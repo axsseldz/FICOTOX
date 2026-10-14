@@ -21,7 +21,7 @@ import { claveDeRol, descripcionDeRol } from "@/lib/shared/roles-descripcion";
 import { invalidate } from "@/lib/client/store";
 import type { ApiRecord } from "@/lib/client/types";
 import { REGLAS_COMBINACION } from "@/lib/shared/combinaciones-roles";
-import { ACCION_KEYS, ALCANCES, firmaFilas, type PermisoFila } from "@/lib/shared/permisos";
+import { ACCION_KEYS, ACCIONES_DOCUMENTALES, ALCANCES, firmaFilas, type PermisoFila } from "@/lib/shared/permisos";
 
 /*
  * Ventana de un rol (Administración › Roles), con la misma ventana centrada de
@@ -266,6 +266,8 @@ function filasDesdeMatriz(matriz: Matriz): PermisoFila[] {
       if (alcance) filas.push({ modulo: area.clave as PermisoFila["modulo"], accion, alcance: alcance as PermisoFila["alcance"] });
     }
   }
+  // Documentos SGC: acciones documentales, sin alcance.
+  for (const { clave } of ACCIONES_DOCUMENTALES) if (matriz[celda("documentos", clave)]) filas.push({ modulo: "documentos", accion: clave, alcance: "total" });
   return filas;
 }
 
@@ -353,6 +355,19 @@ function EditorPermisos({ role, iniciales, onCancelar, onGuardado }: { role: Api
             </tbody>
           </table>
         </div>
+        <section className="flex flex-col gap-3 rounded-[14px] p-4 ring-1 ring-line" data-testid="permisos-documentales" aria-labelledby="permisos-documentales-titulo">
+          <div>
+            <h4 id="permisos-documentales-titulo" className="text-[14px] font-semibold text-ink">
+              Documentos SGC · acciones documentales
+            </h4>
+            <p className="text-[12.5px] text-ink-3">El rol habilita cada acción; sobre cada revisión actúa solo quien está asignado como elaborador, revisor o autorizador. Estas acciones no tienen alcance.</p>
+          </div>
+          <div className="grid gap-x-4 gap-y-2.5 sm:grid-cols-2">
+            {ACCIONES_DOCUMENTALES.map((a) => (
+              <Checkbox key={a.clave} checked={!!matriz[celda("documentos", a.clave)]} onChange={(event) => toggle("documentos", a.clave, event.target.checked)} label={a.nombre} description={a.descripcion} />
+            ))}
+          </div>
+        </section>
         <Callout tone="info" title="Combinaciones de roles prohibidas">
           Al guardar se revisa que nadie con este rol quede con una combinación prohibida; si pasa, el cambio no se guarda y se dice a quién afecta.
           <ul className="mt-1.5 list-disc pl-4">

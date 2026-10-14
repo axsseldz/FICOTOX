@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, CaretDown, CaretUp, CornersIn, CornersOut, DownloadSimple, Printer } from "@phosphor-icons/react";
-import { ESTILOS_IMPRESION, useAncho } from "@/components/features/biblioteca/visor/Visor";
-import { descargarUrl, imprimirPdfUrl } from "@/components/features/biblioteca/visor/usarArchivo";
-import { VisorPdf } from "@/components/features/biblioteca/visor/VisorPdf";
+import { ESTILOS_IMPRESION, useAncho } from "@/components/features/visor/comun";
+import { descargarUrl, imprimirPdfUrl } from "@/components/features/visor/usarArchivo";
+import { VisorPdf } from "@/components/features/visor/VisorPdf";
 import { Callout } from "@/components/features/samples/FormLayout";
 import { StateBadge } from "@/components/features/samples/status";
 import { useSession } from "@/components/session/SessionProvider";
@@ -189,7 +189,7 @@ export function VisorInforme({ item }: { item: ApiRecord }) {
       ) : null}
 
       <div className="min-h-0 min-w-0 flex-1" data-visor-contenido>
-        {integridad === "faltante" ? null : <VisorPdf key={id} url={urlPdfInforme(id)} ambito="informes" docId={id} conTexto compacto={!amplia} />}
+        {integridad === "faltante" ? null : <VisorPdf key={id} url={urlPdfInforme(id)} ambito="informes" docId={id} compacto={!amplia} />}
       </div>
     </div>
   );

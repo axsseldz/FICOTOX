@@ -1,6 +1,7 @@
 import { formatearFolio } from "../shared/folios";
 import type { ApiRecord } from "@/lib/client/types";
 import { ACCION_KEYS, isAccion, isModulo } from "@/lib/shared/permisos";
+import { VERBOS_DOCUMENTALES } from "@/lib/client/permisos-legibles";
 import { ACCEPTANCE_DECISIONS, ANALYSIS_METHODS, ANALYSIS_STATES, ANALYSIS_TYPES, CLIENT_CONTACT_MEDIA, DISPOSAL_TYPES, DOCUMENT_STATES, RECEPTION_ANALYSIS_TYPES, RECEPTION_DELIVERY_MEDIA, RECEPTION_METHODS, RECEPTION_SAMPLE_TYPES, REPORT_DELIVERY_MEDIA, REPORT_STATES, SAMPLE_STATES, STORAGE_PLACES } from "@/lib/shared/sgc";
 import { TIPO_EVIDENCIA_ART } from "@/lib/shared/adjuntos";
 import { ACTIVIDADES_AUTORIZABLES, METODOS_AUTORIZABLES } from "@/lib/shared/autorizaciones";
@@ -76,8 +77,9 @@ const ENTIDAD: Record<string, { art: "el" | "la"; noun: string; plural: string; 
   muestras_analisis: { art: "el", noun: "análisis", plural: "análisis", area: "Análisis" },
   informes: { art: "el", noun: "informe", plural: "informes", area: "Informes de resultados" },
   documentos_sgc: { art: "el", noun: "documento", plural: "documentos", area: "Documentos (sistema anterior)" },
-  biblioteca_documentos: { art: "el", noun: "documento", plural: "documentos", area: "Biblioteca" },
-  biblioteca_categorias: { art: "la", noun: "categoría", plural: "categorías", area: "Biblioteca" },
+  biblioteca_documentos: { art: "el", noun: "documento", plural: "documentos", area: "Biblioteca (retirada)" },
+  biblioteca_categorias: { art: "la", noun: "categoría", plural: "categorías", area: "Biblioteca (retirada)" },
+  sgc_documentos: { art: "el", noun: "documento", plural: "documentos", area: "Documentos SGC" },
   reactivos: { art: "el", noun: "reactivo", plural: "reactivos", area: "Inventario de reactivos" },
   consumibles: { art: "el", noun: "consumible", plural: "consumibles", area: "Inventario de consumibles" },
   equipos: { art: "el", noun: "equipo", plural: "equipos", area: "Equipos" },
@@ -101,10 +103,11 @@ const ENTITY_ROUTE: Partial<Record<string, (id: string, referencia: string) => s
   muestras_extraccion: (id) => `/muestras/extraccion/${id}`,
   muestras_analisis: (id) => `/muestras/analisis/${id}`,
   informes: (id) => `/informes/${id}`,
-  // Documentos del flujo anterior (retirado): su copia vive en la Biblioteca.
-  documentos_sgc: () => "/calidad/biblioteca",
-  biblioteca_documentos: (id) => `/calidad/biblioteca/${id}`,
-  biblioteca_categorias: () => "/calidad/biblioteca",
+  // Flujo anterior y Biblioteca (retirados): sin pantalla propia; llevan a Documentos SGC.
+  documentos_sgc: () => "/documentos",
+  biblioteca_documentos: () => "/documentos",
+  biblioteca_categorias: () => "/documentos",
+  sgc_documentos: (id) => `/documentos/${id}`,
   reactivos: (_id, ref) => `/inventario/reactivos?buscar=${encodeURIComponent(ref)}`,
   consumibles: (_id, ref) => `/inventario/consumibles?buscar=${encodeURIComponent(ref)}`,
   equipos: (_id, ref) => `/inventario/equipos?buscar=${encodeURIComponent(ref)}`,
@@ -129,6 +132,21 @@ const ACCIONES_DE_SESION = new Set(["login", "login_fallido", "reauth_fallida", 
  */
 const FIELD: Record<string, string> = {
   // Generales
+  // Documentos SGC (ficha y revision)
+  proceso: "el proceso o subproceso",
+  confidencialidad: "la confidencialidad",
+  palabras_clave: "las palabras clave",
+  propietario_id: "el propietario",
+  motivo_cambio: "el motivo del cambio",
+  apartados_afectados: "los apartados afectados",
+  descripcion_cambio: "la descripción del cambio",
+  fecha_vigencia: "la fecha de vigencia",
+  fecha_proxima_revision: "la fecha de próxima revisión",
+  ubicacion_historica: "la ubicación histórica",
+  regla_conservacion: "la regla de conservación",
+  elaborador_id: "el elaborador",
+  revisor_id: "el revisor",
+  autorizador_id: "el autorizador",
   estado: "el estado",
   nombre: "el nombre",
   titulo: "el título",
@@ -544,8 +562,8 @@ function frasesDeLista(key: string, antes: unknown[], despues: unknown[], entida
 }
 
 /* Permisos en palabras para la bitacora: "en Muestras puede ver, registrar y editar". */
-const VERBO_PERMISO: Record<string, string> = { V: "ver", C: "registrar", E: "editar", R: "revisar", A: "aprobar", AN: "anular", G: "administrar" };
-const NOMBRE_MODULO: Record<string, string> = { usuarios: "Usuarios y accesos", documentos: "Biblioteca", muestras: "Muestras", ensayos: "Ensayos", informes: "Informes", equipos: "Equipos", inventario: "Inventario", calidad: "Calidad", respaldos: "Respaldos", compras: "Compras" };
+const VERBO_PERMISO: Record<string, string> = { V: "ver", C: "registrar", E: "editar", R: "revisar", A: "aprobar", AN: "anular", G: "administrar", ...VERBOS_DOCUMENTALES };
+const NOMBRE_MODULO: Record<string, string> = { usuarios: "Usuarios y accesos", documentos: "Documentos SGC", muestras: "Muestras", ensayos: "Ensayos", informes: "Informes", equipos: "Equipos", inventario: "Inventario", calidad: "Calidad", respaldos: "Respaldos", compras: "Compras" };
 const unirConY = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`);
 function permisosEnPalabras(filas: unknown): Map<string, string> {
   const out = new Map<string, string>();
@@ -611,6 +629,7 @@ const PRINCIPALES: Record<string, string[]> = {
   incidencias: ["tipo", "fecha_hora_ocurrencia", "descripcion", "impacto_resultados"],
   no_conformidades: ["clasificacion", "origen", "descripcion", "requisito_incumplido"],
   biblioteca_documentos: ["titulo", "clave", "descripcion", "fecha_documento", "visibilidad"],
+  sgc_documentos: ["clave", "titulo", "area", "tipo", "confidencialidad"],
 };
 
 /* De 3 a 6 datos clave de un registro recien creado, con su etiqueta. */
@@ -694,6 +713,7 @@ function redactar(record: ApiRecord, actor: string, sistema: boolean): Partes {
       if (entidad === "usuarios") return { accion: `dio de alta ${O}`, quePaso: `${quien} creó una cuenta nueva en la plataforma${ref ? ` para ${ref}` : ""}.` };
       if (entidad === "roles") return { accion: `creó el rol ${ref ? `«${ref}»` : "nuevo"}`, quePaso: `${quien} creó el rol ${ref ? `«${ref}»` : "nuevo"} y definió qué puede hacer quien lo tenga.` };
       if (entidad === "mantenimientos") return { accion: `programó un mantenimiento`, quePaso: `${quien} programó un mantenimiento de equipo.` };
+      if (entidad === "sgc_documentos") return { accion: `creó la ficha ${de(O)}`, quePaso: `${quien} creó la ficha ${de(O)} con la clave autorizada y su revisión ${texto(d.revision)} en borrador.` };
       const usa = entidad === "muestras_extraccion" || entidad === "muestras_procesamiento" || entidad === "muestras_analisis";
       const inventario = usa && Array.isArray(d.uso_inventario) ? " y se descontaron del inventario los reactivos y consumibles usados" : "";
       return { accion: `registró ${O}`, quePaso: `${quien} registró ${O}${inventario}.` };
@@ -771,6 +791,7 @@ function redactar(record: ApiRecord, actor: string, sistema: boolean): Partes {
       if (!actor) return { accion: `Alguien no pudo confirmar su identidad${ref ? ` con la cuenta ${ref}` : ""}`, quePaso: `Se escribió mal la contraseña${ref ? ` de la cuenta ${ref}` : ""} al confirmar una acción importante, así que la acción no se hizo.`, sinActor: true };
       return { accion: "no pudo confirmar su identidad", quePaso: `${quien} escribió mal su contraseña al confirmar una acción importante, así que la acción no se hizo.` };
     case "descargar": {
+      if (entidad === "sgc_documentos") return { accion: `descargó ${d.tipo === "fuente" ? "el archivo fuente" : "el PDF"} ${de(O)}`, quePaso: `${quien} descargó ${d.tipo === "fuente" ? "el archivo fuente" : "el PDF de consulta"} ${de(O)}${d.nombre ? ` («${texto(d.nombre)}»)` : ""}.` };
       if (entidad === "biblioteca_documentos") return { accion: `descargó ${O}`, quePaso: `${quien} descargó una copia ${de(O)}${d.version ? ` (versión ${texto(d.version)})` : ""}.` };
       if (d.adjunto_id) {
         const que = `${TIPO_EVIDENCIA_ART[String(d.tipo_evidencia)] || "la evidencia"}`;
@@ -852,12 +873,14 @@ function redactar(record: ApiRecord, actor: string, sistema: boolean): Partes {
     case "revocar_asignacion":
       return { accion: `quitó a ${texto(d.persona) || "una persona"} la asignación ${de(O)}`, quePaso: `${quien} quitó a ${texto(d.persona) || "una persona"} del trabajo de ${O}.` };
     case "enviar_revision":
+      if (entidad === "sgc_documentos") return { accion: `envió a revisión ${O}`, quePaso: `${quien} envió ${O} al revisor; desde ahora sus archivos ya no se pueden cambiar.` };
       return { accion: `envió a revisión ${O}`, quePaso: `${quien} terminó ${O} y lo envió para que lo revisen.` };
     case "devolver":
       return { accion: `devolvió ${O} con observaciones`, quePaso: `${quien} devolvió ${O} con observaciones, para que se corrija antes de aprobarlo.` };
     case "enmendar":
       return { accion: `abrió una corrección ${de(O)}`, quePaso: `${quien} abrió una nueva versión ${de(O)} para corregirlo. La versión anterior se conserva.` };
     case "sustituir":
+      if (entidad === "sgc_documentos") return { accion: `sustituyó un archivo ${de(O)}`, quePaso: `${quien} sustituyó un archivo ${de(O)} mientras estaba en borrador. El archivo anterior se conserva.` };
       return { accion: `${cap(O)} quedó reemplazado por su versión corregida`, quePaso: `${cap(O)} quedó reemplazado por una versión corregida${actor ? ` (lo registró ${actor})` : ""}. Se conserva para consulta.`, sinActor: true };
     case "cambiar_folio":
       return { accion: `cambió el folio ${de(O)}`, quePaso: `${quien} cambió el folio ${de(O)}${d.folio_anterior ? ` (antes era ${formatearFolio("R", d.folio_anterior)})` : ""}.${conSolicitud}` };
@@ -880,6 +903,7 @@ function redactar(record: ApiRecord, actor: string, sistema: boolean): Partes {
       if (entidad === "respaldos") return { accion: "Se detectó un problema en un respaldo", quePaso: "La revisión de un respaldo encontró archivos que no coinciden con los originales. Se avisó a Calidad con una incidencia automática.", sinActor: true };
       return { accion: `Se detectó un posible cambio no autorizado en el archivo ${de(O)}`, quePaso: `${d.integridad === "faltante" ? `No se encontró el archivo ${de(O)}` : `El archivo ${de(O)} ya no coincide con el original`}. Se avisó a Calidad con una incidencia automática.`, sinActor: true };
     case "subir":
+      if (entidad === "sgc_documentos") return { accion: `cargó un archivo ${a(O)}`, quePaso: `${quien} cargó un archivo ${a(O)} (en borrador).` };
       return { accion: `subió ${ref ? `el documento «${ref}»` : "un documento"} a la biblioteca`, quePaso: `${quien} subió ${ref ? `el documento «${ref}»` : "un documento"} a la biblioteca${d.visibilidad === "roles" ? "; solo lo ven algunos roles" : ""}.` };
     case "subir_version":
       return { accion: `subió una nueva versión ${de(O)}`, quePaso: `${quien} subió una nueva versión ${de(O)}. La versión anterior se conserva.${d.nota_version ? ` Nota: «${texto(d.nota_version)}».` : ""}` };
@@ -890,7 +914,13 @@ function redactar(record: ApiRecord, actor: string, sistema: boolean): Partes {
         ? { accion: `modificó la categoría «${ref || ""}» de la biblioteca`, quePaso: `${quien} modificó la categoría «${ref || ""}» de la biblioteca.` }
         : { accion: `creó la categoría «${ref || ""}» en la biblioteca`, quePaso: `${quien} creó la categoría «${ref || ""}» en la biblioteca.` };
     case "publicar":
+      if (entidad === "sgc_documentos" && d.carga_inicial) return { accion: `registró como vigente ${O}`, quePaso: `${quien} registró ${O} como vigente en la carga inicial: el documento ya estaba autorizado fuera de la plataforma.` };
+      if (entidad === "sgc_documentos") return { accion: `publicó ${O}`, quePaso: `${quien} publicó ${O}: queda vigente.` };
       return { accion: `publicó ${O}`, quePaso: `${quien} publicó ${O} como vigente (sistema anterior de documentos).` };
+    case "nueva_revision":
+      return { accion: `abrió una revisión nueva ${de(O)}`, quePaso: `${quien} abrió la revisión ${texto(d.revision)} ${de(O)} en borrador. La revisión vigente sigue en uso mientras tanto.` };
+    case "consultar":
+      return { accion: `consultó ${O}`, quePaso: `${quien} abrió para consultar ${O} (documento ${String(d.confidencialidad) === "confidencial" ? "confidencial" : "restringido"}).` };
     case "confirmar_lectura":
       return { accion: `confirmó que leyó ${O}`, quePaso: `${quien} confirmó que leyó y comprendió ${O} (sistema anterior de documentos).` };
     case "proponer":

@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { DownloadSimple, Printer, X } from "@phosphor-icons/react";
-import { descargarUrl, imprimirPdfUrl } from "@/components/features/biblioteca/visor/usarArchivo";
-import { useAncho } from "@/components/features/biblioteca/visor/Visor";
-import { VisorPdf } from "@/components/features/biblioteca/visor/VisorPdf";
+import { useAncho } from "@/components/features/visor/comun";
+import { descargarUrl, imprimirPdfUrl } from "@/components/features/visor/usarArchivo";
+import { VisorPdf } from "@/components/features/visor/VisorPdf";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button, IconButton } from "@/components/ui/Button";
 import { explicarError } from "@/lib/client/mensajes";
@@ -79,7 +79,7 @@ export function VisorPdfFlotante() {
         </div>
       </header>
       <div className="min-h-0 min-w-0 flex-1" data-visor-contenido>
-        <VisorPdf key={peticion.url} url={peticion.url} ambito="pdf-interno" docId={peticion.url} conTexto compacto={!amplia} />
+        <VisorPdf key={peticion.url} url={peticion.url} ambito="pdf-interno" docId={peticion.url} compacto={!amplia} />
       </div>
     </div>
   );

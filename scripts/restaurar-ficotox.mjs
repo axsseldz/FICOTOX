@@ -282,6 +282,8 @@ if (restauradaDb) {
     { etiqueta: "documentos SGC", tabla: "documentos_sgc", archivo: "archivo_nombre", sha: "archivo_sha256", carpeta: "documentos_sgc" },
     // Biblioteca: nombre_almacenado es relativo a <instancia>/biblioteca ("<documento>/<uuid>.<ext>").
     { etiqueta: "versiones de la biblioteca", tabla: "biblioteca_versiones", archivo: "nombre_almacenado", sha: "sha256", carpeta: "biblioteca" },
+    // Documentos SGC: nombre_almacenado es relativo a <instancia>/sgc ("<documento>/<revision>/<uuid>.<ext>").
+    { etiqueta: "archivos de Documentos SGC", tabla: "sgc_archivos", archivo: "nombre_almacenado", sha: "sha256", carpeta: "sgc" },
     { etiqueta: "PDF de no conformidades", tabla: "no_conformidades", archivo: "archivo_pdf", sha: "pdf_sha256", carpeta: path.join("calidad", "nc") },
   ];
   const resumen = [];

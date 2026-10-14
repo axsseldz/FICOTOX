@@ -283,7 +283,8 @@ export async function listarRespaldosApi({ request, s }: RouteContext): Promise<
 const ARCHIVOS_POR_CARPETA: Record<string, string> = {
   informes: "PDF de informes y sus envíos",
   evidencias: "evidencias de análisis e incidencias",
-  biblioteca: "documentos de la biblioteca",
+  biblioteca: "documentos de la biblioteca (anterior)",
+  sgc: "archivos de Documentos SGC",
   calidad: "PDF de no conformidades",
   avatares: "fotos de perfil",
   maintenance_reports: "reportes de mantenimiento",
@@ -363,7 +364,7 @@ export async function detalleRespaldoApi({ request, s, params }: RouteContext): 
     [n("equipos"), "equipo", "equipos"],
     [n("incidencias"), "incidencia", "incidencias"],
     [n("no_conformidades"), "no conformidad", "no conformidades"],
-    [n("biblioteca_documentos"), "documento de la biblioteca", "documentos de la biblioteca"],
+    [n("sgc_documentos"), "documento SGC", "documentos SGC"],
     [n("usuarios"), "usuario", "usuarios"],
   ] as Array<[number, string, string]>;
   const porCarpeta = new Map<string, number>();

@@ -15,8 +15,7 @@ import { GRUPO_TITULO, POR_GRUPO, norm, type GrupoBusqueda, type GrupoClave, typ
 import type { Session } from "../db";
 import type { Autorizacion } from "../rbac";
 import { accesoDe } from "./catalogo";
-import { compacto, construirIndice, hitDocumento, items, leer, type Hit } from "./indice";
-import { listarBiblioteca } from "../modules/biblioteca";
+import { compacto, construirIndice, type Hit } from "./indice";
 
 const PARADAS = new Set(["de", "del", "la", "el", "los", "las", "en", "un", "una", "al", "y", "o", "por", "para", "con", "mi", "mis"]);
 
@@ -183,15 +182,6 @@ export async function buscar(request: Request, s: Session, auth: Autorizacion, c
   const propias = accionesDeReposicion(hits, q, recientes, auth);
   for (const h of propias) puntuados.push({ hit: h, tier: 1, puntaje: 0 });
 
-  // Biblioteca: además de título, clave y etiquetas, el texto dentro de los PDF (lo busca el servidor de la lista).
-  if (q.length >= 3 && hits.some((h) => h.grupo === "biblioteca")) {
-    const ya = new Set(puntuados.map((p) => p.hit.clave));
-    const texto = await leer(request, s, listarBiblioteca, `/api/biblioteca?search=${encodeURIComponent(consulta.trim())}`);
-    for (const d of items(texto)) {
-      const h = hitDocumento(d);
-      if (!ya.has(h.clave)) puntuados.push({ hit: h, tier: 4, puntaje: 3 });
-    }
-  }
   puntuados = puntuados.sort(comparar);
 
   const porGrupo = new Map<GrupoClave, Puntuado[]>();

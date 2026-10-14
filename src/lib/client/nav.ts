@@ -63,13 +63,14 @@ const NAV_ITEMS: NavItem[] = [
     href: "/auditoria",
     label: "Calidad",
     modules: ["documentos", "calidad", "respaldos"],
-    description: "Incidencias y no conformidades, biblioteca de documentos y bitácora de auditoría",
+    // Documentos SGC tambien lo ve la administracion tecnica (usuarios:G) para diagnostico; ya ve Calidad por la bitacora.
+    description: "Incidencias y no conformidades, Documentos SGC, bitácora de auditoría y respaldos",
     icon: "seal",
     children: [
       // Fase 11: incidencias, NC y acciones (con el alcance "incidencias", solo lo propio). El admin tecnico (V bitacora) no las ve.
       { href: "/calidad/incidencias", label: "Incidencias y NC", visible: (p) => !!p.calidad?.V && p.calidad.V !== "bitacora" },
-      // Biblioteca de documentos de consulta (reemplaza el flujo de control documental de Documentos SGC).
-      { href: "/calidad/biblioteca", label: "Biblioteca", module: "documentos" },
+      // Documentos SGC (reemplaza a la Biblioteca). La administracion tecnica (usuarios:G) entra solo a metadatos, para diagnostico.
+      { href: "/documentos", label: "Documentos SGC", visible: (p) => !!p.documentos?.V || !!p.usuarios?.G },
       // Con el alcance "incidencias" no se ve la bitacora.
       { href: "/auditoria", label: "Auditoría", module: "calidad", hideForScopes: ["incidencias"] },
       // Copias de seguridad y pruebas de restauración (respaldos:V; solo el administrador técnico las gestiona).

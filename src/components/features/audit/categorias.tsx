@@ -164,6 +164,7 @@ const ICONO_AREA: Record<string, ReactNode> = {
   documentos_sgc: <Books weight="duotone" />,
   biblioteca_documentos: <Books weight="duotone" />,
   biblioteca_categorias: <Books weight="duotone" />,
+  sgc_documentos: <Books weight="duotone" />,
   reactivos: <Flask weight="duotone" />,
   consumibles: <Package weight="duotone" />,
   equipos: <Toolbox weight="duotone" />,

@@ -12,7 +12,7 @@
  * - Reglas 3 y 4: se evaluan por la clave estable del rol (roles.clave), no
  *   por su nombre visible.
  */
-import { ACCION_KEYS, expandirPermisos, type Accion, type Modulo, type PermisoFila } from "./permisos";
+import { expandirPermisos, isAccion, type Accion, type Modulo, type PermisoFila } from "./permisos";
 
 export const VERSION_COMBINACIONES = "2026-09-24.1";
 
@@ -45,9 +45,10 @@ export const REGLAS_COMBINACION: Regla[] = [
     titulo: "Administración técnica del sistema sin captura ni aprobación técnica",
     evaluar: (roles, tiene) => {
       if (!tiene("usuarios", ["G"])) return null;
-      const tecnico = tiene("ensayos", ["C", "E", "R", "A"]) || tiene("informes", ["C", "E", "R", "A"]) || tiene("documentos", ["A"]);
+      // Documentos SGC: una sesion de administracion tecnica no puede usarse para revisar, autorizar, publicar ni obsoletar documentos.
+      const tecnico = tiene("ensayos", ["C", "E", "R", "A"]) || tiene("informes", ["C", "E", "R", "A"]) || tiene("documentos", ["documento_revisar", "documento_autorizar", "documento_publicar", "documento_obsoletar"]);
       return tecnico
-        ? `Quien administra usuarios y roles (usuarios:G) no puede tener C, E, R o A en ensayos o informes, ni A en documentos (roles: ${nombres(roles)}).`
+        ? `Quien administra usuarios y roles (usuarios:G) no puede tener C, E, R o A en ensayos o informes, ni revisar, autorizar, publicar u obsoletar documentos (roles: ${nombres(roles)}).`
         : null;
     },
   },
@@ -86,7 +87,7 @@ export const REGLAS_COMBINACION: Regla[] = [
 /* Evalua las reglas sobre el conjunto de roles de una persona. */
 export function evaluarCombinacion(roles: RolEvaluado[]): Violacion[] {
   const efectivos = expandirPermisos(roles.flatMap((r) => r.filas));
-  const tiene: Tiene = (modulo, acciones) => acciones.some((accion) => ACCION_KEYS.includes(accion) && !!efectivos[modulo]?.[accion]?.length);
+  const tiene: Tiene = (modulo, acciones) => acciones.some((accion) => isAccion(accion) && !!efectivos[modulo]?.[accion]?.length);
   const out: Violacion[] = [];
   for (const regla of REGLAS_COMBINACION) {
     const mensaje = regla.evaluar(roles, tiene);

@@ -25,7 +25,7 @@ export type TipoResultado =
   | "accion"
   | "ayuda";
 
-export type GrupoClave = "muestras" | "informes" | "inventario" | "calidad" | "biblioteca" | "personas" | "roles" | "solicitudes" | "pantallas" | "acciones";
+export type GrupoClave = "muestras" | "informes" | "inventario" | "calidad" | "documentos" | "personas" | "roles" | "solicitudes" | "pantallas" | "acciones";
 
 /* Acciones que resuelve la propia interfaz (no son una dirección). */
 export type Comando = "tema_oscuro" | "tema_claro" | "tema_auto" | "cuenta" | "cambiar_password" | "cerrar_sesion" | "reportar_incidencia";
@@ -81,7 +81,7 @@ export const GRUPO_TITULO: Record<GrupoClave, string> = {
   informes: "Informes",
   inventario: "Inventario",
   calidad: "Calidad",
-  biblioteca: "Biblioteca",
+  documentos: "Documentos SGC",
   personas: "Personas",
   roles: "Roles",
   solicitudes: "Solicitudes",

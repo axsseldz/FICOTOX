@@ -1,6 +1,6 @@
 /*
  * Prueba de extremo a extremo del flujo completo (recepcion -> procesamiento ->
- * extraccion -> analisis -> informe -> disposicion), anulaciones, Biblioteca
+ * extraccion -> analisis -> informe -> disposicion), anulaciones, Documentos SGC
  * (y el retiro de Documentos SGC), bajas de inventario y bitacora de auditoria. Corre contra el dev
  * server apuntando a la COPIA de prueba de la base.
  */
@@ -354,21 +354,24 @@ let informeId = null;
   check("anular procesamiento con extraccion vigente -> 409", anProc.status === 409, `status ${anProc.status}`);
 }
 
-// ---------- Biblioteca (reemplaza el flujo de Documentos SGC; el detalle esta en api-biblioteca.mjs) ----------
+// ---------- Documentos SGC (reemplaza a la Biblioteca; el detalle esta en api-documentos.mjs) ----------
 {
   const form = new FormData();
   form.set("titulo", "Procedimiento de gestión de calidad para control de documentos");
   form.set("clave", "FX-GCP-CD");
-  form.set("archivo", new File([await pdfConTexto(1, "Control de documentos")], "FX-GCP-CD.pdf", { type: "application/pdf" }));
-  const cr = await api("POST", "/biblioteca", form, { form: true });
-  const docBib = cr.data?.item?.id;
-  const ficha = (await api("GET", `/biblioteca/${docBib}`)).data;
-  const v = ficha?.versiones?.[0];
-  check("biblioteca: subir un PDF (201) con su versión y SHA-256", cr.status === 201 && !!v?.sha256 && ficha?.item?.integridad === "ok", `status ${cr.status} ${cr.data?.message || ""}`);
-  const descarga = await api("GET", `/biblioteca/versiones/${v?.id}/archivo?modo=descargar`);
-  check("biblioteca: descargar el archivo (queda en la bitácora)", descarga.status === 200 && descarga.type.includes("pdf"), `status ${descarga.status} ${descarga.type}`);
+  form.set("area_codigo", "GC");
+  form.set("tipo_codigo", "P");
+  form.set("archivo_pdf", new File([await pdfConTexto(1, "Control de documentos")], "FX-GCP-CD.pdf", { type: "application/pdf" }));
+  const cr = await api("POST", "/sgc/documentos", form, { form: true });
+  const ficha = (await api("GET", `/sgc/documentos/${cr.data?.id}`)).data;
+  const pdf = ficha?.revisiones?.[0]?.archivos?.find((a) => a.tipo === "pdf");
+  check("documentos SGC: nueva ficha con su PDF (201), revisión en borrador y SHA-256", cr.status === 201 && ficha?.revisiones?.[0]?.estado === "borrador" && !!pdf?.sha256, `status ${cr.status} ${cr.data?.message || ""}`);
+  const descarga = await api("GET", `/sgc/archivos/${pdf?.id}?modo=descargar`);
+  check("documentos SGC: descargar el archivo (queda en la bitácora)", descarga.status === 200 && descarga.type.includes("pdf"), `status ${descarga.status} ${descarga.type}`);
   const viejo = await api("POST", "/documentos-sgc", { clave: "FX-GCP-QA9", titulo: "Flujo retirado" });
-  check("Documentos SGC retirado: crear responde 410", viejo.status === 410 && viejo.data?.codigo === "retirado", `status ${viejo.status}`);
+  check("flujo anterior de documentos retirado: crear responde 410", viejo.status === 410 && viejo.data?.codigo === "retirado", `status ${viejo.status}`);
+  const biblioteca = await api("GET", "/biblioteca");
+  check("la Biblioteca ya no responde (404)", biblioteca.status === 404, `status ${biblioteca.status}`);
 }
 
 // ---------- Bajas logicas de inventario y usuarios ----------
@@ -397,7 +400,7 @@ let informeId = null;
   const acciones = new Set(all.map((a) => a.accion));
   const entidades = new Set(all.map((a) => a.entidad));
   check("bitacora registra login, login_fallido, crear, editar, aceptar, revisar, aprobar, autorizar, liberar, enviar, cerrar, anular, restaurar, baja, reactivar, descargar", ["login", "login_fallido", "crear", "editar", "aceptar", "revisar", "aprobar", "autorizar", "liberar", "enviar", "cerrar", "anular", "restaurar", "baja", "reactivar", "descargar"].every((a) => acciones.has(a)), `faltan: ${["login", "login_fallido", "crear", "editar", "aceptar", "revisar", "aprobar", "autorizar", "liberar", "enviar", "cerrar", "anular", "restaurar", "baja", "reactivar", "descargar"].filter((a) => !acciones.has(a)).join(",")}`);
-  check("bitacora cubre recepcion, procesamiento, extraccion, analisis, informes, documentos, equipos, usuarios, sesion", ["muestras_recepcion", "muestras_procesamiento", "muestras_extraccion", "muestras_analisis", "informes", "biblioteca_documentos", "equipos", "usuarios", "sesion"].every((e) => entidades.has(e)), `faltan: ${["muestras_recepcion", "muestras_procesamiento", "muestras_extraccion", "muestras_analisis", "informes", "biblioteca_documentos", "equipos", "usuarios", "sesion"].filter((e) => !entidades.has(e)).join(",")}`);
+  check("bitacora cubre recepcion, procesamiento, extraccion, analisis, informes, documentos, equipos, usuarios, sesion", ["muestras_recepcion", "muestras_procesamiento", "muestras_extraccion", "muestras_analisis", "informes", "sgc_documentos", "equipos", "usuarios", "sesion"].every((e) => entidades.has(e)), `faltan: ${["muestras_recepcion", "muestras_procesamiento", "muestras_extraccion", "muestras_analisis", "informes", "sgc_documentos", "equipos", "usuarios", "sesion"].filter((e) => !entidades.has(e)).join(",")}`);
   const edit = all.find((a) => a.accion === "editar" && a.entidad === "muestras_recepcion");
   check("entrada de edicion guarda antes/despues por campo", !!edit && Object.keys(edit.cambios || {}).length > 0 && "decision_aceptacion" in (edit.cambios || {}), JSON.stringify(edit?.cambios ? Object.keys(edit.cambios) : null));
   const detalle = (await api("GET", `/audit/${edit?.id}`)).data?.item;

@@ -4,6 +4,7 @@ import { type Row, type Session } from "./db";
 import { HttpError } from "./http";
 import { documentosDistribuidosA, soloAutorizados } from "./modules/documentos-flujo";
 import { exigirVerRegistroCalidad } from "./modules/calidad/acceso-historial";
+import { accesoSgc, documentoVisible } from "./modules/sgc/acceso";
 import { permisoDe, type Autorizacion } from "./rbac";
 import type { Modulo } from "../shared/permisos";
 
@@ -14,6 +15,9 @@ import type { Modulo } from "../shared/permisos";
  * - el registro debe existir (404);
  * - "asignado" (muestras): solo recepciones asignadas o registradas por la persona;
  * - "autorizados" (documentos): solo documentos vigentes distribuidos a la persona;
+ * - Documentos SGC: el historial lo ve quien ve el historial de la ficha
+ *   (documento_consultar_historico, crear fichas o diagnostico tecnico), con
+ *   la confidencialidad del documento;
  * - "propio" (usuarios): solo la propia cuenta, sin el catalogo de roles;
  * - "incidencias" (calidad): lo propio (exigirVerRegistroCalidad);
  * - "estado" (muestras): la ficha es de seguimiento; el historial se ve, pero sin
@@ -28,6 +32,7 @@ export const MODULO_DE_REGISTRO: Record<string, Modulo> = {
   informes: "informes",
   documentos_sgc: "documentos",
   biblioteca_documentos: "documentos",
+  sgc_documentos: "documentos",
   reportes_mantenimiento: "equipos",
   reactivos: "inventario",
   consumibles: "inventario",
@@ -46,6 +51,11 @@ const CALIDAD = new Set(["incidencias", "no_conformidades", "acciones_correctiva
 export async function exigirVerRegistro(s: Session, user: CurrentUser, auth: Autorizacion, entidad: string, entidadId: string | number): Promise<void> {
   const id = Number.parseInt(String(entidadId), 10);
   if (CALIDAD.has(entidad)) return exigirVerRegistroCalidad(s, user, entidad, Number.isFinite(id) ? id : 0);
+  if (entidad === "sgc_documentos") {
+    const { vista } = await documentoVisible(s, await accesoSgc(s, auth), Number.isFinite(id) ? id : 0);
+    if (!vista.historial) throw new HttpError(404, { message: "Registro no encontrado" });
+    return;
+  }
   const modulo = MODULO_DE_REGISTRO[entidad];
   const noEncontrado = new HttpError(404, { message: "Registro no encontrado" });
   if (!modulo) throw new HttpError(400, { message: "Ese tipo de registro no tiene historial propio" });

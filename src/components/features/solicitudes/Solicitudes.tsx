@@ -69,9 +69,10 @@ export function hrefDeSolicitud(item: ApiRecord): string | null {
     case "usuarios":
       return "/administracion/usuarios";
     case "documentos_sgc":
-      return "/calidad/biblioteca";
     case "biblioteca_documentos":
-      return `/calidad/biblioteca/${id}`;
+      return "/documentos";
+    case "sgc_documentos":
+      return `/documentos/${id}`;
     default:
       return null;
   }

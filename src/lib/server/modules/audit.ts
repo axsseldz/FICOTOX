@@ -1,4 +1,5 @@
 import { requireUser } from "../auth";
+import { documentosOcultos } from "./sgc/acceso";
 import { exigirVerRegistro } from "../acceso-registro";
 import { advertenciaLlaveBitacora, origenLlaveBitacora, registrarAuditoria, verifyAuditChain, type AuditVerification } from "../audit";
 import { type Row, type Session } from "../db";
@@ -77,6 +78,7 @@ const ENTITY_MODULE: Record<string, Modulo> = {
   documentos_sgc: "documentos",
   biblioteca_documentos: "documentos",
   biblioteca_categorias: "documentos",
+  sgc_documentos: "documentos",
   reportes_mantenimiento: "equipos",
   reactivos: "inventario",
   consumibles: "inventario",
@@ -126,6 +128,8 @@ export async function listAudit({ request, s }: RouteContext): Promise<Response>
   const entidadesLista = searchParam(request, "entidades").split(",").map((e) => e.trim()).filter((e) => /^[a-z_]{2,40}$/.test(e)).slice(0, 40);
   const sinAccesos = searchParam(request, "sin_accesos") === "1";
   const antesDe = Number.parseInt(searchParam(request, "antes_de") || "0", 10) || 0;
+  // Documentos SGC restringidos o confidenciales que la persona no puede ver: sus eventos no se listan.
+  const ocultos = await documentosOcultos(s, auth);
   const entidadesModulo = moduloFiltro ? Object.entries(ENTITY_MODULE).filter(([, m]) => m === moduloFiltro).map(([e]) => e) : [];
 
   const rows = await s.query<Row>(
@@ -146,6 +150,7 @@ export async function listAudit({ request, s }: RouteContext): Promise<Response>
       ${entidadesLista.length ? `AND entidad IN (${entidadesLista.map((_, i) => `:ent${i}`).join(", ")})` : ""}
       ${sinAccesos ? "AND accion NOT IN ('login', 'login_fallido', 'reauth_fallida', 'cerrar_sesiones')" : ""}
       ${antesDe ? "AND id < :antes_de" : ""}
+      ${ocultos.length ? `AND NOT (entidad = 'sgc_documentos' AND entidad_id IN (${ocultos.map((_, i) => `:oc${i}`).join(", ")}))` : ""}
     ORDER BY id DESC
     LIMIT ${limit + 1}
     `,
@@ -165,6 +170,7 @@ export async function listAudit({ request, s }: RouteContext): Promise<Response>
       ...Object.fromEntries(accionesLista.map((a, i) => [`acc${i}`, a])),
       ...Object.fromEntries(usuariosLista.map((u, i) => [`usr${i}`, u])),
       ...Object.fromEntries(entidadesLista.map((e, i) => [`ent${i}`, e])),
+      ...Object.fromEntries(ocultos.map((o, i) => [`oc${i}`, o])),
     },
   );
   const truncado = rows.length > limit;
@@ -181,6 +187,7 @@ export async function getAuditEntry({ request, s, params }: RouteContext): Promi
   const id = Number.parseInt(String(params.id || ""), 10);
   const row = await s.queryOne<Row>("SELECT * FROM auditoria WHERE id = :id", { id });
   if (!row) return json({ message: "Registro no encontrado" }, 404);
+  if (row.entidad === "sgc_documentos" && (await documentosOcultos(s, auth)).includes(String(row.entidad_id))) return json({ message: "Registro no encontrado" }, 404);
   const item = {
     ...serialize(row),
     hash_anterior: row.hash_anterior,

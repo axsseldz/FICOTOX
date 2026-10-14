@@ -1,11 +1,10 @@
 /*
- * pdf.js en el navegador para la biblioteca (visor, miniaturas y texto para
- * buscar). Todo se sirve desde el propio servidor (public/vendor/pdfjs:
+ * pdf.js en el navegador para el visor interno de PDF (Documentos SGC e
+ * informes: visor, miniaturas y texto). Todo se sirve desde el propio servidor (public/vendor/pdfjs:
  * worker, cmaps, fuentes estandar y wasm; ver scripts/vendor-pdfjs.mjs).
  * Se importa solo en el cliente y bajo demanda.
  */
 import { API_BASE_URL } from "./api";
-import { TEXTO_MAX } from "../shared/biblioteca";
 
 type Pdfjs = typeof import("pdfjs-dist");
 export type PdfDocumento = import("pdfjs-dist").PDFDocumentProxy;
@@ -30,23 +29,15 @@ const PDF_OPCIONES = {
   isEvalSupported: false,
 } as const;
 
-/* URL del archivo de una version (modo ver: en linea, sin bitacora, con Range). */
-export const urlArchivoVersion = (versionId: number | string, modo: "ver" | "descargar" = "ver") => `${API_BASE_URL}/biblioteca/versiones/${versionId}/archivo?modo=${modo}`;
-
-/*
- * Abre un PDF de la biblioteca con carga progresiva: pdf.js pide rangos
- * (Range) y solo baja las paginas que se ven.
- */
-export async function abrirPdfVersion(versionId: number | string, token: string): Promise<PdfDocumento> {
-  return abrirPdfUrl(urlArchivoVersion(versionId), token);
-}
-
-/* Abre un PDF protegido por URL (mismo visor para la biblioteca y los informes). */
+/* Abre un PDF protegido por URL con carga progresiva: pdf.js pide rangos (Range) y solo baja las paginas que se ven. */
 export async function abrirPdfUrl(url: string, token: string): Promise<PdfDocumento> {
   const pdfjs = await cargarPdfjs();
   const tarea = pdfjs.getDocument({ url, httpHeaders: { Authorization: `Bearer ${token}` }, disableAutoFetch: true, rangeChunkSize: 256 * 1024, ...PDF_OPCIONES });
   return tarea.promise;
 }
+
+/* URL de un archivo de Documentos SGC para el visor (en linea; la descarga queda en la bitacora). */
+export const urlArchivoSgc = (archivoId: number | string, modo: "ver" | "descargar" = "ver") => `${API_BASE_URL}/sgc/archivos/${archivoId}?modo=${modo}`;
 
 /* URL del PDF final de un informe para el visor (en linea, sin bitacora). */
 export const urlPdfInforme = (informeId: number | string) => `${API_BASE_URL}/informes/${informeId}/pdf?modo=ver`;
@@ -74,12 +65,3 @@ export async function miniaturaPrimeraPagina(pdf: PdfDocumento, ancho = 220): Pr
   return canvas.toDataURL("image/png");
 }
 
-/* Texto de todas las paginas (para buscar dentro del PDF), acotado a TEXTO_MAX caracteres. */
-export async function textoDePdf(pdf: PdfDocumento, max = TEXTO_MAX): Promise<string> {
-  let texto = "";
-  for (let n = 1; n <= pdf.numPages && texto.length < max; n += 1) {
-    const contenido = await (await pdf.getPage(n)).getTextContent();
-    texto += contenido.items.map((i) => ("str" in i ? i.str : "")).join(" ") + "\n";
-  }
-  return texto.replace(/[ \t]+/g, " ").slice(0, max);
-}

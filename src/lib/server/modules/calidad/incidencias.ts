@@ -11,6 +11,7 @@
  * - Anular: calidad:AN, con segundo usuario; una escalada solo si su NC esta anulada.
  */
 import { documentosDistribuidosA, soloAutorizados } from "../documentos-flujo";
+import { accesoSgc, documentoVisible } from "../sgc/acceso";
 import { estaAsignado, soloAsignado } from "../../asignaciones";
 import { requireUser, userIdFromClaims } from "../../auth";
 import { registrarAuditoria, snapshotRow } from "../../audit";
@@ -139,6 +140,10 @@ export async function crearIncidencia({ request, s }: RouteContext): Promise<Res
       const permitidos = doc && String(doc.visibilidad) !== "todos" ? (await s.query<Row>("SELECT rol_id FROM biblioteca_visibilidad_roles WHERE documento_id = :id", { id: eid })).map((r) => Number(r.rol_id)) : [];
       if (!doc || (String(doc.visibilidad) !== "todos" && !permitidos.some((r) => roles.includes(r)))) throw noExiste;
     }
+    // Documentos SGC: solo los que la persona puede ver (confidencialidad, revisiones visibles).
+    if (entidad === "sgc_documentos") await documentoVisible(s, await accesoSgc(s, permiso.auth), eid).catch(() => {
+      throw noExiste;
+    });
     // Con alcance "asignado" (muestras), solo recepciones asignadas o registradas por la persona.
     if (entidad === "muestras_recepcion" && soloAsignado(vista)) {
       const recepcion = await s.queryOne<Row>("SELECT id, creado_por FROM muestras_recepcion WHERE id = :id", { id: eid });

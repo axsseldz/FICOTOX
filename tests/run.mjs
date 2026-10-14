@@ -145,7 +145,7 @@ try {
   }
 
   // api-roles corre despues de api-dsp y api-sgc: crea registros y personas de prueba que alterarian los folios que esas suites esperan.
-  for (const file of ["api-dsp.mjs", "api-sgc.mjs", "api-roles.mjs", "api-seguridad.mjs", "api-segregacion.mjs", "api-autorizaciones.mjs", "api-muestras.mjs", "api-informes.mjs", "api-biblioteca.mjs", "api-cierre.mjs", "api-evidencias.mjs", "api-incidencias.mjs", "api-no-conformidades.mjs", "api-produccion.mjs", "respaldos.mjs"]) {
+  for (const file of ["api-dsp.mjs", "api-sgc.mjs", "api-roles.mjs", "api-seguridad.mjs", "api-segregacion.mjs", "api-autorizaciones.mjs", "api-muestras.mjs", "api-informes.mjs", "api-documentos.mjs", "api-cierre.mjs", "api-evidencias.mjs", "api-incidencias.mjs", "api-no-conformidades.mjs", "api-produccion.mjs", "respaldos.mjs"]) {
     console.log(`\n=== ${file}`);
     failed += (await run(path.join(here, file), api)) ? 1 : 0;
   }
@@ -168,7 +168,7 @@ try {
     if (!existsSync(chrome)) {
       console.log(`\n(navegador omitido: no se encontro Chrome en ${chrome}; define CHROME_PATH)`);
     } else {
-      for (const file of ["roles.mjs", "dsp.mjs", "sgc.mjs", "seguridad.mjs", "fechas.mjs", "segregacion.mjs", "autorizaciones.mjs", "etiquetas.mjs", "auditoria.mjs", "evidencias.mjs", "no-conformidades.mjs", "validacion.mjs", "biblioteca.mjs"]) {
+      for (const file of ["roles.mjs", "dsp.mjs", "sgc.mjs", "seguridad.mjs", "fechas.mjs", "segregacion.mjs", "autorizaciones.mjs", "etiquetas.mjs", "auditoria.mjs", "evidencias.mjs", "no-conformidades.mjs", "validacion.mjs", "documentos.mjs"]) {
         console.log(`\n=== ui/${file}`);
         failed += (await run(path.join(here, "ui", file), { BASE: `http://localhost:${PORT}`, CHROME_PATH: chrome, CREDENCIALES_ROLES: CREDENCIALES, DATOS_APOYO_FILE: datosApoyo })) ? 1 : 0;
       }

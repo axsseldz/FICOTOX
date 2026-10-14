@@ -61,6 +61,9 @@ export const TABLAS_PRINCIPALES = [
   "documentos_sgc",
   "biblioteca_documentos",
   "biblioteca_versiones",
+  "sgc_documentos",
+  "sgc_revisiones",
+  "sgc_archivos",
   "reactivos",
   "consumibles",
   "equipos",
@@ -72,7 +75,8 @@ export const TABLAS_PRINCIPALES = [
 /* Carpetas de la instancia con archivos que se respaldan. */
 // Fase 11: "calidad" (PDF "Registro de no conformidad"). Biblioteca: "biblioteca" (versiones de los documentos).
 // Fotos de perfil: "avatares" (opcional; si no hay fotos, la carpeta no existe y no pasa nada).
-export const CARPETAS_ARCHIVOS = ["informes", "evidencias", "documentos_sgc", "biblioteca", "maintenance_reports", "calidad", "avatares"];
+// Documentos SGC (migracion 22): "sgc" (archivos fuente y PDF de consulta de cada revision).
+export const CARPETAS_ARCHIVOS = ["informes", "evidencias", "documentos_sgc", "biblioteca", "sgc", "maintenance_reports", "calidad", "avatares"];
 
 export const ARCHIVO_LLAVE = path.join(/*turbopackIgnore: true*/ "llave", "llave-bitacora.txt");
 export const CARPETA_ACTAS = "pruebas-restauracion";

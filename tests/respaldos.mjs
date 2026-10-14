@@ -152,8 +152,8 @@ let destinoPrueba = null;
   const acta = actaDe(BACKUPS, r.out);
   check("restauracion en modo prueba: exit 0, 8 verificaciones ✅ y acta .md/.json", r.code === 0 && acta?.resultado === "aprobada" && acta.verificaciones.length === 8 && acta.verificaciones.every((v) => v.ok) && acta.modo === "prueba", `${r.code} ${acta?.resultado} ${r.out.split("\n").filter((l) => l.startsWith("❌")).join(" | ")}`);
   check("el modo prueba no toca la instancia real de prueba y deja la copia en el destino", fs.existsSync(path.join(destinoPrueba, "ficotox.sqlite3")) && fs.existsSync(path.join(destinoPrueba, "evidencias")), destinoPrueba);
-  // Biblioteca: el respaldo incluye instance/biblioteca/ con huellas y la restauracion la copia y verifica (paso 7).
-  check("biblioteca: el respaldo incluye sus archivos (con SHA-256) y la restauración los copia y verifica", manifest.archivos.some((a) => a.ruta.startsWith("archivos/biblioteca/")) && fs.existsSync(path.join(destinoPrueba, "biblioteca")) && verif(acta, 7)?.ok === true && /biblioteca/i.test(verif(acta, 7)?.detalle || ""), `${verif(acta, 7)?.detalle}`);
+  // Documentos SGC: el respaldo incluye instance/sgc/ con huellas y la restauracion la copia y verifica (paso 7).
+  check("Documentos SGC: el respaldo incluye sus archivos (con SHA-256) y la restauración los copia y verifica", manifest.archivos.some((a) => a.ruta.startsWith("archivos/sgc/")) && fs.existsSync(path.join(destinoPrueba, "sgc")) && verif(acta, 7)?.ok === true && /Documentos SGC/i.test(verif(acta, 7)?.detalle || ""), `${verif(acta, 7)?.detalle}`);
 }
 
 /* ---------- Respaldo alterado, llave distinta y sin llave ---------- */

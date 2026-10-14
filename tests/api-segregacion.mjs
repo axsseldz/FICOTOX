@@ -425,7 +425,7 @@ const cadena = async (prefijo, token = QA) => {
   const sinRoles = (await api("GET", `/admin/usuarios/${uid}`, undefined, QA)).data?.item?.roles || [];
   check("alta de cuenta: el rol inicial queda pendiente (la cuenta nace sin roles)", alta.status === 201 && alta.data?.solicitud?.tipo === "asignar_rol" && sinRoles.length === 0, `${alta.status} roles=${sinRoles.length}`);
   const propia = await api("POST", `/solicitudes/${alta.data?.solicitud?.id}/aprobar`, { motivo: "Me autoaprueba" }, QA);
-  const sinA = await api("POST", `/solicitudes/${alta.data?.solicitud?.id}/aprobar`, { motivo: "Sin usuarios:A" }, tR);
+  const sinA = await api("POST", `/solicitudes/${alta.data?.solicitud?.id}/aprobar`, { motivo: "Sin usuarios:A" }, tL);
   const rg = await api("POST", `/solicitudes/${alta.data?.solicitud?.id}/aprobar`, { motivo: "Alta autorizada" }, tP);
   const conRol = (await api("GET", `/admin/usuarios/${uid}`, undefined, QA)).data?.item?.roles || [];
   check("asignar rol: ni el solicitante (409) ni quien no tiene usuarios:A (403) aprueban; el Responsable General si", propia.status === 409 && sinA.status === 403 && rg.status === 200 && conRol.some((r) => r.nombre === "Técnico Auxiliar"), `${propia.status} ${sinA.status} ${rg.status}`);

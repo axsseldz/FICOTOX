@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { descargarUrl } from "@/components/features/biblioteca/visor/usarArchivo";
+import { descargarUrl } from "@/components/features/visor/usarArchivo";
 import { API_BASE_URL } from "./api";
 import { explicarError } from "./mensajes";
 import type { ApiRecord } from "./types";

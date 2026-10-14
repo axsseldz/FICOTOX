@@ -24,8 +24,11 @@ export async function distribucionDe(s: Session, documentoId: number): Promise<R
  * flujo anterior (solo lectura) conserva su regla: vigentes que le fueron distribuidos.
  */
 export function soloAutorizados(auth: Autorizacion): boolean {
-  const permiso = permisoDe(auth, "documentos", "V");
-  return !!permiso && permiso.alcances.length > 0 && permiso.alcances.every((a) => a === "autorizados");
+  // Migracion 22: cualquier accion documental da documentos:V total, asi que el alcance ya no distingue.
+  // Los registros heredados (flujo anterior y Biblioteca) conservan la regla restrictiva para todos,
+  // salvo quien consulta el historico o crea fichas (Mejora Continua, coordinaciones, auditoria).
+  if (!permisoDe(auth, "documentos", "V")) return false;
+  return !permisoDe(auth, "documentos", "documento_consultar_historico") && !permisoDe(auth, "documentos", "documento_crear_ficha");
 }
 
 export async function documentosDistribuidosA(s: Session, usuarioId: number): Promise<number[]> {

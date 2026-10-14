@@ -64,9 +64,11 @@ export const ENTIDADES_RELACIONABLES: Record<string, { label: string; ruta: (id:
   equipos: { label: "Equipo", ruta: () => "/inventario/equipos" },
   reactivos: { label: "Reactivo", ruta: () => "/inventario/reactivos" },
   consumibles: { label: "Consumible", ruta: () => "/inventario/consumibles" },
-  // Documentos del flujo anterior (retirado): se consultan en la Biblioteca, que tiene su copia.
-  documentos_sgc: { label: "Documento (anterior)", ruta: () => "/calidad/biblioteca" },
-  biblioteca_documentos: { label: "Documento de la biblioteca", ruta: (id) => `/calidad/biblioteca/${id}` },
+  // Documentos SGC (migracion 22).
+  sgc_documentos: { label: "Documento SGC", ruta: (id) => `/documentos/${id}` },
+  // Retirados (flujo anterior y Biblioteca): sus registros ligados se conservan; ya no tienen pantalla.
+  documentos_sgc: { label: "Documento (anterior)", ruta: () => "/documentos" },
+  biblioteca_documentos: { label: "Documento de la biblioteca (retirada)", ruta: () => "/documentos" },
 };
 
 /* ---------- No conformidades ---------- */

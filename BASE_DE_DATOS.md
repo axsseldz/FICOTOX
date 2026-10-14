@@ -286,7 +286,13 @@ erDiagram
 | `nc_registros_afectados` | Qué registros (informes, análisis…) toca la no conformidad. | `nc_id`, `entidad`, `entidad_id`, `referencia`. |
 | `suspensiones` | **Suspender** un método o un equipo por una NC (bloquea su uso hasta reanudar). | `tipo` (`metodo`/`equipo`), `clave`, `nc_id`, `motivo`, `suspendida_*`, `reanudada_*`, `estado_previo_equipo`. |
 | `retenciones_informe` | **Retener** un informe (no se libera ni se envía) por una NC. | `nc_id`, `informe_id`, `motivo`, `retenido_*`, `liberada_*`. |
-| `biblioteca_categorias` | Categorías de la Biblioteca de documentos. | `nombre` (único), `orden`, `activa`. |
+| `sgc_areas` | Catálogo de áreas de gestión de Documentos SGC (GC, TH, AD, CO, TC, DI) con su color HEX (identifica el área, nunca el estado). | `codigo` (único), `nombre`, `color`, `orden`, `activo`. |
+| `sgc_tipos` | Tipos documentales (M, P, F, L, I, B, R). | `codigo` (único), `nombre`, `descripcion`, `flujo_predeterminado`. |
+| `sgc_documentos` | **Ficha maestra** de un documento SGC. | `clave` FX (única, normalizada en mayúsculas sin espacios), `titulo`, `area_codigo`, `tipo_codigo`, `origen`, `proceso`, `confidencialidad` (uso_interno/restringido/confidencial), `palabras_clave`, `propietario_id`, `estado` (en_elaboracion/vigente/obsoleto), `revision_vigente_id`. |
+| `sgc_revisiones` | Cada **revisión** de un documento. | `documento_id` + `numero` (únicos juntos), `estado`, fechas de emisión/vigencia/próxima revisión, motivo, apartados y descripción del cambio, `elaborador_id`/`revisor_id`/`autorizador_id`, `origen_registro` (flujo o carga_inicial), conservación. **Solo una vigente por documento** (índice único parcial; en MySQL, columna generada `vigente_de`). |
+| `sgc_archivos` | Archivo fuente y PDF de consulta de una revisión. | `revision_id`, `tipo` (fuente/pdf), `nombre_original`, `nombre_almacenado`, `mime`, `tamano_bytes`, `sha256`, `reemplazado_en`. Disparadores: no se agregan ni cambian archivos de una revisión que ya no está en borrador y no se borran. |
+| `sgc_flujo_acciones`, `sgc_solicitudes`, `sgc_externos`, `sgc_distribucion`, `sgc_lecturas` | Flujo de aprobación, solicitudes, documentos externos, distribución y acuses de lectura (se llenan en las fases 2 y 3 del módulo). | — |
+| `biblioteca_categorias` | (Retirada; sin uso) Categorías de la Biblioteca de documentos. | `nombre` (único), `orden`, `activa`. |
 | `biblioteca_documentos` | Un documento de consulta (manual, procedimiento, formato…). | `titulo`, `descripcion`, `categoria_id`, `clave`, `etiquetas`, `fecha_documento`, `visibilidad` (todos o por roles), `version_actual_id`, `archivado_en`/`archivado_por`/`motivo_archivo`, `origen_sgc_clave` (si vino del flujo anterior). |
 | `biblioteca_versiones` | Cada **versión** (archivo) de un documento. | `documento_id`, `numero` (único con el documento), `nombre_original`, `nombre_almacenado`, `mime`, `extension`, `tamano_bytes`, `sha256`, `nota_version`, `texto` (para buscar dentro), `subido_por`, `subido_en`, `origen_sgc_id`. |
 | `biblioteca_visibilidad_roles` | Qué roles ven un documento restringido. | `documento_id`, `rol_id` (único juntos). |
@@ -648,7 +654,8 @@ Cuándo corre:
 | `informes/` | PDF finales de los informes (`IR-0000028-v1.pdf`) | `informes.archivo_pdf` + `informes.pdf_sha256` |
 | `informes/envios/` | Evidencia de cada envío por correo | `envios_informe.evidencia_archivo` + `evidencia_sha256` |
 | `evidencias/<entidad>/<id>/` | Evidencias adjuntas (de análisis, incidencias, acciones correctivas), con nombre de archivo aleatorio | Tabla `adjuntos` (`nombre_almacenado`, `sha256`) |
-| `biblioteca/` | Archivos de las versiones de los documentos | `biblioteca_versiones.nombre_almacenado` + `sha256` |
+| `sgc/<documento>/<revisión>/` | Archivos de Documentos SGC (fuente y PDF de consulta) | `sgc_archivos.nombre_almacenado` + `sha256` |
+| `biblioteca/` | Archivos de la Biblioteca retirada (sin uso) | `biblioteca_versiones.nombre_almacenado` + `sha256` |
 | `calidad/nc/` | PDF «Registro de no conformidad» al cerrar una NC | `no_conformidades.archivo_pdf` + `pdf_sha256` |
 | `avatares/<usuario>/` | Fotos de perfil (dos tamaños, WEBP) | `usuarios.foto` / `usa_foto` |
 | `maintenance_reports/` | Reportes de mantenimiento | `reportes_mantenimiento.archivo_url` |
@@ -763,6 +770,8 @@ Están en `src/lib/server/migraciones/` y se registran en `motor.mjs`:
 | 16 | Foto de perfil (`usuarios.foto`, `usa_foto`) |
 | 17 | `busqueda_recientes` |
 | 18 | Permisos del módulo «Respaldos» (Calidad › Respaldos): solo datos en `rol_acciones`, sin cambios de estructura |
+| 19–21 | Campos de inventario, unidades de consumibles y ajustes de permisos (usuarios:A, Biblioteca) |
+| 22 | Documentos SGC: catálogos de áreas y tipos, fichas, revisiones (una vigente), archivos inmutables tras enviar a revisión, tablas de las fases 2 y 3 y acciones documentales en `rol_acciones` (retira los permisos de la Biblioteca) |
 
 (Empiezan en la 9 para coincidir con los respaldos anteriores, que usaban 10 y 11 como número de esquema.)
 

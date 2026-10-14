@@ -109,7 +109,9 @@ export type AuditAction =
   | "retener"
   | "liberar_retencion"
   | "comunicar"
-  | "afectar";
+  | "afectar"
+  | "nueva_revision"
+  | "consultar";
 
 export interface AuditEntry {
   accion: AuditAction;

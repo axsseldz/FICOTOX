@@ -25,7 +25,8 @@ import { requireUser } from "../auth";
 import { type Row, type Session } from "../db";
 import type { RouteContext } from "../http";
 import { pendientesDe } from "../pendientes";
-import { listarBiblioteca } from "../modules/biblioteca";
+import { listarDocumentos } from "../modules/sgc/documentos";
+import { ESTADO_DOCUMENTO, ESTADO_REVISION, type EstadoDocumento, type EstadoRevision } from "../../shared/documentos";
 import { listarAcciones, listarNc } from "../modules/calidad/nc";
 import { listarIncidencias } from "../modules/calidad/incidencias";
 import { getConsumables } from "../modules/consumables";
@@ -253,14 +254,19 @@ async function fuenteCalidad(request: Request, s: Session): Promise<Hit[]> {
   return out;
 }
 
+/* Documentos SGC: la misma lista del explorador (los restringidos y confidenciales solo para quien los puede ver). */
 export function hitDocumento(d: ApiRecord): Hit {
   const clave = String(d.clave || "");
-  const etiquetas = Array.isArray(d.etiquetas) ? (d.etiquetas as unknown[]).map(String) : typeof d.etiquetas === "string" ? [d.etiquetas] : [];
-  return hit({ clave: `d-${d.id}`, tipo: "documento", grupo: "biblioteca", titulo: String(d.titulo || clave || "Documento"), sub: join(clave, d.categoria, d.version ? `v${String(d.version)}` : null), href: `/calidad/biblioteca/${d.id}`, etiqueta: "Biblioteca", lista: "/calidad/biblioteca", claves: [clave], palabras: [clave, d.titulo, d.categoria, d.descripcion, ...etiquetas] });
+  const palabras = Array.isArray(d.palabras_clave) ? (d.palabras_clave as unknown[]).map(String) : [];
+  const vigente = d.vigente as ApiRecord | null;
+  const trabajo = d.trabajo as ApiRecord | null;
+  const estado = ESTADO_DOCUMENTO[String(d.estado) as EstadoDocumento]?.etiqueta || "";
+  const enCurso = trabajo ? ESTADO_REVISION[String(trabajo.estado) as EstadoRevision]?.etiqueta : null;
+  return hit({ clave: `doc-${d.id}`, tipo: "documento", grupo: "documentos", titulo: String(d.titulo || clave || "Documento"), sub: join(clave, vigente ? `Rev. ${String(vigente.numero)}` : null, enCurso ? `${estado} · rev. ${String(trabajo?.numero)} ${enCurso.toLowerCase()}` : estado), href: `/documentos/${d.id}`, mono: false, etiqueta: "Documento SGC", lista: "/documentos/explorar", claves: [clave], palabras: [clave, d.titulo, d.proceso, d.area_codigo, ...palabras, "documento sgc"] });
 }
 
-async function fuenteBiblioteca(request: Request, s: Session): Promise<Hit[]> {
-  return items(await leer(request, s, listarBiblioteca, "/api/biblioteca")).map(hitDocumento);
+async function fuenteDocumentos(request: Request, s: Session): Promise<Hit[]> {
+  return items(await leer(request, s, listarDocumentos, "/api/sgc/documentos")).map(hitDocumento);
 }
 
 async function fuentePersonas(request: Request, s: Session): Promise<Hit[]> {
@@ -309,7 +315,7 @@ export async function construirIndice(request: Request, s: Session): Promise<Ind
   hits.push(...(await fuenteInformes(request, s)));
   hits.push(...(await fuenteInventario(request, s)));
   hits.push(...(await fuenteCalidad(request, s)));
-  hits.push(...(await fuenteBiblioteca(request, s)));
+  hits.push(...(await fuenteDocumentos(request, s)));
   hits.push(...(await fuentePersonas(request, s)));
   hits.push(...(await fuentePendientes(request, s)));
   hits.push(...hitsDeCatalogo(auth));

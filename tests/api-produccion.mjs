@@ -1,7 +1,7 @@
 /*
  * Fase 12 · deuda y concurrencia contra el servidor de prueba (base de instance/test):
  * - historial por registro (bitacora y sus solicitudes) con los alcances
- *   de la ficha: asignado (muestras), autorizados (Biblioteca), propio (usuarios),
+ *   de la ficha: asignado (muestras), Documentos SGC (historico y confidencialidad), propio (usuarios),
  *   incidencias (calidad); lo no visible es 404, igual que si no existiera;
  * - la lista de la bitacora dice si esta cortada (la bitacora no se exporta);
  * - folios bajo concurrencia: muchas altas simultaneas de varias personas, sin
@@ -29,27 +29,28 @@ const solicitudes = (entidad, entidadId, token) => api("GET", `/solicitudes?enti
   check("  … quien tiene muestras:V total la ve sin asignación", h3.status === 200, String(h3.status));
 }
 
-// Autorizados: Diego (Estudiante, documentos:V autorizados) solo ve los documentos de la Biblioteca visibles para todos o para su rol.
+// Documentos SGC: el historial (bitacora) de un documento lo ve quien ve su historial (consultar_historico) y respeta la confidencialidad.
 {
   const sufijo = Date.now().toString(36).slice(-4).toUpperCase();
-  const roles = (await api("GET", "/admin/roles", undefined, t.qa)).data?.items || [];
-  const mejora = roles.find((r) => r.nombre === "Coordinador/a de Mejora Continua")?.id;
-  const subir = async (titulo, campos) => {
+  const crear = async (clave, titulo, confidencialidad) => {
     const fd = new FormData();
-    fd.append("archivo", new Blob([await pdfConTexto(1, titulo)]), `${titulo}.pdf`);
-    for (const [k, v] of Object.entries({ titulo, ...campos })) fd.append(k, String(v));
-    return api("POST", "/biblioteca", fd, t.ana);
+    fd.append("archivo_pdf", new Blob([await pdfConTexto(1, titulo)]), `${titulo}.pdf`);
+    for (const [k, v] of Object.entries({ clave, titulo, area_codigo: "GC", tipo_codigo: "P", confidencialidad, elaborador_id: id.luis, revisor_id: id.ricardo, autorizador_id: id.patricia })) fd.append(k, String(v));
+    return api("POST", "/sgc/documentos", fd, t.ana);
   };
-  const restringido = await subir(`Restringido historial ${sufijo}`, { visibilidad: "roles", roles: String(mejora) });
-  const paraTodos = await subir(`Para todos historial ${sufijo}`, { visibilidad: "todos" });
-  const R = restringido.data?.item?.id;
-  const T = paraTodos.data?.item?.id;
-  const [hR, fichaR] = await Promise.all([historial("biblioteca_documentos", R, t.diego), api("GET", `/biblioteca/${R}`, undefined, t.diego)]);
-  check("historial de un documento de la Biblioteca no visible para su rol (alcance autorizados): 404 en la bitácora y la ficha", restringido.status === 201 && hR.status === 404 && fichaR.status === 404, `${restringido.status} ${hR.status} ${fichaR.status}`);
-  const [hT, fichaT] = await Promise.all([historial("biblioteca_documentos", T, t.diego), api("GET", `/biblioteca/${T}`, undefined, t.diego)]);
-  check("  … uno visible para todos SÍ se ve: ficha e historial 200", paraTodos.status === 201 && fichaT.status === 200 && hT.status === 200 && (hT.data?.items || []).length > 0, `${paraTodos.status} ${fichaT.status} ${hT.status}`);
-  const deAna = await historial("biblioteca_documentos", R, t.ana);
-  check("  … quien administra la Biblioteca ve el historial del restringido (200)", deAna.status === 200 && (deAna.data?.items || []).length > 0, String(deAna.status));
+  const restringido = await crear(`FX-GCP-HR${sufijo}`, `Restringido historial ${sufijo}`, "restringido");
+  const interno = await crear(`FX-GCP-HI${sufijo}`, `Uso interno historial ${sufijo}`, "uso_interno");
+  await api("POST", `/sgc/revisiones/${interno.data?.revision_id}/registrar-vigente`, { fecha_emision: "2026-03-01" }, t.ana);
+  const R = restringido.data?.id;
+  const T = interno.data?.id;
+  const [hR, fichaR] = await Promise.all([historial("sgc_documentos", R, t.hector), api("GET", `/sgc/documentos/${R}`, undefined, t.hector)]);
+  check("historial de un documento SGC restringido para quien no debe verlo: 404 en la bitácora y la ficha", restringido.status === 201 && hR.status === 404 && fichaR.status === 404, `${restringido.status} ${hR.status} ${fichaR.status}`);
+  const [hT, fichaT] = await Promise.all([historial("sgc_documentos", T, t.hector), api("GET", `/sgc/documentos/${T}`, undefined, t.hector)]);
+  check("  … uno de uso interno con consultar histórico: ficha e historial 200", interno.status === 201 && fichaT.status === 200 && hT.status === 200 && (hT.data?.items || []).length > 0, `${interno.status} ${fichaT.status} ${hT.status}`);
+  const [hD, fichaD] = await Promise.all([historial("sgc_documentos", T, t.diego), api("GET", `/sgc/documentos/${T}`, undefined, t.diego)]);
+  check("  … con solo consultar vigentes: ve la ficha, pero no su historial (404)", fichaD.status === 200 && hD.status === 404, `${fichaD.status} ${hD.status}`);
+  const deAna = await historial("sgc_documentos", R, t.ana);
+  check("  … Mejora Continua ve el historial del restringido (200)", deAna.status === 200 && (deAna.data?.items || []).length > 0, String(deAna.status));
 }
 
 // Propio: Luis (usuarios:V propio) ve su historial, no el de otra persona ni el de un rol.

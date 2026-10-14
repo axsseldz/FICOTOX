@@ -8,12 +8,12 @@ import type { NextConfig } from "next";
  * por encima de 25 exige volver a correr `npm run build`.
  */
 const evidenciaMaxMb = Math.max(25, Number.parseInt(process.env.EVIDENCIA_MAX_MB || "", 10) || 25);
-/* Biblioteca de documentos: BIBLIOTECA_MAX_MB (50 por omision); el proxy admite el mayor de los dos limites. */
-const bibliotecaMaxMb = Math.max(50, Number.parseInt(process.env.BIBLIOTECA_MAX_MB || "", 10) || 50);
+/* Documentos SGC: DOCUMENTOS_MAX_MB (antes BIBLIOTECA_MAX_MB; 50 por omision); el proxy admite el mayor de los dos limites. */
+const documentosMaxMb = Math.max(50, Number.parseInt(process.env.DOCUMENTOS_MAX_MB || process.env.BIBLIOTECA_MAX_MB || "", 10) || 50);
 
 const nextConfig: NextConfig = {
   experimental: {
-    proxyClientMaxBodySize: (Math.max(evidenciaMaxMb, bibliotecaMaxMb) + 2) * 1024 * 1024,
+    proxyClientMaxBodySize: (Math.max(evidenciaMaxMb, documentosMaxMb) + 2) * 1024 * 1024,
   },
   // Salida autocontenida (.next/standalone) para desplegar solo con Node.js.
   output: "standalone",
@@ -22,6 +22,13 @@ const nextConfig: NextConfig = {
   // El frontend legado llamaba rutas como /api/consumables/ (con barra final).
   // Se reescriben internamente (sin redirect, para no perder el cuerpo de los POST).
   skipTrailingSlashRedirect: true,
+  // La Biblioteca se retiro: Calidad › Documentos SGC la reemplaza (enlaces guardados y marcadores).
+  async redirects() {
+    return [
+      { source: "/calidad/biblioteca", destination: "/documentos", permanent: false },
+      { source: "/calidad/biblioteca/:path*", destination: "/documentos", permanent: false },
+    ];
+  },
   async rewrites() {
     return {
       beforeFiles: [{ source: "/api/:path+/", destination: "/api/:path+" }],

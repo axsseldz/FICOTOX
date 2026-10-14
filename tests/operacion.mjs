@@ -22,6 +22,7 @@ import { createRequire } from "node:module";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { VERSION_ACTUAL } from "../src/lib/server/migraciones/motor.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
@@ -155,7 +156,7 @@ const nuevaInst = instalacion("instancia", `SECRET_KEY=${"b".repeat(64)}\nJWT_SE
   const usuarios = db.prepare("SELECT email, debe_cambiar_password AS d FROM usuarios ORDER BY id").all();
   const roles = db.prepare("SELECT u.email, r.nombre FROM usuario_roles ur JOIN usuarios u ON u.id = ur.usuario_id JOIN roles r ON r.id = ur.rol_id").all();
   const version = db.prepare("SELECT MAX(version) AS v FROM schema_migraciones").get().v;
-  check("  … base nueva con las migraciones (versión actual) y el catálogo de roles; solo las dos cuentas, con cambio de contraseña obligatorio", version === 17 && db.prepare("SELECT COUNT(*) AS n FROM roles").get().n === 10 && usuarios.length === 2 && usuarios.every((u) => u.d === 1) && roles.some((x) => x.email === "ana@cicese.mx" && x.nombre === "Administrador técnico del sistema") && roles.some((x) => x.email === "rosa@cicese.mx" && x.nombre === "Responsable General"), JSON.stringify(roles));
+  check("  … base nueva con las migraciones (versión actual) y el catálogo de roles; solo las dos cuentas, con cambio de contraseña obligatorio", version === VERSION_ACTUAL && db.prepare("SELECT COUNT(*) AS n FROM roles").get().n === 10 && usuarios.length === 2 && usuarios.every((u) => u.d === 1) && roles.some((x) => x.email === "ana@cicese.mx" && x.nombre === "Administrador técnico del sistema") && roles.some((x) => x.email === "rosa@cicese.mx" && x.nombre === "Responsable General"), JSON.stringify(roles));
   const vacias = ["autorizaciones_personal", "reactivos", "consumibles", "recepciones", "documentos_sgc", "biblioteca_documentos"].filter((t) => db.prepare(`SELECT name FROM sqlite_master WHERE name = ?`).get(t)).map((t) => [t, db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n]);
   check("  … sin datos de demostración ni autorizaciones de ejemplo", vacias.every(([, n]) => n === 0), JSON.stringify(vacias));
   const filas = db.prepare("SELECT * FROM auditoria ORDER BY id").all();
@@ -335,7 +336,7 @@ try {
       const version = new Sqlite(nuevaInst.base, { readonly: true }).prepare("SELECT MAX(version) AS v FROM schema_migraciones").get().v;
       check(
         "actualizar con build fallido: exit 1, build anterior devuelto, base sin tocar y el servidor arrancado como estaba",
-        a.codigo === 1 && fs.readFileSync(path.join(build, ".next/standalone/server.js"), "utf8") === "// build anterior\n" && !fs.existsSync(path.join(build, ".next/parcial")) && !fs.existsSync(path.join(build, ".next-anterior")) && version === 17 && salud2.ok && pidDespues && pidDespues !== pidAntes && /respaldo/i.test(a.salida),
+        a.codigo === 1 && fs.readFileSync(path.join(build, ".next/standalone/server.js"), "utf8") === "// build anterior\n" && !fs.existsSync(path.join(build, ".next/parcial")) && !fs.existsSync(path.join(build, ".next-anterior")) && version === VERSION_ACTUAL && salud2.ok && pidDespues && pidDespues !== pidAntes && /respaldo/i.test(a.salida),
         `exit ${a.codigo} pid ${pidAntes}→${pidDespues} salud ${salud2.ok}`,
       );
 

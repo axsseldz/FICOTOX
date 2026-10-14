@@ -1,4 +1,4 @@
-import { ACCION_KEYS, isAccion, isModulo, type Accion, type PermisoFila } from "@/lib/shared/permisos";
+import { ACCION_DOCUMENTAL_KEYS, ACCION_KEYS, isAccionClasica, isAccionDocumental, isModulo, type AccionClasica, type AccionDocumental, type PermisoFila } from "@/lib/shared/permisos";
 
 /*
  * Permisos de un rol en lenguaje cotidiano (Administración › Roles): nunca
@@ -8,21 +8,21 @@ import { ACCION_KEYS, isAccion, isModulo, type Accion, type PermisoFila } from "
 
 /* Areas en el orden en que se muestran (clave del modulo -> nombre). */
 /* `acciones`: solo esas columnas aplican al área (Respaldos: ver y administrar); `soloTotal`: sin alcances intermedios. */
-export const AREAS_PERMISOS: Array<{ clave: string; nombre: string; detalle: string; acciones?: Accion[]; soloTotal?: boolean }> = [
+/* Documentos SGC no esta en la matriz: tiene sus acciones documentales propias (ACCIONES_DOCUMENTALES). */
+export const AREAS_PERMISOS: Array<{ clave: string; nombre: string; detalle: string; acciones?: AccionClasica[]; soloTotal?: boolean }> = [
   { clave: "muestras", nombre: "Muestras", detalle: "Recepción, custodia y disposición final" },
   { clave: "ensayos", nombre: "Ensayos", detalle: "Procesamiento, extracción y análisis" },
   { clave: "informes", nombre: "Informes", detalle: "Informes de resultados" },
   { clave: "equipos", nombre: "Equipos", detalle: "Equipos y mantenimientos" },
   { clave: "inventario", nombre: "Inventario", detalle: "Reactivos, consumibles y movimientos" },
   { clave: "calidad", nombre: "Calidad", detalle: "Registro de actividad, incidencias y no conformidades" },
-  { clave: "documentos", nombre: "Biblioteca", detalle: "Documentos de consulta" },
   { clave: "usuarios", nombre: "Usuarios", detalle: "Cuentas, roles y autorizaciones" },
   { clave: "respaldos", nombre: "Respaldos", detalle: "Copias de seguridad y pruebas de restauración", acciones: ["V", "G"], soloTotal: true },
   { clave: "compras", nombre: "Compras", detalle: "Todavía sin pantallas" },
 ];
 
 /* Columnas del editor y verbos de las frases. */
-export const ACCIONES_LEGIBLES: Record<Accion, { columna: string; verbo: string }> = {
+export const ACCIONES_LEGIBLES: Record<AccionClasica, { columna: string; verbo: string }> = {
   V: { columna: "Ver", verbo: "ver" },
   C: { columna: "Crear", verbo: "registrar" },
   E: { columna: "Editar", verbo: "editar" },
@@ -30,6 +30,24 @@ export const ACCIONES_LEGIBLES: Record<Accion, { columna: string; verbo: string 
   A: { columna: "Aprobar", verbo: "aprobar" },
   AN: { columna: "Anular", verbo: "anular" },
   G: { columna: "Administrar", verbo: "administrar" },
+};
+
+/* Acciones documentales en palabras (frases de "Qué puede hacer"). */
+export const VERBOS_DOCUMENTALES: Record<AccionDocumental, string> = {
+  documento_consultar_vigente: "consultar los documentos vigentes",
+  documento_proponer: "proponer cambios",
+  documento_crear_ficha: "crear fichas",
+  documento_elaborar: "elaborar los que se le asignan",
+  documento_enviar_revision: "enviarlos a revisión",
+  documento_revisar: "revisar los que se le asignan",
+  documento_autorizar: "autorizar los que se le asignan",
+  documento_publicar: "publicar revisiones autorizadas",
+  documento_obsoletar: "declarar documentos obsoletos",
+  documento_consultar_historico: "consultar el histórico",
+  documento_acusar_lectura: "confirmar la lectura",
+  documento_administrar_lecturas: "administrar lecturas",
+  documento_externo_gestionar: "gestionar documentos externos",
+  lista_maestra_exportar: "exportar la Lista Maestra",
 };
 
 /* Alcances en palabras: la opcion del editor y el complemento de la frase. */
@@ -97,10 +115,12 @@ const LIMITE_FRASE: Record<string, string> = {
 
 /* Por area: frases como "Puede ver y registrar recepciones y muestras". Las areas sin permisos no aparecen. */
 export function frasesPorArea(filas: unknown): Array<{ clave: string; area: string; frases: string[] }> {
-  const porArea = new Map<string, Map<string, Accion[]>>();
+  const porArea = new Map<string, Map<string, AccionClasica[]>>();
+  const documentales: AccionDocumental[] = [];
   for (const fila of Array.isArray(filas) ? (filas as PermisoFila[]) : []) {
-    if (!fila || !isModulo(fila.modulo) || !isAccion(fila.accion)) continue;
-    const grupos = porArea.get(fila.modulo) || new Map<string, Accion[]>();
+    if (fila && fila.modulo === "documentos" && isAccionDocumental(fila.accion)) documentales.push(fila.accion);
+    if (!fila || !isModulo(fila.modulo) || !isAccionClasica(fila.accion) || fila.modulo === "documentos") continue;
+    const grupos = porArea.get(fila.modulo) || new Map<string, AccionClasica[]>();
     const alcance = String(fila.alcance || "total");
     grupos.set(alcance, [...(grupos.get(alcance) || []), fila.accion]);
     porArea.set(fila.modulo, grupos);
@@ -122,6 +142,10 @@ export function frasesPorArea(filas: unknown): Array<{ clave: string; area: stri
         return `Puede ${unir(verbos)} ${objeto}${limite ? `, ${limite}` : ""}`;
       });
     out.push({ clave: area.clave, area: area.nombre, frases });
+  }
+  if (documentales.length) {
+    const verbos = ACCION_DOCUMENTAL_KEYS.filter((a) => documentales.includes(a)).map((a) => VERBOS_DOCUMENTALES[a]);
+    out.push({ clave: "documentos", area: "Documentos SGC", frases: [`Puede ${unir(verbos)}`] });
   }
   return out;
 }

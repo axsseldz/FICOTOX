@@ -31,6 +31,7 @@ const ETIQUETA_ACCION: Record<string, string> = {
   permisos: "cambiar los permisos de un rol",
   crear: "crear un respaldo",
   probar: "probar la restauración de un respaldo",
+  publicar: "registrar o publicar una revisión vigente de un documento",
 };
 
 function describirAccion(accion: string): string {

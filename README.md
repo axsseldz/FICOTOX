@@ -1,6 +1,6 @@
 # FICOTOX
 
-Sistema web del laboratorio para gestionar inventario y equipos, muestras (recepción, procesamiento, extracción y análisis), informes de resultados, calidad (incidencias, no conformidades y biblioteca de documentos) y una bitácora de auditoría sellada. Aplicación Next.js única (interfaz y API) con SQLite por omisión o MySQL/MariaDB.
+Sistema web del laboratorio para gestionar inventario y equipos, muestras (recepción, procesamiento, extracción y análisis), informes de resultados, calidad (incidencias, no conformidades y Documentos SGC: control documental con clave FX, revisiones y archivos) y una bitácora de auditoría sellada. Aplicación Next.js única (interfaz y API) con SQLite por omisión o MySQL/MariaDB.
 
 > **Reglas que no se rompen**
 > - La **llave de la bitácora** (`SECRET_KEY`) se genera una sola vez y **no se cambia nunca**: sin ella no se puede comprobar que la bitácora no fue alterada.
@@ -101,7 +101,7 @@ Problemas frecuentes: **puerto en uso** (casi siempre es FICOTOX ya corriendo co
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Envío de informes desde la plataforma (todas o ninguna). |
 | `TLS_CERT`, `TLS_KEY`, `TLS_CA` | HTTPS opcional. |
 | `AUTORIZACIONES_OBLIGATORIAS` | Exige la autorización FX-THF-AP para guardar formatos (`true`). |
-| `EVIDENCIA_MAX_MB`, `BIBLIOTECA_MAX_MB` | Tamaño máximo de adjuntos (25 y 50); subirlos exige `npm run build`. |
+| `EVIDENCIA_MAX_MB`, `DOCUMENTOS_MAX_MB` | Tamaño máximo de la evidencia y de los archivos de Documentos SGC (25 y 50; `BIBLIOTECA_MAX_MB` se sigue leyendo); subirlos exige `npm run build`. |
 | `RESPALDO_RETENCION`, `RESPALDO_AVISO_HORAS`, `PRUEBA_RESTAURACION_AVISO_DIAS` | Retención y avisos de respaldo (30, 24, 90). |
 | `MIGRAR_AL_ARRANCAR` | Aplica las migraciones pendientes al arrancar (`true`). |
 | `LOG_MAX_MB`, `LOG_RETENCION_DIAS` | Rotación de los registros (10 MB, 90 días). |

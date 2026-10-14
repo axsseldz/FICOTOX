@@ -1,0 +1,141 @@
+/*
+ * Documentos SGC (especificacion del modulo de gestion documental): catalogos
+ * y reglas compartidas entre servidor e interfaz. Las areas y los tipos viven
+ * en la base (sgc_areas, sgc_tipos; los siembra la migracion 22); aqui solo
+ * estan las reglas de la clave FX, los estados, la confidencialidad y los
+ * archivos admitidos.
+ */
+
+/* ---------- Clave FX ---------- */
+
+/*
+ * La plataforma no genera claves: registra la que autoriza Mejora Continua y
+ * valida su estructura. Formato general FX-[Area][Tipo]-[ID] (FX-TCF-GMR,
+ * FX-GCP-CD, FX-GCP-CD-1-1). Excepcion: los manuales rectores FX-MC y FX-MO,
+ * con o sin sufijo (FX-MC-1/1, FX-MO-2-1), solo en el area DI y tipo M.
+ * Unica sin distinguir mayusculas ni espacios: se guarda normalizada.
+ */
+const RE_GENERAL = /^FX-([A-Z]{2})([A-Z])-([A-Z0-9]+(?:[-/][A-Z0-9]+)*)$/;
+const RE_RECTOR = /^FX-(MC|MO)(?:-[A-Z0-9]+(?:[-/][A-Z0-9]+)*)?$/;
+export const AREA_RECTORES = "DI";
+export const TIPO_RECTORES = "M";
+
+/* Mayusculas, sin espacios y con guiones normales (– — ‐ se leen como -). */
+export function normalizarClave(valor: unknown): string {
+  return String(valor ?? "")
+    .normalize("NFKC")
+    .replace(/[‐-―−]/g, "-")
+    .replace(/\s+/g, "")
+    .toUpperCase()
+    .slice(0, 80);
+}
+
+export interface ResultadoClave {
+  clave: string;
+  /* Problema para mostrar; null si la clave es valida para el area y el tipo dados. */
+  problema: string | null;
+  rector: boolean;
+}
+
+/* Valida la clave contra el area y el tipo de la ficha (codigos del catalogo). */
+export function validarClave(valor: unknown, area: string, tipo: string): ResultadoClave {
+  const clave = normalizarClave(valor);
+  if (!clave) return { clave, problema: "Indica la clave FX autorizada por Mejora Continua", rector: false };
+  if (RE_RECTOR.test(clave)) {
+    const problema = area === AREA_RECTORES && tipo === TIPO_RECTORES ? null : "Las claves FX-MC y FX-MO son solo para los manuales rectores: elige el área DI (Documentos rectores) y el tipo M (Manual)";
+    return { clave, problema, rector: true };
+  }
+  const m = RE_GENERAL.exec(clave);
+  if (!m) return { clave, problema: "La clave no cumple el formato FX-[Área][Tipo]-[ID] (por ejemplo FX-TCF-GMR o FX-GCP-CD); los manuales rectores usan FX-MC o FX-MO", rector: false };
+  if (m[1] !== area) return { clave, problema: `La clave indica el área ${m[1]}, pero la ficha es del área ${area || "sin elegir"}: deben coincidir`, rector: false };
+  if (m[2] !== tipo) return { clave, problema: `La clave indica el tipo ${m[2]}, pero la ficha es del tipo ${tipo || "sin elegir"}: deben coincidir`, rector: false };
+  return { clave, problema: null, rector: false };
+}
+
+/* ---------- Estados ---------- */
+
+/*
+ * Estados de una revision. Fase 1: borrador, en_revision (enviada; archivos
+ * bloqueados) y vigente / obsoleta. El resto del flujo (en_autorizacion,
+ * autorizada, devuelta, cancelada) lo usa la Fase 2.
+ */
+export const ESTADOS_REVISION = ["borrador", "en_revision", "en_autorizacion", "autorizada", "vigente", "obsoleta", "cancelada"] as const;
+export type EstadoRevision = (typeof ESTADOS_REVISION)[number];
+/* Revision "de trabajo": todavia no vigente ni cerrada (a lo mas una por documento). */
+export const ESTADOS_TRABAJO: EstadoRevision[] = ["borrador", "en_revision", "en_autorizacion", "autorizada"];
+
+export type TonoEstado = "neutral" | "brand" | "success" | "warning" | "danger";
+export type IconoEstado = "borrador" | "revision" | "autorizacion" | "autorizada" | "vigente" | "obsoleta" | "cancelada";
+
+export const ESTADO_REVISION: Record<EstadoRevision, { etiqueta: string; tono: TonoEstado; icono: IconoEstado; descripcion: string }> = {
+  borrador: { etiqueta: "Borrador", tono: "neutral", icono: "borrador", descripcion: "En elaboración; sus archivos se pueden cambiar" },
+  en_revision: { etiqueta: "En revisión", tono: "brand", icono: "revision", descripcion: "Enviada al revisor; sus archivos ya no se pueden cambiar" },
+  en_autorizacion: { etiqueta: "En autorización", tono: "brand", icono: "autorizacion", descripcion: "Revisada; espera la autorización" },
+  autorizada: { etiqueta: "Autorizada", tono: "warning", icono: "autorizada", descripcion: "Autorizada; espera que Mejora Continua la publique" },
+  vigente: { etiqueta: "Vigente", tono: "success", icono: "vigente", descripcion: "Revisión en uso, de solo lectura" },
+  obsoleta: { etiqueta: "Obsoleta", tono: "danger", icono: "obsoleta", descripcion: "Retirada del uso; se conserva en el historial" },
+  cancelada: { etiqueta: "Cancelada", tono: "neutral", icono: "cancelada", descripcion: "Se dejó sin publicar; se conserva en el historial" },
+};
+
+/* Estado global del documento (ficha). */
+export const ESTADOS_DOCUMENTO = ["en_elaboracion", "vigente", "obsoleto"] as const;
+export type EstadoDocumento = (typeof ESTADOS_DOCUMENTO)[number];
+export const ESTADO_DOCUMENTO: Record<EstadoDocumento, { etiqueta: string; tono: TonoEstado; icono: IconoEstado }> = {
+  en_elaboracion: { etiqueta: "En elaboración", tono: "neutral", icono: "borrador" },
+  vigente: { etiqueta: "Vigente", tono: "success", icono: "vigente" },
+  obsoleto: { etiqueta: "Obsoleto", tono: "danger", icono: "obsoleta" },
+};
+
+/* ---------- Clasificacion ---------- */
+
+export const CONFIDENCIALIDADES = [
+  { value: "uso_interno", label: "Uso interno", descripcion: "Lo consulta todo el personal con permiso de consulta" },
+  { value: "restringido", label: "Restringido", descripcion: "Solo Mejora Continua, Responsable General, el propietario, los asignados y los destinatarios" },
+  { value: "confidencial", label: "Confidencial", descripcion: "Solo Mejora Continua, Responsable General, el propietario, los asignados y los destinatarios" },
+] as const;
+export type Confidencialidad = (typeof CONFIDENCIALIDADES)[number]["value"];
+export const esConfidencialidad = (v: unknown): v is Confidencialidad => CONFIDENCIALIDADES.some((c) => c.value === v);
+export const etiquetaConfidencialidad = (v: unknown) => CONFIDENCIALIDADES.find((c) => c.value === v)?.label || "Uso interno";
+
+export const ORIGENES = [
+  { value: "interno", label: "Interno" },
+  { value: "externo", label: "Externo" },
+] as const;
+export type Origen = (typeof ORIGENES)[number]["value"];
+
+/* Palabras clave: separadas por coma, sin repetir (sin distinguir mayusculas), maximo 20 de 40 caracteres. */
+export function normalizarPalabras(valor: unknown): string[] {
+  const lista = Array.isArray(valor) ? valor.map(String) : String(valor || "").split(",");
+  const out: string[] = [];
+  for (const e of lista) {
+    const t = e.trim().replace(/\s+/g, " ").slice(0, 40);
+    if (t && !out.some((x) => x.toLowerCase() === t.toLowerCase())) out.push(t);
+  }
+  return out.slice(0, 20);
+}
+
+/* ---------- Archivos ---------- */
+
+/*
+ * Cada revision tiene a lo mas un archivo fuente (editable) y un PDF de
+ * consulta activos; sustituirlos en borrador conserva el anterior (marcado
+ * como reemplazado). Al enviar a revision ya no se aceptan cambios.
+ */
+export const TIPOS_ARCHIVO_SGC = [
+  { value: "pdf", label: "PDF de consulta", extensiones: ["pdf"] },
+  { value: "fuente", label: "Archivo fuente", extensiones: ["docx", "xlsx", "xls", "pptx", "pdf"] },
+] as const;
+export type TipoArchivoSgc = (typeof TIPOS_ARCHIVO_SGC)[number]["value"];
+export const esTipoArchivo = (v: unknown): v is TipoArchivoSgc => v === "pdf" || v === "fuente";
+export const extensionesDe = (tipo: TipoArchivoSgc): readonly string[] => TIPOS_ARCHIVO_SGC.find((t) => t.value === tipo)!.extensiones;
+
+/* Tipo MIME con que se sirve cada extension (nunca el que manda el navegador). */
+export const MIME_SGC: Record<string, string> = {
+  pdf: "application/pdf",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  xls: "application/vnd.ms-excel",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+};
+export const DOCUMENTOS_MAX_MB_DEFAULT = 50;
+export const MOTIVO_MIN_SGC = 5;
