@@ -20,7 +20,14 @@ export interface TareaSgc {
   href: string;
 }
 
+/* Tareas del flujo y lecturas pendientes (CA-11); total suma ambas (contador del menu). */
+export interface BandejaSgc {
+  items: TareaSgc[];
+  lecturas_pendientes: TareaSgc[];
+  total: number;
+}
+
 export function useBandejaSgc(enabled = true) {
   const { token } = useSession();
-  return useResource<{ items: TareaSgc[]; total: number }>(["sgc", "sgc-bandeja"], async () => (await getJsonAuth(`${API_BASE_URL}/sgc/bandeja`, token)) as unknown as { items: TareaSgc[]; total: number }, { enabled: !!token && enabled });
+  return useResource<BandejaSgc>(["sgc", "sgc-bandeja"], async () => (await getJsonAuth(`${API_BASE_URL}/sgc/bandeja`, token)) as unknown as BandejaSgc, { enabled: !!token && enabled });
 }

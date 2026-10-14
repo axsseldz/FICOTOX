@@ -7,7 +7,7 @@ import { Callout, ChoiceCard } from "@/components/features/samples/FormLayout";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
 import { DateInput } from "@/components/ui/DateInput";
-import { Field, FormGrid, Select, Textarea } from "@/components/ui/Field";
+import { Field, FormGrid, Select, Switch, Textarea } from "@/components/ui/Field";
 import { Dialog } from "@/components/ui/Overlay";
 import { useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
 import { API_BASE_URL, sendJsonAuth } from "@/lib/client/api";
@@ -16,8 +16,9 @@ import { invalidate } from "@/lib/client/store";
 import { ANIOS_PROXIMA_REVISION, MOTIVO_MIN_SGC, sumarAnios } from "@/lib/shared/documentos";
 import { hoyLocal } from "@/lib/shared/fechas";
 import type { AccionDocumental } from "@/lib/shared/permisos";
-import type { Catalogos, FichaDocumento, Revision } from "./comun";
+import type { Catalogos, Distribucion, FichaDocumento, Revision } from "./comun";
 import { opcionesPersonas } from "./FichaSheet";
+import { cuerpoDestinatarios, destinatariosVacios, SelectorDestinatarios, type Destinatarios } from "./Distribucion";
 
 /*
  * Dialogos del flujo de aprobacion (Fase 2). El servidor decide (papel
@@ -108,7 +109,7 @@ export const OPCIONES_RENOVACION_AUTORIZADOR: Opcion[] = [
 ];
 
 /* Publicar (Mejora Continua, contrasena): fechas de emision, vigencia y proxima revision (+3 anios por omision). */
-export function PublicarDialog({ doc, revision, onClose }: { doc: FichaDocumento["item"]; revision: Revision; onClose: () => void }) {
+export function PublicarDialog({ doc, revision, catalogos, distribucionAnterior, onClose }: { doc: FichaDocumento["item"]; revision: Revision; catalogos: Catalogos | null; distribucionAnterior: Distribucion | null; onClose: () => void }) {
   const { token } = useSession();
   const hoy = hoyLocal();
   const [emision, setEmision] = useState(hoy);
@@ -117,10 +118,16 @@ export function PublicarDialog({ doc, revision, onClose }: { doc: FichaDocumento
   const [tocada, setTocada] = useState(false);
   const [comentario, setComentario] = useState("");
   const [guardando, setGuardando] = useState(false);
+  // Distribucion (Fase 3): quien administra lecturas la define al publicar; si no, se conserva la de la revision anterior.
+  const administra = !!catalogos?.yo.acciones.includes("documento_administrar_lecturas");
+  const conservable = !!distribucionAnterior?.filas.length;
+  const [definir, setDefinir] = useState(false);
+  const [dest, setDest] = useState<Destinatarios>(destinatariosVacios);
   const v = useValidacion({
     titulo: "No se pudo publicar",
     reglas: (): Problema[] => {
       const out: Problema[] = [];
+      if (definir && !dest.roles.length && !dest.usuarios.length) out.push({ campo: "pub-destinatarios", mensaje: "Elige al menos un rol o una persona, o desactiva «Definir la distribución»" });
       if (!emision) out.push({ campo: "pub-emision", mensaje: "Indica la fecha de emisión" });
       if (vigencia && emision && vigencia < emision) out.push({ campo: "pub-vigencia", mensaje: "La vigencia no puede empezar antes de la emisión" });
       if (proxima && proxima <= (vigencia || emision)) out.push({ campo: "pub-proxima", mensaje: "La próxima revisión debe ser posterior a la vigencia" });
@@ -131,10 +138,10 @@ export function PublicarDialog({ doc, revision, onClose }: { doc: FichaDocumento
     if (!v.validar()) return;
     setGuardando(true);
     try {
-      await enviar(`${API_BASE_URL}/sgc/revisiones/${revision.id}/publicar`, token, { fecha_emision: emision, fecha_vigencia: vigencia, fecha_proxima_revision: proxima, comentario: comentario.trim() }, "Publicada");
+      await enviar(`${API_BASE_URL}/sgc/revisiones/${revision.id}/publicar`, token, { fecha_emision: emision, fecha_vigencia: vigencia, fecha_proxima_revision: proxima, comentario: comentario.trim(), ...(definir ? { distribucion: cuerpoDestinatarios(dest) } : {}) }, "Publicada");
       onClose();
     } catch (err) {
-      v.errorServidor(err, { fecha_emision: "pub-emision", fecha_vigencia: "pub-vigencia", fecha_proxima_revision: "pub-proxima" });
+      v.errorServidor(err, { fecha_emision: "pub-emision", fecha_vigencia: "pub-vigencia", fecha_proxima_revision: "pub-proxima", roles: "pub-destinatarios", usuarios: "pub-destinatarios" });
     } finally {
       setGuardando(false);
     }
@@ -187,6 +194,12 @@ export function PublicarDialog({ doc, revision, onClose }: { doc: FichaDocumento
           <Field label="Comentario (opcional)" htmlFor="pub-comentario">
             <Textarea id="pub-comentario" rows={2} value={comentario} onChange={(e) => setComentario(e.target.value)} />
           </Field>
+          {administra ? (
+            <div className="flex flex-col gap-3 border-t border-line pt-4" data-testid="pub-distribucion">
+              <Switch checked={definir} onCheckedChange={setDefinir} label="Definir la distribución" description={conservable ? "Si no la defines, se conserva la de la revisión anterior (con acuses de lectura nuevos)." : "Destinatarios por rol o por persona, punto de uso y si requieren confirmar la lectura."} />
+              {definir ? <SelectorDestinatarios valor={dest} onChange={setDest} catalogos={catalogos} prefijo="pub" /> : null}
+            </div>
+          ) : null}
         </div>
       </ValidacionAmbito>
     </Dialog>

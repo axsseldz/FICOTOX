@@ -111,7 +111,10 @@ export type AuditAction =
   | "comunicar"
   | "afectar"
   | "nueva_revision"
-  | "consultar";
+  | "consultar"
+  | "distribuir"
+  | "retirar_distribucion"
+  | "recordar";
 
 export interface AuditEntry {
   accion: AuditAction;

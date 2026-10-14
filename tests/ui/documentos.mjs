@@ -82,7 +82,7 @@ try {
         if (!texto.includes(codigo) || banda !== rgb(hex) || !/Vigentes/.test(texto)) colores = false;
       }
       check("cada carpeta con sigla, nombre, color HEX del área (banda) y conteos con texto", colores);
-      check("menú Calidad: Incidencias y NC · Documentos SGC · Auditoría · Respaldos", (await page.locator('aside[aria-label="Navegación principal"] nav a').allInnerTexts()).join("|").includes("Incidencias y NC|Documentos SGC|Auditoría|Respaldos"));
+      check("menú Calidad: Incidencias y NC · Documentos SGC · Auditoría · Respaldos", (await page.locator('aside[aria-label="Navegación principal"] nav a').allInnerTexts()).map((x) => x.replace(/^(Documentos SGC)\s*\d+$/, "$1")).join("|").includes("Incidencias y NC|Documentos SGC|Auditoría|Respaldos"));
 
       await page.locator('[data-testid="sgc-carpeta"][data-area="TC"]').click();
       await page.waitForURL((url) => url.pathname === "/documentos/explorar" && url.searchParams.get("area") === "TC");

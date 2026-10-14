@@ -350,7 +350,7 @@ try {
   await page.waitForURL((url) => url.pathname === "/documentos");
   await page.getByTestId("sgc-carpetas").waitFor();
   check("/calidad/biblioteca lleva a Documentos SGC (seis carpetas)", (await page.getByTestId("sgc-carpeta").count()) === 6);
-  check("Documentos SGC aparece en el menú Calidad (y ya no «Biblioteca»)", (await page.locator("nav a", { hasText: /^Documentos SGC$/ }).count()) > 0 && (await page.locator("nav a", { hasText: /^Biblioteca$/ }).count()) === 0);
+  check("Documentos SGC aparece en el menú Calidad (y ya no «Biblioteca»)", (await page.locator("nav a", { hasText: /^Documentos SGC(\s*\d+)?$/ }).count()) > 0 && (await page.locator("nav a", { hasText: /^Biblioteca$/ }).count()) === 0);
 
   /* ---------- Auditoria (lenguaje simple; la integridad se verifica sola y solo avisa si falla) ---------- */
   await page.goto(`${BASE}/auditoria`);

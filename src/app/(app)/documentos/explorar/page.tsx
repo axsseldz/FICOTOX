@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState, type KeyboardEvent } from "react";
 import { FilePlus, Files, ListBullets, LockKey, Plus, SquaresFour } from "@phosphor-icons/react";
 import { SolicitudSheet } from "@/components/features/documentos/SolicitudSheets";
-import { areaDe, ConfidencialidadEtiqueta, EstadoDocumentoEtiqueta, EstadoRevisionEtiqueta, IconoArea, nombreTipo, ProximaRevisionEtiqueta, RequireDocumentos, RutaDocumentos, useCatalogos, type DocLista } from "@/components/features/documentos/comun";
+import { areaDe, ConfidencialidadEtiqueta, EstadoDocumentoEtiqueta, ExternoEtiqueta, EstadoRevisionEtiqueta, IconoArea, nombreTipo, ProximaRevisionEtiqueta, RequireDocumentos, RutaDocumentos, useCatalogos, type DocLista } from "@/components/features/documentos/comun";
 import { FichaSheet } from "@/components/features/documentos/FichaSheet";
 import { PageBody } from "@/components/shell/AppShell";
 import { useSession } from "@/components/session/SessionProvider";
@@ -72,7 +72,7 @@ function Explorador() {
   const [area, setArea] = useState(useInitialParam("area").toUpperCase());
   const [tipo, setTipo] = useState(useInitialParam("tipo").toUpperCase());
   const [estado, setEstado] = useState(useInitialParam("estado"));
-  const [origen, setOrigen] = useState("");
+  const [origen, setOrigen] = useState(useInitialParam("origen"));
   const [propietario, setPropietario] = useState("");
   const [periodo, setPeriodo] = useState("todo");
   const [desde, setDesde] = useState("");
@@ -187,6 +187,7 @@ function Explorador() {
       <EstadoDocumentoEtiqueta estado={doc.estado} />
       {doc.trabajo ? <EstadoRevisionEtiqueta estado={doc.trabajo.estado} /> : null}
       <ProximaRevisionEtiqueta fecha={doc.vigente?.fecha_proxima_revision} />
+      {doc.origen === "externo" ? <ExternoEtiqueta /> : null}
     </span>
   );
 

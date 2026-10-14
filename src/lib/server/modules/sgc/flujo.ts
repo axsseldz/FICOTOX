@@ -30,6 +30,7 @@ import { getConfig } from "../../config";
 import { type Row, type Session } from "../../db";
 import { HttpError, intParam, json, readJson, type RouteContext } from "../../http";
 import { cargarAutorizacion, cargoActuante, hoy, permisoDe } from "../../rbac";
+import { copiarDistribucion, datosDistribucion, guardarDistribucion, lecturasPendientesDe } from "./lecturas";
 import { exigirReauth } from "../../seguridad";
 import { crearSolicitud, exigirSinSolicitudPendiente, porAutorizarDe, respuestaSolicitud, type ContextoEjecucion } from "../../solicitudes";
 import { accesoSgc, documentoVisible, tiene, type AccesoSgc } from "./acceso";
@@ -468,6 +469,9 @@ export async function publicarRevision({ request, s, params }: RouteContext): Pr
   if (vigencia < emision) throw new HttpError(400, { message: "La vigencia no puede empezar antes de la emisión", campo: "fecha_vigencia" });
   const proxima = fechaONull(raw.fecha_proxima_revision, "fecha_proxima_revision") || sumarAnios(emision, ANIOS_PROXIMA_REVISION);
   if (proxima <= vigencia) throw new HttpError(400, { message: "La próxima revisión debe ser posterior a la fecha de vigencia", campo: "fecha_proxima_revision" });
+  // Distribucion (Fase 3): la que se indique al publicar; si no se indica, se conserva la de la revision anterior.
+  const distribucion = datosDistribucion(raw.distribucion);
+  if (distribucion && !tiene(a, "documento_administrar_lecturas")) throw new HttpError(403, { message: "Solo quien administra lecturas define la distribución (documento_administrar_lecturas)", codigo: "sin_permiso" });
   await exigirReauth(s, request, user, "documentos:publicar");
   const cargo = cargoDe(request, a, "documento_publicar");
   const en = ahora();
@@ -484,6 +488,7 @@ export async function publicarRevision({ request, s, params }: RouteContext): Pr
   if (!r.rowcount) throw new HttpError(409, { message: "La revisión ya se publicó o cambió al mismo tiempo; recarga la página", codigo: "conflicto_publicacion" });
   await s.execute("UPDATE sgc_documentos SET estado = 'vigente', revision_vigente_id = :rev, actualizado_por = :por, actualizado_en = :en WHERE id = :id", { rev: rev.id, por: a.yo, en, id: doc.id });
   const comentario = textoLargo(raw.comentario, 2000);
+  const distribuidos = distribucion ? await guardarDistribucion(s, Number(rev.id), distribucion, a.yo, "Distribución definida al publicar") : anterior ? await copiarDistribucion(s, Number(anterior.id), Number(rev.id), a.yo) : 0;
   await registrarFlujo(s, { revision_id: Number(rev.id), accion: "publicar", comentario, usuario_id: a.yo, cargo, papel: "publicador", fecha: en });
   if (anterior) await registrarFlujo(s, { revision_id: Number(anterior.id), accion: "obsoleta", comentario: `Sustituida por la revisión ${rev.numero}`, usuario_id: a.yo, cargo, papel: "publicador", fecha: en });
   await registrarAuditoria(s, user, {
@@ -494,7 +499,7 @@ export async function publicarRevision({ request, s, params }: RouteContext): Pr
     motivo: comentario,
     antes: { estado: "autorizada", vigente_anterior: anterior ? Number(anterior.numero) : null },
     despues: { estado: "vigente", fecha_emision: emision, fecha_vigencia: vigencia, fecha_proxima_revision: proxima },
-    detalle: { revision: Number(rev.numero), revision_id: Number(rev.id), sustituye: anterior ? { revision: Number(anterior.numero), revision_id: Number(anterior.id) } : null, ...(cargo ? { actuo_como: { cargo } } : {}) },
+    detalle: { revision: Number(rev.numero), revision_id: Number(rev.id), sustituye: anterior ? { revision: Number(anterior.numero), revision_id: Number(anterior.id) } : null, distribucion: distribucion ? { ...distribucion, origen: "al_publicar" } : distribuidos ? { origen: "revision_anterior", filas: distribuidos } : null, ...(cargo ? { actuo_como: { cargo } } : {}) },
   });
   await s.commit();
   return json({ message: anterior ? `Revisión ${rev.numero} publicada; la ${anterior.numero} queda obsoleta` : `Revisión ${rev.numero} publicada`, estado: "vigente" });
@@ -677,7 +682,7 @@ export async function ejecutarObsolescencia(ctx: ContextoEjecucion): Promise<Rec
 
 export interface Tarea {
   clave: string;
-  tipo: "solicitud" | "elaborar" | "corregir" | "revisar" | "autorizar" | "publicar" | "renovacion_revisar" | "renovacion_autorizar" | "pendiente_revision" | "obsolescencia";
+  tipo: "solicitud" | "elaborar" | "corregir" | "revisar" | "autorizar" | "publicar" | "renovacion_revisar" | "renovacion_autorizar" | "pendiente_revision" | "obsolescencia" | "lectura";
   accion: string;
   papel: string;
   documento_id: number | null;
@@ -736,9 +741,13 @@ export async function tareasSgc(s: Session, a: AccesoSgc): Promise<Tarea[]> {
     if (d.doc.estado !== "vigente" || !d.vigente || !pendienteDeRevision(d.vigente.fecha_proxima_revision, hoyStr)) continue;
     if (d.trabajo || conRenovacion.has(Number(d.doc.id))) continue;
     const propio = Number(d.doc.propietario_id) === a.yo;
-    if (!tiene(a, "documento_crear_ficha") && !propio) continue;
+    // Externos: el responsable de seguimiento (propietario) y quien gestiona externos verifican la vigencia.
+    const externo = d.doc.origen === "externo";
+    const gestiona = externo ? tiene(a, "documento_externo_gestionar") : tiene(a, "documento_crear_ficha");
+    if (!gestiona && !propio) continue;
     const vencida = String(d.vigente.fecha_proxima_revision) < hoyStr;
-    out.push({ clave: `sgc_pendiente_revision:${d.doc.id}:${d.vigente.id}:${d.vigente.fecha_proxima_revision}`, tipo: "pendiente_revision", accion: tiene(a, "documento_crear_ficha") ? "Renovar o abrir una nueva revisión" : "Revisión periódica próxima (eres el propietario)", papel: propio ? "Propietario" : "Mejora Continua", documento_id: Number(d.doc.id), clave_documento: String(d.doc.clave), titulo: String(d.doc.titulo), revision: Number(d.vigente.numero), fecha_limite: String(d.vigente.fecha_proxima_revision), vencida, desde: null, href: `/documentos/${d.doc.id}` });
+    const accion = externo ? "Verificar la vigencia o registrar la nueva versión (externo)" : gestiona ? "Renovar o abrir una nueva revisión" : "Revisión periódica próxima (eres el propietario)";
+    out.push({ clave: `sgc_pendiente_revision:${d.doc.id}:${d.vigente.id}:${d.vigente.fecha_proxima_revision}`, tipo: "pendiente_revision", accion, papel: propio ? (externo ? "Responsable de seguimiento" : "Propietario") : "Mejora Continua", documento_id: Number(d.doc.id), clave_documento: String(d.doc.clave), titulo: String(d.doc.titulo), revision: Number(d.vigente.numero), fecha_limite: String(d.vigente.fecha_proxima_revision), vencida, desde: null, href: `/documentos/${d.doc.id}` });
   }
   // Obsolescencias por aprobar (segundo usuario con documento_autorizar), solo de documentos que la persona ve.
   for (const sol of await porAutorizarDe(s, a.auth)) {
@@ -747,15 +756,21 @@ export async function tareasSgc(s: Session, a: AccesoSgc): Promise<Tarea[]> {
     if (!doc) continue;
     out.push({ clave: `solicitud:${sol.id}`, tipo: "obsolescencia", accion: "Aprobar o rechazar la obsolescencia", papel: "Segundo usuario", documento_id: Number(doc.id), clave_documento: String(doc.clave), titulo: String(doc.titulo), revision: null, fecha_limite: String(sol.vence_en).slice(0, 10), vencida: false, desde: String(sol.solicitado_en), href: `/solicitudes?abrir=${sol.id}` });
   }
+  // Lecturas pendientes (CA-11): revisiones vigentes visibles con lectura requerida y sin acuse de la persona.
+  const vigentes = docs.filter((d) => d.doc.estado === "vigente" && d.vigente).map((d) => ({ revision_id: Number(d.vigente!.id), doc: d.doc, numero: Number(d.vigente!.numero) }));
+  for (const l of await lecturasPendientesDe(s, a, vigentes)) {
+    out.push({ clave: `sgc_lectura:${l.revision_id}:${l.notificado_en || "inicial"}`, tipo: "lectura", accion: l.notificado_en ? `Confirmar la lectura de la revisión ${l.numero} (recordatorio)` : `Leer y confirmar la revisión ${l.numero}`, papel: "Destinatario", documento_id: Number(l.doc.id), clave_documento: String(l.doc.clave), titulo: String(l.doc.titulo), revision: l.numero, fecha_limite: null, vencida: false, desde: l.notificado_en || l.desde, href: `/documentos/${l.doc.id}?leer=1` });
+  }
   return out;
 }
 
 export async function bandejaSgc({ request, s }: RouteContext): Promise<Response> {
   const user = await requireUser(request);
   const a = await acceso(s, user);
-  const tareas = await tareasSgc(s, a);
-  // Fase 3: lecturas pendientes (acuse de lectura).
-  return json({ items: tareas, total: tareas.length, lecturas_pendientes: [] });
+  const todas = await tareasSgc(s, a);
+  const tareas = todas.filter((t) => t.tipo !== "lectura");
+  const lecturas = todas.filter((t) => t.tipo === "lectura");
+  return json({ items: tareas, total: todas.length, lecturas_pendientes: lecturas });
 }
 
 /* Solicitudes propias resueltas en los ultimos 7 dias (aviso al solicitante). */

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { CaretRight, CheckCircle, Clock, FileDashed, FolderSimple, LockKey, MinusCircle, PaperPlaneTilt, Prohibit, ShieldCheck, Signature, type Icon } from "@phosphor-icons/react";
+import { CaretRight, CheckCircle, Clock, FileDashed, FolderSimple, Globe, LockKey, MinusCircle, PaperPlaneTilt, Prohibit, ShieldCheck, Signature, type Icon } from "@phosphor-icons/react";
 import { useSession } from "@/components/session/SessionProvider";
 import { cn } from "@/components/ui/cn";
 import { Badge, EmptyState } from "@/components/ui/Primitives";
@@ -41,6 +41,7 @@ export interface Catalogos {
   areas: Area[];
   tipos: Tipo[];
   personas: Persona[];
+  roles: Array<{ id: number; nombre: string; consulta: boolean; acusa: boolean }>;
   yo: { id: number; acciones: AccionDocumental[]; diagnostico: boolean; privilegiado: boolean };
   puede: { crear_ficha: boolean };
   max_mb: number;
@@ -120,6 +121,7 @@ export interface Revision {
   cancelada_en: string | null;
   sustituida_por_id: number | null;
   renovada_en: string | null;
+  version_externa: string | null;
   linea_tiempo: PasoFlujo[];
   puede: Record<"subir_archivo" | "editar" | "asignar" | "enviar_revision" | "registrar_vigente" | "revisar" | "autorizar" | "publicar" | "reasignar", Puede>;
 }
@@ -187,10 +189,66 @@ export interface FichaDocumento {
   historial: boolean;
   solo_diagnostico: boolean;
   eventos: Evento[];
-  distribucion: unknown[];
-  lecturas: unknown[];
+  externo: DatosExterno | null;
+  distribucion: Distribucion | null;
   renovaciones: Renovacion[];
   puede: { editar: Puede; nueva_revision: Puede; renovar: Puede; obsoletar: Puede; proponer: Puede };
+}
+
+export interface DatosExterno {
+  fuente: string | null;
+  version_fecha: string | null;
+  enlace: string | null;
+  responsable_id: number | null;
+  responsable_nombre: string | null;
+  ultima_verificacion: string | null;
+  proxima_revision: string | null;
+  puede: { verificar: Puede; nueva_version: Puede; editar: Puede };
+}
+export interface Destinatario {
+  usuario_id: number;
+  nombre: string;
+  requiere: boolean;
+  puntos: string[];
+  leido_en: string | null;
+  abierto_en: string | null;
+  notificado_en: string | null;
+}
+export interface FilaDistribucion {
+  id: number;
+  rol_id: number | null;
+  rol_nombre: string | null;
+  usuario_id: number | null;
+  usuario_nombre: string | null;
+  punto_uso: string | null;
+  requiere_lectura: boolean;
+  motivo: string | null;
+  creado_en: string;
+  creado_por_nombre: string | null;
+}
+/* Distribucion y lecturas de la revision vigente (CA-11). */
+export interface Distribucion {
+  revision_id: number;
+  numero: number;
+  puntos_uso: string[];
+  filas: FilaDistribucion[];
+  destinatarios: Destinatario[];
+  avance: { leidos: number; total: number; porcentaje: number | null };
+  mi_lectura: { requiere: boolean; leido_en: string | null; puntos: string[] } | null;
+  completo: boolean;
+  puede: { administrar: Puede; recordatorio: Puede; acusar: Puede };
+}
+
+/* Etiqueta de origen externo (normas, guias, documentos regulatorios). */
+export function ExternoEtiqueta() {
+  return (
+    <span className="inline-flex" data-testid="etiqueta-externo">
+      <Badge tone="neutral" className="gap-1">
+        <Globe size={12} weight="bold" aria-hidden="true" />
+        Externo
+      </Badge>
+    </span>
+  );
 }
 
 /* Catalogos (areas, tipos, personas) y lo que puede la persona. */

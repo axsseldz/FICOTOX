@@ -13,7 +13,7 @@ import { API_BASE_URL, sendFormAuthProgress, sendJsonAuth } from "@/lib/client/a
 import { msg, type Problema } from "@/lib/client/mensajes";
 import { invalidate } from "@/lib/client/store";
 import { extensionDe, fmtBytes } from "@/lib/shared/adjuntos";
-import { CONFIDENCIALIDADES, ORIGENES, TIPOS_ARCHIVO_SGC, MOTIVO_MIN_SGC, normalizarClave, validarClave } from "@/lib/shared/documentos";
+import { CONFIDENCIALIDADES, ORIGENES, TIPOS_ARCHIVO_SGC, MOTIVO_MIN_SGC, normalizarClave, validarClave, validarIdentificadorExterno } from "@/lib/shared/documentos";
 import type { AccionDocumental } from "@/lib/shared/permisos";
 import type { Catalogos, FichaDocumento, Persona } from "./comun";
 
@@ -67,7 +67,9 @@ export function FichaSheet({ open, onClose, catalogos, editar, areaInicial, tipo
   const tipos = catalogos?.tipos || [];
   const personas = catalogos?.personas || [];
   const maxMb = catalogos?.max_mb || 50;
-  const clave = validarClave(datos.clave, datos.area_codigo, datos.tipo_codigo);
+  // Los externos se identifican con la clave del emisor (Fase 3); los internos, con la clave FX.
+  const externo = datos.origen === "externo";
+  const clave = externo ? validarIdentificadorExterno(datos.clave) : validarClave(datos.clave, datos.area_codigo, datos.tipo_codigo);
 
   const archivoProblema = (f: File | null, tipo: "pdf" | "fuente") => {
     if (!f) return null;
@@ -210,11 +212,11 @@ export function FichaSheet({ open, onClose, catalogos, editar, areaInicial, tipo
                 ))}
               </Select>
             </Field>
-            <Field label="Clave FX" htmlFor="ficha-clave" required hint={datos.clave && !clave.problema ? `Se registrará como ${clave.clave}` : "Formato FX-[Área][Tipo]-[ID], p. ej. FX-TCF-GMR; manuales rectores: FX-MC o FX-MO"}>
+            <Field label={externo ? "Identificador del emisor" : "Clave FX"} htmlFor="ficha-clave" required hint={datos.clave && !clave.problema ? `Se registrará como ${clave.clave}` : externo ? "Por ejemplo NMX-EC-17025-IMNC-2018" : "Formato FX-[Área][Tipo]-[ID], p. ej. FX-TCF-GMR; manuales rectores: FX-MC o FX-MO"}>
               <Input id="ficha-clave" mono maxLength={80} value={datos.clave} onChange={(e) => cambiar({ clave: e.target.value })} onBlur={() => datos.clave && cambiar({ clave: normalizarClave(datos.clave) })} placeholder="FX-GCP-CD" autoComplete="off" />
             </Field>
-            <Field label="Origen" htmlFor="ficha-origen">
-              <Select id="ficha-origen" value={datos.origen} onChange={(e) => cambiar({ origen: e.target.value })}>
+            <Field label="Origen" htmlFor="ficha-origen" hint={editar ? "El origen no cambia" : "Los externos se registran en «Documentos externos»"}>
+              <Select id="ficha-origen" value={datos.origen} disabled onChange={(e) => cambiar({ origen: e.target.value })}>
                 {ORIGENES.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}

@@ -1,9 +1,11 @@
 "use client";
 
-import { use, useState, type ReactNode } from "react";
+import { use, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { ArrowsClockwise, ClockCounterClockwise, CloudArrowUp, DownloadSimple, FilePdf, FileText, Info, Lightbulb, ListChecks, PaperPlaneTilt, PencilSimple, Plus, Prohibit, SealCheck, Signature, UsersThree, UserSwitch } from "@phosphor-icons/react";
-import { ConfidencialidadEtiqueta, EstadoDocumentoEtiqueta, EstadoRevisionEtiqueta, IconoArea, ProximaRevisionEtiqueta, RequireDocumentos, RutaDocumentos, useCatalogos, type Archivo, type FichaDocumento, type Puede, type Revision } from "@/components/features/documentos/comun";
+import { AcuseLectura, SeccionDistribucion } from "@/components/features/documentos/Distribucion";
+import { IconoExterno, SeguimientoExterno } from "@/components/features/documentos/Externos";
+import { ConfidencialidadEtiqueta, EstadoDocumentoEtiqueta, ExternoEtiqueta, EstadoRevisionEtiqueta, IconoArea, ProximaRevisionEtiqueta, RequireDocumentos, RutaDocumentos, useCatalogos, type Archivo, type FichaDocumento, type Puede, type Revision } from "@/components/features/documentos/comun";
 import { FichaSheet } from "@/components/features/documentos/FichaSheet";
 import { ArchivoDialog, RegistrarVigenteDialog, RevisionSheet } from "@/components/features/documentos/RevisionSheets";
 import { DecisionDialog, ObsoletarDialog, OPCIONES_AUTORIZADOR, OPCIONES_RENOVACION_AUTORIZADOR, OPCIONES_RENOVACION_REVISOR, OPCIONES_REVISOR, PublicarDialog, ReasignarDialog, RenovarDialog } from "@/components/features/documentos/FlujoDialogs";
@@ -31,7 +33,8 @@ import { formatearFecha, formatearFechaHora, hoyLocal } from "@/lib/shared/fecha
  * Ficha del documento: metadatos, revision vigente en el visor PDF interno,
  * revision en curso (archivos y acciones segun el servidor: banderas "puede"
  * con motivo), historial de revisiones y eventos de la bitacora (con permiso),
- * responsables, y distribucion y lecturas (Fase 3).
+ * responsables, seguimiento de los externos y distribucion y lecturas con
+ * el acuse de la persona (Fase 3).
  */
 export default function FichaDocumentoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -61,6 +64,13 @@ function Ficha({ id }: { id: string }) {
   const [obsoletar, setObsoletar] = useState(false);
   const [proponer, setProponer] = useState(false);
   const recurso = useResource<FichaDocumento>(["sgc", `sgc:${id}`], async () => (await getJsonAuth(`${API_BASE_URL}/sgc/documentos/${encodeURIComponent(id)}`, token)) as unknown as FichaDocumento, { enabled: !!token });
+  // Desde "Lecturas pendientes" (?leer=1): lleva al acuse bajo el visor.
+  const leer = recurso.data?.distribucion?.mi_lectura?.requiere && !recurso.data.distribucion.mi_lectura.leido_en;
+  useEffect(() => {
+    if (!leer || typeof window === "undefined" || !new URLSearchParams(window.location.search).has("leer")) return;
+    const t = window.setTimeout(() => document.getElementById("acuse")?.scrollIntoView({ block: "center", behavior: "smooth" }), 300);
+    return () => window.clearTimeout(t);
+  }, [leer]);
 
   if (recurso.error) {
     const e = explicarError(new Error(recurso.error), "No se pudo abrir el documento");
@@ -130,10 +140,10 @@ function Ficha({ id }: { id: string }) {
               <h1 className="break-words text-[21px] font-semibold leading-tight tracking-[-0.015em] text-ink">{item.titulo}</h1>
               <div className="flex flex-wrap items-center gap-1.5">
                 <EstadoDocumentoEtiqueta estado={item.estado} />
-                {vigente ? <Badge tone="neutral">Rev. {vigente.numero}</Badge> : null}
+                {vigente ? <Badge tone="neutral">{item.origen === "externo" && vigente.version_externa ? `Versión ${vigente.version_externa}` : `Rev. ${vigente.numero}`}</Badge> : null}
                 <ProximaRevisionEtiqueta fecha={vigente?.fecha_proxima_revision} />
                 <ConfidencialidadEtiqueta valor={item.confidencialidad} />
-                {item.origen === "externo" ? <Badge tone="neutral">Externo</Badge> : null}
+                {item.origen === "externo" ? <ExternoEtiqueta /> : null}
               </div>
             </div>
           </div>
@@ -172,7 +182,8 @@ function Ficha({ id }: { id: string }) {
       {item.pendiente_revision && item.estado === "vigente" ? (
         <div data-testid="sgc-aviso-pendiente">
           <Callout tone="warning" title="Pendiente de revisión">
-            Su próxima revisión es el {formatearFecha(vigente?.fecha_proxima_revision)}. Mejora Continua decide si se renueva sin cambios o si se abre una nueva revisión.
+            Su próxima revisión es el {formatearFecha(vigente?.fecha_proxima_revision)}.{" "}
+            {item.origen === "externo" ? "El responsable de seguimiento o Mejora Continua verifica que siga vigente o registra la nueva versión." : "Mejora Continua decide si se renueva sin cambios o si se abre una nueva revisión."}
           </Callout>
         </div>
       ) : null}
@@ -222,13 +233,26 @@ function Ficha({ id }: { id: string }) {
                 ) : !vigente.abrir ? (
                   <p className="text-[13px] text-ink-3">El archivo no se muestra en la vista de diagnóstico.</p>
                 ) : (
-                  <p className="text-[13px] text-ink-3">Esta revisión no tiene PDF de consulta.</p>
+                  <p className="text-[13px] text-ink-3">{item.origen === "externo" ? "Sin PDF registrado (solo con derechos de uso); consúltalo en el enlace del emisor." : "Esta revisión no tiene PDF de consulta."}</p>
                 )}
+                {data.distribucion && vigente.abrir && pdfVigente ? <AcuseLectura dist={data.distribucion} /> : null}
               </div>
             ) : (
               <EmptyState compact icon={<FilePdf size={20} weight="duotone" />} title="Sin revisión vigente" description={enCurso ? "El documento está en elaboración; aparecerá aquí cuando su revisión quede vigente." : "Este documento todavía no tiene una revisión vigente visible para ti."} />
             )}
           </Seccion>
+
+          {data.externo ? (
+            <Seccion titulo="Seguimiento del documento externo" icono={<IconoExterno size={17} weight="duotone" />} testid="sgc-externo">
+              <SeguimientoExterno docId={item.id} clave={item.clave} ext={data.externo} catalogos={catalogos.data} />
+            </Seccion>
+          ) : null}
+
+          {vigente || item.estado === "obsoleto" ? (
+            <Seccion titulo="Distribución y lecturas" icono={<UsersThree size={17} weight="duotone" />} testid="sgc-distribucion">
+              <SeccionDistribucion dist={data.distribucion} catalogos={catalogos.data} obsoleto={item.estado === "obsoleto"} />
+            </Seccion>
+          ) : null}
 
           {data.renovaciones.filter((n) => n.estado === "en_revision" || n.estado === "en_autorizacion").map((n) => (
             <Seccion key={n.id} titulo="Renovación de vigencia" icono={<ArrowsClockwise size={17} weight="duotone" />} testid="sgc-renovacion" accion={<Badge tone="brand">{ESTADOS_RENOVACION[n.estado]?.etiqueta}</Badge>}>
@@ -320,7 +344,9 @@ function Ficha({ id }: { id: string }) {
           </Seccion>
           <Seccion titulo="Responsables" icono={<UsersThree size={17} weight="duotone" />}>
             <dl className="grid grid-cols-1 gap-3">
-              {(enCurso || vigente) ? (
+              {item.origen === "externo" ? (
+                <Dato etiqueta="Responsable de seguimiento">{data.externo?.responsable_nombre || "—"}</Dato>
+              ) : (enCurso || vigente) ? (
                 <>
                   <Dato etiqueta="Elaborador">{(enCurso || vigente)!.elaborador_nombre || "Sin asignar"}</Dato>
                   <Dato etiqueta="Revisor">{(enCurso || vigente)!.revisor_nombre || "Sin asignar"}</Dato>
@@ -331,12 +357,6 @@ function Ficha({ id }: { id: string }) {
               )}
             </dl>
             {enCurso && vigente ? <p className="mt-2 text-[12px] text-ink-3">De la revisión en curso ({enCurso.numero}).</p> : null}
-          </Seccion>
-          <Seccion titulo="Distribución" testid="sgc-distribucion">
-            <p className="text-[13px] text-ink-3">Sin destinatarios definidos. La distribución a roles o personas y los puntos de uso se configuran con la publicación.</p>
-          </Seccion>
-          <Seccion titulo="Lecturas" testid="sgc-lecturas">
-            <p className="text-[13px] text-ink-3">Sin confirmaciones de lectura pendientes ni registradas.</p>
           </Seccion>
         </aside>
       </div>
@@ -349,7 +369,7 @@ function Ficha({ id }: { id: string }) {
       {decision?.tipo === "autorizar" ? <DecisionDialog titulo={`Autorizar ${item.clave} rev. ${decision.numero}`} descripcion="Como autorizador asignado. Autorizar pide tu contraseña." url={`${API_BASE_URL}/sgc/revisiones/${decision.id}/autorizar`} opciones={OPCIONES_AUTORIZADOR} onClose={() => setDecision(null)} /> : null}
       {decision?.tipo === "ren_revisar" ? <DecisionDialog titulo={`Confirmar la vigencia de ${item.clave}`} descripcion="Como revisor de la renovación: confirma que el documento sigue vigente sin cambios, con tu comentario." url={`${API_BASE_URL}/sgc/renovaciones/${decision.id}/revisar`} opciones={OPCIONES_RENOVACION_REVISOR} onClose={() => setDecision(null)} /> : null}
       {decision?.tipo === "ren_autorizar" ? <DecisionDialog titulo={`Autorizar la renovación de ${item.clave}`} descripcion="La misma revisión sigue vigente con la nueva fecha de próxima revisión. Autorizar pide tu contraseña." url={`${API_BASE_URL}/sgc/renovaciones/${decision.id}/autorizar`} opciones={OPCIONES_RENOVACION_AUTORIZADOR} onClose={() => setDecision(null)} /> : null}
-      {publicarDe ? <PublicarDialog doc={item} revision={publicarDe} onClose={() => setPublicarDe(null)} /> : null}
+      {publicarDe ? <PublicarDialog doc={item} revision={publicarDe} catalogos={catalogos.data} distribucionAnterior={data.distribucion} onClose={() => setPublicarDe(null)} /> : null}
       {reasignarDe ? <ReasignarDialog revision={reasignarDe} catalogos={catalogos.data} onClose={() => setReasignarDe(null)} /> : null}
       {renovar ? <RenovarDialog doc={item} catalogos={catalogos.data} onClose={() => setRenovar(false)} /> : null}
       {obsoletar ? <ObsoletarDialog doc={item} onClose={() => setObsoletar(false)} /> : null}
@@ -536,7 +556,10 @@ function Historial({ revisiones, onDescargar }: { revisiones: Revision[]; onDesc
             const pdf = activo(r, "pdf");
             return (
               <tr key={r.id} className="align-top" data-testid="sgc-historial-fila" data-numero={r.numero} data-estado={r.estado}>
-                <td className="tnum py-2 pr-3 font-semibold text-ink">{r.numero}</td>
+                <td className="tnum py-2 pr-3 font-semibold text-ink">
+                  {r.numero}
+                  {r.version_externa ? <span className="block text-[11.5px] font-normal text-ink-3">Versión {r.version_externa}</span> : null}
+                </td>
                 <td className="py-2 pr-3">
                   <EstadoRevisionEtiqueta estado={r.estado} />
                   {r.origen_registro === "carga_inicial" ? <span className="mt-1 block text-[11.5px] text-ink-3">Carga inicial</span> : null}

@@ -199,3 +199,30 @@ export const ACCION_FLUJO: Record<string, string> = {
   renovacion_autorizar: "Autorizó la renovación",
   obsoletar: "Declaró el documento obsoleto",
 };
+
+/* ---------- Externos (Fase 3) ---------- */
+
+/*
+ * Identificador propio del emisor de un documento externo (NMX-EC-17025-IMNC-2018,
+ * NOM-242-SSA1-2009, AOAC 991.26...): unico sin distinguir mayusculas ni
+ * espacios (se guarda normalizado); no puede usar el prefijo FX- de los internos.
+ */
+export function validarIdentificadorExterno(valor: unknown): ResultadoClave {
+  const clave = normalizarClave(valor);
+  if (!clave) return { clave, problema: "Indica el identificador del emisor (por ejemplo NMX-EC-17025-IMNC-2018)", rector: false };
+  if (clave.startsWith("FX-")) return { clave, problema: "El prefijo FX- es de los documentos internos; usa el identificador del emisor", rector: false };
+  if (!/^[A-Z0-9][A-Z0-9.\-/:]*$/.test(clave)) return { clave, problema: "El identificador solo admite letras, números, guiones, puntos, diagonales y dos puntos", rector: false };
+  return { clave, problema: null, rector: false };
+}
+
+/* Enlace de consulta de un externo: solo http(s). */
+export function enlaceValido(valor: unknown): string | null {
+  const t = String(valor ?? "").trim();
+  if (!t) return null;
+  try {
+    const u = new URL(t);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
