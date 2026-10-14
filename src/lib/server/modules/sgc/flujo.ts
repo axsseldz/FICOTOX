@@ -207,6 +207,7 @@ async function datosSolicitud(s: Session, a: AccesoSgc, raw: Record<string, unkn
       throw new HttpError(400, { message: "Elige un documento que puedas consultar", campo: "documento" });
     });
     if (doc.estado === "obsoleto") throw new HttpError(409, { message: "El documento está obsoleto: propón un documento nuevo", campo: "documento" });
+    if (doc.origen === "externo") throw new HttpError(409, { message: "Los documentos externos no pasan por el flujo: se verifica su vigencia o se registra su nueva versión", campo: "documento", codigo: "externo" });
     return { tipo, documento_id: docId, area_codigo: doc.area_codigo, tipo_codigo: doc.tipo_codigo, titulo_propuesto: String(doc.titulo), necesidad, justificacion, referencia: referenciaDe(doc) };
   }
   const area = texto(raw.area_codigo ?? raw.area, 4).toUpperCase();
@@ -322,6 +323,7 @@ async function aceptarInterna(s: Session, user: CurrentUser, a: AccesoSgc, reque
     docId = Number(f.documento_id);
     const { doc, revisiones } = await documentoVisible(s, a, docId);
     if (doc.estado === "obsoleto") throw new HttpError(409, { message: "El documento está obsoleto; no se le abren revisiones" });
+    if (doc.origen === "externo") throw new HttpError(409, { message: "Los documentos externos no pasan por el flujo: se verifica su vigencia o se registra su nueva versión", codigo: "externo" });
     const enCurso = revisiones.find((r) => ESTADOS_TRABAJO.includes(r.estado));
     if (enCurso) throw new HttpError(409, { message: `Ya hay una revisión en curso (revisión ${enCurso.numero}); solo puede haber una a la vez`, codigo: "revision_en_curso" });
     if (await s.queryOne<Row>("SELECT id FROM sgc_renovaciones WHERE documento_id = :id AND estado IN ('en_revision', 'en_autorizacion')", { id: docId })) throw new HttpError(409, { message: "Hay una renovación de vigencia en curso; termínala antes de abrir una revisión", codigo: "renovacion_en_curso" });
@@ -367,6 +369,7 @@ export async function rechazarSolicitudSgc({ request, s, params }: RouteContext)
  */
 export async function solicitudPropiaAceptada(s: Session, user: CurrentUser, a: AccesoSgc, request: Request, documentoId: number, raw: Record<string, unknown>) {
   const { doc } = await documentoVisible(s, a, documentoId);
+  if (doc.origen === "externo") throw new HttpError(409, { message: "Los documentos externos no pasan por el flujo: se verifica su vigencia o se registra su nueva versión", codigo: "externo" });
   const justificacion = String(raw.motivo_cambio || raw.justificacion || "").trim();
   if (justificacion.length < MOTIVO_MIN_SGC) throw new HttpError(400, { message: `Describe el motivo del cambio (al menos ${MOTIVO_MIN_SGC} caracteres)`, campo: "motivo_cambio" });
   const r = await s.execute(
@@ -542,6 +545,7 @@ export async function iniciarRenovacion({ request, s, params }: RouteContext): P
   const { doc, revisiones } = await documentoVisible(s, a, intParam(params.id));
   exigir(a, "documento_crear_ficha", "Solo Mejora Continua inicia una renovación (documento_crear_ficha)");
   const vigente = revisiones.find((r) => r.estado === "vigente");
+  if (doc.origen === "externo") throw new HttpError(409, { message: "Los documentos externos no pasan por el flujo: se verifica su vigencia o se registra su nueva versión", codigo: "externo" });
   if (!vigente || doc.estado !== "vigente") throw new HttpError(409, { message: "Solo se renueva un documento vigente" });
   if (!pendienteDeRevision(vigente.fecha_proxima_revision, hoy())) throw new HttpError(409, { message: "El documento todavía no está pendiente de revisión (faltan más de 30 días para su próxima revisión)", codigo: "no_pendiente" });
   if (revisiones.some((r) => ESTADOS_TRABAJO.includes(r.estado))) throw new HttpError(409, { message: "Hay una revisión en curso; termínala antes de renovar", codigo: "revision_en_curso" });

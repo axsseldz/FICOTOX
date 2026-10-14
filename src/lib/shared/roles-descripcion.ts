@@ -34,7 +34,7 @@ const DESCRIPCION_ROLES: Record<string, DescripcionRol> = {
   mejora_continua: {
     icono: "medalla",
     proposito: "Cuida y mejora el sistema de calidad del laboratorio.",
-    responsabilidades: ["Administra la biblioteca de documentos", "Atiende incidencias y no conformidades con sus acciones correctivas", "Organiza las auditorías", "Da seguimiento a la calidad", "Consulta los respaldos y sus pruebas de restauración"],
+    responsabilidades: ["Administra el control de documentos (Documentos SGC): solicitudes, publicación, distribución y Lista Maestra", "Atiende incidencias y no conformidades con sus acciones correctivas", "Organiza las auditorías", "Da seguimiento a la calidad", "Consulta los respaldos y sus pruebas de restauración"],
     noPuede: ["Modificar resultados técnicos", "Validar resultados técnicos"],
   },
   coord_area_tecnica: {

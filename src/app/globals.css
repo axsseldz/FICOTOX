@@ -692,3 +692,8 @@ html [data-sonner-toaster][data-sonner-theme] {
 html [data-sonner-toaster][data-sonner-theme] [data-description] {
   color: var(--color-ink-3);
 }
+
+/* Documentos SGC: el icono conserva el HEX exacto del area; en modo oscuro va sobre un recuadro claro para mantener contraste >= 3:1. */
+:root[data-theme="dark"] .icono-area {
+  background-color: #ffffff;
+}

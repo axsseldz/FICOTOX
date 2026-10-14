@@ -14,7 +14,7 @@ import { EVENTO_VER_PDF, type PeticionVerPdf } from "@/lib/client/files";
 /*
  * Visor interno para los PDF protegidos que no tienen su propia pantalla (reportes
  * de mantenimiento, PDF de no conformidades): el mismo visor pdf.js de la
- * Biblioteca, a pantalla completa sobre la plataforma. Sin pestaña nueva y sin
+ * ficha de Documentos SGC, a pantalla completa sobre la plataforma. Sin pestaña nueva y sin
  * descarga automatica: Descargar es un boton del visor.
  */
 export function VisorPdfFlotante() {

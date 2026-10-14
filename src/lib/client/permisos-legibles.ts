@@ -86,7 +86,7 @@ const OBJETO_AREA: Record<string, string> = {
   equipos: "equipos y mantenimientos",
   inventario: "reactivos y consumibles",
   calidad: "incidencias, no conformidades y el registro de actividad",
-  documentos: "documentos de la biblioteca",
+  documentos: "Documentos SGC (control documental)",
   usuarios: "cuentas, roles y autorizaciones",
   respaldos: "los respaldos y las pruebas de restauración",
   compras: "compras",

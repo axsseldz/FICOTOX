@@ -31,7 +31,8 @@
     "sqlite-a-mysql": "node scripts/sqlite-a-mysql.mjs",
     "detener": "node scripts/detener-ficotox.mjs",
     "reiniciar": "node scripts/detener-ficotox.mjs --reiniciar",
-    "vendor:pdfjs": "node scripts/vendor-pdfjs.mjs"
+    "vendor:pdfjs": "node scripts/vendor-pdfjs.mjs",
+    "demo:documentos": "node scripts/sembrar-demo-documentos.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

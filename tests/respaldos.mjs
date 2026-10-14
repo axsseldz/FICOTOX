@@ -166,6 +166,19 @@ let destinoPrueba = null;
   const acta = actaDe(BACKUPS, r.out);
   check("un archivo del respaldo alterado -> falla la verificacion 1 (exit 1)", r.code === 1 && verif(acta, 1)?.ok === false && /alterado/.test(verif(acta, 1)?.detalle || ""), `${r.code} ${verif(acta, 1)?.detalle}`);
 
+  // Documentos SGC (CA-13): un PDF de sgc/ alterado en el respaldo tambien se detecta, y el manifest cuenta todas las tablas sgc_*.
+  const sgcArchivo = manifest.archivos.find((a) => a.ruta.startsWith("archivos/sgc/"));
+  if (sgcArchivo) {
+    const altSgc = path.join(TEST_DIR, "respaldos-alterados", `altsgc-${sufijo}`);
+    fs.cpSync(carpeta, altSgc, { recursive: true });
+    fs.appendFileSync(path.join(altSgc, ...sgcArchivo.ruta.split("/")), "x");
+    const rs = script("restaurar-ficotox.mjs", ["--respaldo", altSgc, "--destino", path.join(TEST_DIR, "restauradas", `altsgc-${sufijo}`), "--responsable", "Pruebas"]);
+    const actaS = actaDe(BACKUPS, rs.out);
+    check("un PDF de Documentos SGC alterado en el respaldo -> falla la verificacion 1 (SHA-256)", rs.code === 1 && verif(actaS, 1)?.ok === false && /alterado/.test(verif(actaS, 1)?.detalle || ""), `${rs.code} ${verif(actaS, 1)?.detalle}`);
+  } else check("un PDF de Documentos SGC alterado en el respaldo -> falla la verificacion 1 (SHA-256)", false, "el respaldo no trae archivos sgc/");
+  const tablasSgc = ["sgc_documentos", "sgc_revisiones", "sgc_archivos", "sgc_flujo_acciones", "sgc_solicitudes", "sgc_renovaciones", "sgc_externos", "sgc_distribucion", "sgc_lecturas"];
+  check("el manifest cuenta todas las tablas del módulo Documentos SGC (y se comparan al restaurar)", tablasSgc.every((t) => typeof manifest.conteos[t] === "number"), tablasSgc.filter((t) => typeof manifest.conteos[t] !== "number").join(","));
+
   const llaveFalsa = path.join(TEST_DIR, `llave-falsa-${sufijo}.txt`);
   fs.writeFileSync(llaveFalsa, "otra-llave-que-no-es-la-del-respaldo-000000\n");
   const r2 = script("restaurar-ficotox.mjs", ["--respaldo", respaldoId, "--destino", path.join(TEST_DIR, "restauradas", `llave-${sufijo}`), "--llave", llaveFalsa, "--responsable", "Pruebas"]);

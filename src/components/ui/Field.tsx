@@ -13,7 +13,7 @@ import { useErrorDeCampo } from "./Validacion";
 
 /* Sin alto ni tamaño de letra: los fija la variante (clsx no fusiona clases de Tailwind, así que no se pueden sobrescribir después). */
 export const controlBase =
-  "w-full rounded-[10px] border border-line bg-surface-2/80 px-3 text-ink placeholder:text-ink-4 transition-[border-color,background-color] duration-150 ease-[var(--ease-spring)] hover:border-line-strong focus:border-brand/55 focus:outline-none aria-[invalid=true]:border-danger aria-[invalid=true]:focus:border-danger disabled:cursor-not-allowed disabled:bg-surface-3/60 disabled:text-ink-3 read-only:bg-surface-3/50";
+  "w-full rounded-[10px] border border-line bg-surface-2/80 px-3 text-ink placeholder:text-ink-4 transition-[border-color,background-color] duration-150 ease-[var(--ease-spring)] hover:border-line-strong focus:border-brand/55 focus:outline-none focus-visible:shadow-[var(--shadow-focus)] aria-[invalid=true]:border-danger aria-[invalid=true]:focus:border-danger disabled:cursor-not-allowed disabled:bg-surface-3/60 disabled:text-ink-3 read-only:bg-surface-3/50";
 export const controlClass = `${controlBase} text-[14px]`;
 /* Control compacto para tablas y tarjetas por fila. */
 export const controlClassSm = `${controlBase} h-8 text-[13px]`;

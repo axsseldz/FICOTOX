@@ -116,4 +116,30 @@ npm run typecheck    # tsc --noEmit
 npm run lint         # eslint
 npm test             # pruebas (npm run test:api = solo API; test:mysql contra MySQL/MariaDB)
 npm run seed:roles   # roles y usuarios iniciales (scripts/roles-catalogo.json + seed-usuarios.local.json)
+npm run demo:documentos -- --url http://localhost:<puerto>   # datos de demostración de Documentos SGC (solo desarrollo)
 ```
+
+## 9. Documentos SGC (control documental)
+
+Módulo en **Calidad › Documentos SGC**. Lo cubren las migraciones 22 a 24. Incluye:
+
+- seis carpetas por gestión, con su color;
+- fichas con clave FX única;
+- revisiones con archivos inmutables tras el envío;
+- flujo solicitud → elaboración → revisión → autorización → publicación, con contraseña y segregación de funciones;
+- renovación y obsolescencia con segundo usuario;
+- documentos externos;
+- distribución con acuse de lectura;
+- Lista Maestra FX-GCL-MD en PDF.
+
+Los archivos van en `instance/sgc/` con SHA-256 y entran en los respaldos. Documentación completa en [`docs/documentos-sgc/`](docs/documentos-sgc/):
+
+| Documento | Contenido |
+| --- | --- |
+| [MANUAL_USUARIO.md](docs/documentos-sgc/MANUAL_USUARIO.md) | Guía por papel: Mejora Continua, elaborador, revisor, autorizador, destinatario y auditor. |
+| [MANUAL_TECNICO.md](docs/documentos-sgc/MANUAL_TECNICO.md) | Arquitectura, migraciones, almacenamiento, variables, seguridad, respaldo y despliegue. |
+| [API_Y_PERMISOS.md](docs/documentos-sgc/API_Y_PERMISOS.md) | Endpoints `/api/sgc/*` y matriz rol × acción documental. |
+| [MODELO_DATOS.md](docs/documentos-sgc/MODELO_DATOS.md) | Diagrama entidad–relación y diccionario de datos de las tablas `sgc_*`. |
+| [RESPALDO_RESTAURACION.md](docs/documentos-sgc/RESPALDO_RESTAURACION.md) | Qué se respalda, cómo se prueba la restauración y el acta. |
+| [MATRIZ_PRUEBAS.md](docs/documentos-sgc/MATRIZ_PRUEBAS.md) | CA-01 a CA-17 → pruebas → resultado, e incidencias corregidas. |
+| [DECISIONES_Y_LIMITACIONES.md](docs/documentos-sgc/DECISIONES_Y_LIMITACIONES.md) | Decisiones, diferencias con la especificación y pendientes para V2. |

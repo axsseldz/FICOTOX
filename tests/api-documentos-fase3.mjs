@@ -95,6 +95,10 @@ check("aviso en la bandeja del responsable y de Mejora Continua", tRic.some((x) 
 check("aviso en la campana del responsable", (await avisos(t.ricardo)).some((x) => String(x.clave).startsWith(`sgc_pendiente_revision:${E.data?.id}:`)));
 const fE = (await doc(E.data?.id, t.ana)).data;
 check("ficha del externo: datos de seguimiento, sin flujo interno (nueva revisión deshabilitada)", fE?.externo?.fuente === "IMNC" && fE?.externo?.version_fecha === "2025" && fE?.puede?.nueva_revision?.ok === false && fE?.puede?.proponer?.ok === false && fE?.externo?.puede?.nueva_version?.ok === true);
+const extRev = await api("POST", `/sgc/documentos/${E.data?.id}/revisiones`, { motivo_cambio: "Intento de revisión interna de un externo", elaborador_id: id.luis, revisor_id: id.ricardo, autorizador_id: id.patricia }, t.ana);
+const extSol = await api("POST", "/sgc/solicitudes", { tipo: "cambio", documento_id: E.data?.id, justificacion: "Intento de cambio interno a una norma externa" }, t.luis);
+const extRen = await api("POST", `/sgc/documentos/${E.data?.id}/renovar`, { revisor_id: id.ricardo, autorizador_id: id.patricia, fecha_proxima_revision: enDias(700), comentario: "Intento de renovación" }, t.ana);
+check("por API tampoco: un externo no recibe nueva revisión, solicitud de cambio ni renovación (409)", [extRev, extSol, extRen].every((x) => x.status === 409 && x.data?.codigo === "externo"), `${extRev.status} ${extSol.status} ${extRen.status}`);
 const fichaInt = await ficha(t.ana, { clave: `ABC-${s5}`, titulo: "Externo por la ficha interna", area_codigo: "GC", tipo_codigo: "P", origen: "externo", elaborador_id: id.luis, revisor_id: id.ricardo, autorizador_id: id.patricia });
 check("la ficha interna no registra externos (400)", fichaInt.status === 400 && fichaInt.data?.campo === "origen", `${fichaInt.status} ${fichaInt.data?.campo} ${fichaInt.data?.message}`);
 const editar = await api("PUT", `/sgc/externos/${E.data?.id}`, { enlace: "https://www.imnc.org.mx/normas", motivo: "Cambió la dirección del catálogo" }, t.ana);

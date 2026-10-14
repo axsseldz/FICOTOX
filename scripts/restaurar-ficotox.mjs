@@ -279,9 +279,9 @@ if (restauradaDb) {
     { etiqueta: "PDF de informes", tabla: "informes", archivo: "archivo_pdf", sha: "pdf_sha256", carpeta: "informes" },
     { etiqueta: "evidencias de envío", tabla: "envios_informe", archivo: "evidencia_archivo", sha: "evidencia_sha256", carpeta: path.join("informes", "envios") },
     { etiqueta: "adjuntos (evidencia instrumental)", tabla: "adjuntos", archivo: "nombre_almacenado", sha: "sha256", carpeta: "evidencias" },
-    { etiqueta: "documentos SGC", tabla: "documentos_sgc", archivo: "archivo_nombre", sha: "archivo_sha256", carpeta: "documentos_sgc" },
+    { etiqueta: "documentos SGC del flujo anterior (heredados)", tabla: "documentos_sgc", archivo: "archivo_nombre", sha: "archivo_sha256", carpeta: "documentos_sgc" },
     // Biblioteca: nombre_almacenado es relativo a <instancia>/biblioteca ("<documento>/<uuid>.<ext>").
-    { etiqueta: "versiones de la biblioteca", tabla: "biblioteca_versiones", archivo: "nombre_almacenado", sha: "sha256", carpeta: "biblioteca" },
+    { etiqueta: "versiones de la Biblioteca retirada (heredadas)", tabla: "biblioteca_versiones", archivo: "nombre_almacenado", sha: "sha256", carpeta: "biblioteca" },
     // Documentos SGC: nombre_almacenado es relativo a <instancia>/sgc ("<documento>/<revision>/<uuid>.<ext>").
     { etiqueta: "archivos de Documentos SGC", tabla: "sgc_archivos", archivo: "nombre_almacenado", sha: "sha256", carpeta: "sgc" },
     { etiqueta: "PDF de no conformidades", tabla: "no_conformidades", archivo: "archivo_pdf", sha: "pdf_sha256", carpeta: path.join("calidad", "nc") },

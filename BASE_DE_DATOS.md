@@ -30,7 +30,7 @@ Todo lo que dice se tomó del código (`src/lib/server/db.ts`, `config.ts`, `mig
 
 ## 1. Resumen en una página
 
-**En palabras simples.** FICOTOX guarda todo lo que se captura (recepciones, análisis, informes, reactivos, personas, permisos, incidencias…) en **un solo archivo** llamado `ficotox.sqlite3`. Ese archivo vive en la carpeta `instance/` de la computadora del laboratorio. Los documentos «pesados» (los PDF de los informes, las evidencias de los equipos, los archivos de la Biblioteca, las fotos de perfil) **no** se meten en ese archivo: se guardan como archivos normales en carpetas dentro de `instance/`, y la base solo guarda su nombre y su huella digital para poder comprobar que nadie los cambió.
+**En palabras simples.** FICOTOX guarda todo lo que se captura (recepciones, análisis, informes, reactivos, personas, permisos, incidencias…) en **un solo archivo** llamado `ficotox.sqlite3`. Ese archivo vive en la carpeta `instance/` de la computadora del laboratorio. Los documentos «pesados» (los PDF de los informes, las evidencias de los equipos, los archivos de Documentos SGC, las fotos de perfil) **no** se meten en ese archivo: se guardan como archivos normales en carpetas dentro de `instance/`, y la base solo guarda su nombre y su huella digital para poder comprobar que nadie los cambió.
 
 **Detalle técnico.**
 
@@ -42,7 +42,7 @@ Todo lo que dice se tomó del código (`src/lib/server/db.ts`, `config.ts`, `mig
 | Tablas | **44 tablas de datos** + 2 de control de migraciones (`schema_migraciones`, `schema_migraciones_bloqueo`). Ver sección 3. |
 | Versión del esquema | **21** (la última migración es la `0021`; la primera es la `0009`). |
 | Dentro de la base | Datos capturados, usuarios, roles y permisos, folios, estados, bitácora de auditoría, huellas SHA-256 de los archivos. |
-| Fuera de la base | PDF de informes y evidencias de envío, evidencias de análisis, Biblioteca, PDF de no conformidades, fotos de perfil, reportes de mantenimiento, la llave de la bitácora (`auditoria.key`, si se usa) y los registros del servidor. Ver sección 8. |
+| Fuera de la base | PDF de informes y evidencias de envío, evidencias de análisis, archivos de Documentos SGC (`sgc/`), PDF de no conformidades, fotos de perfil, reportes de mantenimiento, la llave de la bitácora (`auditoria.key`, si se usa) y los registros del servidor. Ver sección 8. |
 
 ### Las 5 reglas más importantes
 
@@ -258,9 +258,9 @@ erDiagram
 | `reportes_mantenimiento` | El reporte (archivo) de un mantenimiento. | `codigo` (único, `RM-<mantenimiento>-<n>`), `id_mantenimiento`, `version`, `archivo_url` (el archivo está en `instance/maintenance_reports/`). |
 | `movimientos` | **Libro de entradas y salidas** de inventario. Cada consumo hecho desde un formato queda aquí. | `tipo` (`entrada`/`salida`), `tabla_origen` (`reactivos` o `consumibles`), `id_item`, `cantidad`, `motivo`, `referencia` (**única**; por ejemplo `EXT-78-INS-0` = «extracción 78, insumo 0»), `id_usuario`, `creado_en`. |
 
-### 3.5 Calidad (incidencias, no conformidades y Biblioteca)
+### 3.5 Calidad (incidencias, no conformidades y Documentos SGC)
 
-**Para qué sirve.** Registrar problemas (incidencias), tratarlos formalmente cuando lo ameritan (no conformidades con acciones correctivas) y conservar los documentos de consulta (Biblioteca).
+**Para qué sirve.** Registrar problemas (incidencias), tratarlos formalmente cuando lo ameritan (no conformidades con acciones correctivas) y controlar los documentos del sistema de calidad (**Documentos SGC**, tablas `sgc_*`, migraciones 22 a 24). La Biblioteca de documentos se retiró: sus tablas se conservan sin uso. El diagrama entidad–relación y el diccionario completo de las tablas `sgc_*` están en [docs/documentos-sgc/MODELO_DATOS.md](docs/documentos-sgc/MODELO_DATOS.md).
 
 ```mermaid
 erDiagram
@@ -294,10 +294,12 @@ erDiagram
 | `sgc_solicitudes` | Solicitudes de documento nuevo o de cambio (`documento_proponer`); Mejora Continua las acepta (crea la ficha o abre la revisión) o las rechaza con motivo. | `tipo` (nuevo/cambio), `documento_id`, `area_codigo`, `tipo_codigo`, `titulo_propuesto`, `justificacion`, `solicitante_id`, `estado` (pendiente/aceptada/rechazada), `resuelta_*`, `revision_id`, `clave_asignada`, archivo de apoyo (`apoyo_*` con SHA-256). |
 | `sgc_flujo_acciones` | Cada decisión del flujo (CA-07): solicitar, aceptar, enviar, revisar, devolver, rechazar, autorizar, publicar, reasignar, renovar, obsoletar. | `revision_id`, `accion`, `decision`, `comentario`, `usuario_id`, `cargo`, `papel`, `renovacion_id`, `fecha`. |
 | `sgc_renovaciones` | Renovación sin cambios de la revisión vigente (misma revisión, nueva próxima revisión). | `documento_id`, `revision_id`, `estado` (en_revision/en_autorizacion/completada/cancelada), `revisor_id`, `autorizador_id`, `fecha_proxima_anterior`, `fecha_proxima_nueva`, `fecha_limite`. |
-| `sgc_externos`, `sgc_distribucion`, `sgc_lecturas` | Documentos externos, distribución y acuses de lectura (Fase 3 del módulo). | — |
+| `sgc_externos` | Seguimiento de un documento **externo** (norma, guía): emisor, versión, enlace, responsable, última verificación y próxima revisión (aviso a 30 días). Cada versión es una revisión (`sgc_revisiones.version_externa`). | `documento_id` (único), `fuente`, `version_fecha`, `enlace`, `responsable_id`, `ultima_revision`, `proxima_revision`. |
+| `sgc_distribucion` | Destinatarios de una revisión, por rol (incluye a quien reciba el rol después) o por persona, con punto de uso y lectura requerida. | `revision_id`, `rol_id` o `usuario_id`, `punto_uso`, `requiere_lectura`, `motivo`, `retirado_en` y `motivo_retiro`. |
+| `sgc_lecturas` | Acuse de lectura de una persona sobre una revisión exacta (no se deshace). | `revision_id` + `usuario_id` (únicos), `abierto_en` (apertura del PDF, exigida), `leido_en`, `notificado_en` (recordatorio), `estado`. |
 | `biblioteca_categorias` | (Retirada; sin uso) Categorías de la Biblioteca de documentos. | `nombre` (único), `orden`, `activa`. |
-| `biblioteca_documentos` | Un documento de consulta (manual, procedimiento, formato…). | `titulo`, `descripcion`, `categoria_id`, `clave`, `etiquetas`, `fecha_documento`, `visibilidad` (todos o por roles), `version_actual_id`, `archivado_en`/`archivado_por`/`motivo_archivo`, `origen_sgc_clave` (si vino del flujo anterior). |
-| `biblioteca_versiones` | Cada **versión** (archivo) de un documento. | `documento_id`, `numero` (único con el documento), `nombre_original`, `nombre_almacenado`, `mime`, `extension`, `tamano_bytes`, `sha256`, `nota_version`, `texto` (para buscar dentro), `subido_por`, `subido_en`, `origen_sgc_id`. |
+| `biblioteca_documentos` | (Retirada; sin uso) Un documento de consulta (manual, procedimiento, formato…). | `titulo`, `descripcion`, `categoria_id`, `clave`, `etiquetas`, `fecha_documento`, `visibilidad` (todos o por roles), `version_actual_id`, `archivado_en`/`archivado_por`/`motivo_archivo`, `origen_sgc_clave` (si vino del flujo anterior). |
+| `biblioteca_versiones` | (Retirada; sin uso) Cada **versión** (archivo) de un documento. | `documento_id`, `numero` (único con el documento), `nombre_original`, `nombre_almacenado`, `mime`, `extension`, `tamano_bytes`, `sha256`, `nota_version`, `texto` (para buscar dentro), `subido_por`, `subido_en`, `origen_sgc_id`. |
 | `biblioteca_visibilidad_roles` | Qué roles ven un documento restringido. | `documento_id`, `rol_id` (único juntos). |
 
 **Biblioteca de documentos** (relaciones lógicas):
@@ -530,7 +532,8 @@ Cuando el laboratorio decide qué hacer con los remanentes de la muestra (`POST 
 | **Revocar** un rol, una asignación de muestra o una autorización | Se llena la fecha de revocación; la fila queda | `revocado_en`, `revocado_por`, `motivo_revocacion` (en `usuario_roles`, `asignaciones_muestra`, `autorizaciones_personal`) |
 | Rol o autorización que **vence** | El barrido (una vez por minuto) lo anota en la bitácora una sola vez | `vigente_hasta`, `vencimiento_registrado_en` |
 | **Dar de baja** una cuenta | `usuarios.activo = 0` y `token_version` + 1 (cierra sus sesiones abiertas). La cuenta y su historial quedan. | `activo`, `token_version` |
-| **Versiones** de documentos de la Biblioteca | Cada subida es una fila nueva en `biblioteca_versiones` (`numero` + 1); la anterior se conserva y se puede abrir | `version_actual_id`, `numero` |
+| **Revisiones** de Documentos SGC | Cada revisión es una fila nueva en `sgc_revisiones`; la anterior pasa a obsoleta y conserva su archivo, sus aprobaciones y su fecha de sustitución | `numero`, `sustituida_por_id` |
+| **Versiones** de la Biblioteca retirada (historial) | Cada subida es una fila nueva en `biblioteca_versiones` (`numero` + 1); la anterior se conserva y se puede abrir | `version_actual_id`, `numero` |
 | **Archivar** un documento | `archivado_en`, `archivado_por`, `motivo_archivo` | |
 | **Enmiendas** de análisis e informes | Una fila nueva con el mismo folio y `version` + 1; la original queda `sustituido` y el PDF anterior se conserva marcado | `sustituye_a`, `motivo_enmienda`, `version` |
 | Un **adjunto** equivocado | Se anula con motivo; el archivo **se conserva** en disco | `anulado_en`, `motivo_anulacion` |
@@ -683,7 +686,7 @@ Cada vez que se **abre o descarga** un archivo se recalcula su SHA-256 y se comp
 - **alterado**: el archivo existe pero su contenido cambió.
 - **faltante**: la base lo menciona pero el archivo no está.
 
-Si no es «ok», se **registra una alerta** (`alerta_integridad`) en la bitácora y se crea una **incidencia automática** (una sola vez por hecho, aunque se repita la consulta). Ejemplo: el PDF de un informe; el visor de informes y la descarga hacen esta comprobación. En la Biblioteca, el visor avisa; en la **restauración de un respaldo** (verificación 7) se comprueban de golpe los PDF de informes, las evidencias, los adjuntos, los archivos del flujo anterior, las versiones de la Biblioteca y los PDF de NC.
+Si no es «ok», se **registra una alerta** (`alerta_integridad`) en la bitácora y se crea una **incidencia automática** (una sola vez por hecho, aunque se repita la consulta). Ejemplo: el PDF de un informe; el visor de informes y la descarga hacen esta comprobación. En Documentos SGC, al abrir o descargar un archivo se verifica igual; en la **restauración de un respaldo** (verificación 7) se comprueban de golpe los PDF de informes, las evidencias, los adjuntos, los **archivos de Documentos SGC**, los archivos heredados (flujo anterior y Biblioteca retirada) y los PDF de NC.
 
 Un caso especial: cuando se enmienda un informe, el PDF del informe original se **vuelve a generar** marcado como «sustituido» y su huella se actualiza (porque el cambio es legítimo y está en la bitácora).
 
@@ -774,8 +777,9 @@ Están en `src/lib/server/migraciones/` y se registran en `motor.mjs`:
 | 17 | `busqueda_recientes` |
 | 18 | Permisos del módulo «Respaldos» (Calidad › Respaldos): solo datos en `rol_acciones`, sin cambios de estructura |
 | 19–21 | Campos de inventario, unidades de consumibles y ajustes de permisos (usuarios:A, Biblioteca) |
-| 23 | Documentos SGC, flujo de aprobación: fecha límite, revisión/autorización/cancelación y «sustituida por» en `sgc_revisiones`; papel en `sgc_flujo_acciones`; clave asignada en `sgc_solicitudes`; tabla `sgc_renovaciones` |
 | 22 | Documentos SGC: catálogos de áreas y tipos, fichas, revisiones (una vigente), archivos inmutables tras enviar a revisión, tablas de las fases 2 y 3 y acciones documentales en `rol_acciones` (retira los permisos de la Biblioteca) |
+| 23 | Documentos SGC, flujo de aprobación: fecha límite, revisión/autorización/cancelación y «sustituida por» en `sgc_revisiones`; papel en `sgc_flujo_acciones`; clave asignada en `sgc_solicitudes`; tabla `sgc_renovaciones` |
+| 24 | Documentos SGC, externos y lectura controlada: `version_externa` en `sgc_revisiones`, motivos de alta y retiro en `sgc_distribucion`, `abierto_en` en `sgc_lecturas` e índice de lecturas por usuario |
 
 (Empiezan en la 9 para coincidir con los respaldos anteriores, que usaban 10 y 11 como número de esquema.)
 
@@ -940,7 +944,7 @@ Cada verificación sale con ✅/❌ en el acta (en ambos modos):
 4. **Llave**: su huella coincide con la del manifest y el sello del manifest es válido (si no, el respaldo fue alterado tras crearse).
 5. **Cadena de la bitácora íntegra** con esa llave (sellos, huecos, triggers).
 6. **Conteos por tabla** iguales a los del manifest.
-7. **Archivos contra la base** (SHA-256): PDF de informes, evidencias de envío, adjuntos, documentos SGC, versiones de la Biblioteca y PDF de NC.
+7. **Archivos contra la base** (SHA-256): PDF de informes, evidencias de envío, adjuntos, archivos de Documentos SGC (`sgc/`), archivos heredados (flujo anterior y Biblioteca retirada) y PDF de NC. La verificación 6 compara además los conteos de todas las tablas `sgc_*`.
 8. Tiempo total.
 
 Si la verificación 1 falla, las demás se marcan «no ejecutada» (el respaldo no es confiable). El código de salida es distinto de 0 si algo falla.

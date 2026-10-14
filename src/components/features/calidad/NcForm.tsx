@@ -428,7 +428,7 @@ export function NcForm({ item }: { item: ApiRecord }) {
             {editar ? <Textarea id="nc-nota-riesgos" rows={2} value={d.nota_riesgos} onChange={(event) => set("nota_riesgos")(event.target.value)} /> : <ReadValue value={item.nota_riesgos} />}
           </Field>
         ) : null}
-        <Switch checked={d.requiere_cambio_documental === "1"} onCheckedChange={(v) => set("requiere_cambio_documental")(v ? "1" : "0")} disabled={!editar} label="Requiere cambio documental" description="Se registra la bandera. Los documentos se actualizan en Calidad › Biblioteca (subir versión nueva); ya no hay propuestas ni flujo de aprobación." />
+        <Switch checked={d.requiere_cambio_documental === "1"} onCheckedChange={(v) => set("requiere_cambio_documental")(v ? "1" : "0")} disabled={!editar} label="Requiere cambio documental" description="Se registra la bandera. El cambio se propone en Calidad › Documentos SGC («Nueva solicitud») y sigue su flujo de revisión y autorización." />
         <PropuestaAnterior item={item} />
       </FormCard>
 
@@ -935,7 +935,7 @@ function Verificar({ item, bloqueo, onExcepcion }: { item: ApiRecord; bloqueo: s
 /* ---------- 7. Propuesta documental anterior (solo lectura) ---------- */
 
 /*
- * Con la Biblioteca (decision confirmada del laboratorio) ya no se crean
+ * Desde la Biblioteca (y ahora con Documentos SGC) ya no se crean
  * propuestas de cambio documental: "requiere cambio documental" es solo una
  * bandera. Si la NC ya apuntaba a una propuesta del flujo anterior, se muestra
  * en solo lectura (titulo y estado), sin enlace a la pantalla retirada.

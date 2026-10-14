@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowRight, ArrowsClockwise, BookOpenText, Cube, FileText, Flask, Keyboard, MagnifyingGlass, Prohibit, SealCheck, TestTube, WarningCircle } from "@phosphor-icons/react";
+import { ArrowRight, ArrowsClockwise, BookOpenText, Cube, FileText, Files, Flask, Keyboard, MagnifyingGlass, Prohibit, SealCheck, TestTube, WarningCircle } from "@phosphor-icons/react";
 import { PageBody } from "@/components/shell/AppShell";
 import { useSession } from "@/components/session/SessionProvider";
 import { cn } from "@/components/ui/cn";
@@ -24,6 +24,7 @@ const SECTIONS: Array<{ anchor: string; title: string; icon: ReactNode }> = [
   { anchor: "informes", title: "Informes", icon: <FileText size={16} /> },
   { anchor: "inventario", title: "Inventario y avisos", icon: <Cube size={16} /> },
   { anchor: "calidad", title: "Auditoría", icon: <ArrowsClockwise size={16} /> },
+  { anchor: "documentos", title: "Documentos SGC", icon: <Files size={16} /> },
   { anchor: "anular", title: "Corregir un registro", icon: <Prohibit size={16} /> },
   { anchor: "atajos", title: "Atajos", icon: <Keyboard size={16} /> },
 ];
@@ -285,6 +286,27 @@ export default function AyudaPage() {
             <p>
               Cada formato tiene al final un <b>Historial</b> con frases sencillas («Axel aprobó el análisis A 0000004»); al pulsar una actividad se abre una ventana con qué pasó, qué cambió y el motivo. En <b>Calidad › Auditoría</b> se ve lo mismo para toda la plataforma, con el buscador y el botón «Filtros» (periodo, personas, tipo de actividad y área). La bitácora no se exporta: se consulta solo aquí. Está sellada: si alguien la altera fuera de la plataforma, se detecta solo y aparece un aviso rojo.
             </p>
+          </Section>
+
+          <Section anchor="documentos" title="Documentos SGC" lead="Los documentos controlados del laboratorio, en seis carpetas por gestión (el color es de la gestión, nunca del estado).">
+            <ul className="flex flex-col gap-2">
+              <li>
+                <b>Consultar:</b> en <b>Calidad › Documentos SGC › Explorar</b> busca por clave FX, título o palabra clave; la revisión vigente se lee en el visor. Descargada o impresa es una copia no controlada.
+              </li>
+              <li>
+                <b>Proponer un cambio:</b> «Nueva solicitud» (o «Proponer cambio» en la ficha) con la justificación. Mejora Continua la acepta y asigna elaborador, revisor y autorizador: tres personas distintas.
+              </li>
+              <li>
+                <b>Elaborar, revisar y autorizar:</b> lo que te toca aparece en la <b>Bandeja</b> y en la campana. El elaborador carga el PDF y lo envía (desde ahí el archivo ya no cambia); el revisor acepta o devuelve con comentarios; el autorizador autoriza con su contraseña y Mejora Continua publica: la anterior queda obsoleta.
+              </li>
+              <li>
+                <b>Confirmar lectura:</b> en «Lecturas pendientes» pulsa «Leer», revisa el PDF y confirma «Leí y comprendí»; queda ligado a ti y a esa revisión.
+              </li>
+              <li>
+                <b>Lista Maestra y externos:</b> la Lista Maestra FX-GCL-MD se filtra y se abre en PDF en el visor; las normas externas avisan cuando se acerca su próxima revisión.
+              </li>
+            </ul>
+            <Tip>Si un botón está deshabilitado, debajo dice por qué. Los documentos restringidos o confidenciales solo los ven las personas autorizadas.</Tip>
           </Section>
 
           <Section anchor="anular" title="Corregir un registro" lead="Los registros técnicos no se borran; se anulan con motivo y, si hace falta, se restauran.">

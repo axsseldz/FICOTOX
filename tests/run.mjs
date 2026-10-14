@@ -145,7 +145,7 @@ try {
   }
 
   // api-roles corre despues de api-dsp y api-sgc: crea registros y personas de prueba que alterarian los folios que esas suites esperan.
-  for (const file of ["api-dsp.mjs", "api-sgc.mjs", "api-roles.mjs", "api-seguridad.mjs", "api-segregacion.mjs", "api-autorizaciones.mjs", "api-muestras.mjs", "api-informes.mjs", "api-documentos.mjs", "api-documentos-flujo.mjs", "api-documentos-fase3.mjs", "api-cierre.mjs", "api-evidencias.mjs", "api-incidencias.mjs", "api-no-conformidades.mjs", "api-produccion.mjs", "respaldos.mjs"]) {
+  for (const file of ["api-dsp.mjs", "api-sgc.mjs", "api-roles.mjs", "api-seguridad.mjs", "api-segregacion.mjs", "api-autorizaciones.mjs", "api-muestras.mjs", "api-informes.mjs", "api-documentos.mjs", "api-documentos-flujo.mjs", "api-documentos-fase3.mjs", "api-documentos-aceptacion.mjs", "api-cierre.mjs", "api-evidencias.mjs", "api-incidencias.mjs", "api-no-conformidades.mjs", "api-produccion.mjs", "respaldos.mjs"]) {
     console.log(`\n=== ${file}`);
     failed += (await run(path.join(here, file), api)) ? 1 : 0;
   }

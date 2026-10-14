@@ -329,7 +329,7 @@ export function IconoArea({ area, size = "md" }: { area: Pick<Area, "codigo" | "
   const caja = { sm: "h-8 w-8 rounded-[9px]", md: "h-11 w-11 rounded-[12px]", lg: "h-14 w-14 rounded-[15px]" }[size];
   const icono = { sm: 17, md: 23, lg: 30 }[size];
   return (
-    <span className={cn("relative flex shrink-0 items-center justify-center bg-surface-2 ring-1 ring-line", caja)} aria-hidden="true">
+    <span className={cn("icono-area relative flex shrink-0 items-center justify-center bg-surface-2 ring-1 ring-line", caja)} aria-hidden="true">
       <FolderSimple size={icono} weight="fill" style={{ color: area.color }} />
     </span>
   );
