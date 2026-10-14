@@ -15,6 +15,7 @@ import { violacionParaExcepcionAnalisis } from "./modules/samples/analisis";
 import { ejecutarCambioFolio, ejecutarDecisionRecepcion, ejecutarReapertura } from "./modules/samples/recepcion";
 import { ejecutarAnulacionCalidad, violacionParaExcepcionNc, violacionParaExcepcionSuspension } from "./modules/calidad/nc";
 import { violacionParaExcepcionIncidencia } from "./modules/calidad/incidencias";
+import { ejecutarObsolescencia } from "./modules/sgc/flujo";
 
 /*
  * Que hace el servidor cuando un segundo usuario aprueba cada tipo de
@@ -65,6 +66,8 @@ const EJECUTORES: Ejecutores = {
   reabrir_recepcion: ejecutarReapertura,
   // Fase 11: anular una incidencia o una NC.
   anular_calidad: (ctx) => ejecutarAnulacionCalidad({ s: ctx.s, user: ctx.user, actuo: ctx.actuo, solicitud: ctx.solicitud, motivo: ctx.motivo }),
+  // Documentos SGC (Fase 2): declarar obsoleto sin reemplazo.
+  obsoletar_documento_sgc: ejecutarObsolescencia,
 };
 
 export const aprobarSolicitud = aprobarSolicitudCon(EJECUTORES);

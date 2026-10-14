@@ -132,7 +132,7 @@ try {
       const sobran = [...hrefs].filter((h) => !esperados.has(h));
       const faltan = [...esperados].filter((h) => !hrefs.has(h));
       check(`${rol}: menu con solo sus modulos`, !sobran.length && !faltan.length, `sobran=[${sobran.join(", ")}] faltan=[${faltan.join(", ")}]`);
-      check(`${rol}: «Documentos SGC» aparece en Calidad y ya no «Biblioteca»`, [...hrefs].includes("/documentos") && (await aside.locator("nav a", { hasText: /^Documentos SGC$/ }).count()) > 0 && !hrefs.has("/calidad/biblioteca") && (await aside.locator("nav a", { hasText: /^Biblioteca$/ }).count()) === 0);
+      check(`${rol}: «Documentos SGC» aparece en Calidad y ya no «Biblioteca»`, [...hrefs].includes("/documentos") && (await aside.locator('nav a[href="/documentos"]', { hasText: /^Documentos SGC\d*$/ }).count()) > 0 && !hrefs.has("/calidad/biblioteca") && (await aside.locator("nav a", { hasText: /^Biblioteca$/ }).count()) === 0);
 
       for (const [ruta, texto, visible] of BOTONES[rol] || []) {
         await page.goto(`${BASE}${ruta}`);

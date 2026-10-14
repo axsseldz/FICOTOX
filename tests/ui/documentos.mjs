@@ -36,7 +36,7 @@ async function ficha(token, campos, pdfTitulo) {
 // Restringido vigente (para la URL directa) y uno en borrador asignado a Luis (para el boton con motivo).
 const R = await ficha(t.ana, { clave: `FX-GCL-R${stamp}`, titulo: `Lista restringida UI ${stamp}`, area_codigo: "GC", tipo_codigo: "L", confidencialidad: "confidencial", elaborador_id: id.luis, revisor_id: id.ricardo, autorizador_id: id.patricia }, "Restringida");
 await api("POST", `/sgc/revisiones/${R.revision_id}/registrar-vigente`, { fecha_emision: "2026-05-01" }, t.ana);
-const L = await ficha(t.ana, { clave: `FX-TCI-L${stamp}`, titulo: `Instrucción de Luis ${stamp}`, area_codigo: "TC", tipo_codigo: "I", elaborador_id: id.luis, revisor_id: id.ricardo, autorizador_id: id.patricia }, "Instruccion");
+const L = await ficha(t.ana, { clave: `FX-TCI-L${stamp}`, titulo: `Instrucción de Luis ${stamp}`, area_codigo: "TC", tipo_codigo: "I", elaborador_id: id.luis, revisor_id: id.ricardo, autorizador_id: id.patricia, apartados_afectados: "Todo el documento", descripcion_cambio: "Emisión inicial de la instrucción" }, "Instruccion");
 
 const browser = await chromium.launch({ executablePath, headless: true });
 const consoleErrors = [];

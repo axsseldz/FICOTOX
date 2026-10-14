@@ -11,7 +11,7 @@
  * un registro concreto; queda registrada en el registro y en la bitacora.
  */
 
-export const VERSION_SEGREGACION = "2026-10-03.1";
+export const VERSION_SEGREGACION = "2026-10-14.1";
 
 export interface Violacion {
   regla: number;
@@ -113,4 +113,22 @@ export function evaluarCierreNc(usuarioId: number, responsablesNc: Iterable<numb
 export function evaluarReanudacion(usuarioId: number, suspendidaPor: number | null | undefined): Violacion | null {
   if (suspendidaPor === null || suspendidaPor === undefined || Number(suspendidaPor) !== Number(usuarioId)) return null;
   return { regla: 10, clave: "reanudar_trabajo", mensaje: "Suspendiste este trabajo; lo debe reanudar otra persona" };
+}
+
+/*
+ * Regla 11 (Documentos SGC): elaborador, revisor y autorizador de una revision
+ * son tres personas distintas, y nadie actua en un papel que no le fue asignado.
+ */
+export type PapelDocumento = "elaborador" | "revisor" | "autorizador";
+const PAPEL_ARTICULO: Record<PapelDocumento, string> = { elaborador: "el elaborador", revisor: "el revisor", autorizador: "el autorizador" };
+
+export function evaluarTresPersonas(ids: { elaborador_id?: number | null; revisor_id?: number | null; autorizador_id?: number | null }): Violacion | null {
+  const lista = [ids.elaborador_id, ids.revisor_id, ids.autorizador_id].filter((x): x is number => x !== null && x !== undefined && Number(x) > 0).map(Number);
+  if (new Set(lista).size === lista.length) return null;
+  return { regla: 11, clave: "documento_tres_personas", mensaje: "Elaborador, revisor y autorizador deben ser tres personas distintas: nadie revisa ni autoriza lo que elaboró, ni autoriza lo que revisó" };
+}
+
+export function evaluarPapelDocumento(usuarioId: number, asignado: number | null | undefined, papel: PapelDocumento): Violacion | null {
+  if (asignado !== null && asignado !== undefined && Number(asignado) === Number(usuarioId)) return null;
+  return { regla: 11, clave: "documento_papel_asignado", mensaje: `No eres ${PAPEL_ARTICULO[papel]} asignado de esta revisión; solo actúa quien fue asignado por Mejora Continua` };
 }

@@ -38,6 +38,7 @@ export function RevisionSheet({ doc, revision, catalogos, onClose }: { doc: Fich
   const [resp, setResp] = useState<Resp>(respDe(revision));
   const [fechas, setFechas] = useState({ fecha_emision: revision?.fecha_emision || "", fecha_vigencia: revision?.fecha_vigencia || "", fecha_proxima_revision: revision?.fecha_proxima_revision || "" });
   const [retencion, setRetencion] = useState({ ubicacion_historica: revision?.ubicacion_historica || "", regla_conservacion: revision?.regla_conservacion || "" });
+  const [limite, setLimite] = useState("");
   const [guardando, setGuardando] = useState(false);
   const puedeAsignar = !revision || revision.puede.asignar.ok;
   const personas = catalogos?.personas || [];
@@ -47,7 +48,8 @@ export function RevisionSheet({ doc, revision, catalogos, onClose }: { doc: Fich
       const out: Problema[] = [];
       if (motivo.trim().length < MOTIVO_MIN_SGC) out.push({ campo: "rev-motivo", mensaje: `Describe el motivo del cambio (al menos ${MOTIVO_MIN_SGC} caracteres)` });
       const ids = Object.values(resp).filter(Boolean);
-      if (new Set(ids).size !== ids.length) out.push({ campo: "rev-elaborador", mensaje: "Elaborador, revisor y autorizador deben ser tres personas distintas" });
+      if (!editar && ids.length < 3) out.push({ campo: "rev-elaborador", mensaje: "Asigna elaborador, revisor y autorizador" });
+      else if (new Set(ids).size !== ids.length) out.push({ campo: "rev-elaborador", mensaje: "Elaborador, revisor y autorizador deben ser tres personas distintas" });
       return out;
     },
   });
@@ -55,7 +57,7 @@ export function RevisionSheet({ doc, revision, catalogos, onClose }: { doc: Fich
     if (!v.validar()) return;
     setGuardando(true);
     try {
-      const cuerpo = { motivo_cambio: motivo.trim(), apartados_afectados: apartados.trim(), descripcion_cambio: descripcion.trim(), ...(puedeAsignar ? resp : {}), ...(editar ? { ...fechas, ...retencion } : {}) };
+      const cuerpo = { motivo_cambio: motivo.trim(), apartados_afectados: apartados.trim(), descripcion_cambio: descripcion.trim(), ...(puedeAsignar ? resp : {}), ...(editar ? { ...fechas, ...retencion } : { fecha_limite: limite || null }) };
       const r = editar ? await sendJsonAuth("PUT", `${API_BASE_URL}/sgc/revisiones/${revision!.id}`, token, cuerpo) : await sendJsonAuth("POST", `${API_BASE_URL}/sgc/documentos/${doc.id}/revisiones`, token, cuerpo);
       toast.success(String(r.message || "Revisión guardada"));
       invalidate("sgc");
@@ -85,7 +87,7 @@ export function RevisionSheet({ doc, revision, catalogos, onClose }: { doc: Fich
       open
       onOpenChange={(o) => !o && !guardando && onClose()}
       title={editar ? `Revisión ${revision!.numero} · ${doc.clave}` : `Nueva revisión · ${doc.clave}`}
-      description={editar ? "Datos de la revisión en borrador. Los cambios quedan en la bitácora." : "Se abre una revisión de trabajo en borrador. La revisión vigente sigue disponible sin cambios hasta que la nueva se publique."}
+      description={editar ? "Datos de la revisión en borrador. Los cambios quedan en la bitácora." : "Queda registrada como una solicitud tuya aceptada: se abre la revisión de trabajo en borrador y la vigente sigue disponible sin cambios hasta que la nueva se publique."}
       size="lg"
       footer={
         <>
@@ -122,6 +124,11 @@ export function RevisionSheet({ doc, revision, catalogos, onClose }: { doc: Fich
               {persona("autorizador_id", "Autorizador", "documento_autorizar", "rev-autorizador")}
             </FormGrid>
           </section>
+          {!editar ? (
+            <Field label="Fecha límite (opcional)" htmlFor="rev-limite">
+              <DateInput id="rev-limite" value={limite} onChange={setLimite} />
+            </Field>
+          ) : null}
           {editar ? (
             <>
               <FormGrid cols={3}>

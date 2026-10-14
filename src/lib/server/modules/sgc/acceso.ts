@@ -36,6 +36,8 @@ export interface AccesoSgc {
   rolIds: number[];
   /* Revisiones donde la persona es destinataria (distribucion vigente; Fase 3). */
   destinatarioDe: Set<number>;
+  /* Documentos con una renovacion en curso donde la persona es revisor o autorizador (Fase 2). */
+  renovacionDe: Set<number>;
 }
 
 export const tiene = (a: AccesoSgc, accion: AccionDocumental) => a.acciones.has(accion);
@@ -49,6 +51,7 @@ export async function accesoSgc(s: Session, auth: Autorizacion): Promise<AccesoS
   rolIds.forEach((id, i) => (params[`r${i}`] = id));
   const porRol = rolIds.length ? ` OR rol_id IN (${rolIds.map((_, i) => `:r${i}`).join(", ")})` : "";
   const dist = await s.query<Row>(`SELECT DISTINCT revision_id FROM sgc_distribucion WHERE retirado_en IS NULL AND (usuario_id = :yo${porRol})`, params);
+  const renov = await s.query<Row>("SELECT DISTINCT documento_id FROM sgc_renovaciones WHERE estado IN ('en_revision', 'en_autorizacion') AND (revisor_id = :yo OR autorizador_id = :yo)", { yo: auth.userId });
   return {
     auth,
     yo: auth.userId,
@@ -57,9 +60,12 @@ export async function accesoSgc(s: Session, auth: Autorizacion): Promise<AccesoS
     diagnostico,
     rolIds,
     destinatarioDe: new Set(dist.map((d) => Number(d.revision_id))),
+    renovacionDe: new Set(renov.map((d) => Number(d.documento_id))),
   };
 }
 
+/* Una asignacion cuenta mientras la revision esta en el flujo o vigente; en una cancelada u obsoleta ya no abre el documento. */
+const ESTADOS_ACTIVOS = new Set(["borrador", "en_revision", "en_autorizacion", "autorizada", "vigente"]);
 const asignadoEn = (a: AccesoSgc, rev: Row) => [rev.elaborador_id, rev.revisor_id, rev.autorizador_id].some((u) => u !== null && u !== undefined && Number(u) === a.yo);
 
 /* ¿Que puede ver la persona de un documento? (con todas sus revisiones cargadas) */
@@ -78,11 +84,13 @@ export interface VistaDocumento {
 export function vistaDocumento(a: AccesoSgc, doc: Row, revisiones: Row[]): VistaDocumento {
   const nada: VistaDocumento = { ficha: false, revisiones: new Set(), archivos: new Set(), historial: false, soloDiagnostico: false };
   const propio = doc.propietario_id !== null && doc.propietario_id !== undefined && Number(doc.propietario_id) === a.yo;
-  const asignado = revisiones.some((r) => asignadoEn(a, r));
+  const asignado = revisiones.some((r) => ESTADOS_ACTIVOS.has(String(r.estado)) && asignadoEn(a, r)) || a.renovacionDe.has(Number(doc.id));
   const destinatario = revisiones.some((r) => a.destinatarioDe.has(Number(r.id)));
   const confidencial = String(doc.confidencialidad || "uso_interno") !== "uso_interno";
   if (confidencial && !(a.privilegiado || propio || asignado || destinatario)) return nada;
   const historico = tiene(a, "documento_consultar_historico") || tiene(a, "documento_crear_ficha");
+  // Obsoleto: fuera de los puntos de uso; solo lo consulta quien ve el historico (o el diagnostico tecnico).
+  if (doc.estado === "obsoleto" && !historico && !a.diagnostico) return nada;
   const consulta = tiene(a, "documento_consultar_vigente");
   const visibles = new Set<number>();
   const archivos = new Set<number>();

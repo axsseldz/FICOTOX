@@ -80,6 +80,7 @@ const ENTIDAD: Record<string, { art: "el" | "la"; noun: string; plural: string; 
   biblioteca_documentos: { art: "el", noun: "documento", plural: "documentos", area: "Biblioteca (retirada)" },
   biblioteca_categorias: { art: "la", noun: "categoría", plural: "categorías", area: "Biblioteca (retirada)" },
   sgc_documentos: { art: "el", noun: "documento", plural: "documentos", area: "Documentos SGC" },
+  sgc_solicitudes: { art: "la", noun: "solicitud de documento", plural: "solicitudes de documentos", area: "Documentos SGC" },
   reactivos: { art: "el", noun: "reactivo", plural: "reactivos", area: "Inventario de reactivos" },
   consumibles: { art: "el", noun: "consumible", plural: "consumibles", area: "Inventario de consumibles" },
   equipos: { art: "el", noun: "equipo", plural: "equipos", area: "Equipos" },
@@ -108,6 +109,7 @@ const ENTITY_ROUTE: Partial<Record<string, (id: string, referencia: string) => s
   biblioteca_documentos: () => "/documentos",
   biblioteca_categorias: () => "/documentos",
   sgc_documentos: (id) => `/documentos/${id}`,
+  sgc_solicitudes: (id) => `/documentos/solicitudes?abrir=${id}`,
   reactivos: (_id, ref) => `/inventario/reactivos?buscar=${encodeURIComponent(ref)}`,
   consumibles: (_id, ref) => `/inventario/consumibles?buscar=${encodeURIComponent(ref)}`,
   equipos: (_id, ref) => `/inventario/equipos?buscar=${encodeURIComponent(ref)}`,
@@ -691,6 +693,42 @@ interface Partes {
   sinActor?: boolean;
 }
 
+/* Documentos SGC (Fase 2): solicitudes, decisiones del flujo, renovacion y obsolescencia. */
+function redactarSgc(accion: string, d: ApiRecord, O: string, quien: string, ref: string | null): Partes | null {
+  const papel = d.papel === "revisor" ? "como revisor" : d.papel === "autorizador" ? "como autorizador" : "";
+  if (d.renovacion) {
+    if (accion === "crear") return { accion: `inició la renovación ${de(O)}`, quePaso: `${quien} inició la renovación de vigencia ${de(O)}, sin cambiar su contenido.` };
+    if (accion === "revisar") return { accion: `confirmó la vigencia ${de(O)}`, quePaso: `${quien} confirmó, como revisor, que ${O} sigue vigente sin cambios.` };
+    if (accion === "autorizar") return { accion: `autorizó la renovación ${de(O)}`, quePaso: `${quien} autorizó la renovación: ${O} sigue vigente con nueva fecha de próxima revisión.` };
+    if (accion === "rechazar") return { accion: `rechazó la renovación ${de(O)}`, quePaso: `${quien} rechazó la renovación ${de(O)}.` };
+  }
+  switch (accion) {
+    case "proponer":
+      return { accion: ref ? `propuso un cambio a ${O}` : "propuso un documento nuevo", quePaso: `${quien} registró una solicitud ${ref && !/^Solicitud/.test(ref) ? `de cambio a ${O}` : "de documento nuevo"} para Mejora Continua.` };
+    case "aceptar":
+      return { accion: `aceptó ${O}`, quePaso: `${quien} aceptó ${O} y asignó elaborador, revisor y autorizador.` };
+    case "revisar":
+      return { accion: `revisó y aceptó ${O}`, quePaso: `${quien} revisó ${O} y lo aceptó; pasa a autorización.` };
+    case "devolver":
+      return { accion: `devolvió ${O} con comentarios`, quePaso: `${quien} devolvió ${O} ${papel} con comentarios; vuelve a borrador para corregirse.` };
+    case "rechazar":
+      return { accion: `rechazó ${O}`, quePaso: d.tipo !== undefined && !d.revision ? `${quien} rechazó ${O}.` : `${quien} rechazó ${O} ${papel}; esa revisión queda cancelada y la vigente sigue en uso.` };
+    case "autorizar":
+      return { accion: `autorizó ${O}`, quePaso: `${quien} autorizó la emisión ${de(O)}; falta que Mejora Continua la publique.` };
+    case "reasignar":
+      return { accion: `reasignó los responsables ${de(O)}`, quePaso: `${quien} cambió a los responsables ${de(O)}.` };
+    case "anular":
+      if (d.obsoletar) return { accion: `declaró obsoleto ${O}`, quePaso: `${quien} aprobó la solicitud: ${O} queda obsoleto, fuera de los puntos de uso y conservado en el historial.` };
+      return null;
+    case "publicar":
+      if (d.sustituye) return { accion: `publicó ${O}`, quePaso: `${quien} publicó ${O}: queda vigente y la revisión ${texto((d.sustituye as ApiRecord).revision)} queda obsoleta.` };
+      return null;
+    default:
+      return null;
+  }
+}
+const de = (frase: string) => (frase.startsWith("el ") ? `del ${frase.slice(3)}` : `de ${frase}`);
+
 function redactar(record: ApiRecord, actor: string, sistema: boolean): Partes {
   const entidad = String(record.entidad || "");
   const accion = String(record.accion || "");
@@ -706,6 +744,10 @@ function redactar(record: ApiRecord, actor: string, sistema: boolean): Partes {
   const conSolicitud = d.solicitud_id !== undefined && d.solicitud_id !== null ? " Lo hizo al autorizar la solicitud de otra persona." : "";
   const excepcion = d.excepcion || d.excepcion_segregacion ? " Se permitió por una excepción autorizada, porque normalmente lo hace otra persona." : "";
 
+  if (entidad === "sgc_documentos" || entidad === "sgc_solicitudes") {
+    const sgc = redactarSgc(accion, d, O, quien, ref);
+    if (sgc) return sgc;
+  }
   switch (accion) {
     case "crear": {
       if (d.accion_correctiva) return { accion: `agregó una acción correctiva ${a(O)}`, quePaso: `${quien} agregó una acción correctiva ${a(O)}${d.responsable ? `, a cargo de ${texto(d.responsable)}` : ""}${d.fecha_compromiso ? `, con fecha compromiso ${formatearFecha(d.fecha_compromiso)}` : ""}.` };

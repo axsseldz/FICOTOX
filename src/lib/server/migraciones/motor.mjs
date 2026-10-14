@@ -41,8 +41,9 @@ import * as m0019 from "./0019_inventario_campos.mjs";
 import * as m0020 from "./0020_consumibles_unidades.mjs";
 import * as m0021 from "./0021_permisos_acceso_y_biblioteca.mjs";
 import * as m0022 from "./0022_documentos_sgc.mjs";
+import * as m0023 from "./0023_documentos_flujo.mjs";
 
-export const MIGRACIONES = [m0009, m0010, m0011, m0012, m0013, m0014, m0015, m0016, m0017, m0018, m0019, m0020, m0021, m0022].sort((a, b) => a.version - b.version);
+export const MIGRACIONES = [m0009, m0010, m0011, m0012, m0013, m0014, m0015, m0016, m0017, m0018, m0019, m0020, m0021, m0022, m0023].sort((a, b) => a.version - b.version);
 export const VERSION_ACTUAL = MIGRACIONES[MIGRACIONES.length - 1].version;
 /* Versiones que pueden quedar como linea base de una base anterior (las del sistema sin migraciones). */
 export const VERSIONES_BASELINE = [11, 10, 9];

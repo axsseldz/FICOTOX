@@ -32,6 +32,8 @@ const ETIQUETA_ACCION: Record<string, string> = {
   crear: "crear un respaldo",
   probar: "probar la restauración de un respaldo",
   publicar: "registrar o publicar una revisión vigente de un documento",
+  autorizar: "autorizar la emisión o la renovación de un documento",
+  obsoletar: "solicitar que un documento quede obsoleto",
 };
 
 function describirAccion(accion: string): string {

@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState, type KeyboardEvent } from "react";
-import { Files, ListBullets, LockKey, Plus, SquaresFour } from "@phosphor-icons/react";
+import { FilePlus, Files, ListBullets, LockKey, Plus, SquaresFour } from "@phosphor-icons/react";
+import { SolicitudSheet } from "@/components/features/documentos/SolicitudSheets";
 import { areaDe, ConfidencialidadEtiqueta, EstadoDocumentoEtiqueta, EstadoRevisionEtiqueta, IconoArea, nombreTipo, ProximaRevisionEtiqueta, RequireDocumentos, RutaDocumentos, useCatalogos, type DocLista } from "@/components/features/documentos/comun";
 import { FichaSheet } from "@/components/features/documentos/FichaSheet";
 import { PageBody } from "@/components/shell/AppShell";
@@ -41,7 +42,7 @@ const COLUMNAS: ColumnaLista[] = [
 interface Respuesta {
   items: DocLista[];
   propietarios: Array<{ id: number; nombre: string }>;
-  puede: { crear_ficha: boolean };
+  puede: { crear_ficha: boolean; proponer: boolean; ver_obsoletos: boolean };
   diagnostico: boolean;
 }
 
@@ -77,6 +78,8 @@ function Explorador() {
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
   const [orden, setOrden] = useState("clave");
+  const [obsoletos, setObsoletos] = useState(false);
+  const [solicitud, setSolicitud] = useState(false);
   const [vista, setVistaState] = useState<Vista>(() => (typeof window === "undefined" ? "tabla" : leerVista()));
   const [nueva, setNueva] = useState(useInitialParam("nueva") === "1");
   const debounced = useDebouncedValue(search);
@@ -106,13 +109,14 @@ function Explorador() {
     async () => {
       const q = new URLSearchParams({ search: debounced.trim(), orden });
       for (const [k, val] of Object.entries({ area, tipo, estado, origen, propietario })) if (val) q.set(k, val);
+      if (obsoletos) q.set("obsoletos", "1");
       if (periodo === "rango") {
         if (desde) q.set("desde", desde);
         if (hasta) q.set("hasta", hasta);
       }
       return (await getJsonAuth(`${API_BASE_URL}/sgc/documentos?${q.toString()}`, token)) as unknown as Respuesta;
     },
-    { enabled: !!token, deps: [debounced, area, tipo, estado, origen, propietario, periodo, desde, hasta, orden] },
+    { enabled: !!token, deps: [debounced, area, tipo, estado, origen, propietario, periodo, desde, hasta, orden, obsoletos] },
   );
   const data = recurso.data;
   const items = data?.items || [];
@@ -135,7 +139,7 @@ function Explorador() {
         { value: "en_revision", label: "En revisión o autorización" },
         { value: "borrador", label: "Con borrador en curso" },
         { value: "en_elaboracion", label: "Sin revisión vigente" },
-        { value: "proxima_revision", label: "Próximos a revisar" },
+        { value: "pendiente_revision", label: "Pendientes de revisión" },
         { value: "obsoleto", label: "Obsoletos" },
       ],
     },
@@ -194,11 +198,18 @@ function Explorador() {
           title={areaSel ? areaSel.nombre : "Explorador documental"}
           description={areaSel ? `Documentos de ${areaSel.codigo}${tipoSel ? ` · ${tipoSel.nombre}` : ""}. Busca por clave, título o palabras clave.` : "Busca por clave, título o palabras clave y filtra por gestión, tipo, estado, origen, propietario o fecha."}
           actions={
-            data?.puede.crear_ficha ? (
-              <Button icon={<Plus size={16} weight="bold" />} onClick={() => setNueva(true)} data-testid="sgc-nueva-ficha">
-                Nueva ficha
-              </Button>
-            ) : null
+            <>
+              {data?.puede.proponer ? (
+                <Button variant="secondary" icon={<FilePlus size={16} />} onClick={() => setSolicitud(true)} data-testid="sgc-explorar-solicitud">
+                  Nueva solicitud
+                </Button>
+              ) : null}
+              {data?.puede.crear_ficha ? (
+                <Button icon={<Plus size={16} weight="bold" />} onClick={() => setNueva(true)} data-testid="sgc-nueva-ficha">
+                  Nueva ficha
+                </Button>
+              ) : null}
+            </>
           }
         />
       </div>
@@ -216,7 +227,7 @@ function Explorador() {
         }
       >
         <SearchInput value={search} onChange={setSearch} placeholder="Buscar por clave, título o palabras clave" className="w-full md:w-[360px]" />
-        <FilterMenu groups={groups} gruposFinales={ordenar} />
+        <FilterMenu groups={groups} gruposFinales={ordenar} toggles={data?.puede.ver_obsoletos ? [{ key: "obsoletos", label: "Mostrar obsoletos", description: "Fuera de los puntos de uso; solo para consulta histórica", checked: obsoletos, onChange: setObsoletos }] : []} />
       </Toolbar>
 
       {recurso.error ? (
@@ -301,6 +312,7 @@ function Explorador() {
         />
       )}
 
+      {solicitud ? <SolicitudSheet catalogos={cat || null} onClose={() => setSolicitud(false)} /> : null}
       {nueva && cat?.puede.crear_ficha ? <FichaSheet open onClose={() => setNueva(false)} catalogos={cat} areaInicial={area} tipoInicial={tipo} /> : null}
     </PageBody>
   );

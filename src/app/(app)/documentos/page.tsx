@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { CheckCircle, Clock, FileDashed, MagnifyingGlass, PaperPlaneTilt, Plus, BookOpenText } from "@phosphor-icons/react";
+import { CheckCircle, Clock, FileDashed, MagnifyingGlass, PaperPlaneTilt, Plus, BookOpenText, FilePlus, Tray } from "@phosphor-icons/react";
+import { useBandejaSgc } from "@/components/features/documentos/bandeja";
 import { useRouter } from "next/navigation";
 import { IconoArea, RequireDocumentos, type Area } from "@/components/features/documentos/comun";
 import { Callout } from "@/components/features/samples/FormLayout";
@@ -46,6 +47,7 @@ export default function DocumentosPage() {
 function Inicio() {
   const { token } = useSession();
   const router = useRouter();
+  const bandeja = useBandejaSgc();
   const recurso = useResource<Resumen>(["sgc", "sgc-resumen"], async () => (await getJsonAuth(`${API_BASE_URL}/sgc/resumen`, token)) as unknown as Resumen, { enabled: !!token });
   const data = recurso.data;
   return (
@@ -56,8 +58,14 @@ function Inicio() {
         description="Documentos controlados del Sistema de Gestión de Calidad, organizados por gestión como en la carpeta institucional."
         actions={
           <>
+            <Button variant="secondary" icon={<Tray size={16} />} onClick={() => router.push("/documentos/bandeja")} data-testid="sgc-ir-bandeja">
+              Bandeja{bandeja.data?.total ? ` · ${bandeja.data.total}` : ""}
+            </Button>
+            <Button variant="secondary" icon={<FilePlus size={16} />} onClick={() => router.push("/documentos/solicitudes")}>
+              Solicitudes
+            </Button>
             <Button variant="secondary" icon={<MagnifyingGlass size={16} />} onClick={() => router.push("/documentos/explorar")}>
-              Explorar documentos
+              Explorar
             </Button>
             {data?.puede.crear_ficha ? (
               <Button icon={<Plus size={16} weight="bold" />} data-testid="sgc-nueva-ficha" onClick={() => router.push("/documentos/explorar?nueva=1")}>
@@ -87,7 +95,7 @@ function Inicio() {
           <section aria-label="Indicadores" className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <Indicador icono={<CheckCircle size={18} weight="duotone" />} etiqueta="Vigentes" valor={data.totales.vigentes} href="/documentos/explorar?estado=vigente" />
             <Indicador icono={<PaperPlaneTilt size={18} weight="duotone" />} etiqueta="En revisión" valor={data.totales.en_revision} href="/documentos/explorar?estado=en_revision" />
-            <Indicador icono={<Clock size={18} weight="duotone" />} etiqueta="Próximos a revisar" valor={data.totales.proximos} href="/documentos/explorar?estado=proxima_revision" />
+            <Indicador icono={<Clock size={18} weight="duotone" />} etiqueta="Pendientes de revisión" valor={data.totales.proximos} href="/documentos/explorar?estado=pendiente_revision" />
             <Indicador icono={<BookOpenText size={18} weight="duotone" />} etiqueta="Lecturas pendientes" valor={data.lecturas_pendientes} nota="Disponible con la distribución" />
           </section>
 
@@ -135,7 +143,7 @@ function Carpeta({ area }: { area: Area & { conteos: Conteos } }) {
     { icono: <CheckCircle size={14} weight="bold" />, etiqueta: "Vigentes", valor: c.vigentes },
     { icono: <PaperPlaneTilt size={14} weight="bold" />, etiqueta: "En revisión", valor: c.en_revision },
     { icono: <FileDashed size={14} weight="bold" />, etiqueta: "Borradores", valor: c.borradores },
-    { icono: <Clock size={14} weight="bold" />, etiqueta: "Próximos a revisar", valor: c.proximos },
+    { icono: <Clock size={14} weight="bold" />, etiqueta: "Pend. de revisión", valor: c.proximos },
   ];
   return (
     <Link

@@ -68,6 +68,7 @@ export interface DocLista {
   estado: EstadoDocumento;
   vigente: ResumenRevision | null;
   trabajo: ResumenRevision | null;
+  pendiente_revision: boolean;
   creado_en: string;
   actualizado_en: string;
 }
@@ -113,7 +114,39 @@ export interface Revision {
   creado_en: string;
   archivos: Archivo[];
   abrir: boolean;
-  puede: Record<"subir_archivo" | "editar" | "asignar" | "enviar_revision" | "registrar_vigente", Puede>;
+  fecha_limite: string | null;
+  revisada_en: string | null;
+  autorizada_en: string | null;
+  cancelada_en: string | null;
+  sustituida_por_id: number | null;
+  renovada_en: string | null;
+  linea_tiempo: PasoFlujo[];
+  puede: Record<"subir_archivo" | "editar" | "asignar" | "enviar_revision" | "registrar_vigente" | "revisar" | "autorizar" | "publicar" | "reasignar", Puede>;
+}
+export interface PasoFlujo {
+  id: number;
+  accion: string;
+  decision: string | null;
+  comentario: string | null;
+  usuario_nombre: string | null;
+  cargo: string | null;
+  papel: string | null;
+  fecha: string;
+  renovacion_id: number | null;
+}
+export interface Renovacion {
+  id: number;
+  revision_id: number;
+  estado: "en_revision" | "en_autorizacion" | "completada" | "cancelada";
+  revisor_nombre: string | null;
+  autorizador_nombre: string | null;
+  solicitado_por_nombre: string | null;
+  fecha_proxima_anterior: string | null;
+  fecha_proxima_nueva: string;
+  fecha_limite: string | null;
+  creado_en: string;
+  autorizada_en: string | null;
+  puede: { revisar: Puede; autorizar: Puede };
 }
 export interface Evento {
   id: number;
@@ -139,6 +172,11 @@ export interface FichaDocumento {
     propietario_id: number | null;
     propietario_nombre: string | null;
     estado: EstadoDocumento;
+    pendiente_revision: boolean;
+    obsoleto_en: string | null;
+    obsoleto_por_nombre: string | null;
+    motivo_obsolescencia: string | null;
+    obsolescencia_pendiente: number | null;
     revision_vigente_id: number | null;
     creado_por_nombre: string | null;
     creado_en: string;
@@ -151,7 +189,8 @@ export interface FichaDocumento {
   eventos: Evento[];
   distribucion: unknown[];
   lecturas: unknown[];
-  puede: { editar: Puede; nueva_revision: Puede };
+  renovaciones: Renovacion[];
+  puede: { editar: Puede; nueva_revision: Puede; renovar: Puede; obsoletar: Puede; proponer: Puede };
 }
 
 /* Catalogos (areas, tipos, personas) y lo que puede la persona. */
@@ -202,6 +241,7 @@ export function EstadoDocumentoEtiqueta({ estado }: { estado: EstadoDocumento | 
   );
 }
 
+/* Pendiente de revision: faltan 30 dias o menos para la proxima revision, o ya paso. */
 export function ProximaRevisionEtiqueta({ fecha }: { fecha: string | null | undefined }) {
   if (!fecha) return null;
   const hoy = hoyLocal();
@@ -210,7 +250,7 @@ export function ProximaRevisionEtiqueta({ fecha }: { fecha: string | null | unde
   return (
     <Badge tone="warning" className="gap-1">
       <Clock size={12} weight="bold" aria-hidden="true" />
-      {fecha < hoy ? "Revisión vencida" : "Próxima a revisar"}
+      {fecha < hoy ? "Pendiente de revisión · vencida" : "Pendiente de revisión"}
     </Badge>
   );
 }

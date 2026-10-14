@@ -139,3 +139,63 @@ export const MIME_SGC: Record<string, string> = {
 };
 export const DOCUMENTOS_MAX_MB_DEFAULT = 50;
 export const MOTIVO_MIN_SGC = 5;
+
+/* ---------- Flujo (Fase 2) ---------- */
+
+/* Dias antes de la proxima revision en que el documento pasa a "pendiente de revision". */
+export const DIAS_AVISO_REVISION = 30;
+/* Proxima revision por omision al publicar o renovar: emision + 3 anios. */
+export const ANIOS_PROXIMA_REVISION = 3;
+
+export function sumarAnios(fecha: string, anios: number): string {
+  const [y, m, d] = fecha.split("-").map(Number);
+  const f = new Date(Date.UTC(y + anios, m - 1, d));
+  // 29 de febrero -> 28 (no saltar al 1 de marzo).
+  if (f.getUTCMonth() !== m - 1) f.setUTCDate(0);
+  return f.toISOString().slice(0, 10);
+}
+
+/* ¿La vigente esta pendiente de revision (faltan 30 dias o menos, o ya paso)? */
+export function pendienteDeRevision(fechaProxima: unknown, hoy: string): boolean {
+  if (!fechaProxima) return false;
+  const [y, m, d] = hoy.split("-").map(Number);
+  const limite = new Date(Date.UTC(y, m - 1, d + DIAS_AVISO_REVISION)).toISOString().slice(0, 10);
+  return String(fechaProxima).slice(0, 10) <= limite;
+}
+
+export const PAPELES = { elaborador: "Elaborador", revisor: "Revisor", autorizador: "Autorizador", publicador: "Mejora Continua", solicitante: "Solicitante" } as const;
+
+export const ESTADOS_SOLICITUD_SGC: Record<string, { etiqueta: string; tono: TonoEstado }> = {
+  pendiente: { etiqueta: "Pendiente", tono: "warning" },
+  aceptada: { etiqueta: "Aceptada", tono: "success" },
+  rechazada: { etiqueta: "Rechazada", tono: "danger" },
+};
+
+export const ESTADOS_RENOVACION: Record<string, { etiqueta: string; tono: TonoEstado }> = {
+  en_revision: { etiqueta: "Renovación: confirmar vigencia", tono: "brand" },
+  en_autorizacion: { etiqueta: "Renovación: por autorizar", tono: "brand" },
+  completada: { etiqueta: "Renovado", tono: "success" },
+  cancelada: { etiqueta: "Renovación rechazada", tono: "neutral" },
+};
+
+/* Acciones del flujo en palabras (linea de tiempo). */
+export const ACCION_FLUJO: Record<string, string> = {
+  solicitar: "Solicitó",
+  aceptar_solicitud: "Aceptó la solicitud y asignó responsables",
+  enviar_revision: "Envió a revisión",
+  revisar_aceptar: "Revisó y aceptó",
+  revisar_devolver: "Devolvió con comentarios (revisión)",
+  revisar_rechazar: "Rechazó en la revisión",
+  autorizar: "Autorizó",
+  autorizar_devolver: "Devolvió con comentarios (autorización)",
+  autorizar_rechazar: "Rechazó en la autorización",
+  publicar: "Publicó: queda vigente",
+  registrar_vigente: "Registró como vigente (carga inicial)",
+  reasignar: "Reasignó responsables",
+  obsoleta: "Quedó obsoleta",
+  renovacion_iniciar: "Inició la renovación",
+  renovacion_confirmar: "Confirmó la vigencia",
+  renovacion_rechazar: "Rechazó la renovación",
+  renovacion_autorizar: "Autorizó la renovación",
+  obsoletar: "Declaró el documento obsoleto",
+};

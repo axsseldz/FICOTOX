@@ -15,6 +15,7 @@ import { isActivePath, isItemActive, visibleNav, type NavChild, type NavIcon, ty
 import { BrandLockup, BrandMark } from "./Brand";
 import { ABRIR_MIS_AUTORIZACIONES, AccountSheet, EVENTO_ABRIR_CUENTA } from "./AccountSheet";
 import { usePendientesPorResolver } from "@/components/features/solicitudes/Solicitudes";
+import { useBandejaSgc } from "@/components/features/documentos/bandeja";
 import { Campana } from "./Campana";
 import { CommandPalette } from "./CommandPalette";
 import { VisorPdfFlotante } from "./VisorPdfFlotante";
@@ -229,7 +230,10 @@ function SidebarContent({ items, pathname, collapsed, onSearch, onToggle, onAcco
   const pendientes = usePendientesPorResolver();
   // Acceso rapido de apariencia en el menu de la cuenta (Claro <-> Oscuro).
   const tema = useAlternarTema();
-  const contador: Record<string, number> = { "/solicitudes": pendientes.solicitudes.length, "/supervision": pendientes.supervision.length };
+  // Documentos SGC: tareas de su bandeja (solo si tiene acciones documentales).
+  const { can } = useSession();
+  const bandejaSgc = useBandejaSgc(can("documentos"));
+  const contador: Record<string, number> = { "/solicitudes": pendientes.solicitudes.length, "/supervision": pendientes.supervision.length, "/documentos": bandejaSgc.data?.total || 0 };
 
   const toggleExpanded = (label: string, active: boolean) => {
     setExpanded((current) => {

@@ -132,7 +132,7 @@ const archivoVigente = fila("SELECT id, sha256 FROM sgc_archivos WHERE revision_
 /* ---------- 5. Nueva revision sin tocar la vigente (CA-04) ---------- */
 const noMc = await api("POST", `/sgc/documentos/${docA}/revisiones`, { motivo_cambio: "Cambio propuesto" }, t.luis);
 check("Técnico Analista no abre revisiones (403)", noMc.status === 403, `${noMc.status}`);
-const nueva = await api("POST", `/sgc/documentos/${docA}/revisiones`, { motivo_cambio: "Actualizar el método de extracción", apartados_afectados: "5.2", elaborador_id: id.luis, revisor_id: id.ricardo, autorizador_id: id.patricia }, t.ana);
+const nueva = await api("POST", `/sgc/documentos/${docA}/revisiones`, { motivo_cambio: "Actualizar el método de extracción", apartados_afectados: "5.2", descripcion_cambio: "Nuevo volumen de extracción", elaborador_id: id.luis, revisor_id: id.ricardo, autorizador_id: id.patricia }, t.ana);
 const revA2 = nueva.data?.revision_id;
 check("Mejora Continua abre la revisión 4 en borrador", nueva.status === 201 && nueva.data?.numero === 4, `${nueva.status} ${nueva.data?.message}`);
 const otra = await api("POST", `/sgc/documentos/${docA}/revisiones`, { motivo_cambio: "Otra más a la vez" }, t.ana);
@@ -253,7 +253,7 @@ check("Técnico Analista no edita la ficha (403)", editLuis.status === 403);
 
 /* ---------- 10. Bitacora y Biblioteca retirada ---------- */
 const acciones10 = filas("SELECT DISTINCT accion FROM auditoria WHERE entidad = 'sgc_documentos' AND entidad_id = ?", String(docA)).map((r) => r.accion);
-check("bitácora del documento: crear, publicar, nueva revisión, subir/sustituir, enviar a revisión", ["crear", "publicar", "nueva_revision", "subir", "sustituir", "enviar_revision"].every((a) => acciones10.includes(a)), acciones10.join(", "));
+check("bitácora del documento: crear, publicar, proponer, nueva revisión, subir/sustituir, enviar a revisión", ["crear", "publicar", "proponer", "nueva_revision", "subir", "sustituir", "enviar_revision"].every((a) => acciones10.includes(a)), acciones10.join(", "));
 const eventos = (await doc(docA, t.ana)).data?.eventos || [];
 check("la ficha muestra los eventos de la bitácora a quien ve el historial", eventos.length >= 5 && (deMariana.data?.eventos || []).length === 0);
 const bib = await api("GET", "/biblioteca", undefined, t.qa);

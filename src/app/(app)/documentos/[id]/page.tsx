@@ -2,10 +2,12 @@
 
 import { use, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { ClockCounterClockwise, CloudArrowUp, DownloadSimple, FilePdf, FileText, Info, PaperPlaneTilt, PencilSimple, Plus, SealCheck, UsersThree } from "@phosphor-icons/react";
+import { ArrowsClockwise, ClockCounterClockwise, CloudArrowUp, DownloadSimple, FilePdf, FileText, Info, Lightbulb, ListChecks, PaperPlaneTilt, PencilSimple, Plus, Prohibit, SealCheck, Signature, UsersThree, UserSwitch } from "@phosphor-icons/react";
 import { ConfidencialidadEtiqueta, EstadoDocumentoEtiqueta, EstadoRevisionEtiqueta, IconoArea, ProximaRevisionEtiqueta, RequireDocumentos, RutaDocumentos, useCatalogos, type Archivo, type FichaDocumento, type Puede, type Revision } from "@/components/features/documentos/comun";
 import { FichaSheet } from "@/components/features/documentos/FichaSheet";
 import { ArchivoDialog, RegistrarVigenteDialog, RevisionSheet } from "@/components/features/documentos/RevisionSheets";
+import { DecisionDialog, ObsoletarDialog, OPCIONES_AUTORIZADOR, OPCIONES_RENOVACION_AUTORIZADOR, OPCIONES_RENOVACION_REVISOR, OPCIONES_REVISOR, PublicarDialog, ReasignarDialog, RenovarDialog } from "@/components/features/documentos/FlujoDialogs";
+import { SolicitudSheet } from "@/components/features/documentos/SolicitudSheets";
 import { Callout } from "@/components/features/samples/FormLayout";
 import { useAncho } from "@/components/features/visor/comun";
 import { descargarUrl } from "@/components/features/visor/usarArchivo";
@@ -22,8 +24,8 @@ import { explicarError } from "@/lib/client/mensajes";
 import { urlArchivoSgc } from "@/lib/client/pdf";
 import { invalidate, useResource } from "@/lib/client/store";
 import { fmtBytes, huellaCorta } from "@/lib/shared/adjuntos";
-import { etiquetaConfidencialidad } from "@/lib/shared/documentos";
-import { formatearFecha, formatearFechaHora } from "@/lib/shared/fechas";
+import { ACCION_FLUJO, ESTADOS_RENOVACION, etiquetaConfidencialidad } from "@/lib/shared/documentos";
+import { formatearFecha, formatearFechaHora, hoyLocal } from "@/lib/shared/fechas";
 
 /*
  * Ficha del documento: metadatos, revision vigente en el visor PDF interno,
@@ -52,6 +54,12 @@ function Ficha({ id }: { id: string }) {
   const [archivoDe, setArchivoDe] = useState<Revision | null>(null);
   const [vigenteDe, setVigenteDe] = useState<Revision | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [decision, setDecision] = useState<{ tipo: "revisar" | "autorizar" | "ren_revisar" | "ren_autorizar"; id: number; numero?: number } | null>(null);
+  const [publicarDe, setPublicarDe] = useState<Revision | null>(null);
+  const [reasignarDe, setReasignarDe] = useState<Revision | null>(null);
+  const [renovar, setRenovar] = useState(false);
+  const [obsoletar, setObsoletar] = useState(false);
+  const [proponer, setProponer] = useState(false);
   const recurso = useResource<FichaDocumento>(["sgc", `sgc:${id}`], async () => (await getJsonAuth(`${API_BASE_URL}/sgc/documentos/${encodeURIComponent(id)}`, token)) as unknown as FichaDocumento, { enabled: !!token });
 
   if (recurso.error) {
@@ -112,7 +120,7 @@ function Ficha({ id }: { id: string }) {
 
       <header className="flex overflow-hidden rounded-card bg-surface shadow-card" data-testid="sgc-ficha" data-clave={item.clave}>
         <span className="w-1.5 shrink-0" style={{ backgroundColor: item.area.color }} aria-hidden="true" />
-        <div className="flex min-w-0 flex-1 flex-col gap-3 p-5 md:flex-row md:items-start">
+        <div className="flex min-w-0 flex-1 flex-col gap-4 p-5">
           <div className="flex min-w-0 flex-1 items-start gap-4">
             <IconoArea area={item.area} size="lg" />
             <div className="flex min-w-0 flex-col gap-1.5">
@@ -129,19 +137,50 @@ function Ficha({ id }: { id: string }) {
               </div>
             </div>
           </div>
-          <div className="flex flex-wrap items-start gap-2">
+          <div className="flex flex-wrap items-start gap-2 border-t border-line pt-3 empty:hidden" aria-label="Acciones del documento">
             {data.puede.editar.ok ? (
               <Button size="sm" variant="secondary" icon={<PencilSimple size={15} />} onClick={() => setEditar(true)} data-testid="sgc-editar">
                 Editar metadatos
               </Button>
             ) : null}
+            {data.puede.proponer.ok ? (
+              <Button size="sm" variant="secondary" icon={<Lightbulb size={15} />} onClick={() => setProponer(true)} data-testid="sgc-proponer">
+                Proponer cambio
+              </Button>
+            ) : null}
             <BotonPuede puede={data.puede.nueva_revision} icono={<Plus size={15} weight="bold" />} testid="sgc-nueva-revision" onClick={() => setRevisionSheet({ revision: null })}>
               Nueva revisión
+            </BotonPuede>
+            <BotonPuede puede={data.puede.renovar} icono={<ArrowsClockwise size={15} />} testid="sgc-renovar" onClick={() => setRenovar(true)}>
+              Renovar sin cambios
+            </BotonPuede>
+            <BotonPuede puede={data.puede.obsoletar} icono={<Prohibit size={15} />} testid="sgc-obsoletar" onClick={() => setObsoletar(true)}>
+              Declarar obsoleto
             </BotonPuede>
           </div>
         </div>
       </header>
 
+      {item.estado === "obsoleto" ? (
+        <div data-testid="sgc-aviso-obsoleto">
+          <Callout tone="danger" title="Documento obsoleto">
+            Retirado del uso {item.obsoleto_en ? `el ${formatearFecha(item.obsoleto_en)}` : ""}
+            {item.motivo_obsolescencia ? `. Motivo: ${item.motivo_obsolescencia}` : ""}. Se conserva en el historial; no es la versión de referencia.
+          </Callout>
+        </div>
+      ) : null}
+      {item.pendiente_revision && item.estado === "vigente" ? (
+        <div data-testid="sgc-aviso-pendiente">
+          <Callout tone="warning" title="Pendiente de revisión">
+            Su próxima revisión es el {formatearFecha(vigente?.fecha_proxima_revision)}. Mejora Continua decide si se renueva sin cambios o si se abre una nueva revisión.
+          </Callout>
+        </div>
+      ) : null}
+      {item.obsolescencia_pendiente ? (
+        <Callout tone="info" title="Obsolescencia solicitada">
+          Hay una solicitud (#{item.obsolescencia_pendiente}) para declararlo obsoleto; la debe aprobar otra persona en «Por autorizar».
+        </Callout>
+      ) : null}
       {data.solo_diagnostico ? (
         <Callout tone="info" title="Solo metadatos (diagnóstico)">
           La administración técnica consulta la ficha y sus metadatos para dar soporte, pero no abre los archivos del documento.
@@ -160,6 +199,7 @@ function Ficha({ id }: { id: string }) {
                   <span>Emisión: {formatearFecha(vigente.fecha_emision)}</span>
                   <span>Vigencia: {formatearFecha(vigente.fecha_vigencia)}</span>
                   {vigente.fecha_proxima_revision ? <span>Próxima revisión: {formatearFecha(vigente.fecha_proxima_revision)}</span> : null}
+                  {vigente.renovada_en ? <Badge tone="success">Renovado el {formatearFecha(vigente.renovada_en)}</Badge> : null}
                 </div>
                 {vigente.abrir ? (
                   <div className="flex flex-wrap gap-2">
@@ -190,6 +230,24 @@ function Ficha({ id }: { id: string }) {
             )}
           </Seccion>
 
+          {data.renovaciones.filter((n) => n.estado === "en_revision" || n.estado === "en_autorizacion").map((n) => (
+            <Seccion key={n.id} titulo="Renovación de vigencia" icono={<ArrowsClockwise size={17} weight="duotone" />} testid="sgc-renovacion" accion={<Badge tone="brand">{ESTADOS_RENOVACION[n.estado]?.etiqueta}</Badge>}>
+              <dl className="grid gap-3 sm:grid-cols-3">
+                <Dato etiqueta="Revisor">{n.revisor_nombre || "—"}</Dato>
+                <Dato etiqueta="Autorizador">{n.autorizador_nombre || "—"}</Dato>
+                <Dato etiqueta="Nueva próxima revisión">{formatearFecha(n.fecha_proxima_nueva)}</Dato>
+              </dl>
+              <div className="flex flex-wrap gap-3">
+                <BotonPuede puede={n.puede.revisar} icono={<ListChecks size={15} />} variante="primary" testid="sgc-renovacion-revisar" onClick={() => setDecision({ tipo: "ren_revisar", id: n.id })}>
+                  Confirmar vigencia
+                </BotonPuede>
+                <BotonPuede puede={n.puede.autorizar} icono={<Signature size={15} />} variante="primary" testid="sgc-renovacion-autorizar" onClick={() => setDecision({ tipo: "ren_autorizar", id: n.id })}>
+                  Autorizar renovación
+                </BotonPuede>
+              </div>
+            </Seccion>
+          ))}
+
           {enCurso ? (
             <Seccion titulo={`Revisión en curso · ${enCurso.numero}`} icono={<FileText size={17} weight="duotone" />} testid="sgc-en-curso" accion={<EstadoRevisionEtiqueta estado={enCurso.estado} />}>
               <RevisionEnCurso
@@ -198,6 +256,10 @@ function Ficha({ id }: { id: string }) {
                 onArchivo={() => setArchivoDe(enCurso)}
                 onEnviar={() => void enviar(enCurso)}
                 onVigente={() => setVigenteDe(enCurso)}
+                onRevisar={() => setDecision({ tipo: "revisar", id: enCurso.id, numero: enCurso.numero })}
+                onAutorizar={() => setDecision({ tipo: "autorizar", id: enCurso.id, numero: enCurso.numero })}
+                onPublicar={() => setPublicarDe(enCurso)}
+                onReasignar={() => setReasignarDe(enCurso)}
                 onDescargar={descargar}
                 enviando={enviando}
               />
@@ -283,6 +345,15 @@ function Ficha({ id }: { id: string }) {
       {revisionSheet ? <RevisionSheet doc={item} revision={revisionSheet.revision} catalogos={catalogos.data} onClose={() => setRevisionSheet(null)} /> : null}
       {archivoDe ? <ArchivoDialog revision={archivoDe} maxMb={catalogos.data?.max_mb || 50} onClose={() => setArchivoDe(null)} /> : null}
       {vigenteDe ? <RegistrarVigenteDialog doc={item} revision={vigenteDe} onClose={() => setVigenteDe(null)} /> : null}
+      {decision?.tipo === "revisar" ? <DecisionDialog titulo={`Revisar ${item.clave} rev. ${decision.numero}`} descripcion="Como revisor asignado: acepta, devuelve con comentarios al elaborador o rechaza." url={`${API_BASE_URL}/sgc/revisiones/${decision.id}/revisar`} opciones={OPCIONES_REVISOR} onClose={() => setDecision(null)} /> : null}
+      {decision?.tipo === "autorizar" ? <DecisionDialog titulo={`Autorizar ${item.clave} rev. ${decision.numero}`} descripcion="Como autorizador asignado. Autorizar pide tu contraseña." url={`${API_BASE_URL}/sgc/revisiones/${decision.id}/autorizar`} opciones={OPCIONES_AUTORIZADOR} onClose={() => setDecision(null)} /> : null}
+      {decision?.tipo === "ren_revisar" ? <DecisionDialog titulo={`Confirmar la vigencia de ${item.clave}`} descripcion="Como revisor de la renovación: confirma que el documento sigue vigente sin cambios, con tu comentario." url={`${API_BASE_URL}/sgc/renovaciones/${decision.id}/revisar`} opciones={OPCIONES_RENOVACION_REVISOR} onClose={() => setDecision(null)} /> : null}
+      {decision?.tipo === "ren_autorizar" ? <DecisionDialog titulo={`Autorizar la renovación de ${item.clave}`} descripcion="La misma revisión sigue vigente con la nueva fecha de próxima revisión. Autorizar pide tu contraseña." url={`${API_BASE_URL}/sgc/renovaciones/${decision.id}/autorizar`} opciones={OPCIONES_RENOVACION_AUTORIZADOR} onClose={() => setDecision(null)} /> : null}
+      {publicarDe ? <PublicarDialog doc={item} revision={publicarDe} onClose={() => setPublicarDe(null)} /> : null}
+      {reasignarDe ? <ReasignarDialog revision={reasignarDe} catalogos={catalogos.data} onClose={() => setReasignarDe(null)} /> : null}
+      {renovar ? <RenovarDialog doc={item} catalogos={catalogos.data} onClose={() => setRenovar(false)} /> : null}
+      {obsoletar ? <ObsoletarDialog doc={item} onClose={() => setObsoletar(false)} /> : null}
+      {proponer ? <SolicitudSheet catalogos={catalogos.data} documento={{ id: item.id, clave: item.clave, titulo: item.titulo }} onClose={() => setProponer(false)} /> : null}
     </PageBody>
   );
 }
@@ -340,11 +411,17 @@ function ArchivoFila({ a, abrir, onDescargar }: { a: Archivo; abrir: boolean; on
   );
 }
 
-function RevisionEnCurso({ revision: r, onEditar, onArchivo, onEnviar, onVigente, onDescargar, enviando }: { revision: Revision; onEditar: () => void; onArchivo: () => void; onEnviar: () => void; onVigente: () => void; onDescargar: (a: Archivo) => void; enviando: boolean }) {
+function RevisionEnCurso({ revision: r, onEditar, onArchivo, onEnviar, onVigente, onRevisar, onAutorizar, onPublicar, onReasignar, onDescargar, enviando }: { revision: Revision; onEditar: () => void; onArchivo: () => void; onEnviar: () => void; onVigente: () => void; onRevisar: () => void; onAutorizar: () => void; onPublicar: () => void; onReasignar: () => void; onDescargar: (a: Archivo) => void; enviando: boolean }) {
   const activos = r.archivos.filter((a) => !a.reemplazado_en);
   const reemplazados = r.archivos.filter((a) => a.reemplazado_en);
   return (
     <div className="flex flex-col gap-4">
+      {r.fecha_limite ? (
+        <p className={cn("text-[13px]", r.fecha_limite < hoyLocal() ? "font-semibold text-danger-text" : "text-ink-2")} data-testid="sgc-fecha-limite">
+          Fecha límite: {formatearFecha(r.fecha_limite)}
+          {r.fecha_limite < hoyLocal() ? " · vencida" : ""}
+        </p>
+      ) : null}
       {r.estado !== "borrador" ? (
         <Callout tone="info" title="Archivos bloqueados">
           La revisión se envió a revisión{r.enviada_revision_en ? ` el ${formatearFechaHora(r.enviada_revision_en)}` : ""}: su archivo no se puede cambiar; para cambiarlo debe devolverse a borrador.
@@ -392,11 +469,50 @@ function RevisionEnCurso({ revision: r, onEditar, onArchivo, onEnviar, onVigente
         <BotonPuede puede={r.puede.enviar_revision} icono={<PaperPlaneTilt size={15} />} onClick={onEnviar} testid="sgc-enviar-revision" variante="primary" cargando={enviando}>
           Enviar a revisión
         </BotonPuede>
+        <BotonPuede puede={r.puede.revisar} icono={<ListChecks size={15} />} onClick={onRevisar} testid="sgc-revisar" variante="primary">
+          Revisar
+        </BotonPuede>
+        <BotonPuede puede={r.puede.autorizar} icono={<Signature size={15} />} onClick={onAutorizar} testid="sgc-autorizar" variante="primary">
+          Autorizar
+        </BotonPuede>
+        <BotonPuede puede={r.puede.publicar} icono={<SealCheck size={15} />} onClick={onPublicar} testid="sgc-publicar" variante="primary">
+          Publicar
+        </BotonPuede>
+        <BotonPuede puede={r.puede.reasignar} icono={<UserSwitch size={15} />} onClick={onReasignar} testid="sgc-reasignar">
+          Reasignar
+        </BotonPuede>
         <BotonPuede puede={r.puede.registrar_vigente} icono={<SealCheck size={15} />} onClick={onVigente} testid="sgc-registrar-vigente">
           Registrar vigente (carga inicial)
         </BotonPuede>
       </div>
+      <LineaTiempo pasos={r.linea_tiempo} />
     </div>
+  );
+}
+
+const PAPEL: Record<string, string> = { elaborador: "Elaborador", revisor: "Revisor", autorizador: "Autorizador", publicador: "Mejora Continua", solicitante: "Solicitante" };
+
+/* Linea de tiempo de una revision (CA-07): quien, en que papel y cargo, cuando, con que decision y comentario. */
+function LineaTiempo({ pasos }: { pasos: Revision["linea_tiempo"] }) {
+  if (!pasos?.length) return null;
+  return (
+    <section aria-label="Línea de tiempo" className="flex flex-col gap-2" data-testid="sgc-linea-tiempo">
+      <h3 className="text-[13px] font-semibold text-ink">Línea de tiempo</h3>
+      <ol className="relative flex flex-col gap-3 border-l border-line pl-4">
+        {pasos.map((p) => (
+          <li key={p.id} className="relative" data-accion={p.accion}>
+            <span className={cn("absolute top-1.5 -left-[21px] h-2.5 w-2.5 rounded-full ring-2 ring-surface", /rechazar/.test(p.accion) ? "bg-danger" : /devolver/.test(p.accion) ? "bg-warning" : /publicar|autorizar$|registrar_vigente|renovacion_autorizar/.test(p.accion) ? "bg-success" : "bg-brand")} aria-hidden="true" />
+            <p className="text-[13.5px] text-ink">
+              <span className="font-medium">{ACCION_FLUJO[p.accion] || p.accion}</span>
+              {p.usuario_nombre ? ` · ${p.usuario_nombre}` : ""}
+              {p.papel ? <span className="text-ink-3"> ({PAPEL[p.papel] || p.papel}{p.cargo ? `, ${p.cargo}` : ""})</span> : null}
+            </p>
+            <p className="text-[12px] text-ink-3">{formatearFechaHora(p.fecha)}</p>
+            {p.comentario ? <p className="mt-0.5 whitespace-pre-line text-[13px] text-ink-2">«{p.comentario}»</p> : null}
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 
@@ -424,6 +540,15 @@ function Historial({ revisiones, onDescargar }: { revisiones: Revision[]; onDesc
                 <td className="py-2 pr-3">
                   <EstadoRevisionEtiqueta estado={r.estado} />
                   {r.origen_registro === "carga_inicial" ? <span className="mt-1 block text-[11.5px] text-ink-3">Carga inicial</span> : null}
+                  {r.renovada_en ? <span className="mt-1 block text-[11.5px] text-success-text">Renovado {formatearFecha(r.renovada_en)}</span> : null}
+                  {r.linea_tiempo?.length ? (
+                    <details className="mt-1 text-[12px] text-ink-3">
+                      <summary className="cursor-pointer">Línea de tiempo</summary>
+                      <div className="mt-2 min-w-[260px]">
+                        <LineaTiempo pasos={r.linea_tiempo} />
+                      </div>
+                    </details>
+                  ) : null}
                 </td>
                 <td className="py-2 pr-3 text-ink-2">{formatearFecha(r.fecha_emision)}</td>
                 <td className="py-2 pr-3 text-ink-2">

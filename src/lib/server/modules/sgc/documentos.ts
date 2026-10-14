@@ -31,23 +31,26 @@ import { cargarAutorizacion, cargoActuante, hoy, permisoDe } from "../../rbac";
 import { exigirReauth } from "../../seguridad";
 import { incidenciaPorAlertaIntegridad } from "../calidad/automaticas";
 import { accesoSgc, documentoVisible, tiene, vistaDocumento, type AccesoSgc } from "./acceso";
+import { pendienteDeRevision } from "../../../shared/documentos";
 import { CONFIDENCIALIDADES, ESTADOS_TRABAJO, MIME_SGC, MOTIVO_MIN_SGC, esConfidencialidad, esTipoArchivo, etiquetaConfidencialidad, extensionesDe, normalizarPalabras, validarClave, type TipoArchivoSgc } from "../../../shared/documentos";
 import { ACCION_DOCUMENTAL_KEYS, type AccionDocumental } from "../../../shared/permisos";
+import { evaluarTresPersonas } from "../../../shared/segregacion";
+import { exigirSinOtroPapel, registrarSolicitudDeFicha, solicitudPropiaAceptada } from "./flujo";
 
-const ENTIDAD = "sgc_documentos";
-const sgcDir = () => path.join(/*turbopackIgnore: true*/ getConfig().INSTANCE_DIR, "sgc");
-const ahora = () => new Date().toISOString();
-const FECHA = /^\d{4}-\d{2}-\d{2}$/;
+export const ENTIDAD = "sgc_documentos";
+export const sgcDir = () => path.join(/*turbopackIgnore: true*/ getConfig().INSTANCE_DIR, "sgc");
+export const ahora = () => new Date().toISOString();
+export const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
-type Puede = { ok: boolean; motivo?: string };
-const si: Puede = { ok: true };
-const no = (motivo?: string): Puede => (motivo ? { ok: false, motivo } : { ok: false });
+export type Puede = { ok: boolean; motivo?: string };
+export const si: Puede = { ok: true };
+export const no = (motivo?: string): Puede => (motivo ? { ok: false, motivo } : { ok: false });
 
-async function acceso(s: Session, user: CurrentUser): Promise<AccesoSgc> {
+export async function acceso(s: Session, user: CurrentUser): Promise<AccesoSgc> {
   return accesoSgc(s, await cargarAutorizacion(s, user));
 }
 
-const palabrasDe = (row: Row): string[] => {
+export const palabrasDe = (row: Row): string[] => {
   try {
     const v = JSON.parse(String(row.palabras_clave || "[]"));
     return Array.isArray(v) ? v.map(String) : [];
@@ -55,24 +58,24 @@ const palabrasDe = (row: Row): string[] => {
     return [];
   }
 };
-const referenciaDe = (doc: Row) => String(doc.clave || `Documento ${doc.id}`);
+export const referenciaDe = (doc: Row) => String(doc.clave || `Documento ${doc.id}`);
 
 /* ---------- Catalogos y personas ---------- */
 
-async function catalogos(s: Session): Promise<{ areas: Row[]; tipos: Row[] }> {
+export async function catalogos(s: Session): Promise<{ areas: Row[]; tipos: Row[] }> {
   const areas = await s.query<Row>("SELECT codigo, nombre, color, orden, activo FROM sgc_areas ORDER BY orden, codigo");
   const tipos = await s.query<Row>("SELECT codigo, nombre, descripcion, orden, activo FROM sgc_tipos ORDER BY orden, codigo");
   return { areas, tipos };
 }
 
 /* Personas activas con sus acciones documentales vigentes (union de roles). */
-interface Persona {
+export interface Persona {
   id: number;
   nombre: string;
   email: string;
   acciones: AccionDocumental[];
 }
-async function personas(s: Session): Promise<Persona[]> {
+export async function personas(s: Session): Promise<Persona[]> {
   const filas = await s.query<Row>(
     `SELECT u.id, u.nombre, u.email, ra.accion
      FROM usuarios u
@@ -95,7 +98,7 @@ async function personas(s: Session): Promise<Persona[]> {
   return [...mapa.values()];
 }
 
-const nombres = async (s: Session, ids: unknown[]): Promise<Map<number, string>> => {
+export const nombres = async (s: Session, ids: unknown[]): Promise<Map<number, string>> => {
   const unicos = [...new Set(ids.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
   if (!unicos.length) return new Map();
   const filas = await s.query<Row>(`SELECT id, nombre, email FROM usuarios WHERE id IN (${unicos.map((_, i) => `:u${i}`).join(", ")})`, Object.fromEntries(unicos.map((id, i) => [`u${i}`, id])));
@@ -121,7 +124,7 @@ export async function obtenerCatalogos({ request, s }: RouteContext): Promise<Re
 
 /* ---------- Lectura: lista, resumen y ficha ---------- */
 
-interface DocLista {
+export interface DocLista {
   doc: Row;
   revisiones: Row[];
   vigente: Row | null;
@@ -129,7 +132,7 @@ interface DocLista {
 }
 
 /* Todos los documentos que la persona puede ver, con la vigente y la revision de trabajo visibles. */
-async function documentosVisibles(s: Session, a: AccesoSgc): Promise<DocLista[]> {
+export async function documentosVisibles(s: Session, a: AccesoSgc): Promise<DocLista[]> {
   const docs = await s.query<Row>("SELECT d.*, u.nombre AS propietario_nombre FROM sgc_documentos d LEFT JOIN usuarios u ON u.id = d.propietario_id ORDER BY d.clave");
   const revs = await s.query<Row>("SELECT id, documento_id, numero, estado, fecha_emision, fecha_vigencia, fecha_proxima_revision, elaborador_id, revisor_id, autorizador_id FROM sgc_revisiones");
   const porDoc = new Map<number, Row[]>();
@@ -163,6 +166,7 @@ function serializarLista(x: DocLista): Row {
     propietario_nombre: doc.propietario_nombre || null,
     estado: doc.estado,
     vigente: resumenRevision(x.vigente),
+    pendiente_revision: x.doc.estado === "vigente" && pendienteDeRevision(x.vigente?.fecha_proxima_revision, hoy()),
     trabajo: resumenRevision(x.trabajo),
     creado_en: doc.creado_en,
     actualizado_en: doc.actualizado_en || doc.creado_en,
@@ -216,6 +220,8 @@ export async function listarDocumentos({ request, s }: RouteContext): Promise<Re
   const hasta = FECHA.test(p("hasta")) ? p("hasta") : "";
   const orden = p("orden") || "clave";
   let lista = await documentosVisibles(s, a);
+  // Obsoletos: fuera de los puntos de uso; solo con "Mostrar obsoletos" (y solo los ve quien consulta el historico).
+  if (p("obsoletos") !== "1" && estado !== "obsoleto") lista = lista.filter((x) => x.doc.estado !== "obsoleto");
   if (area) lista = lista.filter((x) => x.doc.area_codigo === area);
   if (tipo) lista = lista.filter((x) => x.doc.tipo_codigo === tipo);
   if (origen === "interno" || origen === "externo") lista = lista.filter((x) => x.doc.origen === origen);
@@ -223,7 +229,7 @@ export async function listarDocumentos({ request, s }: RouteContext): Promise<Re
   if (estado === "vigente" || estado === "obsoleto" || estado === "en_elaboracion") lista = lista.filter((x) => x.doc.estado === estado);
   if (estado === "en_revision") lista = lista.filter(enProceso);
   if (estado === "borrador") lista = lista.filter(enBorrador);
-  if (estado === "proxima_revision") lista = lista.filter((x) => proximaRevision(x));
+  if (estado === "proxima_revision" || estado === "pendiente_revision") lista = lista.filter((x) => proximaRevision(x));
   // Fechas: la de emision de la revision vigente (o la de creacion de la ficha si no tiene vigente).
   const fechaDe = (x: DocLista) => String(x.vigente?.fecha_emision || String(x.doc.creado_en || "").slice(0, 10));
   if (desde) lista = lista.filter((x) => fechaDe(x) >= desde);
@@ -239,7 +245,7 @@ export async function listarDocumentos({ request, s }: RouteContext): Promise<Re
   };
   lista.sort(cmp[orden] || cmp.clave);
   const propietarios = [...new Map((await documentosVisibles(s, a)).filter((x) => x.doc.propietario_id).map((x) => [Number(x.doc.propietario_id), { id: Number(x.doc.propietario_id), nombre: String(x.doc.propietario_nombre || "") }])).values()].sort((x, y) => x.nombre.localeCompare(y.nombre, "es"));
-  return json({ items: lista.map(serializarLista), propietarios, puede: { crear_ficha: tiene(a, "documento_crear_ficha") }, diagnostico: a.diagnostico });
+  return json({ items: lista.map(serializarLista), propietarios, puede: { crear_ficha: tiene(a, "documento_crear_ficha"), proponer: tiene(a, "documento_proponer"), ver_obsoletos: tiene(a, "documento_consultar_historico") || tiene(a, "documento_crear_ficha") }, diagnostico: a.diagnostico });
 }
 
 /* Banderas de una revision para la persona. */
@@ -265,8 +271,14 @@ function puedeRevision(a: AccesoSgc, doc: Row, rev: Row, archivos: Row[], todas:
   else if (!elaborador) out.enviar_revision = no("Falta asignar al elaborador");
   else if (!soyElaborador) out.enviar_revision = no("Solo el elaborador asignado la envía a revisión");
   else if (!pdf) out.enviar_revision = no("Carga el PDF de consulta antes de enviarla");
-  else if (!rev.revisor_id) out.enviar_revision = no("Falta asignar al revisor");
+  else if (!rev.revisor_id || !rev.autorizador_id) out.enviar_revision = no("Faltan el revisor o el autorizador: los asigna Mejora Continua");
+  else if (!String(rev.motivo_cambio || "").trim() || !String(rev.apartados_afectados || "").trim() || !String(rev.descripcion_cambio || "").trim()) out.enviar_revision = no("Completa el motivo del cambio, los apartados afectados y la descripción del cambio («Editar datos»)");
   else out.enviar_revision = si;
+  // Fase 2: cada decision solo para quien esta asignado en ese papel y tiene la accion del rol.
+  out.revisar = rev.estado === "en_revision" && tiene(a, "documento_revisar") && Number(rev.revisor_id) === a.yo ? si : no();
+  out.autorizar = rev.estado === "en_autorizacion" && tiene(a, "documento_autorizar") && Number(rev.autorizador_id) === a.yo ? si : no();
+  out.publicar = rev.estado === "autorizada" && tiene(a, "documento_publicar") && !obsoleto ? si : no();
+  out.reasignar = ["borrador", "en_revision", "en_autorizacion"].includes(String(rev.estado)) && crear && !obsoleto ? si : no();
   // Carga inicial: solo la primera revision de un documento que nunca tuvo vigente (documentos ya autorizados fuera de la plataforma).
   const primera = !todas.some((r) => Number(r.id) !== Number(rev.id) && ["vigente", "obsoleta"].includes(String(r.estado)));
   if (!tiene(a, "documento_publicar") || !["borrador", "en_revision"].includes(String(rev.estado)) || !primera || obsoleto) out.registrar_vigente = no();
@@ -276,7 +288,7 @@ function puedeRevision(a: AccesoSgc, doc: Row, rev: Row, archivos: Row[], todas:
   return out;
 }
 
-const camposRevision = ["numero", "estado", "fecha_emision", "fecha_vigencia", "fecha_proxima_revision", "motivo_cambio", "apartados_afectados", "descripcion_cambio", "elaborador_id", "revisor_id", "autorizador_id", "enviada_revision_en", "publicada_en", "fecha_obsolescencia", "ubicacion_historica", "regla_conservacion", "origen_registro", "creado_en"];
+const camposRevision = ["fecha_limite", "revisada_en", "autorizada_en", "cancelada_en", "sustituida_por_id", "renovada_en", "solicitud_id", "numero", "estado", "fecha_emision", "fecha_vigencia", "fecha_proxima_revision", "motivo_cambio", "apartados_afectados", "descripcion_cambio", "elaborador_id", "revisor_id", "autorizador_id", "enviada_revision_en", "publicada_en", "fecha_obsolescencia", "ubicacion_historica", "regla_conservacion", "origen_registro", "creado_en"];
 
 export async function obtenerDocumento({ request, s, params }: RouteContext): Promise<Response> {
   const user = await requireUser(request);
@@ -285,7 +297,10 @@ export async function obtenerDocumento({ request, s, params }: RouteContext): Pr
   const visibles = revisiones.filter((r) => vista.revisiones.has(Number(r.id)));
   const ids = visibles.map((r) => Number(r.id));
   const archivos = ids.length ? await s.query<Row>(`SELECT id, revision_id, tipo, nombre_original, extension, mime, tamano_bytes, sha256, subido_por, subido_en, reemplazado_en, reemplazado_por FROM sgc_archivos WHERE revision_id IN (${ids.map((_, i) => `:r${i}`).join(", ")}) ORDER BY id DESC`, Object.fromEntries(ids.map((id, i) => [`r${i}`, id]))) : [];
-  const gente = await nombres(s, [doc.propietario_id, doc.creado_por, ...visibles.flatMap((r) => [r.elaborador_id, r.revisor_id, r.autorizador_id, r.publicada_por, r.enviada_revision_por]), ...archivos.map((f) => f.subido_por)]);
+  const flujo = ids.length ? await s.query<Row>(`SELECT * FROM sgc_flujo_acciones WHERE revision_id IN (${ids.map((_, i) => `:r${i}`).join(", ")}) ORDER BY fecha, id`, Object.fromEntries(ids.map((id, i) => [`r${i}`, id]))) : [];
+  const renovaciones = await s.query<Row>("SELECT * FROM sgc_renovaciones WHERE documento_id = :id ORDER BY id DESC", { id: doc.id });
+  const pendienteObs = await s.queryOne<Row>("SELECT id FROM solicitudes_autorizacion WHERE entidad = :e AND entidad_id = :id AND tipo = 'obsoletar_documento_sgc' AND estado = 'pendiente' AND vence_en > :ahora", { e: ENTIDAD, id: String(doc.id), ahora: ahora() });
+  const gente = await nombres(s, [doc.propietario_id, doc.creado_por, doc.obsoleto_por, ...visibles.flatMap((r) => [r.elaborador_id, r.revisor_id, r.autorizador_id, r.publicada_por, r.enviada_revision_por]), ...archivos.map((f) => f.subido_por), ...flujo.map((f) => f.usuario_id), ...renovaciones.flatMap((n) => [n.revisor_id, n.autorizador_id, n.solicitado_por])]);
   const nombre = (id: unknown) => (id ? gente.get(Number(id)) || null : null);
   const { areas, tipos } = await catalogos(s);
   const crear = tiene(a, "documento_crear_ficha");
@@ -296,8 +311,22 @@ export async function obtenerDocumento({ request, s, params }: RouteContext): Pr
     if (doc.estado === "obsoleto") nuevaRevision = no("El documento está obsoleto");
     else if (!vigente) nuevaRevision = no("El documento todavía no tiene revisión vigente: completa la revisión en curso");
     else if (trabajo) nuevaRevision = no(`Ya hay una revisión en curso (revisión ${trabajo.numero}, ${String(trabajo.estado).replace("_", " ")})`);
+    else if (renovaciones.some((n) => ["en_revision", "en_autorizacion"].includes(String(n.estado)))) nuevaRevision = no("Hay una renovación de vigencia en curso");
+    else if (pendienteObs) nuevaRevision = no("Hay una solicitud de obsolescencia pendiente");
     else nuevaRevision = si;
   }
+  const renovacionActiva = renovaciones.find((n) => ["en_revision", "en_autorizacion"].includes(String(n.estado)));
+  const pendiente = doc.estado === "vigente" && !!vigente && pendienteDeRevision(vigente.fecha_proxima_revision, hoy());
+  let renovar: Puede = no();
+  if (crear && doc.estado === "vigente" && vigente) {
+    if (!pendiente) renovar = no();
+    else if (trabajo) renovar = no("Hay una revisión en curso");
+    else if (renovacionActiva) renovar = no("Ya hay una renovación en curso");
+    else if (pendienteObs) renovar = no("Hay una solicitud de obsolescencia pendiente");
+    else renovar = si;
+  }
+  let obsoletar: Puede = no();
+  if (tiene(a, "documento_obsoletar") && doc.estado !== "obsoleto") obsoletar = pendienteObs ? no(`Ya hay una solicitud de obsolescencia pendiente (#${pendienteObs.id})`) : si;
   const eventos = vista.historial
     ? await s.query<Row>("SELECT id, fecha_hora, usuario_nombre, usuario_email, accion, entidad, entidad_id, referencia, motivo, cambios_json FROM auditoria WHERE entidad = :e AND entidad_id = :id ORDER BY id DESC LIMIT 200", { e: ENTIDAD, id: String(doc.id) })
     : [];
@@ -315,6 +344,11 @@ export async function obtenerDocumento({ request, s, params }: RouteContext): Pr
       propietario_id: doc.propietario_id ?? null,
       propietario_nombre: nombre(doc.propietario_id),
       estado: doc.estado,
+      pendiente_revision: pendiente,
+      obsoleto_en: doc.obsoleto_en || null,
+      obsoleto_por_nombre: nombre(doc.obsoleto_por),
+      motivo_obsolescencia: doc.motivo_obsolescencia || null,
+      obsolescencia_pendiente: pendienteObs ? Number(pendienteObs.id) : null,
       revision_vigente_id: vigente && vista.revisiones.has(Number(vigente.id)) ? Number(vigente.id) : null,
       creado_por_nombre: nombre(doc.creado_por),
       creado_en: doc.creado_en,
@@ -330,6 +364,7 @@ export async function obtenerDocumento({ request, s, params }: RouteContext): Pr
         autorizador_nombre: nombre(r.autorizador_id),
         publicada_por_nombre: nombre(r.publicada_por),
         archivos: suyos.map((f) => ({ ...f, subido_por_nombre: nombre(f.subido_por) })),
+        linea_tiempo: flujo.filter((f) => Number(f.revision_id) === Number(r.id)).map((f) => ({ id: Number(f.id), accion: f.accion, decision: f.decision ?? null, comentario: f.comentario ?? null, usuario_nombre: nombre(f.usuario_id), cargo: f.cargo ?? null, papel: f.papel ?? null, fecha: f.fecha, renovacion_id: f.renovacion_id ?? null })),
         abrir: vista.archivos.has(Number(r.id)),
         puede: puedeRevision(a, doc, r, suyos, revisiones),
       };
@@ -342,13 +377,30 @@ export async function obtenerDocumento({ request, s, params }: RouteContext): Pr
     // Fase 3: distribucion y acuses de lectura.
     distribucion: [],
     lecturas: [],
-    puede: { editar: crear && doc.estado !== "obsoleto" ? si : no(), nueva_revision: nuevaRevision },
+    renovaciones: renovaciones.map((n) => ({
+      id: Number(n.id),
+      revision_id: Number(n.revision_id),
+      estado: n.estado,
+      revisor_nombre: nombre(n.revisor_id),
+      autorizador_nombre: nombre(n.autorizador_id),
+      solicitado_por_nombre: nombre(n.solicitado_por),
+      fecha_proxima_anterior: n.fecha_proxima_anterior ?? null,
+      fecha_proxima_nueva: n.fecha_proxima_nueva,
+      fecha_limite: n.fecha_limite ?? null,
+      creado_en: n.creado_en,
+      autorizada_en: n.autorizada_en ?? null,
+      puede: {
+        revisar: n.estado === "en_revision" && Number(n.revisor_id) === a.yo && tiene(a, "documento_revisar") ? si : no(),
+        autorizar: n.estado === "en_autorizacion" && Number(n.autorizador_id) === a.yo && tiene(a, "documento_autorizar") ? si : no(),
+      },
+    })),
+    puede: { editar: crear && doc.estado !== "obsoleto" ? si : no(), nueva_revision: nuevaRevision, renovar, obsoletar, proponer: tiene(a, "documento_proponer") && doc.estado !== "obsoleto" ? si : no() },
   });
 }
 
 /* ---------- Validacion de datos ---------- */
 
-interface DatosFicha {
+export interface DatosFicha {
   clave: string;
   titulo: string;
   area_codigo: string;
@@ -360,14 +412,14 @@ interface DatosFicha {
   propietario_id: number | null;
 }
 
-const texto = (v: unknown, max: number) => String(v ?? "").trim().replace(/\s+/g, " ").slice(0, max);
-const textoLargo = (v: unknown, max = 4000) => String(v ?? "").trim().slice(0, max) || null;
-const idONull = (v: unknown) => {
+export const texto = (v: unknown, max: number) => String(v ?? "").trim().replace(/\s+/g, " ").slice(0, max);
+export const textoLargo = (v: unknown, max = 4000) => String(v ?? "").trim().slice(0, max) || null;
+export const idONull = (v: unknown) => {
   const n = Number(v);
   return Number.isInteger(n) && n > 0 ? n : null;
 };
 
-function datosFicha(raw: Record<string, unknown>): DatosFicha {
+export function datosFicha(raw: Record<string, unknown>): DatosFicha {
   return {
     clave: String(raw.clave ?? ""),
     titulo: texto(raw.titulo, 300),
@@ -381,7 +433,7 @@ function datosFicha(raw: Record<string, unknown>): DatosFicha {
   };
 }
 
-async function validarFicha(s: Session, d: DatosFicha, excluirId = 0, a?: AccesoSgc): Promise<DatosFicha> {
+export async function validarFicha(s: Session, d: DatosFicha, excluirId = 0, a?: AccesoSgc): Promise<DatosFicha> {
   if (!d.titulo) throw new HttpError(400, { message: "Indica el título completo del documento", campo: "titulo" });
   const { areas, tipos } = await catalogos(s);
   if (!areas.some((x) => x.codigo === d.area_codigo && Number(x.activo))) throw new HttpError(400, { message: "Elige el área de gestión", campo: "area" });
@@ -399,14 +451,14 @@ async function validarFicha(s: Session, d: DatosFicha, excluirId = 0, a?: Acceso
   return { ...d, clave: r.clave };
 }
 
-interface Responsables {
+export interface Responsables {
   elaborador_id: number | null;
   revisor_id: number | null;
   autorizador_id: number | null;
 }
 
 /* Cada responsable debe tener la accion documental de su papel; los tres deben ser personas distintas. */
-async function validarResponsables(s: Session, r: Responsables): Promise<void> {
+export async function validarResponsables(s: Session, r: Responsables): Promise<void> {
   const gente = await personas(s);
   const reglas: Array<[keyof Responsables, AccionDocumental, string]> = [
     ["elaborador_id", "documento_elaborar", "elaborador"],
@@ -420,8 +472,8 @@ async function validarResponsables(s: Session, r: Responsables): Promise<void> {
     if (!p) throw new HttpError(400, { message: `El ${papel} debe ser una persona con cuenta activa`, campo: papel });
     if (!p.acciones.includes(accion)) throw new HttpError(400, { message: `${p.nombre} no tiene permiso para actuar como ${papel} (${accion})`, campo: papel });
   }
-  const ids = [r.elaborador_id, r.revisor_id, r.autorizador_id].filter(Boolean);
-  if (new Set(ids).size !== ids.length) throw new HttpError(400, { message: "Elaborador, revisor y autorizador deben ser tres personas distintas", campo: "responsables", codigo: "personas_distintas" });
+  const violacion = evaluarTresPersonas(r);
+  if (violacion) throw new HttpError(400, { message: violacion.mensaje, campo: "responsables", codigo: "segregacion", regla: violacion.regla, clave: violacion.clave });
 }
 
 /* ---------- Archivos ---------- */
@@ -483,11 +535,11 @@ async function guardarArchivos(s: Session, docId: number, revId: number, archivo
 
 /* ---------- Escritura: ficha ---------- */
 
-function exigir(a: AccesoSgc, accion: AccionDocumental, mensaje: string): void {
+export function exigir(a: AccesoSgc, accion: AccionDocumental, mensaje: string): void {
   if (!tiene(a, accion)) throw new HttpError(403, { message: mensaje, codigo: "sin_permiso", required: { module: "documentos", action: accion } });
 }
 
-const fichaVisible = (d: DatosFicha | Row) => ({
+export const fichaVisible = (d: DatosFicha | Row) => ({
   clave: d.clave,
   titulo: d.titulo,
   area: d.area_codigo,
@@ -525,6 +577,7 @@ export async function crearDocumento({ request, s }: RouteContext): Promise<Resp
     );
     const revId = Number(rv.lastrowid);
     const subidos = await guardarArchivos(s, docId, revId, archivos, a.yo, guardados);
+    await registrarSolicitudDeFicha(s, a, { id: docId, area_codigo: d.area_codigo, tipo_codigo: d.tipo_codigo, titulo: d.titulo, clave: d.clave }, revId);
     await registrarAuditoria(s, user, { accion: "crear", entidad: ENTIDAD, entidadId: docId, referencia: d.clave, despues: fichaVisible(d), detalle: { revision: numero, revision_id: revId, estado: "borrador", archivos: subidos, ...resp } });
     await s.commit();
     return json({ message: `Ficha ${d.clave} creada con la revisión ${numero} en borrador`, id: docId, revision_id: revId }, 201);
@@ -559,35 +612,22 @@ export async function editarDocumento({ request, s, params }: RouteContext): Pro
 
 /* ---------- Escritura: revisiones ---------- */
 
+/*
+ * Nueva revision directa de Mejora Continua: desde la Fase 2 queda registrada
+ * como una solicitud propia aceptada en el mismo paso (con los tres responsables).
+ */
 export async function nuevaRevision({ request, s, params }: RouteContext): Promise<Response> {
   const user = await requireUser(request);
   const a = await acceso(s, user);
-  const { doc, revisiones } = await documentoVisible(s, a, intParam(params.id));
   exigir(a, "documento_crear_ficha", "Solo Mejora Continua abre revisiones nuevas (documento_crear_ficha)");
-  if (doc.estado === "obsoleto") throw new HttpError(409, { message: "El documento está obsoleto" });
-  if (!revisiones.some((r) => r.estado === "vigente")) throw new HttpError(409, { message: "El documento todavía no tiene revisión vigente: completa la revisión en curso" });
-  const enCurso = revisiones.find((r) => ESTADOS_TRABAJO.includes(r.estado));
-  if (enCurso) throw new HttpError(409, { message: `Ya hay una revisión en curso (revisión ${enCurso.numero}); solo puede haber una a la vez`, codigo: "revision_en_curso" });
   const raw = await readJson(request);
-  const motivo = String(raw.motivo_cambio || "").trim();
-  if (motivo.length < MOTIVO_MIN_SGC) throw new HttpError(400, { message: `Describe el motivo del cambio (al menos ${MOTIVO_MIN_SGC} caracteres)`, campo: "motivo_cambio" });
-  const resp: Responsables = { elaborador_id: idONull(raw.elaborador_id), revisor_id: idONull(raw.revisor_id), autorizador_id: idONull(raw.autorizador_id) };
-  await validarResponsables(s, resp);
-  const numero = Math.max(...revisiones.map((r) => Number(r.numero))) + 1;
-  // La revision vigente no se toca: la nueva nace en borrador, sin archivos (CA-04).
-  const r = await s.execute(
-    `INSERT INTO sgc_revisiones (documento_id, numero, estado, motivo_cambio, apartados_afectados, descripcion_cambio, elaborador_id, revisor_id, autorizador_id, origen_registro, creado_por, creado_en)
-     VALUES (:doc, :numero, 'borrador', :motivo, :apartados, :descripcion, :elaborador_id, :revisor_id, :autorizador_id, 'flujo', :por, :en)`,
-    { doc: doc.id, numero, motivo, apartados: textoLargo(raw.apartados_afectados), descripcion: textoLargo(raw.descripcion_cambio), ...resp, por: a.yo, en: ahora() },
-  );
-  await s.execute("UPDATE sgc_documentos SET actualizado_por = :por, actualizado_en = :en WHERE id = :id", { por: a.yo, en: ahora(), id: doc.id });
-  await registrarAuditoria(s, user, { accion: "nueva_revision", entidad: ENTIDAD, entidadId: Number(doc.id), referencia: referenciaDe(doc), motivo, detalle: { revision: numero, revision_id: Number(r.lastrowid), estado: "borrador", ...resp, apartados_afectados: textoLargo(raw.apartados_afectados) } });
+  const r = await solicitudPropiaAceptada(s, user, a, request, intParam(params.id), raw);
   await s.commit();
-  return json({ message: `Revisión ${numero} abierta en borrador; la vigente sigue en uso`, revision_id: Number(r.lastrowid), numero }, 201);
+  return json({ message: `Revisión ${r.numero} abierta en borrador; la vigente sigue en uso`, revision_id: r.revision_id, numero: r.numero }, 201);
 }
 
 /* Revision con su documento, visible para la persona (404 si no). */
-async function revisionVisible(s: Session, a: AccesoSgc, revId: number): Promise<{ doc: Row; rev: Row; revisiones: Row[]; archivos: Row[] }> {
+export async function revisionVisible(s: Session, a: AccesoSgc, revId: number): Promise<{ doc: Row; rev: Row; revisiones: Row[]; archivos: Row[] }> {
   const rev0 = Number.isInteger(revId) && revId > 0 ? await s.queryOne<Row>("SELECT documento_id FROM sgc_revisiones WHERE id = :id", { id: revId }) : null;
   if (!rev0) throw new HttpError(404, { message: "Revisión no encontrada" });
   const { doc, revisiones, vista } = await documentoVisible(s, a, Number(rev0.documento_id));
@@ -597,7 +637,7 @@ async function revisionVisible(s: Session, a: AccesoSgc, revId: number): Promise
   return { doc, rev, revisiones, archivos };
 }
 
-const fechaONull = (v: unknown, campo: string): string | null => {
+export const fechaONull = (v: unknown, campo: string): string | null => {
   const t = String(v ?? "").trim();
   if (!t) return null;
   if (!FECHA.test(t)) throw new HttpError(400, { message: "Escribe la fecha como AAAA-MM-DD", campo });
@@ -679,12 +719,14 @@ export async function enviarRevision({ request, s, params }: RouteContext): Prom
   if (!puede.ok) throw new HttpError(puede.motivo && tiene(a, "documento_enviar_revision") ? 409 : 403, { message: puede.motivo || "No tienes permiso para enviar documentos a revisión (documento_enviar_revision)", codigo: puede.motivo ? "incompleta" : "sin_permiso" });
   if (!String(rev.motivo_cambio || "").trim()) throw new HttpError(409, { message: "Describe el motivo del cambio antes de enviarla", campo: "motivo_cambio" });
   await validarResponsables(s, { elaborador_id: rev.elaborador_id ?? null, revisor_id: rev.revisor_id ?? null, autorizador_id: rev.autorizador_id ?? null });
+  await exigirSinOtroPapel(s, Number(rev.id), a.yo, "elaborador");
   const raw = await readJson(request).catch(() => ({}) as Record<string, unknown>);
   const comentario = textoLargo((raw as Record<string, unknown>).comentario, 2000);
   const en = ahora();
   const r = await s.execute("UPDATE sgc_revisiones SET estado = 'en_revision', enviada_revision_en = :en, enviada_revision_por = :por, actualizado_por = :por, actualizado_en = :en WHERE id = :id AND estado = 'borrador'", { en, por: a.yo, id: rev.id });
   if (!r.rowcount) throw new HttpError(409, { message: "Otra persona cambió la revisión al mismo tiempo; recarga la página" });
-  await s.execute("INSERT INTO sgc_flujo_acciones (revision_id, accion, decision, comentario, usuario_id, cargo, fecha) VALUES (:rev, 'enviar_revision', NULL, :comentario, :por, NULL, :en)", { rev: rev.id, comentario, por: a.yo, en });
+  const permisoEnvio = permisoDe(a.auth, "documentos", "documento_enviar_revision");
+  await s.execute("INSERT INTO sgc_flujo_acciones (revision_id, accion, decision, comentario, usuario_id, cargo, papel, fecha) VALUES (:rev, 'enviar_revision', NULL, :comentario, :por, :cargo, 'elaborador', :en)", { rev: rev.id, comentario, por: a.yo, cargo: permisoEnvio ? cargoActuante(request, permisoEnvio).cargo : null, en });
   const pdf = archivos.find((f) => f.tipo === "pdf" && !f.reemplazado_en);
   await registrarAuditoria(s, user, { accion: "enviar_revision", entidad: ENTIDAD, entidadId: Number(doc.id), referencia: `${referenciaDe(doc)} rev. ${rev.numero}`, motivo: comentario, antes: { estado: "borrador" }, despues: { estado: "en_revision" }, detalle: { revision: Number(rev.numero), revision_id: Number(rev.id), pdf: pdf ? { nombre: pdf.nombre_original, sha256: pdf.sha256 } : null, revisor_id: rev.revisor_id } });
   await s.commit();

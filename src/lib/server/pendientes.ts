@@ -26,6 +26,8 @@ import { vencimientosProximos } from "./modules/admin";
 import { permisoDe, type Autorizacion } from "./rbac";
 import { porAutorizarDe } from "./solicitudes";
 import { contarPorSupervisar } from "./supervision";
+import { accesoSgc } from "./modules/sgc/acceso";
+import { solicitudesResueltasDe, tareasSgc, type Tarea } from "./modules/sgc/flujo";
 
 type Tono = "danger" | "warning" | "info";
 
@@ -221,6 +223,19 @@ export async function pendientesDe(s: Session, auth: Autorizacion): Promise<Grup
     const semana = String(a.vigente_hasta || "") <= sumarDias(hoy, 7);
     return { clave: `vence_autorizacion:${a.id}:${semana ? "7dias" : "30dias"}`, frase: "Autorización por vencer", registro: a.propia ? `Tu autorización: ${a.etiqueta}` : `${a.persona} · ${a.etiqueta}`, detalle: `Vence el ${fmt(a.vigente_hasta)}`, href: a.propia ? "/#mis-autorizaciones" : administraAut ? `/administracion/usuarios?abrir=${a.usuario_id}` : "/administracion/usuarios", tono: "warning" as Tono, cuando: null, persona_id: Number(a.usuario_id) || null, persona: a.persona };
   }));
+
+  // Documentos SGC: tareas de la bandeja (lo asignado y lo que toca a la persona) y solicitudes propias resueltas.
+  if (puede("documentos", "V")) {
+    let tareas: Tarea[] = [];
+    try {
+      tareas = await tareasSgc(s, await accesoSgc(s, auth));
+    } catch {
+      tareas = [];
+    }
+    // Las obsolescencias por aprobar ya salen en "Por autorizar".
+    agregar("documentos_sgc", "Documentos SGC por atender", "info", "/documentos/bandeja", tareas.filter((t) => t.tipo !== "obsolescencia").map((t) => ({ tipo: t.tipo, clave: t.clave, frase: t.accion, registro: t.clave_documento ? `${t.clave_documento}${t.revision !== null ? ` rev. ${t.revision}` : ""}` : t.titulo, detalle: [t.titulo, t.fecha_limite ? `${t.vencida ? "venció" : "límite"} ${fmt(t.fecha_limite)}` : null].filter(Boolean).join(" · ") || null, href: t.href, tono: (t.vencida ? "danger" : "info") as Tono, cuando: t.desde })));
+    agregar("documentos_solicitudes", "Tus solicitudes de documentos", "info", "/documentos/solicitudes", (await solicitudesResueltasDe(s, yo)).map((f) => ({ clave: `sgc_solicitud_resuelta:${f.id}:${f.estado}`, frase: f.estado === "aceptada" ? "Solicitud aceptada" : "Solicitud rechazada", registro: f.clave ? String(f.clave) : String(f.titulo_propuesto || `Solicitud #${f.id}`), detalle: f.estado === "rechazada" ? String(f.comentario_resolucion || "") : f.revision_id ? "Se abrió la revisión de trabajo" : null, href: f.estado === "aceptada" && f.documento_id ? `/documentos/${f.documento_id}` : `/documentos/solicitudes?abrir=${f.id}`, tono: (f.estado === "rechazada" ? "warning" : "info") as Tono, cuando: (f.resuelta_en as string | null) ?? null })));
+  }
 
   // Calidad: incidencias por evaluar, mis acciones, verificaciones, informes retenidos, suspensiones y reasignaciones.
   const calidad = await avisosCalidad(s, auth);

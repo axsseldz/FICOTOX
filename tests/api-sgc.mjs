@@ -431,23 +431,24 @@ let informeId = null;
   check("programar preventivo pone el equipo en mantenimiento", (await estadoDe()) === "mantenimiento");
   await api("DELETE", `/inventory/mantenimientos/${m2}`, { motivo: "Prueba de sincronizacion" });
   check("cancelar el pendiente regresa el equipo a operativo", (await estadoDe()) === "operativo");
-  // Existencias: el consumible respeta el stock de referencia y el reactivo la cantidad explícita.
-  const cid = (await api("POST", "/consumables", { producto: "Consumible prueba stock", piezas: 10, stock_maximo: 100 })).data?.id;
+  // Existencias (migraciones 19 y 20): el consumible lleva su existencia en UNIDADES (piezas x cantidad por pieza)
+  // y el reactivo la inicia con capacidad x piezas; despues solo cambian con movimientos.
+  const cid = (await api("POST", "/consumables", { producto: "Consumible prueba stock", piezas: 10, cantidad_por_pieza: 10 })).data?.id;
   const crow = (await api("GET", "/consumables?search=Consumible prueba stock")).data?.items?.find((c) => c.id === cid);
-  check("consumible guarda piezas y stock maximo por separado", Number(crow?.piezas) === 10 && Number(crow?.stock_maximo) === 100, JSON.stringify([crow?.piezas, crow?.stock_maximo]));
-  const rid = (await api("POST", "/inventory/reactivos", { tipo_reactivo: "alcoholes_solventes", producto: "Reactivo prueba stock", cantidad_actual: 3, unidad: "L", stock_maximo: 8, stock_minimo: 2, restante_190126: 7 })).data?.id;
+  check("consumible: existencia en unidades = piezas × cantidad por pieza (y es su stock de referencia)", Number(crow?.existencia) === 100 && Number(crow?.piezas) === 10 && Number(crow?.stock_maximo) === 100, JSON.stringify([crow?.existencia, crow?.piezas, crow?.stock_maximo]));
+  const rid = (await api("POST", "/inventory/reactivos", { tipo_reactivo: "alcoholes_solventes", producto: "Reactivo prueba stock", capacidad: 1, unidad_capacidad: "L", piezas: 3, stock_minimo: 2, restante_190126: 7 })).data?.id;
   const rrow = (await api("GET", "/inventory/reactivos?search=Reactivo prueba stock")).data?.items?.find((r) => r.id === rid);
-  check("reactivo: la cantidad explicita manda sobre las columnas heredadas", Number(rrow?.cantidad_actual) === 3 && Number(rrow?.stock_maximo) === 8 && Number(rrow?.stock_minimo) === 2, JSON.stringify([rrow?.cantidad_actual, rrow?.stock_maximo, rrow?.stock_minimo]));
-  // Editar desde otra categoría conserva las columnas heredadas y el relleno parte de cantidad_actual.
-  await api("PUT", `/inventory/reactivos/${rid}`, { tipo_reactivo: "acidos", producto: "Reactivo prueba stock", cantidad_actual: 3, unidad: "L", stock_maximo: 8, stock_minimo: 2 });
+  check("reactivo: la existencia inicial es capacidad × piezas (las columnas heredadas no cuentan)", Number(rrow?.cantidad_actual) === 3 && Number(rrow?.stock_maximo) === 3 && Number(rrow?.stock_minimo) === 2, JSON.stringify([rrow?.cantidad_actual, rrow?.stock_maximo, rrow?.stock_minimo]));
+  // Editar desde otra categoría conserva la existencia y las columnas heredadas; el relleno parte de cantidad_actual.
+  await api("PUT", `/inventory/reactivos/${rid}`, { tipo_reactivo: "acidos", producto: "Reactivo prueba stock", capacidad: 1, unidad_capacidad: "L", piezas: 3, stock_minimo: 2 });
   const editado = (await api("GET", `/inventory/reactivos/${rid}`)).data?.item;
-  check("editar reactivo conserva columnas que la hoja no manda", Number(editado?.restante_190126) === 7 && Number(editado?.cantidad_actual) === 3 && editado?.tipo_reactivo === "acidos", JSON.stringify([editado?.restante_190126, editado?.cantidad_actual]));
+  check("editar reactivo conserva la existencia y las columnas que la hoja no manda", Number(editado?.restante_190126) === 7 && Number(editado?.cantidad_actual) === 3 && editado?.tipo_reactivo === "acidos", JSON.stringify([editado?.restante_190126, editado?.cantidad_actual, editado?.tipo_reactivo]));
   await api("POST", `/inventory/reactivos/${rid}/refill`, { cantidad: 6, motivo: "Prueba relleno" });
   const relleno = (await api("GET", `/inventory/reactivos/${rid}`)).data?.item;
   check("relleno suma a cantidad_actual y el maximo nunca queda por debajo", Number(relleno?.cantidad_actual) === 9 && Number(relleno?.stock_maximo) === 9 && Number(relleno?.restante_190126) === 7, JSON.stringify([relleno?.cantidad_actual, relleno?.stock_maximo, relleno?.restante_190126]));
   await api("POST", `/consumables/${cid}/refill`, { cantidad: 5, motivo: "Prueba relleno" });
   const crow2 = (await api("GET", "/consumables?search=Consumible prueba stock")).data?.items?.find((c) => c.id === cid);
-  check("relleno de consumible no infla el stock maximo", Number(crow2?.piezas) === 15 && Number(crow2?.stock_maximo) === 100, JSON.stringify([crow2?.piezas, crow2?.stock_maximo]));
+  check("relleno de consumible suma unidades a la existencia; las piezas (empaque) no cambian", Number(crow2?.existencia) === 105 && Number(crow2?.piezas) === 10 && Number(crow2?.stock_maximo) === 105, JSON.stringify([crow2?.existencia, crow2?.piezas, crow2?.stock_maximo]));
   // El estado manual del equipo no contradice a Mantenimiento.
   const m3 = (await api("POST", "/inventory/mantenimientos", { id_equipo: eq, tipo: "correctivo", fecha_programada: "2026-09-25", estado: "programado" })).data?.id;
   await api("PUT", `/inventory/equipos/${eq}`, { nombre: "Equipo prueba sync", clave_bitacora: "FX-TCB-ZZ1", estado: "operativo" });

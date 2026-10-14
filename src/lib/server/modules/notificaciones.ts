@@ -43,6 +43,8 @@ const TIPO_GRUPO: Record<string, string> = {
   bitacora_alterada: "bitacora_alterada",
   respaldo_viejo: "respaldo",
   prueba_vieja: "respaldo",
+  documentos_sgc: "documento",
+  documentos_solicitudes: "documento",
 };
 
 const DIA = 86_400_000;

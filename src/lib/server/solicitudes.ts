@@ -9,6 +9,14 @@ import { cargarAutorizacion, cargoActuante, permisoDe, requirePermission, type A
 import { exigirReauth } from "./seguridad";
 import { ACCIONES_CRITICAS, esTipoActivo, etiquetasDeSolicitud, permisoParaAprobar, TIPOS_SOLICITUD, type EstadoSolicitud, type TipoSolicitud } from "../shared/acciones-criticas";
 import { evaluarSegundoUsuario } from "../shared/segregacion";
+import { documentosOcultos } from "./modules/sgc/acceso";
+
+/* Documentos SGC confidenciales que la persona no ve: sus solicitudes no se le muestran (ni clave ni motivo). */
+async function sinDocumentosOcultos(s: Session, auth: Autorizacion, filas: Solicitud[]): Promise<Solicitud[]> {
+  if (!filas.some((f) => f.entidad === "sgc_documentos")) return filas;
+  const ocultos = new Set(await documentosOcultos(s, auth));
+  return filas.filter((f) => f.entidad !== "sgc_documentos" || !ocultos.has(String(f.entidad_id)));
+}
 
 /*
  * Solicitudes de autorizacion de un segundo usuario (Fase 3; seccion 10 de
@@ -241,7 +249,7 @@ export async function listarSolicitudes({ request, s }: RouteContext): Promise<R
     return json({ items: filas.map(decorar), total: filas.length });
   }
   const filas = await s.query<Solicitud>(estado === "todas" ? "SELECT * FROM solicitudes_autorizacion ORDER BY id DESC LIMIT 500" : "SELECT * FROM solicitudes_autorizacion WHERE estado = :estado ORDER BY id DESC LIMIT 500", { estado });
-  const visibles = filas.filter((f) => Number(f.solicitado_por) === auth.userId || puedeAprobar(auth, { ...f, estado: "pendiente" }) || (f.resuelto_por !== null && Number(f.resuelto_por) === auth.userId));
+  const visibles = await sinDocumentosOcultos(s, auth, filas.filter((f) => Number(f.solicitado_por) === auth.userId || puedeAprobar(auth, { ...f, estado: "pendiente" }) || (f.resuelto_por !== null && Number(f.resuelto_por) === auth.userId)));
   const items = visibles.map(decorar);
   return json({ items, total: items.length, por_autorizar: items.filter((i) => i.puedo_aprobar).length });
 }
@@ -249,7 +257,7 @@ export async function listarSolicitudes({ request, s }: RouteContext): Promise<R
 /* Cuantas solicitudes pendientes puede aprobar la persona (aviso del Inicio). */
 export async function porAutorizarDe(s: Session, auth: Autorizacion): Promise<Solicitud[]> {
   const filas = await s.query<Solicitud>("SELECT * FROM solicitudes_autorizacion WHERE estado = 'pendiente' AND vence_en > :ahora ORDER BY id ASC LIMIT 100", { ahora: ahoraIso() });
-  return filas.filter((f) => puedeAprobar(auth, f));
+  return sinDocumentosOcultos(s, auth, filas.filter((f) => puedeAprobar(auth, f)));
 }
 
 /* ---------- Resolver ---------- */

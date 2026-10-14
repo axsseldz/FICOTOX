@@ -11,9 +11,9 @@
  */
 import type { Accion, Modulo } from "./permisos";
 
-export const VERSION_ACCIONES_CRITICAS = "2026-10-03.1";
+export const VERSION_ACCIONES_CRITICAS = "2026-10-14.1";
 
-export type TipoSolicitud = "anular_registro" | "restaurar_registro" | "anular_informe" | "excepcion_segregacion" | "asignar_rol" | "reactivar_cuenta" | "ampliar_vigencia" | "decision_recepcion" | "cambiar_folio" | "reabrir_recepcion" | "anular_calidad";
+export type TipoSolicitud = "anular_registro" | "restaurar_registro" | "anular_informe" | "excepcion_segregacion" | "asignar_rol" | "reactivar_cuenta" | "ampliar_vigencia" | "decision_recepcion" | "cambiar_folio" | "reabrir_recepcion" | "anular_calidad" | "obsoletar_documento_sgc";
 
 export type EstadoSolicitud = "pendiente" | "aprobada" | "rechazada" | "cancelada" | "vencida";
 
@@ -41,6 +41,8 @@ export const ACCIONES_CRITICAS: Record<TipoSolicitud, AccionCritica> = {
   // "obsoletar_documento" (Fase 7) se retiro: Calidad › Documentos es ahora la Biblioteca (decision del laboratorio). Ver ACCIONES_RETIRADAS.
   // Fase 11: anular una incidencia o una no conformidad (calidad:AN pide, otra persona con calidad:AN aprueba).
   anular_calidad: { tipo: "anular_calidad", etiqueta: "Anular incidencia o NC", pendiente: "Anulación solicitada", aprueba: { modulo: "calidad", accion: "AN" }, descripcion: "Anular una incidencia o una no conformidad. Una incidencia escalada solo se anula si su NC está anulada." },
+  // Documentos SGC (Fase 2): declarar obsoleto un documento sin reemplazo. Lo pide Mejora Continua (documento_obsoletar); lo aprueba otra persona con documento_autorizar.
+  obsoletar_documento_sgc: { tipo: "obsoletar_documento_sgc", etiqueta: "Declarar obsoleto un documento", pendiente: "Obsolescencia solicitada", aprueba: { modulo: "documentos", accion: "documento_autorizar" }, descripcion: "Retirar del uso un documento SGC sin reemplazo. Queda obsoleto y se conserva en el historial." },
   ampliar_vigencia: { tipo: "ampliar_vigencia", etiqueta: "Ampliar vigencia", pendiente: "Ampliación de vigencia solicitada", aprueba: { modulo: "usuarios", accion: "A" }, descripcion: "Ampliar la vigencia de una cuenta temporal (o convertirla en permanente)." },
 };
 
@@ -70,6 +72,7 @@ const MODULO_DE_ENTIDAD: Record<string, Modulo> = {
   muestras_analisis: "ensayos",
   informes: "informes",
   documentos_sgc: "documentos",
+  sgc_documentos: "documentos",
   usuarios: "usuarios",
   incidencias: "calidad",
   no_conformidades: "calidad",
