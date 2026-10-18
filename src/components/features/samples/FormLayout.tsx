@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, CaretDown, Check, CheckCircle, Clock, Info, ListNumbers, Rows, SealCheck, Warning, WarningCircle } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, CaretDown, Check, CheckCircle, Clock, Info, ListNumbers, LockSimple, Rows, SealCheck, Warning, WarningCircle } from "@phosphor-icons/react";
 import { cn } from "@/components/ui/cn";
+import { CampoValidado, MensajeCampo, ValidacionAmbito, type Validacion } from "@/components/ui/Validacion";
 import { checkboxClass, radioClass } from "@/components/ui/Field";
 import { SegmentedTabs } from "@/components/ui/PageHeader";
 import { Badge, type Tone } from "@/components/ui/Primitives";
@@ -35,17 +36,9 @@ export interface FormSectionDef {
   complete?: boolean;
   /* Opcional: no bloquea el guardado ni cuenta en "n de m"; se pinta verde solo si se llenó. */
   optional?: boolean;
-}
-
-/* Secciones obligatorias con datos faltantes: con ellas el formato no se guarda. */
-export function missingSections(sections: FormSectionDef[]): FormSectionDef[] {
-  return sections.filter((section) => !section.optional && section.complete === false);
-}
-
-/* Mensaje para el usuario cuando falta información obligatoria. */
-export function missingMessage(missing: FormSectionDef[]): string {
-  const labels = missing.map((section) => section.label);
-  return labels.length === 1 ? `Falta información en “${labels[0]}”` : `Falta información en: ${labels.join(", ")}`;
+  /* Etiqueta en lugar de "Opcional" (p. ej. "Puede decidirse después") y nota de por qué importa. */
+  optionalLabel?: string;
+  optionalNote?: string;
 }
 
 interface FormPageContextValue {
@@ -78,11 +71,6 @@ export function EditableScope({ children }: { children: ReactNode }) {
   return ctx ? <FormPageContext.Provider value={{ ...ctx, readOnly: false }}>{children}</FormPageContext.Provider> : <>{children}</>;
 }
 
-/* Abre (si esta plegada) y enfoca una seccion del formato; lo usan las validaciones al guardar. */
-export function openFormSection(id: string) {
-  window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: id }));
-}
-
 function readShowAll(): boolean | null {
   try {
     const raw = window.localStorage.getItem(SHOW_ALL_KEY);
@@ -97,11 +85,11 @@ function readShowAll(): boolean | null {
  * formato este en solo lectura (p. ej. la evidencia instrumental: se consulta y
  * descarga siempre, antes de las firmas). `tail` vuelve a quedar en solo lectura.
  */
-export function FormPage({ backHref, backLabel, code, title, status, statusTone = "brand", actions, sections, children, interactive, tail, after, readOnly = false, error }: { backHref: string; backLabel: string; code: string; title: ReactNode; status?: string; statusTone?: Tone; actions: ReactNode; sections: FormSectionDef[]; interactive?: ReactNode; tail?: ReactNode; after?: ReactNode; readOnly?: boolean; children: ReactNode; error?: string | null }) {
+export function FormPage({ backHref, backLabel, code, title, status, statusTone = "brand", actions, sections, children, interactive, tail, after, readOnly = false, error, validacion }: { backHref: string; backLabel: string; code: string; title: ReactNode; status?: string; statusTone?: Tone; actions: ReactNode; sections: FormSectionDef[]; interactive?: ReactNode; tail?: ReactNode; after?: ReactNode; readOnly?: boolean; children: ReactNode; error?: string | null; /* Validacion compartida: completitud, aviso del encabezado y pop-up. */ validacion?: Validacion }) {
   const [openId, setOpenId] = useState(sections[0]?.id || "");
   const [opened, setVisited] = useState<Set<string>>(() => new Set(sections[0]?.id ? [sections[0].id] : []));
   // Al guardar con errores todas las secciones cuentan como vistas: se señalan todos los faltantes.
-  const visited = error ? new Set(sections.map((section) => section.id)) : opened;
+  const visited = error || validacion?.intentado ? new Set(sections.map((section) => section.id)) : opened;
   // Al consultar un registro terminado conviene verlo completo; al capturar, paso a paso. La persona puede cambiarlo y se recuerda.
   const [showAllPref, setShowAll] = useState<boolean>(() => (typeof window === "undefined" ? false : (readShowAll() ?? false)));
   // Un registro en solo lectura siempre se muestra completo: se consulta, no se captura.
@@ -196,7 +184,7 @@ export function FormPage({ backHref, backLabel, code, title, status, statusTone 
   // `sections` cambia en cada render (lleva el estado de completitud), así que memorizar el contexto no ahorra nada.
   const ctx: FormPageContextValue = { sections, visited, openId, showAll, readOnly, open, next };
 
-  return (
+  const page = (
     <FormPageContext.Provider value={ctx}>
       <div className="animate-rise-in -mt-6 flex flex-col sm:-mt-8">
         {/* Cabecera: regreso · título + estado · acciones. Una sola fila en escritorio, apilada en móvil. */}
@@ -220,7 +208,20 @@ export function FormPage({ backHref, backLabel, code, title, status, statusTone 
             </div>
             <div className="hidden shrink-0 items-center gap-2 sm:flex">{actions}</div>
           </div>
-          {error ? (
+          {validacion && validacion.faltantes.length && !readOnly ? (
+            // Mismas reglas que la guía: cada sección es un enlace a su primer campo faltante.
+            <p role="status" data-aviso-faltantes className="mx-auto flex max-w-[1184px] flex-wrap items-center gap-x-1.5 gap-y-1 px-4 pb-2.5 text-[12.5px] text-danger sm:px-8">
+              <span>Falta información en:</span>
+              {validacion.faltantes.map((f, i) => (
+                <span key={f.seccion}>
+                  <button type="button" onClick={() => validacion.irA(f.primero)} className="font-medium underline decoration-danger/40 underline-offset-2 hover:decoration-danger">
+                    {f.grupo}
+                  </button>
+                  {i < validacion.faltantes.length - 1 ? "," : ""}
+                </span>
+              ))}
+            </p>
+          ) : error ? (
             <p role="alert" className="mx-auto max-w-[1184px] px-4 pb-2.5 text-[12.5px] text-danger sm:px-8">
               {error}
             </p>
@@ -248,7 +249,8 @@ export function FormPage({ backHref, backLabel, code, title, status, statusTone 
             <ol className="scroll-thin -mx-4 flex gap-1 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 lg:flex-col lg:gap-0.5 lg:overflow-visible lg:pb-0">
               {sections.map((section, index) => {
                 const active = openId === section.id;
-                const missing = !section.optional && section.complete === false && visited.has(section.id) && !active;
+                // Opcionales incluidas: si se evaluaron (complete === false), la guía coincide con el aviso del encabezado.
+                const missing = section.complete === false && visited.has(section.id) && !active;
                 return (
                   <li key={section.id} className="shrink-0">
                     <button
@@ -257,9 +259,9 @@ export function FormPage({ backHref, backLabel, code, title, status, statusTone 
                       aria-current={active ? "step" : undefined}
                       className={cn("press flex h-9 w-full items-center gap-2.5 rounded-[9px] px-2 text-left text-[13px] transition-colors", active ? "bg-surface font-medium text-ink shadow-card" : "text-ink-3 hover:bg-surface-3/70 hover:text-ink")}
                     >
-                      <span className={cn("tnum flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10.5px] font-semibold", section.complete ? "bg-success text-white" : missing ? "bg-warning-soft text-warning-text" : active ? "bg-ink text-white" : "bg-surface-3 text-ink-3")}>{section.complete ? <Check size={11} weight="bold" /> : index + 1}</span>
+                      <span className={cn("tnum flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10.5px] font-semibold", section.complete ? "bg-success text-on-accent" : missing ? "bg-warning-soft text-warning-text" : active ? "bg-brand-soft text-brand-strong ring-1 ring-inset ring-brand/25" : "bg-surface-3 text-ink-3")}>{section.complete ? <Check size={11} weight="bold" /> : index + 1}</span>
                       <span className="truncate">{section.label}</span>
-                      {section.optional ? <span className="ml-auto shrink-0 text-[10.5px] font-medium uppercase tracking-wide text-ink-4">opcional</span> : null}
+                      {section.optional ? <span className="ml-auto shrink-0 text-[10.5px] font-medium uppercase tracking-wide text-ink-3">{section.optionalLabel ? "después" : "opcional"}</span> : null}
                     </button>
                   </li>
                 );
@@ -268,7 +270,7 @@ export function FormPage({ backHref, backLabel, code, title, status, statusTone 
             {evaluated > 0 ? (
               <div className="mt-3 hidden px-2 lg:block">
                 <div className="h-1 w-full overflow-hidden rounded-full bg-surface-3">
-                  <div className="h-full rounded-full bg-success transition-[width] duration-500 ease-[var(--ease-spring)]" style={{ width: `${Math.round((done / evaluated) * 100)}%` }} />
+                  <div className="h-full w-full rounded-full bg-success transition-[translate] duration-500 ease-[var(--ease-spring)]" style={{ translate: `${Math.round((done / evaluated) * 100) - 100}% 0` }} />
                 </div>
                 <p className="tnum mt-1.5 text-[12px] text-ink-3">
                   {done} de {evaluated} secciones completas
@@ -284,6 +286,8 @@ export function FormPage({ backHref, backLabel, code, title, status, statusTone 
           </nav>
 
           <div className="flex min-w-0 flex-col gap-4">
+            {/* Avisos con acciones (solicitud pendiente, visto bueno): fuera del fieldset, siguen activos en solo lectura. */}
+            <div id="form-avisos" className="flex flex-col gap-3 empty:hidden" />
             {/* En solo lectura el fieldset desactiva todos los controles del formato; lo que va en `after` (historial) sigue activo. */}
             <fieldset disabled={readOnly} className={cn("m-0 flex min-w-0 flex-col gap-4 border-0 p-0", readOnly && "form-readonly")}>
               {children}
@@ -303,6 +307,7 @@ export function FormPage({ backHref, backLabel, code, title, status, statusTone 
       </div>
     </FormPageContext.Provider>
   );
+  return validacion ? <ValidacionAmbito v={validacion}>{page}</ValidacionAmbito> : page;
 }
 
 export function FormCard({ id, title, description, children, aside, optional }: { id: string; title: ReactNode; description?: ReactNode; children: ReactNode; aside?: ReactNode; optional?: boolean }) {
@@ -314,7 +319,7 @@ export function FormCard({ id, title, description, children, aside, optional }: 
   const isLast = !!ctx && index === ctx.sections.length - 1;
   const stepMode = !!ctx && !ctx.showAll && !ctx.readOnly && index >= 0;
   const isOptional = optional || !!meta?.optional;
-  const missing = !!ctx && !isOptional && meta?.complete === false && ctx.visited.has(id) && !isOpen;
+  const missing = !!ctx && meta?.complete === false && ctx.visited.has(id) && !isOpen;
   // Mientras se despliega hace falta recortar; ya abierta, los desplegables (buscador de insumos) deben poder salir de la tarjeta.
   const [settled, setSettled] = useState(isOpen);
   const [prevOpen, setPrevOpen] = useState(isOpen);
@@ -331,7 +336,7 @@ export function FormCard({ id, title, description, children, aside, optional }: 
 
   // Solo la sección en curso lleva el número en tinta; con todo desplegado, las demás van en gris.
   const current = !!ctx && ctx.openId === id;
-  const badge = index >= 0 ? <span className={cn("tnum flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11.5px] font-semibold", meta?.complete ? "bg-success text-white" : missing ? "bg-warning-soft text-warning-text" : current ? "bg-ink text-white" : "bg-surface-3 text-ink-2")}>{meta?.complete ? <Check size={12} weight="bold" /> : index + 1}</span> : null;
+  const badge = index >= 0 ? <span className={cn("tnum flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11.5px] font-semibold", meta?.complete ? "bg-success text-on-accent" : missing ? "bg-warning-soft text-warning-text" : current ? "bg-brand-soft text-brand-strong ring-1 ring-inset ring-brand/25" : "bg-surface-3 text-ink-2")}>{meta?.complete ? <Check size={12} weight="bold" /> : index + 1}</span> : null;
 
   return (
     <section id={id} className={cn("scroll-mt-24 rounded-[16px] bg-surface shadow-card transition-[box-shadow] duration-300 sm:scroll-mt-28", current && isOpen && "shadow-raised", !isOpen && "hover:shadow-raised")} data-open={isOpen}>
@@ -342,7 +347,8 @@ export function FormCard({ id, title, description, children, aside, optional }: 
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink">{title}</h2>
-              {isOptional ? <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[11px] font-medium text-ink-3">Opcional</span> : null}
+              {isOptional ? <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[11px] font-medium text-ink-3">{meta?.optionalLabel || "Opcional"}</span> : null}
+              {meta?.optionalNote ? <span className="text-[12px] text-ink-3">{meta.optionalNote}</span> : null}
             </div>
             {description ? <p className="text-[13px] leading-snug text-ink-3">{description}</p> : null}
           </div>
@@ -370,7 +376,7 @@ export function FormCard({ id, title, description, children, aside, optional }: 
             {children}
             {stepMode && !isLast ? (
               <div className="mt-6 flex justify-end border-t border-line pt-4">
-                <button type="button" onClick={() => ctx!.next(id)} className="press inline-flex h-9 items-center gap-2 rounded-[9px] bg-ink px-3.5 text-[13.5px] font-medium text-white hover:bg-ink-2">
+                <button type="button" onClick={() => ctx!.next(id)} className="press inline-flex h-9 items-center gap-2 rounded-[9px] bg-surface-3 px-3.5 text-[13.5px] font-medium text-ink ring-1 ring-inset ring-line-strong/60 hover:bg-line">
                   Continuar <ArrowRight size={14} weight="bold" />
                 </button>
               </div>
@@ -451,12 +457,39 @@ export function ChoiceGrid({ children, className, cols = 3 }: { children: ReactN
 }
 
 /* Tarjeta seleccionable (checkbox o radio) con aspecto de opcion. */
-export function ChoiceCard({ checked, onChange, label, description, type = "checkbox", name, disabled }: { checked: boolean; onChange: (checked: boolean) => void; label: ReactNode; description?: ReactNode; type?: "checkbox" | "radio"; name?: string; disabled?: boolean }) {
+/*
+ * Opcion de una sola o varias respuestas. `bloqueada` (una regla no la
+ * permite ahora): se ve atenuada con candado, pero se puede pulsar y llama a
+ * `bloqueada()` para explicar por que (pop-up de validacion) en vez de no hacer nada.
+ */
+export function ChoiceCard({ checked, onChange, label, description, type = "checkbox", name, disabled, bloqueada, invalida }: { checked: boolean; onChange: (checked: boolean) => void; label: ReactNode; description?: ReactNode; type?: "checkbox" | "radio"; name?: string; disabled?: boolean; bloqueada?: () => void; /* La opcion elegida dejo de ser valida: se marca en rojo. */ invalida?: boolean }) {
   return (
-    <label className={cn("press flex cursor-pointer items-start gap-3 rounded-[12px] border px-3.5 py-3 transition-colors", checked ? "border-brand bg-brand-faint shadow-[0_0_0_1px_var(--color-brand)]" : "border-line bg-surface hover:border-line-strong", disabled && "cursor-not-allowed opacity-60")}>
-      <input type={type} name={name} disabled={disabled} className={cn(type === "radio" ? radioClass : checkboxClass, "mt-0.5")} checked={checked} onChange={(event) => onChange(event.target.checked)} />
+    <label
+      data-bloqueada={bloqueada ? "true" : undefined}
+      className={cn("press flex cursor-pointer items-start gap-3 rounded-[12px] border px-3.5 py-3 transition-colors", invalida ? "border-danger bg-danger-soft/40 shadow-[0_0_0_1px_var(--color-danger)]" : checked ? "border-brand bg-brand-faint shadow-[0_0_0_1px_var(--color-brand)]" : "border-line bg-surface hover:border-line-strong", disabled && "cursor-not-allowed opacity-60", bloqueada && !checked && "border-dashed bg-surface-2/60 text-ink-3")}
+    >
+      <input
+        type={type}
+        name={name}
+        disabled={disabled}
+        aria-invalid={invalida || undefined}
+        aria-disabled={bloqueada ? true : undefined}
+        className={cn(type === "radio" ? radioClass : checkboxClass, "mt-0.5")}
+        checked={checked}
+        onChange={(event) => {
+          if (bloqueada && event.target.checked) {
+            event.preventDefault();
+            bloqueada();
+            return;
+          }
+          onChange(event.target.checked);
+        }}
+      />
       <span className="flex flex-col gap-0.5">
-        <span className="text-[14px] font-medium text-ink">{label}</span>
+        <span className={cn("flex items-center gap-1.5 text-[14px] font-medium", bloqueada && !checked ? "text-ink-3" : "text-ink")}>
+          {label}
+          {bloqueada ? <LockSimple size={13} weight="bold" className="text-ink-4" aria-label="No disponible por ahora" /> : null}
+        </span>
         {description ? <span className="text-[12.5px] leading-snug text-ink-3">{description}</span> : null}
       </span>
     </label>
@@ -466,7 +499,10 @@ export function ChoiceCard({ checked, onChange, label, description, type = "chec
 const slug = (text: string) => text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 /* Persona responsable: se elige del personal autorizado (o "Otra persona…") y firma compacta. El cargo sale del rol de la persona (no se captura). Varias se apilan. */
-export function PersonCard({ title, name, onName, cargo, onCargo, signature, onSignature, disabled = false, requires = "muestras", firmante, onFirmante, firmanteSesion = true }: { title: string; name: string; onName: (v: string) => void; cargo?: string; onCargo?: (v: string) => void; signature: string; onSignature: (v: string) => void; disabled?: boolean; requires?: PersonaCapacidad; /* Fase 5: firma ligada a una cuenta activa (con contrasena si no es la sesion). */ firmante?: FirmanteState; onFirmante?: (v: FirmanteState) => void; firmanteSesion?: boolean }) {
+/* id del selector de una PersonCard ("persona-<titulo>"); la firma es "<id>-firma". */
+export const personaId = (title: string) => `persona-${slug(title)}`;
+
+export function PersonCard({ title, name, onName, cargo, onCargo, signature, onSignature, disabled = false, requires = "muestras", firmante, onFirmante, firmanteSesion = true, nuevo = false }: { title: string; name: string; onName: (v: string) => void; cargo?: string; onCargo?: (v: string) => void; signature: string; onSignature: (v: string) => void; disabled?: boolean; requires?: PersonaCapacidad; /* Fase 5: firma ligada a una cuenta activa (con contrasena si no es la sesion). */ firmante?: FirmanteState; onFirmante?: (v: FirmanteState) => void; firmanteSesion?: boolean; /* Formato aun sin guardar (el nombre prellenado de la sesion se liga a su cuenta). */ nuevo?: boolean }) {
   const id = `persona-${slug(title)}`;
   return (
     <div className="on-panel grid gap-4 rounded-[12px] bg-surface-2 p-4 ring-1 ring-line md:grid-cols-[minmax(0,1fr)_300px]">
@@ -483,6 +519,7 @@ export function PersonCard({ title, name, onName, cargo, onCargo, signature, onS
                 nombre={name}
                 disabled={disabled}
                 porOmisionSesion={firmanteSesion}
+                nuevo={nuevo}
                 onChange={(value, cuenta) => {
                   onFirmante(value);
                   onName(cuenta?.nombre || "");
@@ -503,12 +540,15 @@ export function PersonCard({ title, name, onName, cargo, onCargo, signature, onS
               />
             )}
           </label>
+          <MensajeCampo id={id} />
           {cargo && !(firmante && onFirmante) ? <p className="text-[12.5px] text-ink-3">Cargo: {cargo}</p> : null}
         </div>
       </div>
       <div className="flex min-w-0 flex-col gap-1.5">
         <span className="text-[12.5px] font-medium text-ink-2">Firma</span>
-        <SignaturePad value={signature} onChange={onSignature} disabled={disabled} label={`Firma · ${title}`} compact />
+        <CampoValidado id={`${id}-firma`}>
+          <SignaturePad value={signature} onChange={onSignature} disabled={disabled} label={`Firma · ${title}`} compact />
+        </CampoValidado>
       </div>
     </div>
   );
@@ -536,7 +576,7 @@ export function SignoffCard({ title, name, cargo, at, note, hint, children }: { 
   const when = at ? formatearFechaHora(at, "") : null;
   return (
     <div className={cn("flex gap-3 rounded-[14px] p-4 ring-1", done ? "bg-success-soft/40 ring-success/30" : "bg-surface-2 ring-line")}>
-      <span className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", done ? "bg-success text-white" : "bg-surface-3 text-ink-4")}>{done ? <SealCheck size={16} weight="fill" /> : <Clock size={16} />}</span>
+      <span className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", done ? "bg-success text-on-accent" : "bg-surface-3 text-ink-4")}>{done ? <SealCheck size={16} weight="fill" /> : <Clock size={16} />}</span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <p className="text-[12.5px] font-medium text-ink-3">{title}</p>
         <p className="truncate text-[14px] font-semibold text-ink">{name ? String(name) : done ? "—" : "Pendiente"}</p>
@@ -558,7 +598,7 @@ export function FlowSteps({ steps, current, failed }: { steps: { key: string; la
         const active = i === index;
         return (
           <li key={step.key} className="flex shrink-0 items-center gap-1">
-            <span className={cn("flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium transition-colors", active ? "bg-ink text-white" : done ? "bg-success-soft text-success-text" : "bg-surface-3 text-ink-3")}>
+            <span className={cn("flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium transition-colors", active ? "bg-brand-soft text-brand-strong ring-1 ring-inset ring-brand/25" : done ? "bg-success-soft text-success-text" : "bg-surface-3 text-ink-3")}>
               {done ? <Check size={11} weight="bold" /> : null}
               {step.label}
             </span>

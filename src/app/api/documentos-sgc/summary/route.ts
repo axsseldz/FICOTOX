@@ -1,4 +1,4 @@
-import { apiRoute } from "@/lib/server/http";
-import { documentosSummary } from "@/lib/server/modules/documentos-sgc";
+import { funcionalidadRetirada } from "@/lib/server/retirado";
 
-export const GET = apiRoute(documentosSummary);
+/* Flujo de control documental retirado por decision del laboratorio (el control documental vigente es Documentos SGC, /api/sgc). */
+export const GET = funcionalidadRetirada;

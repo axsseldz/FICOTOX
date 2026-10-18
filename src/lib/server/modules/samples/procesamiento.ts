@@ -1,4 +1,5 @@
 import { requireUser, userIdFromClaims } from "../../auth";
+import { conSolicitudesYPuede } from "../../puede-registro";
 import { registrarAuditoria, snapshotRow } from "../../audit";
 import { type Row, type Session } from "../../db";
 import { HttpError, intParam, json, readJson, type RouteContext } from "../../http";
@@ -9,13 +10,13 @@ import { evaluarSupervisionCaptura } from "../../../shared/segregacion";
 import { respuestaSolicitud } from "../../solicitudes";
 import { aplicarSupervision, filtroSupervision, marcaSupervision } from "../../supervision";
 
-import { advanceState, anularOSolicitar, applyStageInventory, assertEditableAsync, assertOrigin, conSolicitudes, deletionNotAllowed, exigirUsoDeRecursos, folioLabel, insumosDeclarados, isFolioConflict, nextFolioNum, readMotivo, restaurarOSolicitar } from "../../samples-flow";
+import { advanceState, anularOSolicitar, applyStageInventory, assertEditableAsync, assertOrigin, deletionNotAllowed, exigirUsoDeRecursos, folioLabel, insumosDeclarados, isFolioConflict, nextFolioNum, readMotivo, restaurarOSolicitar } from "../../samples-flow";
 import { jsonText, safeJsonLoad, searchParam, strippedOrNull, toIntOrNull } from "../helpers";
 
 import { exigirAutorizaciones } from "../../autorizaciones";
 import { requisitosProcesamiento } from "../../../shared/autorizaciones";
 import { exigirAsignacion, filtroAsignadas } from "../../asignaciones";
-import { guardarFirmantes, resolverFirmantes, type RolFirma } from "../../firmas";
+import { guardarFirmantes, resolverFirmantes, verificarFirmasConPassword, type RolFirma } from "../../firmas";
 
 /*
  * Portado de modules/samples/procesamiento.py del backend Flask original.
@@ -133,7 +134,7 @@ export async function listProcessingSamples({ request, s }: RouteContext): Promi
     { search, search_like: `%${search}%`, incluir_anuladas: includeAnuladas ? 1 : 0, ...supFiltro.params },
   );
   return json({
-    items: (await conSolicitudes(s, TABLE, rows)).map((row) => {
+    items: (await conSolicitudesYPuede(s, user, TABLE, rows)).map((row) => {
       const item: Row = { ...row, tipo_organismo: safeJsonLoad(row.tipo_organismo_json, []) };
       delete item.tipo_organismo_json;
       return item;
@@ -170,7 +171,7 @@ export async function getProcessingSample({ request, s, params }: RouteContext):
   if (!row) {
     return json({ message: "Registro no encontrado" }, 404);
   }
-  return json({ item: (await conSolicitudes(s, TABLE, [serializeRow(row)]))[0] });
+  return json({ item: (await conSolicitudesYPuede(s, user, TABLE, [serializeRow(row)]))[0] });
 }
 
 export async function createProcessingSample({ request, s }: RouteContext): Promise<Response> {
@@ -179,6 +180,8 @@ export async function createProcessingSample({ request, s }: RouteContext): Prom
   const actuo = cargoActuante(request, permiso);
 
   const payload = await readJson(request);
+  // Contraseñas de firmantes enviadas al guardar: se verifican antes de cualquier otra escritura.
+  await verificarFirmasConPassword(s, user, payload);
   const data = normalizePayload(payload);
   await exigirUsoDeRecursos(s, user, permiso.auth, { equipos: false, insumosJson: data.uso_inventario_json });
   // Fase 4: autorizacion FX-THF-AP de quien captura.
@@ -191,7 +194,9 @@ export async function createProcessingSample({ request, s }: RouteContext): Prom
   // Fase 5: solo quien esta asignado a la muestra (o la coordinacion).
   await exigirAsignacion(s, user, data.recepcion_id, permiso.auth);
   // Solo se procesa una muestra recibida, aceptada y vigente.
-  await assertOrigin(s, "muestras_recepcion", data.recepcion_id, { requireAccepted: true, requerido: ORIGEN_REQUERIDO });
+  const origen = await assertOrigin(s, "muestras_recepcion", data.recepcion_id, { requireAccepted: true, requerido: ORIGEN_REQUERIDO });
+  // El folio de la etapa anterior sale del registro vinculado, no de lo que mande el cliente.
+  if (origen) data.folio_recepcion_num = toIntOrNull(origen.folio_num);
   const supervision = marcaSupervision(permiso);
   if (data.estado === "anulada") data.estado = "registrada";
   const userId = userIdFromClaims(user);
@@ -257,6 +262,8 @@ export async function updateProcessingSample({ request, s, params }: RouteContex
   const actuo = cargoActuante(request, permiso);
   await assertEditableAsync(s, antes, TABLE);
   const payload = await readJson(request);
+  // Contraseñas de firmantes enviadas al guardar: se verifican antes de cualquier otra escritura.
+  await verificarFirmasConPassword(s, user, payload);
   const data = normalizePayload(payload);
   await exigirUsoDeRecursos(s, user, permiso.auth, { equipos: false, insumosJson: data.uso_inventario_json });
   // Fase 4: autorizacion FX-THF-AP de quien captura.
@@ -269,7 +276,9 @@ export async function updateProcessingSample({ request, s, params }: RouteContex
   // Fase 5: solo quien esta asignado a la muestra (o la coordinacion).
   await exigirAsignacion(s, user, data.recepcion_id, permiso.auth);
   // El origen se valida tambien al editar (no se puede quitar ni cambiar por uno invalido).
-  await assertOrigin(s, "muestras_recepcion", data.recepcion_id, { requireAccepted: true, requerido: ORIGEN_REQUERIDO });
+  const origen = await assertOrigin(s, "muestras_recepcion", data.recepcion_id, { requireAccepted: true, requerido: ORIGEN_REQUERIDO });
+  // El folio de la etapa anterior sale del registro vinculado, no de lo que mande el cliente.
+  if (origen) data.folio_recepcion_num = toIntOrNull(origen.folio_num);
   const supervision = marcaSupervision(permiso);
   // El estado lo maneja el flujo: no se anula ni se retrocede desde el formato.
   if (data.estado === "anulada" || ["en_proceso", "completada"].includes(String(antes?.estado || ""))) data.estado = String(antes?.estado || "registrada");

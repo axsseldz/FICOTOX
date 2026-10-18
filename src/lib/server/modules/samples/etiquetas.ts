@@ -28,7 +28,7 @@ import { safeJsonLoad } from "../helpers";
 
 const TABLE = "muestras_recepcion";
 
-export interface Etiqueta {
+interface Etiqueta {
   folio: string;
   id_interno: string;
   organismo: string;
@@ -78,7 +78,9 @@ export async function getEtiquetas(ctx: RouteContext): Promise<Response> {
 export async function registrarImpresionEtiquetas(ctx: RouteContext): Promise<Response> {
   const { row, user } = await cargar(ctx);
   const payload = await readJson(ctx.request);
-  const formato = payload.formato === "hoja" ? "hoja" : "etiqueta";
+  // Tamaño elegido (solo para la bitácora): pequena, mediana, grande, media_hoja (y los nombres anteriores).
+  const formato = ["pequena", "mediana", "grande", "media_hoja", "hoja", "etiqueta"].includes(String(payload.formato)) ? String(payload.formato) : "pequena";
+  const inicio = Math.max(Number.parseInt(String(payload.inicio ?? 1), 10) || 1, 1);
   const copias = Math.min(Math.max(Number.parseInt(String(payload.copias ?? 1), 10) || 1, 1), 50);
   const etiquetas = etiquetasDe(row);
   await registrarAuditoria(ctx.s, user, {
@@ -86,7 +88,7 @@ export async function registrarImpresionEtiquetas(ctx: RouteContext): Promise<Re
     entidad: TABLE,
     entidadId: Number(row.id),
     referencia: folioLabel(TABLE, row),
-    detalle: { formato, copias, etiquetas: etiquetas.length, id_internos: etiquetas.map((e) => e.id_interno) },
+    detalle: { formato, copias, inicio, etiquetas: etiquetas.length, id_internos: etiquetas.map((e) => e.id_interno) },
   });
   await ctx.s.commit();
   return json({ message: "Impresión registrada en la bitácora", etiquetas: etiquetas.length });

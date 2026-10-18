@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useSession } from "@/components/session/SessionProvider";
 import { AvatarArt, AVATARS, resolveAvatarKey } from "@/components/ui/AvatarArt";
+import { useFiguraDe } from "@/components/ui/Figura";
+import { isAvatarKey } from "@/lib/shared/avatars";
 import { AvatarPicker } from "@/components/ui/AvatarPicker";
+import { SelectorTema } from "@/components/ui/SelectorTema";
+import { PanelFoto, SelectorModoPerfil, type ModoPerfil } from "@/components/shell/FotoPerfilEditor";
+import { Avatar } from "@/components/ui/Primitives";
 import { Button } from "@/components/ui/Button";
 import { Sheet, useConfirm } from "@/components/ui/Overlay";
 import { Field, Select } from "@/components/ui/Field";
@@ -27,12 +32,12 @@ import { ListaAutorizaciones } from "@/components/features/admin/AutorizacionesP
 export const ABRIR_MIS_AUTORIZACIONES = "#mis-autorizaciones";
 export const EVENTO_ABRIR_CUENTA = "ficotox:abrir-cuenta";
 
-export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function AccountSheet({ open, onClose, abrirClave = false }: { open: boolean; onClose: () => void; /* Abre ya el formulario de cambio de contraseña (desde la búsqueda). */ abrirClave?: boolean }) {
   const { user, token, refreshMe, roles, logoutAll, authConfig } = useSession();
   const confirm = useConfirm();
   const [cargo, setCargo] = useState<string>(user?.cargo_predeterminado ? String(user.cargo_predeterminado) : "");
   const [savingCargo, setSavingCargo] = useState(false);
-  const [cambiarClave, setCambiarClave] = useState(false);
+  const [cambiarClave, setCambiarClave] = useState(abrirClave);
   const { items: autorizaciones } = useAutorizaciones();
 
   // Si se abrio desde un enlace a #mis-autorizaciones, se lleva la vista a esa seccion.
@@ -69,18 +74,44 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
     }
   };
   const seed = (user?.email || user?.nombre || "?").trim().toLowerCase();
-  const current = resolveAvatarKey(user?.avatar, seed);
-  const [choice, setChoice] = useState<string>(current);
+  // Sin figura elegida: la misma figura por omision que ven los demas (distinta a la de otras personas).
+  const porDefecto = useFiguraDe(null, seed);
+  const current = resolveAvatarKey(isAvatarKey(user?.avatar) ? user?.avatar : porDefecto, seed);
+  // null = sin cambio: muestra la figura actual (la elegida o la que le toca por omision).
+  const [elegida, setChoice] = useState<string | null>(null);
+  const choice = elegida ?? current;
   const [saving, setSaving] = useState(false);
   const dirty = choice !== current;
+
+  // Figura o foto: cambiar de una a otra no pierde la otra (la foto queda guardada hasta quitarla).
+  const [modoLocal, setModoLocal] = useState<ModoPerfil | null>(null);
+  const modo: ModoPerfil = modoLocal ?? (user?.usa_foto ? "foto" : "figura");
+  const alCambiarFoto = async () => {
+    await refreshMe();
+    invalidate("cuentas-activas", "usuarios");
+  };
+  const cambiarModo = async (m: ModoPerfil) => {
+    setModoLocal(m);
+    const usa = m === "foto";
+    // Sin foto guardada, "Foto" solo muestra la zona para subirla.
+    if (!user?.foto || usa === !!user?.usa_foto) return;
+    try {
+      await sendJsonAuth("PUT", `${API_BASE_URL}/auth/me/foto`, token, { usa_foto: usa });
+      await alCambiarFoto();
+      toast.success(usa ? "Se muestra tu foto" : "Se muestra tu figura");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo cambiar");
+    }
+  };
+  const fotoVisible = modo === "foto" && !!user?.foto;
 
   const save = async () => {
     setSaving(true);
     try {
       await sendJsonAuth("PUT", `${API_BASE_URL}/auth/me/avatar`, token, { avatar: choice });
       await refreshMe();
-      invalidate("usuarios");
-      toast.success("Avatar actualizado");
+      invalidate("usuarios", "cuentas-activas");
+      toast.success("Figura actualizada");
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo guardar el avatar");
@@ -94,21 +125,23 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
       open={open}
       onOpenChange={(value) => !value && onClose()}
       title="Mi cuenta"
-      description="Tus datos de acceso y el avatar con el que te ven en el sistema."
+      description="Tus datos de acceso y la figura o foto con la que te ven en el sistema."
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
             Cerrar
           </Button>
-          <Button onClick={save} loading={saving} disabled={!dirty}>
-            Guardar avatar
-          </Button>
+          {modo === "figura" ? (
+            <Button onClick={save} loading={saving} disabled={!dirty}>
+              Guardar figura
+            </Button>
+          ) : null}
         </>
       }
     >
       <div className="flex flex-col gap-6">
         <div className="flex items-center gap-4 rounded-[14px] bg-surface-2 p-4 ring-1 ring-line">
-          <AvatarArt avatar={choice} seed={seed} size={72} className="shadow-[0_6px_16px_-6px_rgba(16,32,43,0.35)]" />
+          {fotoVisible ? <Avatar id={user?.id} name={user?.nombre} email={user?.email} avatar={user?.avatar} size="xl" className="shadow-raised" /> : <AvatarArt avatar={choice} seed={seed} size={72} animado="siempre" className="rounded-full shadow-raised" />}
           <div className="flex min-w-0 flex-col">
             <p className="truncate text-[16px] font-semibold text-ink">{user?.nombre || user?.email}</p>
             <p className="truncate text-[13px] text-ink-3">{user?.email}</p>
@@ -117,14 +150,14 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
                 {roles.map((rol) => (
                   <li key={rol.id}>
                     {rol.nombre}
-                    {rol.vigente_hasta ? <span className="text-ink-4"> · hasta {fmtDate(rol.vigente_hasta)}</span> : null}
+                    {rol.vigente_hasta ? <span className="text-ink-3"> · hasta {fmtDate(rol.vigente_hasta)}</span> : null}
                   </li>
                 ))}
               </ul>
             ) : (
               <p className="mt-1 text-[12.5px] text-warning-text">Sin roles vigentes</p>
             )}
-            <p className="mt-1 text-[12px] text-ink-4">{AVATARS[resolveAvatarKey(choice, seed)].label}</p>
+            <p className="mt-1 text-[12px] text-ink-3">{fotoVisible ? "Tu foto" : AVATARS[resolveAvatarKey(choice, seed)].label}</p>
           </div>
         </div>
         {user?.tipo_cuenta === "temporal" ? (
@@ -177,12 +210,24 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
         </section>
         <section className="flex flex-col gap-3">
           <div>
-            <h3 className="title-3 text-ink">Elige tu avatar</h3>
-            <p className="text-[13px] text-ink-3">Criaturas y objetos del laboratorio. Si no eliges, el sistema te asigna uno a partir de tu correo.</p>
+            <h3 className="title-3 text-ink">Apariencia</h3>
+            <p className="text-[13px] text-ink-3">Claro, oscuro o automático (como tu sistema). Te sigue en cualquier computadora.</p>
           </div>
-          <AvatarPicker value={choice} seed={seed} onChange={setChoice} />
+          <SelectorTema />
         </section>
-        <p className="text-[12px] text-ink-4">Nombre, correo y roles los administra quien tiene la administración de usuarios (Administración › Usuarios).</p>
+        <section className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="title-3 text-ink">Foto de perfil</h3>
+              <p className="text-[13px] text-ink-3">{modo === "foto" ? "Una foto tuya, recortada en círculo." : "Criaturas y objetos del laboratorio. Si no eliges, el sistema te asigna uno a partir de tu correo."}</p>
+            </div>
+            <SelectorModoPerfil modo={modo} onModo={cambiarModo} />
+          </div>
+          <div key={modo} className="animate-rise-in motion-reduce:animate-none">
+            {modo === "foto" ? <PanelFoto onCambio={alCambiarFoto} /> : <AvatarPicker value={choice} seed={seed} onChange={setChoice} />}
+          </div>
+        </section>
+        <p className="text-[12px] text-ink-3">Nombre, correo y roles los administra quien tiene la administración de usuarios (Administración › Usuarios).</p>
       </div>
     </Sheet>
   );

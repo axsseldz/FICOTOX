@@ -1,4 +1,4 @@
-import { apiRoute } from "@/lib/server/http";
-import { revisionAccesos } from "@/lib/server/modules/admin";
+import { pantallaRetirada } from "@/lib/server/retirado";
 
-export const GET = apiRoute(revisionAccesos);
+/* Revisión de accesos se integró en Administración › Usuarios (sin exportación); los cambios del periodo se consultan en Auditoría. */
+export const GET = () => pantallaRetirada("la revisión de accesos está en Administración › Usuarios");

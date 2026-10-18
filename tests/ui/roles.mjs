@@ -3,7 +3,7 @@
  * navegador; la barra lateral muestra solo los destinos de los modulos que puede
  * ver (V) y los botones de alta aparecen segun su accion y alcance. La tabla se
  * repite aqui a proposito (independiente de scripts/roles-catalogo.json).
- * Fase 7: Documentos encendido: aparece para quien ve documentos.
+ * Documentos SGC: Calidad › Documentos SGC aparece para todos los roles del catalogo (la Biblioteca se retiro).
  *
  * Nota (Fase 2): los alcances diferidos se comportan como "total" salvo en
  * calidad (sin acceso: una C "incidencias" ya no abre la bitacora) y en usuarios
@@ -29,15 +29,15 @@ const check = (name, ok, detail = "") => {
 const TODOS = ["muestras", "ensayos", "informes", "equipos", "inventario", "calidad", "usuarios"];
 /* Modulos con V (efectiva) de cada rol; "usuarios:propio" oculta Roles. */
 const USUARIOS = [
-  ["Administrador técnico del sistema", "jorge.ramirez@ficotox.local", ["usuarios", "muestras", "equipos", "calidad:bitacora"]],
-  ["Responsable General", "patricia.luna@ficotox.local", TODOS],
-  ["Coordinador/a de Mejora Continua", "ana.torres@ficotox.local", TODOS],
+  ["Administrador técnico del sistema", "jorge.ramirez@ficotox.local", ["usuarios", "muestras", "equipos", "calidad:bitacora", "respaldos"]],
+  ["Responsable General", "patricia.luna@ficotox.local", [...TODOS, "respaldos"]],
+  ["Coordinador/a de Mejora Continua", "ana.torres@ficotox.local", [...TODOS, "respaldos"]],
   ["Coordinador/a del Área Técnica", "ricardo.medina@ficotox.local", TODOS],
   ["Coordinador/a de Investigación y Desarrollo", "gabriela.ortiz@ficotox.local", TODOS],
   ["Técnico Analista", "luis.castro@ficotox.local", ["usuarios:propio", "muestras", "ensayos", "informes", "equipos", "inventario", "calidad:incidencias"]],
   ["Técnico Auxiliar", "mariana.delgado@ficotox.local", ["usuarios:propio", "muestras", "ensayos", "equipos", "inventario", "calidad:incidencias"]],
   ["Administrador/a Auxiliar", "carmen.aguilar@ficotox.local", ["usuarios:propio", "muestras", "equipos", "inventario", "calidad:incidencias"]],
-  ["Auditor Interno", "hector.navarro@ficotox.local", TODOS],
+  ["Auditor Interno", "hector.navarro@ficotox.local", [...TODOS, "respaldos"]],
   ["Estudiante / personal en formación", "diego.salinas@ficotox.local", ["usuarios:propio", "muestras", "ensayos", "equipos", "inventario", "calidad:incidencias"]],
 ];
 
@@ -94,14 +94,16 @@ function enlacesEsperados(modulos) {
   if (set.has("equipos")) ["/inventario/equipos", "/inventario/mantenimiento"].forEach((h) => out.add(h));
   if (set.has("calidad") && calidad !== "incidencias") out.add("/auditoria");
   if (set.has("calidad") && calidad !== "bitacora") out.add("/calidad/incidencias");
-  // Fase 7: Documentos encendido (Calidad › Documentos) para quien ve documentos.
-  if (set.has("documentos")) out.add("/documentos");
+  // Documentos SGC (grupo propio del menú, reemplaza a la Biblioteca) con sus subitems, para quien tiene acciones documentales (o administra usuarios: diagnostico).
+  // Documentos SGC: las carpetas las ven quien tiene documentos:V o administra usuarios (diagnostico); los subitems solo con documentos:V.
+  if (set.has("documentos") || set.has("usuarios")) out.add("/documentos");
+  if (set.has("documentos")) ["/documentos/bandeja", "/documentos/solicitudes", "/documentos/externos", "/documentos/lista-maestra"].forEach((h) => out.add(h));
+  // Calidad › Respaldos (respaldos:V: Admin tecnico, Responsable General, Mejora Continua y Auditor Interno).
+  if (set.has("respaldos")) out.add("/calidad/respaldos");
   if (set.has("usuarios")) {
+    // Revision de accesos se integro en Usuarios y la pantalla Respaldos se retiro.
     out.add("/administracion/usuarios");
-    out.add("/administracion/accesos");
     if (!propio) out.add("/administracion/roles");
-    // Fase 10: Respaldos para usuarios:G o calidad:V (en el catalogo, todo rol que ve calidad tambien ve usuarios).
-    if (set.has("calidad") && calidad !== "incidencias") out.add("/administracion/respaldos");
   }
   return out;
 }
@@ -127,12 +129,12 @@ try {
       await aside.locator("nav a").first().waitFor();
       await page.waitForLoadState("networkidle");
       const hrefs = new Set(await aside.locator("a").evaluateAll((links) => links.map((a) => new URL(a.href).pathname)));
-      // Fase 7: todos los roles del catalogo ven documentos (documentos:V con su alcance).
-      const esperados = enlacesEsperados([...modulos, "documentos"]);
+      // Todos los roles del catalogo tienen documentos:V (acciones documentales), salvo el administrador tecnico (solo diagnostico con usuarios:G).
+      const esperados = enlacesEsperados(rol.startsWith("Administrador técnico") ? modulos : [...modulos, "documentos"]);
       const sobran = [...hrefs].filter((h) => !esperados.has(h));
       const faltan = [...esperados].filter((h) => !hrefs.has(h));
       check(`${rol}: menu con solo sus modulos`, !sobran.length && !faltan.length, `sobran=[${sobran.join(", ")}] faltan=[${faltan.join(", ")}]`);
-      check(`${rol}: Documentos aparece (modulo encendido; todos los roles ven documentos)`, [...hrefs].includes("/documentos"));
+      check(`${rol}: «Documentos SGC» aparece en el menú y ya no «Biblioteca»`, [...hrefs].includes("/documentos") && (await aside.locator('nav a[href="/documentos"]', { hasText: /^Documentos SGC\d*$/ }).count()) > 0 && !hrefs.has("/calidad/biblioteca") && (await aside.locator("nav a", { hasText: /^Biblioteca$/ }).count()) === 0);
 
       for (const [ruta, texto, visible] of BOTONES[rol] || []) {
         await page.goto(`${BASE}${ruta}`);

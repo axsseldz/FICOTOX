@@ -2,25 +2,56 @@
 
 import { Suspense, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowCounterClockwise, ArrowsClockwise, IdentificationCard, Package, PencilSimple, Plus, Trash, UploadSimple } from "@phosphor-icons/react";
-import { IncidenciasDelRegistro } from "@/components/features/calidad/IncidenciasDelRegistro";
+import { ArrowCounterClockwise, ArrowsClockwise, Package, PencilSimple, Plus, Trash } from "@phosphor-icons/react";
 import { useMenuReportar } from "@/components/features/calidad/ReportarIncidencia";
-import { DetailSheet } from "@/components/features/inventory/DetailSheet";
-import { ConsumibleSheet, ImportConsumiblesSheet } from "@/components/features/inventory/ConsumibleSheet";
+import { Caducidad, IconoConsumible } from "@/components/features/inventory/ventanas/comun";
+import { InsumoVentana } from "@/components/features/inventory/ventanas/InsumoVentana";
+import { ConsumibleSheet } from "@/components/features/inventory/ConsumibleSheet";
 import { StockRefillSheet, type StockRefillTarget } from "@/components/features/inventory/StockRefillSheet";
 import { RequireModule } from "@/components/session/RequireModule";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
-import { FilterChips, FilterMenu, type FilterGroup, type FilterToggle } from "@/components/ui/FilterMenu";
+import { FilterMenu, type FilterGroup, type FilterToggle } from "@/components/ui/FilterMenu";
+import { ListaCuadricula, type ColumnaLista } from "@/components/ui/ListaCuadricula";
 import { ActionMenu, usePrompt, type MenuItem } from "@/components/ui/Overlay";
 import { SearchInput, Toolbar } from "@/components/ui/PageHeader";
-import { Badge, EmptyState, ErrorState, StockMeter, TableSkeleton } from "@/components/ui/Primitives";
-import { CellPrimary, Table, TBody, Td, Th, THead, Tr, TableShell } from "@/components/ui/Table";
+import { Badge, StockMeter, TableSkeleton } from "@/components/ui/Primitives";
 import { API_BASE_URL, getJsonAuth, resolveApiEntity, sendJsonAuth } from "@/lib/client/api";
-import { fmt, fmtDate, fmtDateTime, parseNumberOrNull } from "@/lib/client/format";
-import { useDebouncedValue, useInitialParam, useOpenState, useParamChange, useUrlTrigger } from "@/lib/client/hooks";
+import { fmt, parseNumberOrNull } from "@/lib/client/format";
+import { useDebouncedValue, useInitialParam, useOpenState, useParamChange, useUrlTrigger, useAbrirDesdeUrl } from "@/lib/client/hooks";
 import { invalidate, useResource } from "@/lib/client/store";
 import type { ApiRecord } from "@/lib/client/types";
+
+/* Columnas fijas: producto y marca, ubicacion, caducidad en color y existencia en unidades con barra. */
+const COLUMNAS: ColumnaLista[] = [
+  { clave: "producto", titulo: "Producto", ancho: "minmax(260px,1.7fr)" },
+  { clave: "ubicacion", titulo: "Ubicación", ancho: "minmax(140px,0.8fr)" },
+  { clave: "caducidad", titulo: "Caducidad", ancho: "150px" },
+  { clave: "existencia", titulo: "Existencia", ancho: "minmax(180px,1fr)" },
+];
+
+function celdasConsumible(item: ApiRecord) {
+  const pieces = parseNumberOrNull(item.existencia) ?? 0;
+  const max = parseNumberOrNull(item.stock_maximo) || pieces;
+  const inactive = Number(item.activo ?? 1) === 0;
+  const ubicacion = item.localizacion || item.ubicacion;
+  const minimo = parseNumberOrNull(item.stock_minimo) || 5;
+  return [
+    <span key="p" className={inactive ? "flex min-w-0 items-center gap-3 opacity-60" : "flex min-w-0 items-center gap-3"}>
+      <IconoConsumible producto={item.producto} />
+      <span className="flex min-w-0 flex-col">
+        <span className="text-[14.5px] leading-tight font-semibold text-ink">
+          {String(item.producto || "—")}
+          {inactive ? <Badge tone="danger" className="ml-2 align-middle">Baja</Badge> : null}
+        </span>
+        <span className="text-[12.5px] text-ink-3">{[item.marca, item.tamano_capacidad || item.contenedor].filter(Boolean).join(" · ") || "Sin marca"}</span>
+      </span>
+    </span>,
+    <span key="u" className="text-[13.5px] text-ink-2">{ubicacion ? String(ubicacion) : <span className="text-ink-4">—</span>}</span>,
+    <Caducidad key="c" value={item.caducidad} />,
+    <StockMeter key="e" current={pieces} max={max} min={minimo} unit="unidades" low={pieces <= minimo} />,
+  ];
+}
 
 export default function ConsumiblesPage() {
   return (
@@ -33,8 +64,9 @@ export default function ConsumiblesPage() {
 }
 
 type Filter = "todos" | "bajo" | "agotado";
+type Orden = "nombre" | "existencia";
 
-const piecesOf = (item: ApiRecord) => Number(item.piezas || 0);
+const piecesOf = (item: ApiRecord) => Number(item.existencia || 0);
 
 function ConsumiblesContent() {
   const { token, can } = useSession();
@@ -45,9 +77,9 @@ function ConsumiblesContent() {
   const debounced = useDebouncedValue(search);
   const [showBajas, setShowBajas] = useState(initialFilter === "bajas");
   const modal = useOpenState<ApiRecord>();
-  const importSheet = useOpenState();
   const refill = useOpenState<StockRefillTarget>();
-  const detail = useOpenState<ApiRecord>();
+  const [abierta, setAbierta] = useState<number | null>(null);
+  const [orden, setOrden] = useState<Orden>("nombre");
 
   useParamChange("buscar", (value) => setSearch(value));
   useParamChange("filtro", (value) => {
@@ -69,30 +101,21 @@ function ConsumiblesContent() {
     if (can("inventario", "C", { objeto: "catalogo_inventario" })) modal.open(null);
   });
 
-  const counts = useMemo(() => {
-    const list = items || [];
-    return {
-      total: list.length,
-      low: list.filter((item) => piecesOf(item) <= 5).length,
-      out: list.filter((item) => piecesOf(item) <= 0).length,
-    };
-  }, [items]);
-
   const visible = useMemo(() => {
-    const list = items || [];
-    if (filter === "bajo") return list.filter((item) => piecesOf(item) <= 5);
-    if (filter === "agotado") return list.filter((item) => piecesOf(item) <= 0);
-    return list;
-  }, [items, filter]);
+    let list = items || [];
+    if (filter === "bajo") list = list.filter((item) => piecesOf(item) <= (parseNumberOrNull(item.stock_minimo) || 5));
+    if (filter === "agotado") list = list.filter((item) => piecesOf(item) <= 0);
+    if (orden === "existencia") return [...list].sort((a, b) => piecesOf(a) - piecesOf(b));
+    return [...list].sort((a, b) => String(a.producto || "").localeCompare(String(b.producto || ""), "es"));
+  }, [items, filter, orden]);
+  useAbrirDesdeUrl(items ? visible : null, setAbierta);
 
   const editConsumable = async (id: number) => {
     try {
       const data = await getJsonAuth(`${API_BASE_URL}/consumables/${id}`, token);
-      detail.close();
       modal.open(resolveApiEntity(data));
     } catch {
       const fallback = (items || []).find((row) => Number(row.id) === id);
-      detail.close();
       if (fallback) modal.open(fallback);
       else toast.error("No se pudo cargar el consumible");
     }
@@ -105,7 +128,6 @@ function ConsumiblesContent() {
     try {
       await sendJsonAuth("DELETE", `${API_BASE_URL}/consumables/${item.id}`, token, { motivo });
       toast.success("Consumible dado de baja");
-      detail.close();
       invalidate("consumibles", "dashboard");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo dar de baja");
@@ -118,7 +140,6 @@ function ConsumiblesContent() {
     try {
       await sendJsonAuth("POST", `${API_BASE_URL}/consumables/${item.id}/reactivar`, token, { motivo });
       toast.success("Consumible reactivado");
-      detail.close();
       invalidate("consumibles", "dashboard");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo reactivar");
@@ -131,36 +152,48 @@ function ConsumiblesContent() {
   const canBaja = can("inventario", "AN");
   const canReactivar = can("inventario", "G");
 
-  const selected = detail.payload;
-  const selectedInactive = selected ? Number(selected.activo ?? 1) === 0 : false;
-  const selectedPieces = selected ? parseNumberOrNull(selected.piezas) ?? 0 : 0;
-  const selectedMax = selected ? parseNumberOrNull(selected.stock_maximo) || selectedPieces : 0;
-
   const groups: FilterGroup[] = [
     {
-      key: "piezas",
-      label: "Piezas",
+      key: "existencia",
+      label: "Existencia",
       value: filter,
       defaultValue: "todos",
       onChange: (v) => setFilter(v as Filter),
       options: [
-        { value: "todos", label: "Todos", count: items ? counts.total : null },
-        { value: "bajo", label: "5 piezas o menos", count: items ? counts.low : null, tone: counts.low ? "warning" : "neutral" },
-        { value: "agotado", label: "Agotados", count: items ? counts.out : null, tone: counts.out ? "danger" : "neutral" },
+        { value: "todos", label: "Todos" },
+        { value: "bajo", label: "Stock bajo" },
+        { value: "agotado", label: "Agotados" },
       ],
     },
   ];
-  const toggles: FilterToggle[] = [{ key: "bajas", label: "Mostrar bajas", description: "Incluye consumibles dados de baja.", checked: showBajas, onChange: setShowBajas }];
+  const toggles: FilterToggle[] = [{ key: "bajas", label: "Mostrar bajas", group: "Vista", checked: showBajas, onChange: setShowBajas }];
+  const ordenar: FilterGroup[] = [
+    {
+      key: "orden",
+      label: "Ordenar por",
+      value: orden,
+      defaultValue: "nombre",
+      showDefault: true,
+      onChange: (v) => setOrden(v as Orden),
+      options: [
+        { value: "nombre", label: "Nombre A–Z" },
+        { value: "existencia", label: "Menos unidades primero" },
+      ],
+    },
+  ];
 
   const reportar = useMenuReportar();
+  const reponer = (item: ApiRecord) => refill.open({ type: "consumible", id: Number(item.id), name: String(item.producto || "Consumible") });
+  // Desde la búsqueda ("reponer metanol"): ?reponer=<id> abre la reposición de ese registro.
+  useAbrirDesdeUrl(items ? visible : null, (indice) => (canRellenar ? reponer(visible[indice]) : undefined), "reponer");
   const menuFor = (item: ApiRecord): MenuItem[] => {
     const inactive = Number(item.activo ?? 1) === 0;
-    const list: MenuItem[] = [{ label: "Ver ficha", description: "Piezas, presentación y resguardo", icon: <IdentificationCard size={16} weight="duotone" />, tone: "brand", onSelect: () => detail.open(item) }];
-    if (canRellenar && !inactive) list.push({ label: "Rellenar stock", description: "Registrar una entrada de piezas", icon: <ArrowsClockwise size={16} weight="duotone" />, tone: "success", onSelect: () => refill.open({ type: "consumible", id: Number(item.id), name: String(item.producto || "Consumible") }) });
+    const list: MenuItem[] = [];
+    if (canRellenar && !inactive) list.push({ label: "Registrar movimiento", description: "Entrada, salida, consumo o ajuste por conteo", icon: <ArrowsClockwise size={16} weight="duotone" />, tone: "success", onSelect: () => reponer(item) });
     if (canEditar) list.push({ label: "Editar", description: "Cambiar datos del consumible", icon: <PencilSimple size={16} weight="duotone" />, onSelect: () => editConsumable(Number(item.id)) });
     list.push(...reportar("consumibles", item.id, String(item.producto || "Consumible")));
     if (inactive ? canReactivar : canBaja) {
-      if (inactive) list.push({ label: "Reactivar consumible…", description: "Vuelve al inventario con motivo", icon: <ArrowCounterClockwise size={16} weight="duotone" />, tone: "warning", separatorBefore: true, onSelect: () => reactivarConsumable(item) });
+      if (inactive) list.push({ label: "Reactivar…", description: "Vuelve al inventario con motivo", icon: <ArrowCounterClockwise size={16} weight="duotone" />, tone: "warning", separatorBefore: true, onSelect: () => reactivarConsumable(item) });
       else list.push({ label: "Dar de baja…", description: "Deja de ofrecerse; conserva su historial", icon: <Trash size={16} weight="duotone" />, tone: "danger", separatorBefore: true, onSelect: () => deleteConsumable(item) });
     }
     return list;
@@ -172,11 +205,6 @@ function ConsumiblesContent() {
         end={
           <>
             {canCreate ? (
-              <Button variant="secondary" icon={<UploadSimple size={16} />} onClick={() => importSheet.open()}>
-                Importar
-              </Button>
-            ) : null}
-            {canCreate ? (
               <Button icon={<Plus size={16} weight="bold" />} onClick={() => modal.open(null)}>
                 Nuevo consumible
               </Button>
@@ -185,139 +213,45 @@ function ConsumiblesContent() {
         }
       >
         <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre o marca" className="w-full md:w-[340px]" />
-        <FilterMenu groups={groups} toggles={toggles} />
-        <FilterChips groups={groups} toggles={toggles} />
+        <FilterMenu groups={groups} toggles={toggles} gruposFinales={ordenar} vistaAlFinal />
       </Toolbar>
 
-      <TableShell footer={items ? `${fmt(visible.length)} consumibles${filter !== "todos" ? " en este filtro" : ""}` : undefined}>
-        {resource.error ? (
-          <ErrorState message={resource.error} onRetry={resource.reload} />
-        ) : !items ? (
-          <TableSkeleton cols={6} />
-        ) : !visible.length ? (
-          <EmptyState icon={<Package size={20} />} title={search || filter !== "todos" ? "Sin coincidencias" : "Aún no hay consumibles"} description={search || filter !== "todos" ? "Prueba con otro término o cambia el filtro." : "Crea el primero o importa desde CSV o Excel."} action={canCreate && !search && filter === "todos" ? <Button onClick={() => modal.open(null)}>Nuevo consumible</Button> : undefined} />
-        ) : (
-          <Table>
-            <THead>
-              <tr>
-                <Th>Producto</Th>
-                <Th>Marca / proveedor</Th>
-                <Th>Presentación</Th>
-                <Th>Piezas</Th>
-                <Th align="right" sticky />
-              </tr>
-            </THead>
-            <TBody>
-              {visible.map((item) => {
-                const pieces = parseNumberOrNull(item.piezas) ?? 0;
-                const max = parseNumberOrNull(item.stock_maximo) || pieces;
-                const inactive = Number(item.activo ?? 1) === 0;
-                return (
-                  <Tr key={item.id} interactive onClick={() => detail.open(item)} className={inactive ? "opacity-60" : undefined}>
-                    <Td className="max-w-[360px]">
-                      <div className="flex items-center gap-2">
-                        {inactive ? <Badge tone="danger">Baja</Badge> : null}
-                        <CellPrimary title={item.producto || "-"} subtitle={[item.catalogo_parte_cas, item.cantidad_por_pieza ? `${fmt(item.cantidad_por_pieza)} por pieza` : null].filter(Boolean).join(" · ")} />
-                      </div>
-                    </Td>
-                    <Td muted>{[item.marca, item.proveedor].filter(Boolean).join(" / ") || "—"}</Td>
-                    <Td muted>{[item.tamano_capacidad, item.contenedor].filter(Boolean).join(" · ") || "—"}</Td>
-                    <Td>
-                      <StockMeter current={pieces} max={max} min={5} unit="piezas" low={pieces <= 5} />
-                    </Td>
-                    <Td align="right" sticky onClick={(event) => event.stopPropagation()}>
-                      <ActionMenu items={menuFor(item)} header={String(item.producto || "")} />
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </TBody>
-          </Table>
+      <ListaCuadricula
+        etiqueta="Consumibles"
+        columnas={COLUMNAS}
+        filas={items ? visible : null}
+        error={resource.error}
+        onReintentar={resource.reload}
+        clave={(item) => String(item.id)}
+        onAbrir={(_, i) => setAbierta(i)}
+        activa={(_, i) => abierta === i}
+        celdas={celdasConsumible}
+        extremo={(item) => (
+          <span className="w-9">
+            <ActionMenu items={menuFor(item)} header={String(item.producto || "")} />
+          </span>
         )}
-      </TableShell>
+        anchoExtremo="52px"
+        propsFila={(item) => ({ "data-consumible": String(item.id) })}
+        vacio={{
+          icono: <Package size={20} />,
+          titulo: search || filter !== "todos" ? "Sin coincidencias" : "Aún no hay consumibles",
+          descripcion: search || filter !== "todos" ? "Prueba con otro término o cambia el filtro." : "Crea el primero con «Nuevo consumible».",
+          accion: canCreate && !search && filter === "todos" ? <Button onClick={() => modal.open(null)}>Nuevo consumible</Button> : undefined,
+        }}
+      />
+      {items && visible.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-3">{visible.length === 1 ? "1 consumible" : `${fmt(visible.length)} consumibles`}</p> : null}
 
-      {selected ? (
-        <DetailSheet
-          extra={
-            <section className="flex flex-col gap-1.5">
-              <h3 className="eyebrow px-1 text-ink-3">Incidencias</h3>
-              <IncidenciasDelRegistro entidad="consumibles" id={selected.id} etiqueta={String(selected.producto || "Consumible")} />
-            </section>
-          }
-          open={detail.isOpen}
-          onOpenChange={(open) => {
-            if (!open) detail.close();
-          }}
-          title={String(selected.producto || "Consumible")}
-          subtitle={[selected.marca, selected.proveedor].filter(Boolean).join(" / ") || undefined}
-          badges={selectedInactive ? <Badge tone="danger">Baja</Badge> : selectedPieces <= 0 ? <Badge tone="danger">Agotado</Badge> : selectedPieces <= 5 ? <Badge tone="warning">Stock bajo</Badge> : null}
-          hero={
-            <div className="rounded-[14px] bg-surface-2 p-4 ring-1 ring-line">
-              <p className="text-[12.5px] text-ink-3">Piezas disponibles</p>
-              <p className="tnum mt-0.5 text-[26px] font-semibold tracking-[-0.02em] text-ink">
-                {fmt(selectedPieces)} <span className="text-[15px] font-medium text-ink-3">de {fmt(selectedMax)}</span>
-              </p>
-              <StockMeter className="mt-3" size="lg" current={selectedPieces} max={selectedMax} min={5} unit="piezas" low={selectedPieces <= 5} label="Aviso de stock bajo con 5 piezas o menos" />
-            </div>
-          }
-          groups={[
-            {
-              title: "Identificación",
-              rows: [
-                { label: "Catálogo / parte", value: selected.catalogo_parte_cas, mono: true },
-                { label: "Marca", value: selected.marca },
-                { label: "Proveedor", value: selected.proveedor },
-                { label: "Cantidad por pieza", value: selected.cantidad_por_pieza ? fmt(selected.cantidad_por_pieza) : null },
-              ],
-            },
-            {
-              title: "Presentación y resguardo",
-              rows: [
-                { label: "Tamaño / capacidad", value: selected.tamano_capacidad },
-                { label: "Contenedor", value: selected.contenedor },
-                { label: "Ubicación", value: selected.ubicacion || selected.localizacion },
-                { label: "Fecha de ingreso", value: selected.fecha_ingreso ? fmtDate(selected.fecha_ingreso) : null },
-                { label: "Stock máximo", value: selected.stock_maximo ? fmt(selected.stock_maximo) : null },
-              ],
-            },
-            {
-              title: "Baja",
-              rows: [
-                { label: "Motivo", value: selectedInactive ? selected.baja_motivo : null },
-                { label: "Fecha", value: selectedInactive && selected.baja_en ? fmtDateTime(selected.baja_en) : null },
-              ],
-            },
-          ]}
-          actions={
-            <>
-              {(selectedInactive ? canReactivar : canBaja) ? (
-                selectedInactive ? (
-                  <Button variant="secondary" icon={<ArrowCounterClockwise size={16} />} onClick={() => reactivarConsumable(selected)}>
-                    Reactivar
-                  </Button>
-                ) : (
-                  <Button variant="ghost" className="mr-auto text-danger hover:bg-danger-soft hover:text-danger" icon={<Trash size={16} />} onClick={() => deleteConsumable(selected)}>
-                    Dar de baja
-                  </Button>
-                )
-              ) : null}
-              {canRellenar && !selectedInactive ? (
-                <Button variant="secondary" icon={<ArrowsClockwise size={16} />} onClick={() => refill.open({ type: "consumible", id: Number(selected.id), name: String(selected.producto || "Consumible") })}>
-                  Rellenar
-                </Button>
-              ) : null}
-              {canEditar ? (
-                <Button icon={<PencilSimple size={16} />} onClick={() => editConsumable(Number(selected.id))}>
-                  Editar
-                </Button>
-              ) : null}
-            </>
-          }
-        />
-      ) : null}
+      <InsumoVentana
+        tipo="consumible"
+        items={visible}
+        indice={abierta !== null && abierta < visible.length ? abierta : null}
+        onIndice={setAbierta}
+        onCerrar={() => setAbierta(null)}
+        acciones={{ puedeReponer: canRellenar, puedeEditar: canEditar, puedeBaja: canBaja, puedeReactivar: canReactivar, reponer, editar: (item) => editConsumable(Number(item.id)), darDeBaja: deleteConsumable, reactivar: reactivarConsumable }}
+      />
 
       {modal.key ? <ConsumibleSheet key={`modal-${modal.key}`} open={modal.isOpen} item={modal.payload} onClose={modal.close} /> : null}
-      {importSheet.key ? <ImportConsumiblesSheet key={`import-${importSheet.key}`} open={importSheet.isOpen} onClose={importSheet.close} /> : null}
       {refill.key ? <StockRefillSheet key={`refill-${refill.key}`} open={refill.isOpen} target={refill.payload} onClose={refill.close} /> : null}
     </>
   );

@@ -84,15 +84,15 @@ try {
     const { context, page } = await entrar(RICARDO, credenciales[RICARDO]);
     try {
       await page.goto(`${BASE}/administracion/usuarios`);
-      const fila = page.locator("tbody tr").filter({ hasText: /Luis Fernando/ }).first();
+      // Usuarios minimalista: al pulsar a la persona se abre su ventana (General, Roles, Autorizaciones).
+      const fila = page.locator("[data-usuario]").filter({ hasText: /Luis Fernando/ }).first();
       await fila.waitFor();
-      await fila.getByRole("button", { name: "Acciones" }).click();
-      await page.getByRole("menuitem", { name: /Ver ficha|Editar/ }).click();
-      await page.getByRole("radio", { name: "Autorizaciones (FX-THF-AP)" }).click();
+      await fila.locator("button[aria-haspopup=dialog]").click();
+      await page.getByRole("tab", { name: "Autorizaciones" }).click();
       const panel = page.locator("#autorizaciones-usuario");
       await panel.getByText("FX-THF-AP-DEMO").first().waitFor();
-      check("la ficha muestra la pestaña de autorizaciones con las del seed", true);
-      check("quien administra ve el boton Agregar", (await page.locator("#aut-agregar").count()) > 0);
+      check("la ventana muestra la pestaña de autorizaciones con las del seed", true);
+      check("quien administra ve el boton Agregar", (await panel.getByRole("button", { name: "Agregar" }).count()) > 0);
     } catch (error) {
       check("pestaña de autorizaciones", false, error.message);
       await captura(page);

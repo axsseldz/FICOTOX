@@ -1,22 +1,5 @@
-import type { PageKey } from "./types";
-import { LEGACY_RECEPTION_METHODS, LEGACY_RECEPTION_SAMPLE_TYPES, RECEPTION_ANALYSIS_TYPES, RECEPTION_INSPECTION_REQUIREMENTS, RECEPTION_METHODS, RECEPTION_SAMPLE_TYPES } from "../shared/sgc";
 
 /* Catalogos y metadatos de la interfaz; los de recepcion salen del formato oficial (src/lib/shared/sgc.ts). */
-
-export const IMPORT_COLUMNS = [
-  "producto",
-  "marca",
-  "proveedor",
-  "catalogo_parte_cas",
-  "fecha_ingreso",
-  "tamano_capacidad",
-  "contenedor",
-  "piezas",
-  "cantidad_por_pieza",
-] as const;
-
-/* Texto integro del formato FX-TCF-GMR (los registros viejos con el texto anterior se muestran tal cual). */
-export const INSPECCION_REQUIREMENTS = RECEPTION_INSPECTION_REQUIREMENTS;
 
 export interface ReactivoTypeConfig {
   value: string;
@@ -25,55 +8,41 @@ export interface ReactivoTypeConfig {
   fields: string[];
 }
 
+/* Todas las categorías de reactivos comparten el mismo conjunto de campos; las columnas cromatográficas tienen el suyo, sin cantidades. */
+export const REACTIVO_CAMPOS_COMUNES = [
+  "id_interno",
+  "producto",
+  "marca",
+  "proveedor",
+  "catalogo",
+  "cas",
+  "lote",
+  "localizacion",
+  "contenedor",
+  "capacidad",
+  "unidad_capacidad",
+  "piezas",
+  "fecha_ingreso",
+  "fecha_apertura",
+  "caducidad",
+  "stock_minimo",
+  "observaciones",
+];
+export const REACTIVO_CAMPOS_COLUMNA = ["id_interno", "producto", "marca", "proveedor", "localizacion", "lote", "parte", "serie", "descripcion", "fecha_ingreso", "fecha_apertura", "nuevo_usado", "metodo", "observaciones"];
+
+export const CONTENEDORES_REACTIVO = ["Botella", "Botella de vidrio ámbar", "Botella de plástico", "Ampolleta", "Vial", "Bidón", "Sobre", "Otro"];
+export const UNIDADES_REACTIVO = ["L", "mL", "kg", "g"];
+export const CONTENEDORES_CONSUMIBLE = ["Caja", "Bolsa", "Rollo", "Bote", "Otro"];
+
 export const REACTIVO_TYPES: ReactivoTypeConfig[] = [
-  {
-    value: "acidos",
-    label: "Ácidos",
-    hint: "Registro principal de ácidos: identificación, proveedor, caducidad, contenedor y existencia en litros.",
-    fields: ["id_interno", "producto", "marca", "proveedor", "catalogo_parte_cas_lote", "caducidad", "fecha_apertura", "fecha_ingreso", "contenedor", "capacidad_litros", "piezas", "total_litros_2025"],
-  },
-  {
-    value: "alcoholes_solventes",
-    label: "Alcoholes y solventes orgánicos",
-    hint: "Incluye localización física, caducidad y remanente para solventes de uso frecuente.",
-    fields: ["id_interno", "producto", "marca", "proveedor", "catalogo_parte_cas_lote", "localizacion", "caducidad", "fecha_apertura", "fecha_ingreso", "contenedor", "capacidad_litros", "piezas", "total_litros_2025", "restante_190126"],
-  },
-  {
-    value: "compuestos_amonio",
-    label: "Compuestos de Amonio",
-    hint: "Control de sales y compuestos de amonio con contenedor, piezas y capacidad.",
-    fields: ["id_interno", "producto", "marca", "proveedor", "catalogo_parte_cas_lote", "caducidad", "fecha_apertura", "fecha_ingreso", "contenedor", "capacidad_litros", "piezas", "total_litros_2025"],
-  },
-  {
-    value: "compuestos_sodio",
-    label: "Compuestos de Sodio",
-    hint: "Registro de compuestos sólidos con capacidad en kilos.",
-    fields: ["id_interno", "producto", "marca", "proveedor", "catalogo_parte_cas_lote", "caducidad", "fecha_apertura", "fecha_ingreso", "contenedor", "capacidad_kilos", "piezas", "total_litros_2025"],
-  },
-  {
-    value: "estandares_preparados",
-    label: "Estándares preparados",
-    hint: "Formato corto para preparaciones internas y notas de preparación.",
-    fields: ["item_name", "localizacion", "sub_localizacion", "fecha_preparacion", "informacion_extra"],
-  },
-  {
-    value: "materiales_referencia",
-    label: "Materiales de Referencia",
-    hint: "Control de CRM por lote, proveedor, método, estado, volumen y URL.",
-    fields: ["id_interno", "nombre_crm", "lot_number", "proveedor", "localizacion", "url", "metodo", "caducidad", "fecha_apertura", "estado_reactivo", "volumen"],
-  },
-  {
-    value: "miscelaneos",
-    label: "Misceláneos",
-    hint: "Registro flexible para sustancias, presentaciones y materiales no clasificados.",
-    fields: ["item_name", "vendor", "catalogo", "localizacion", "sub_localizacion", "amount_in_stock", "expiration_date", "lot_number", "cas_number", "bottle_tag_color", "date_opened", "fecha_ingreso", "formula", "id_interno", "physical_state", "presentacion", "tipo_sustancia", "observaciones"],
-  },
-  {
-    value: "columnas_cromatograficas",
-    label: "Columnas cromatográficas",
-    hint: "Registro técnico de columnas por lote, parte, serie, método y condición de uso.",
-    fields: ["id_interno", "producto", "marca", "proveedor", "localizacion", "lote", "parte", "serie", "descripcion", "fecha_ingreso", "fecha_apertura", "nuevo_usado", "metodo", "observaciones"],
-  },
+  { value: "acidos", label: "Ácidos", hint: "Ácidos del laboratorio: identificación, proveedor, contenedor, capacidad y caducidad.", fields: REACTIVO_CAMPOS_COMUNES },
+  { value: "alcoholes_solventes", label: "Alcoholes y solventes orgánicos", hint: "Alcoholes y solventes orgánicos, con su localización en el laboratorio.", fields: REACTIVO_CAMPOS_COMUNES },
+  { value: "compuestos_amonio", label: "Compuestos de Amonio", hint: "Sales y compuestos de amonio.", fields: REACTIVO_CAMPOS_COMUNES },
+  { value: "compuestos_sodio", label: "Compuestos de Sodio", hint: "Compuestos de sodio (la capacidad suele ir en kg).", fields: REACTIVO_CAMPOS_COMUNES },
+  { value: "estandares_preparados", label: "Estándares preparados", hint: "Preparaciones internas.", fields: REACTIVO_CAMPOS_COMUNES },
+  { value: "materiales_referencia", label: "Materiales de Referencia", hint: "Materiales de referencia certificados (CRM).", fields: REACTIVO_CAMPOS_COMUNES },
+  { value: "miscelaneos", label: "Misceláneos", hint: "Sustancias y materiales que no caen en otra categoría.", fields: REACTIVO_CAMPOS_COMUNES },
+  { value: "columnas_cromatograficas", label: "Columnas cromatográficas", hint: "Columnas por lote, parte, serie, condición y método. No llevan cantidad ni existencias.", fields: REACTIVO_CAMPOS_COLUMNA },
 ];
 
 export interface ReactivoFieldMeta {
@@ -86,152 +55,43 @@ export interface ReactivoFieldMeta {
   wide?: boolean;
   options?: string[];
   target?: string;
+  hint?: string;
 }
 
 export const REACTIVO_FIELD_META: Record<string, ReactivoFieldMeta> = {
+  id_interno: { label: "ID interno" },
   producto: { label: "Producto", required: true },
   marca: { label: "Marca" },
-  proveedor: { label: "Proveedor" },
-  catalogo_parte_cas_lote: { label: "#catálogo / #parte / CAS / lote" },
+  proveedor: { label: "Proveedor", hint: "Puede ser distinto de la marca." },
+  catalogo: { label: "Número de catálogo" },
+  cas: { label: "CAS" },
+  lote: { label: "Lote" },
   localizacion: { label: "Localización" },
-  sub_localizacion: { label: "Sub-location" },
-  caducidad: { label: "Caducidad", type: "date" },
-  fecha_apertura: { label: "Fecha de apertura", type: "date" },
+  contenedor: { label: "Contenedor", options: CONTENEDORES_REACTIVO },
+  capacidad: { label: "Capacidad por envase", type: "number", step: "any", min: "0" },
+  unidad_capacidad: { label: "Unidad", options: UNIDADES_REACTIVO },
+  piezas: { label: "Piezas", type: "number", step: "any", min: "0", hint: "Número de envases; acepta decimales." },
   fecha_ingreso: { label: "Fecha de ingreso", type: "date" },
-  contenedor: { label: "Contenedor" },
-  /* Columnas heredadas del Excel: informativas; la existencia real vive en "Existencias". */
-  capacidad_litros: { label: "Capacidad del envase (litros)", type: "number", step: "0.0001", min: "0" },
-  capacidad_kilos: { label: "Capacidad del envase (kilos)", type: "number", step: "0.0001", min: "0" },
-  piezas: { label: "Envases (piezas)", type: "number", step: "1", min: "0" },
-  total_litros_2025: { label: "Total en litros 2025", type: "number", step: "0.0001", min: "0" },
-  restante_190126: { label: "Restante al 19/01/26", type: "number", step: "0.0001", min: "0" },
-  lote: { label: "# Lote" },
-  parte: { label: "# Parte" },
-  serie: { label: "# Serie" },
-  descripcion: { label: "Descripción", textarea: true, wide: true },
-  nuevo_usado: { label: "Nuevo o usado", options: ["Nuevo", "Usado"] },
-  metodo: { label: "Método" },
+  fecha_apertura: { label: "Fecha de apertura", type: "date" },
+  caducidad: { label: "Caducidad", type: "date" },
+  stock_minimo: { label: "Stock mínimo", type: "number", step: "any", min: "0", hint: "Opcional, en la misma unidad. Al llegar a esta cantidad aparece el aviso de stock bajo." },
   observaciones: { label: "Observaciones", textarea: true, wide: true },
-  item_name: { label: "Item Name", required: true },
-  fecha_preparacion: { label: "Fecha de preparación", type: "date" },
-  informacion_extra: { label: "Información extra", textarea: true, wide: true },
-  nombre_crm: { label: "Nombre del CRM", required: true },
-  lot_number: { label: "Lot Number" },
-  url: { label: "URL", type: "url", wide: true },
-  estado_reactivo: { label: "Estado", options: ["Nuevo", "Abierto"] },
-  volumen: { label: "Volumen", type: "number", step: "0.0001", min: "0" },
-  vendor: { label: "Vendor" },
-  catalogo: { label: "Catalog #" },
-  amount_in_stock: { label: "Amount in Stock", type: "number", step: "0.0001", min: "0" },
-  expiration_date: { label: "Expiration Date", type: "date" },
-  cas_number: { label: "CAS Number" },
-  bottle_tag_color: { label: "Bottle Tag Color" },
-  date_opened: { label: "Date Opened", type: "date" },
-  formula: { label: "Formula" },
-  id_interno: { label: "ID interno" },
-  physical_state: { label: "Physical State", options: ["Sólido", "Líquido", "Gas", "Mixto"] },
-  presentacion: { label: "Presentación" },
-  tipo_sustancia: { label: "Tipo de sustancia" },
+  parte: { label: "Número de parte" },
+  serie: { label: "Número de serie" },
+  descripcion: { label: "Descripción", textarea: true, wide: true, hint: "Dimensiones y partícula." },
+  nuevo_usado: { label: "Condición", options: ["Nueva", "Usada"] },
+  metodo: { label: "Método", options: ["PSP", "DSP", "ASP", "Otro"] },
 };
 
-export const REACTIVO_SHEET_TYPE_LABELS: Record<string, string> = {
-  acidos: "Ácidos",
-  alcoholes_solventes: "Alcoholes y solventes orgánicos",
-  compuestos_amonio: "Compuestos de Amonio",
-  compuestos_sodio: "Compuestos de Sodio",
-  estandares_preparados: "Estándares preparados",
-  materiales_referencia: "Materiales de Referencia",
-  miscelaneos: "Misceláneos",
-  columnas_cromatograficas: "Columnas cromatográficas",
+/* Nombres cortos para las listas (el nombre completo queda en el tooltip y en la ventana); no cambian los datos guardados. */
+export const ANALYSIS_NAME_SHORT: Record<string, string> = {
+  acido_domoico: "Ácido domoico (ASP)",
+  toxinas_lipofilicas: "Toxinas lipofílicas (DSP)",
+  toxinas_paralizantes: "Toxinas paralizantes (PSP)",
 };
-
-export const PAGE_MODULE_MAP: Record<PageKey, string> = {
-  dashboard: "dashboard",
-  reactivos: "reactivos",
-  consumibles: "consumibles",
-  equipos: "equipos",
-  muestras: "muestras",
-  movimientos: "movimientos",
-  mantenimiento: "mantenimiento",
-  documentos: "documentos",
-  reportes: "documentos",
-  roles: "roles",
-  usuarios: "usuarios",
-};
-
-export const PAGE_LABELS: Record<PageKey, string> = {
-  dashboard: "Dashboard",
-  reactivos: "Reactivos",
-  consumibles: "Consumibles",
-  equipos: "Equipos",
-  muestras: "Muestras",
-  movimientos: "Movimientos",
-  mantenimiento: "Mantenimiento",
-  documentos: "Documentos SGC",
-  reportes: "Reportes Mantenimiento",
-  roles: "Roles",
-  usuarios: "Usuarios",
-};
-
-export const PREFERRED_PAGE_ORDER: PageKey[] = [
-  "dashboard",
-  "reactivos",
-  "consumibles",
-  "equipos",
-  "muestras",
-  "movimientos",
-  "mantenimiento",
-  "documentos",
-  "roles",
-  "usuarios",
-];
-
-export interface ModuleCardConfig {
-  page: PageKey;
-  label: string;
-  desc: string;
-  icon: string;
-  color: string;
-}
-
-export const MODULE_CARDS_CONFIG: ModuleCardConfig[] = [
-  { page: "reactivos", label: "Reactivos", desc: "Gestiona el catálogo de reactivos del laboratorio", icon: "bi-prescription2", color: "" },
-  { page: "consumibles", label: "Consumibles", desc: "Control de materiales consumibles", icon: "bi-box-seam", color: "amber" },
-  { page: "equipos", label: "Equipos", desc: "Registro y calibración de equipos", icon: "bi-magic", color: "violet" },
-  { page: "muestras", label: "Muestras", desc: "Recepción y seguimiento de muestras", icon: "bi-eyedropper", color: "green" },
-  { page: "movimientos", label: "Movimientos", desc: "Historial de entradas y salidas de inventario", icon: "bi-journal-text", color: "sky" },
-  { page: "mantenimiento", label: "Mantenimiento", desc: "Programación y registro de mantenimientos", icon: "bi-wrench-adjustable-circle", color: "rose" },
-  { page: "documentos", label: "Documentos SGC", desc: "Gestión documental del sistema de calidad", icon: "bi-file-earmark-text", color: "slate" },
-];
-
-export const SAMPLE_ANALYSIS_LABELS: Record<string, string> = Object.fromEntries(RECEPTION_ANALYSIS_TYPES.map((item) => [item.value, item.label]));
-
-export const SAMPLE_METHOD_LABELS: Record<string, string> = { ...LEGACY_RECEPTION_METHODS, ...Object.fromEntries(RECEPTION_METHODS.map((item) => [item.value, item.label])) };
-
-export const SAMPLE_MATRIX_LABELS: Record<string, string> = { ...LEGACY_RECEPTION_SAMPLE_TYPES, ...Object.fromEntries(RECEPTION_SAMPLE_TYPES.map((item) => [item.value, item.label])) };
-
-export interface StatusMeta {
-  label: string;
-  className: string;
-  icon: string;
-}
-
-export const EQUIPO_STATUS_META: Record<string, StatusMeta> = {
-  operativo: { label: "Operativo", className: "active", icon: "bi-check-circle" },
-  mantenimiento: { label: "En Mantenimiento", className: "warning", icon: "bi-wrench-adjustable" },
-  calibracion_pendiente: { label: "Calibracion Pendiente", className: "info", icon: "bi-clock-history" },
-  fuera_servicio: { label: "Fuera de Servicio", className: "danger", icon: "bi-exclamation-triangle" },
-};
-
-export const MANTENIMIENTO_STATUS_META: Record<string, StatusMeta> = {
-  programado: { label: "Programado", className: "neutral", icon: "bi-calendar-event" },
-  en_proceso: { label: "En Proceso", className: "info", icon: "bi-clock-history" },
-  completado: { label: "Completado", className: "active", icon: "bi-check-circle" },
-  vencido: { label: "Vencido", className: "danger", icon: "bi-exclamation-triangle" },
-};
-
-export const MANTENIMIENTO_TYPE_META: Record<string, { label: string; className: string }> = {
-  preventivo: { label: "Preventivo", className: "outline" },
-  correctivo: { label: "Correctivo", className: "warning" },
-  calibracion: { label: "Calibracion", className: "purple" },
+export const ANALYSIS_METHOD_SHORT: Record<string, string> = {
+  hplc_uv_vis: "HPLC-UV",
+  hplc_ms_ms: "HPLC-MS/MS",
+  hplc_fld: "HPLC-FLD",
+  bioensayo_raton: "Bioensayo en ratón",
 };

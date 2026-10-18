@@ -52,7 +52,7 @@ export function toStrOrNull(value: unknown, maxLength?: number): string | null {
 }
 
 /* str(value) con la representacion de Python para flotantes enteros (3.0 -> "3.0"). */
-export function pyStr(value: unknown): string {
+function pyStr(value: unknown): string {
   if (typeof value === "number") {
     return Number.isInteger(value) ? String(value) : String(value);
   }

@@ -11,8 +11,10 @@ import { FolioChip, SegregacionCallout, SolicitudCallout } from "@/components/fe
 import { PageBody } from "@/components/shell/AppShell";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
-import { Field, FormGrid, Input, Select, Textarea } from "@/components/ui/Field";
+import { Field, FormGrid, Select, Textarea } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Overlay";
+import { useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
+import { msg, type Problema } from "@/lib/client/mensajes";
 import { Card, CardHeader, DetailRow } from "@/components/ui/Primitives";
 import { API_BASE_URL, getJsonAuth } from "@/lib/client/api";
 import { fmtDateTime } from "@/lib/client/format";
@@ -40,7 +42,7 @@ export function IncidenciaFicha({ item }: { item: ApiRecord }) {
   const editable = ["reportada", "en_evaluacion"].includes(String(item.estado));
 
   const anular = async () => {
-    const motivo = await prompt({ critico: true, tone: "danger", title: `Anular ${item.folio}`, description: "La incidencia deja de contar, pero se conserva. La anulación la autoriza un segundo usuario con calidad:AN.", confirmLabel: "Solicitar anulación" });
+    const motivo = await prompt({ critico: true, tone: "danger", title: `Anular ${item.folio}`, description: "La incidencia deja de contar, pero se conserva. La anulación la autoriza otra persona con permiso para anular en calidad.", confirmLabel: "Solicitar anulación" });
     if (motivo) await enviar("POST", `/calidad/incidencias/${item.id}/anular`, { motivo });
   };
 
@@ -102,7 +104,7 @@ export function IncidenciaFicha({ item }: { item: ApiRecord }) {
           </Card>
 
           <Card>
-            <CardHeader title="Fotos y archivos" description={editable ? "Quien reportó (o calidad:G) puede agregar fotos mientras se evalúa." : "Solo lectura: la incidencia ya se evaluó."} />
+            <CardHeader title="Fotos y archivos" description={editable ? "Quien reportó (o quien administra calidad) puede agregar fotos mientras se evalúa." : "Solo lectura: la incidencia ya se evaluó."} />
             <AdjuntosPanel registroId={Number(item.id)} base={`/calidad/incidencias/${item.id}`} token={token} clave="calidad" tipoInicial="foto" textos={{ vacioTitulo: "Sin fotos ni archivos", vacioEditable: "Agrega una foto de lo observado o un archivo de apoyo.", vacioLectura: "Esta incidencia no tiene archivos.", boton: "Adjuntar" }} />
           </Card>
 
@@ -118,7 +120,7 @@ export function IncidenciaFicha({ item }: { item: ApiRecord }) {
                 ) : null}
               </div>
             ) : (
-              <p className="text-[13.5px] text-ink-3">{item.estado === "anulada" ? "No se evaluó." : "Pendiente: la evalúa quien tiene calidad:R (Coordinación Técnica, Mejora Continua o Responsable General), nunca quien la reportó."}</p>
+              <p className="text-[13.5px] text-ink-3">{item.estado === "anulada" ? "No se evaluó." : "Pendiente: la evalúa quien revisa en calidad (Coordinación Técnica, Mejora Continua o Responsable General), nunca quien la reportó."}</p>
             )}
           </Card>
           <RecordHistory entidad="incidencias" entidadId={Number(item.id)} />
@@ -180,20 +182,29 @@ function EvaluarSheet({ item, onClose }: { item: ApiRecord; onClose: () => void 
     setOpen(false);
     window.setTimeout(onClose, 250);
   };
+  const v = useValidacion({
+    titulo: decision === "escalar" ? "No se pudo escalar la incidencia" : "No se pudo cerrar la incidencia",
+    reglas: () => {
+      const out: Problema[] = [];
+      if (justificacion.trim().length < 10) out.push({ campo: "eval-just", mensaje: justificacion.trim() ? msg.minimo("La justificación", 10) : msg.escribe("la justificación"), grupo: "Justificación" });
+      if (decision === "escalar" && destino === "existente" && !ncId) out.push({ campo: "eval-nc", mensaje: msg.elige("la no conformidad abierta"), grupo: "No conformidad" });
+      return out;
+    },
+  });
   const guardar = async () => {
+    if (!v.validar()) return;
     setEnviando(true);
     const body: ApiRecord = { decision, justificacion };
     if (decision === "escalar") {
       if (destino === "existente") body.nc_id = Number(ncId);
       else body.nc = { clasificacion: clasificacion || null, requisito_incumplido: requisito, responsable_id: responsable ? Number(responsable) : null };
     }
-    const data = await enviar("POST", `/calidad/incidencias/${item.id}/evaluar`, body);
+    const data = await enviar("POST", `/calidad/incidencias/${item.id}/evaluar`, body, undefined, (err) => v.errorServidor(err, { motivo: "eval-just" }));
     setEnviando(false);
     if (!data) return;
     cerrar();
     if (data.nc_id) router.push(`/calidad/nc/${data.nc_id}`);
   };
-  const valido = justificacion.trim().length >= 10 && (decision === "cerrar_sin_nc" || destino === "nueva" || !!ncId);
   return (
     <Sheet
       open={open}
@@ -205,12 +216,13 @@ function EvaluarSheet({ item, onClose }: { item: ApiRecord; onClose: () => void 
           <Button variant="secondary" onClick={cerrar}>
             Cancelar
           </Button>
-          <Button onClick={guardar} loading={enviando} disabled={!valido} data-guardar-evaluacion>
+          <Button onClick={guardar} loading={enviando} data-guardar-evaluacion>
             {decision === "escalar" ? "Escalar a NC" : "Cerrar sin NC"}
           </Button>
         </>
       }
     >
+      <ValidacionAmbito v={v}>
       <div className="flex flex-col gap-5">
         <ChoiceGrid cols={2}>
           <ChoiceCard type="radio" name="decision" checked={decision === "escalar"} onChange={() => setDecision("escalar")} label="Escalar a no conformidad" description="Requiere análisis de causa y, en su caso, acciones correctivas." />
@@ -239,7 +251,7 @@ function EvaluarSheet({ item, onClose }: { item: ApiRecord; onClose: () => void 
             ) : (
               <FormGrid cols={1}>
                 <Field label="Requisito incumplido" htmlFor="eval-req" hint="Cláusula ISO, procedimiento o formato.">
-                  <Input id="eval-req" value={requisito} onChange={(event) => setRequisito(event.target.value)} />
+                  <Textarea id="eval-req" rows={2} value={requisito} onChange={(event) => setRequisito(event.target.value)} />
                 </Field>
                 <Field label="Clasificación" htmlFor="eval-clasif" hint="Por validar con Mejora Continua.">
                   <Select id="eval-clasif" value={clasificacion} onChange={(event) => setClasificacion(event.target.value)}>
@@ -269,6 +281,7 @@ function EvaluarSheet({ item, onClose }: { item: ApiRecord; onClose: () => void 
           </>
         ) : null}
       </div>
+      </ValidacionAmbito>
     </Sheet>
   );
 }

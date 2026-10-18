@@ -22,7 +22,7 @@ export interface ContextoAdjunto {
   que: string;
 }
 
-export const detalleAdjunto = (a: Row) => ({ adjunto_id: Number(a.id), tipo_evidencia: String(a.tipo_evidencia), descripcion: String(a.descripcion), nombre: String(a.nombre_original), tamano_bytes: Number(a.tamano_bytes), sha256: String(a.sha256) });
+const detalleAdjunto = (a: Row) => ({ adjunto_id: Number(a.id), tipo_evidencia: String(a.tipo_evidencia), descripcion: String(a.descripcion), nombre: String(a.nombre_original), tamano_bytes: Number(a.tamano_bytes), sha256: String(a.sha256) });
 
 /*
  * Sube un archivo (multipart: archivo, tipo_evidencia, descripcion). `antesDeInsertar`

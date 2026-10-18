@@ -5,65 +5,123 @@
  * quien las administra (ensayos:A o calidad:A, nunca sobre si mismo), alta y
  * revocacion con motivo y contrasena. Nada se borra: revocar la deja en la lista.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { Plus, Prohibit } from "@phosphor-icons/react";
+import { Flask, ListChecks, Plus, Prohibit, Wrench } from "@phosphor-icons/react";
+import { cn } from "@/components/ui/cn";
 import { Callout, Panel } from "@/components/features/samples/FormLayout";
+import { useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
+import { msg, type Problema } from "@/lib/client/mensajes";
 import { useSession } from "@/components/session/SessionProvider";
 import { CampoIdentidad } from "@/components/session/Reautenticar";
 import { Button } from "@/components/ui/Button";
 import { DateInput } from "@/components/ui/DateInput";
-import { Field, FormGrid, Input, Select } from "@/components/ui/Field";
+import { Field, FormGrid, Input, Select, Textarea } from "@/components/ui/Field";
 import { usePrompt } from "@/components/ui/Overlay";
 import { Badge, Skeleton, type Tone } from "@/components/ui/Primitives";
 import { API_BASE_URL, armarReauth, getJsonAuth, sendJsonAuth } from "@/lib/client/api";
 import { invalidate } from "@/lib/client/store";
 import { ETIQUETA_ESTADO_AUTORIZACION, TIPOS_AUTORIZACION, type AutorizacionPersonal, type EstadoAutorizacion } from "@/lib/shared/autorizaciones";
-import { formatearFecha, formatearFechaHora, hoyLocal } from "@/lib/shared/fechas";
+import { diasEntre, formatearFecha, hoyLocal } from "@/lib/shared/fechas";
 
 const TONO_ESTADO: Record<EstadoAutorizacion, Tone> = { vigente: "success", por_iniciar: "brand", vencida: "neutral", revocada: "danger" };
-const ETIQUETA_TIPO: Record<string, string> = Object.fromEntries(TIPOS_AUTORIZACION.map((t) => [t.value, t.label]));
 
-/* Lista de solo lectura (tambien la usa "Mi cuenta"). */
+/* "vigente hasta 31/12/2026 · quedan 89 días", "empieza el …", "venció el …". */
+function vigenciaEnPalabras(a: AutorizacionPersonal, estado: EstadoAutorizacion): string {
+  if (estado === "revocada") return `Revocada el ${formatearFecha(a.revocada_en)}`;
+  if (estado === "por_iniciar") return `Empieza el ${formatearFecha(a.vigente_desde)}`;
+  if (estado === "vencida") return `Venció el ${formatearFecha(a.vigente_hasta)}`;
+  if (!a.vigente_hasta) return "Vigente, sin fecha de fin";
+  const dias = diasEntre(hoyLocal(), a.vigente_hasta);
+  return `Vigente hasta el ${formatearFecha(a.vigente_hasta)}${dias !== null ? ` · ${dias === 0 ? "vence hoy" : dias === 1 ? "queda 1 día" : `quedan ${dias} días`}` : ""}`;
+}
+
+const GRUPOS: Array<{ tipo: string; titulo: string; icono: ReactNode }> = [
+  { tipo: "actividad", titulo: "Actividades", icono: <ListChecks size={17} weight="duotone" /> },
+  { tipo: "metodo", titulo: "Métodos", icono: <Flask size={17} weight="duotone" /> },
+  { tipo: "equipo", titulo: "Equipos", icono: <Wrench size={17} weight="duotone" /> },
+];
+
+function FilaAutorizacion({ a, i, onRevocar }: { a: AutorizacionPersonal; i: number; onRevocar?: (a: AutorizacionPersonal) => void }) {
+  const estado = (a.estado || "vigente") as EstadoAutorizacion;
+  const revocable = !!onRevocar && (estado === "vigente" || estado === "por_iniciar");
+  const dias = estado === "vigente" && a.vigente_hasta ? diasEntre(hoyLocal(), a.vigente_hasta) : null;
+  const porVencer = dias !== null && dias < 30;
+  return (
+    <li className={cn("entrada-escalonada flex flex-wrap items-start gap-3 rounded-[12px] bg-surface px-3.5 py-3 ring-1 transition-shadow duration-200 hover:shadow-raised", porVencer ? "ring-warning/40" : "ring-line")} style={{ ["--i" as string]: i }} data-autorizacion={a.id}>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[14px] font-medium text-ink">{a.etiqueta || "Autorización"}</span>
+          {estado !== "vigente" ? (
+            <Badge tone={TONO_ESTADO[estado]} dot>
+              {ETIQUETA_ESTADO_AUTORIZACION[estado]}
+            </Badge>
+          ) : null}
+        </div>
+        <span className={cn("text-[12.5px]", porVencer ? "text-warning-text" : "text-ink-3")}>
+          {vigenciaEnPalabras(a, estado)}
+          {a.folio_fx_thf_ap ? ` · formato ${a.folio_fx_thf_ap}` : ""}
+        </span>
+        {porVencer ? <span className="text-[12px] text-warning-text">Vence pronto: conviene renovarla.</span> : null}
+        {a.motivo_revocacion ? <span className="text-[12.5px] text-ink-3">Motivo: {a.motivo_revocacion}</span> : null}
+      </div>
+      {revocable ? (
+        <Button size="sm" variant="secondary" icon={<Prohibit size={14} />} onClick={() => onRevocar!(a)}>
+          Revocar
+        </Button>
+      ) : null}
+    </li>
+  );
+}
+
+/*
+ * Lista de autorizaciones FX-THF-AP (tambien la usa "Mi cuenta"): agrupadas en
+ * Actividades, Metodos y Equipos, con su vigencia en palabras y un aviso suave
+ * si vencen en menos de 30 dias. Las revocadas o vencidas quedan plegadas.
+ */
 export function ListaAutorizaciones({ items, onRevocar }: { items: AutorizacionPersonal[]; onRevocar?: (a: AutorizacionPersonal) => void }) {
   if (!items.length) return <p className="text-[13px] text-ink-3">Sin autorizaciones registradas en FX-THF-AP.</p>;
+  const activa = (a: AutorizacionPersonal) => ["vigente", "por_iniciar"].includes(String(a.estado || "vigente"));
+  const inactivas = items.filter((a) => !activa(a));
   return (
-    <ul className="flex flex-col divide-y divide-line rounded-card border border-line" aria-label="Autorizaciones FX-THF-AP">
-      {items.map((a) => {
-        const estado = (a.estado || "vigente") as EstadoAutorizacion;
-        const revocable = !!onRevocar && (estado === "vigente" || estado === "por_iniciar");
+    <div className="flex flex-col gap-4" aria-label="Autorizaciones FX-THF-AP">
+      {GRUPOS.map((g) => {
+        const lista = items.filter((a) => a.tipo === g.tipo && activa(a));
+        if (!lista.length) return null;
         return (
-          <li key={a.id} className="flex flex-wrap items-start gap-3 px-3 py-2.5" data-autorizacion={a.id}>
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[12px] text-ink-3">{ETIQUETA_TIPO[a.tipo] || a.tipo}</span>
-                <span className="font-medium text-ink">{a.etiqueta || a.clave}</span>
-                <Badge tone={TONO_ESTADO[estado]} dot>
-                  {ETIQUETA_ESTADO_AUTORIZACION[estado]}
-                </Badge>
-              </div>
-              <span className="text-[12.5px] text-ink-3">
-                Desde {formatearFecha(a.vigente_desde)}
-                {a.vigente_hasta ? ` hasta ${formatearFecha(a.vigente_hasta)}` : " · sin fecha de fin"}
-                {a.folio_fx_thf_ap ? ` · folio ${a.folio_fx_thf_ap}` : ""}
+          <section key={g.tipo} className="flex flex-col gap-2">
+            <h4 className="flex items-center gap-2 text-[13px] font-semibold text-ink-2">
+              <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-brand-soft text-brand-strong">
+                {g.icono}
               </span>
-              {a.motivo ? <span className="text-[12.5px] text-ink-2">Motivo: {a.motivo}</span> : null}
-              {a.revocada_en ? (
-                <span className="text-[12.5px] text-danger">
-                  Revocada el {formatearFechaHora(a.revocada_en)}
-                  {a.motivo_revocacion ? ` · ${a.motivo_revocacion}` : ""}
-                </span>
-              ) : null}
-            </div>
-            {revocable ? (
-              <Button size="sm" variant="secondary" icon={<Prohibit size={14} />} onClick={() => onRevocar!(a)}>
-                Revocar
-              </Button>
-            ) : null}
-          </li>
+              {g.titulo}
+              <span className="font-normal text-ink-3">· {lista.length}</span>
+            </h4>
+            <ul className="flex flex-col gap-2">
+              {lista.map((a, i) => (
+                <FilaAutorizacion key={a.id} a={a} i={i} onRevocar={onRevocar} />
+              ))}
+            </ul>
+          </section>
         );
       })}
-    </ul>
+      {!items.some(activa) ? <p className="text-[13px] text-ink-3">No tiene autorizaciones vigentes.</p> : null}
+      {inactivas.length ? (
+        <details className="group/aut rounded-[14px] bg-surface-2 ring-1 ring-line">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-[13.5px] font-medium text-ink-2 [&::-webkit-details-marker]:hidden">
+            Revocadas o vencidas ({inactivas.length})
+            <span aria-hidden="true" className="text-ink-4 transition-transform duration-200 ease-[var(--ease-spring)] group-open/aut:rotate-180">
+              ▾
+            </span>
+          </summary>
+          <ul className="flex flex-col gap-2 px-3 pb-3">
+            {inactivas.map((a, i) => (
+              <FilaAutorizacion key={a.id} a={a} i={i} />
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
   );
 }
 
@@ -80,6 +138,8 @@ export function AutorizacionesUsuario({ usuarioId }: { usuarioId: number }) {
   const [nueva, setNueva] = useState({ tipo: "actividad", clave: "", desde: hoyLocal(), hasta: "", folio: "", motivo: "" });
   const [clave, setClave] = useState("");
   const [guardando, setGuardando] = useState(false);
+  // El formulario de alta aparece al pulsar "Agregar".
+  const [agregarAbierto, setAgregarAbierto] = useState(false);
 
   const cargar = useCallback(async () => {
     try {
@@ -105,10 +165,20 @@ export function AutorizacionesUsuario({ usuarioId }: { usuarioId: number }) {
   }, [puede, catalogo, token]);
 
   const opciones = !catalogo ? [] : nueva.tipo === "metodo" ? catalogo.metodos : nueva.tipo === "equipo" ? catalogo.equipos : catalogo.actividades;
+  const queSe = nueva.tipo === "metodo" ? "el método" : nueva.tipo === "equipo" ? "el equipo" : "la actividad";
+  const v = useValidacion({
+    titulo: "No se pudo registrar la autorización",
+    reglas: () => {
+      const out: Problema[] = [];
+      if (!nueva.clave) out.push({ campo: "aut-clave", mensaje: msg.elige(`${queSe} que se autoriza`) });
+      if (nueva.desde && nueva.hasta && nueva.hasta < nueva.desde) out.push({ campo: "aut-hasta", mensaje: msg.fechaAnterior("La fecha de fin", "la de inicio") });
+      if (nueva.motivo.trim().length < 5) out.push({ campo: "aut-motivo", mensaje: msg.minimo("El motivo", 5) });
+      return out;
+    },
+  });
 
   const agregar = async () => {
-    if (!nueva.clave) return toast.error("Elige qué se autoriza");
-    if (nueva.motivo.trim().length < 5) return toast.error("Indica el motivo (al menos 5 caracteres)");
+    if (!v.validar()) return;
     armarReauth(clave ? { password: clave } : null);
     setGuardando(true);
     try {
@@ -123,10 +193,11 @@ export function AutorizacionesUsuario({ usuarioId }: { usuarioId: number }) {
       toast.success(String(data.message || "Autorización registrada"));
       setNueva((prev) => ({ ...prev, clave: "", hasta: "", motivo: "" }));
       setClave("");
+      setAgregarAbierto(false);
       await cargar();
       invalidate("dashboard");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo registrar la autorización");
+      v.errorServidor(err, { motivo: "aut-motivo", password: "aut-clave-admin" });
     } finally {
       setGuardando(false);
     }
@@ -141,7 +212,7 @@ export function AutorizacionesUsuario({ usuarioId }: { usuarioId: number }) {
       await cargar();
       invalidate("dashboard");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo revocar la autorización");
+      v.errorServidor(err);
     }
   };
 
@@ -149,10 +220,18 @@ export function AutorizacionesUsuario({ usuarioId }: { usuarioId: number }) {
   if (!items) return <Skeleton className="h-24 w-full" />;
 
   return (
+    <ValidacionAmbito v={v}>
     <div className="flex flex-col gap-3" id="autorizaciones-usuario">
-      <p className="text-[12.5px] text-ink-3">Además del rol, la persona solo opera los métodos, equipos y actividades para los que está autorizada en el formato FX-THF-AP, dentro de su vigencia.</p>
+      <p className="text-[13px] text-ink-3">Además del rol, la persona solo puede trabajar con los métodos, equipos y actividades para los que está autorizada (formato FX-THF-AP), mientras la autorización esté vigente.</p>
       <ListaAutorizaciones items={items} onRevocar={puede ? revocar : undefined} />
-      {puede ? (
+      {puede && !agregarAbierto ? (
+        <div>
+          <Button size="sm" icon={<Plus size={14} weight="bold" />} onClick={() => setAgregarAbierto(true)}>
+            Agregar
+          </Button>
+        </div>
+      ) : null}
+      {puede && agregarAbierto ? (
         <Panel title="Agregar autorización" description="La registra quien aprueba en ensayos o calidad; nadie se autoriza a sí mismo. Queda en la bitácora con su motivo.">
           <FormGrid>
             <Field label="Tipo" htmlFor="aut-tipo" required>
@@ -184,11 +263,14 @@ export function AutorizacionesUsuario({ usuarioId }: { usuarioId: number }) {
               <Input id="aut-folio" maxLength={80} value={nueva.folio} onChange={(event) => setNueva((prev) => ({ ...prev, folio: event.target.value }))} />
             </Field>
             <Field label="Motivo" htmlFor="aut-motivo" required>
-              <Input id="aut-motivo" maxLength={300} value={nueva.motivo} onChange={(event) => setNueva((prev) => ({ ...prev, motivo: event.target.value }))} placeholder="Ej. Evaluación de competencia aprobada" />
+              <Textarea id="aut-motivo" rows={2} maxLength={300} value={nueva.motivo} onChange={(event) => setNueva((prev) => ({ ...prev, motivo: event.target.value }))} placeholder="Ej. Evaluación de competencia aprobada" />
             </Field>
           </FormGrid>
           <CampoIdentidad value={clave} onChange={setClave} id="aut-clave-admin" />
-          <div>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setAgregarAbierto(false)}>
+              Cancelar
+            </Button>
             <Button icon={<Plus size={14} weight="bold" />} onClick={agregar} loading={guardando} id="aut-agregar">
               Agregar
             </Button>
@@ -196,5 +278,6 @@ export function AutorizacionesUsuario({ usuarioId }: { usuarioId: number }) {
         </Panel>
       ) : null}
     </div>
+    </ValidacionAmbito>
   );
 }

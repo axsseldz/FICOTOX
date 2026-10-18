@@ -3,6 +3,7 @@ import type { InventarioRow } from "@/lib/client/insumos";
 import type { ApiRecord } from "@/lib/client/types";
 import type { ExtractionType } from "@/lib/shared/extraction";
 import type { FormSectionDef } from "../FormLayout";
+import type { Problema } from "@/lib/client/mensajes";
 
 /*
  * Un "protocolo" describe un formato de extraccion (ASP, DSP...): sus
@@ -11,7 +12,7 @@ import type { FormSectionDef } from "../FormLayout";
  * formulario (`ExtractionForm`) es comun a todos los protocolos.
  */
 
-export interface StepDef {
+interface StepDef {
   key: string;
   /* Texto que se guarda en pasos.checklist (los registros ASP viejos dependen de el). */
   value: string;
@@ -37,7 +38,7 @@ export interface FixedField {
   placeholder: string;
 }
 
-export interface EquipoField {
+interface EquipoField {
   /* Clave dentro de pasos_json donde se guarda el id del equipo. */
   key: string;
   label: string;
@@ -128,7 +129,14 @@ export interface ExtractionProtocol {
   tipo: ExtractionType;
   /* Secciones propias del protocolo (entre "Muestra y molienda" y "Resguardo"). */
   sections: FormSectionDef[];
-  /* Completitud de cada seccion del protocolo: true, false o undefined (sin evaluar / opcional sin llenar). */
+  /*
+   * Reglas de las secciones obligatorias del protocolo, en orden: dan la
+   * completitud de la guia y lo que falta al guardar (validacion compartida).
+   * Los pasos se marcan por su id `e-paso-<clave>` y las tablas de pesos por
+   * `e-pesos-<columna>`.
+   */
+  reglas: (form: ExtractionState) => Problema[];
+  /* Completitud de las secciones opcionales (true si se llenaron, undefined si no). */
   sectionComplete: (id: string, form: ExtractionState) => boolean | undefined;
   steps: StepDef[];
   fixedFields: FixedField[];

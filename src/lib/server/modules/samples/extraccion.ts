@@ -1,3 +1,5 @@
+import { formatearFolio } from "../../../shared/folios";
+import { conSolicitudesYPuede } from "../../puede-registro";
 import { requireUser, userIdFromClaims } from "../../auth";
 import { registrarAuditoria, snapshotRow } from "../../audit";
 
@@ -11,7 +13,7 @@ import { respuestaSolicitud } from "../../solicitudes";
 import { aplicarSupervision, filtroSupervision, marcaSupervision } from "../../supervision";
 import { recordBitacoraFolios } from "../inventory";
 
-import { advanceState, anularOSolicitar, applyStageInventory, recepcionDe, assertEditableAsync, assertOrigin, avanzarRecepcion, conSolicitudes, deletionNotAllowed, exigirUsoDeRecursos, folioLabel, insumosDeclarados, isFolioConflict, nextFolioNum, readMotivo, restaurarOSolicitar } from "../../samples-flow";
+import { advanceState, anularOSolicitar, applyStageInventory, recepcionDe, assertEditableAsync, assertOrigin, avanzarRecepcion, deletionNotAllowed, exigirUsoDeRecursos, folioLabel, insumosDeclarados, isFolioConflict, nextFolioNum, readMotivo, restaurarOSolicitar } from "../../samples-flow";
 import { EXTRACTION_TYPES, claveForType, normalizeExtractionType, parseExtractionFolioSearch, type ExtractionType } from "../../../shared/extraction";
 import { jsonText, safeJsonLoad, searchParam, strippedOrNull, toIntOrNull } from "../helpers";
 
@@ -20,7 +22,7 @@ import { metodoDeExtraccion, requisitosExtraccion } from "../../../shared/autori
 import { exigirSinSuspension, idsDeEquipos } from "../calidad/bloqueos";
 import { incidenciasPorEquiposNoAptos } from "../calidad/automaticas";
 import { exigirAsignacion, filtroAsignadas } from "../../asignaciones";
-import { guardarFirmantes, resolverFirmantes, type RolFirma } from "../../firmas";
+import { guardarFirmantes, resolverFirmantes, verificarFirmasConPassword, type RolFirma } from "../../firmas";
 
 /* Fase 11: equipos de la extraccion para suspensiones e incidencias (con id, o solo por nombre si no se eligio del catalogo). */
 function usoDeEquipos(equiposJson: unknown): { equipoIds: unknown[]; equipoNombres: string[] } {
@@ -61,7 +63,7 @@ function exigirSupervisorDistinto(data: { nombre_quien_extrajo: string | null; n
   if (violacion) throw new HttpError(409, { message: violacion.mensaje, codigo: "segregacion", regla: violacion.regla, clave: violacion.clave });
 }
 
-export interface EquipoUtilizado {
+interface EquipoUtilizado {
   equipo_id: number | null;
   nombre: string | null;
   uso: string | null;
@@ -233,7 +235,7 @@ export async function listExtractionSamples({ request, s }: RouteContext): Promi
       ...supFiltro.params,
     },
   );
-  return json({ items: await conSolicitudes(s, TABLE, rows), total: rows.length });
+  return json({ items: await conSolicitudesYPuede(s, user, TABLE, rows), total: rows.length });
 }
 
 export async function getExtractionSample({ request, s, params }: RouteContext): Promise<Response> {
@@ -262,7 +264,7 @@ export async function getExtractionSample({ request, s, params }: RouteContext):
   if (!row) {
     return json({ message: "Registro no encontrado" }, 404);
   }
-  return json({ item: (await conSolicitudes(s, TABLE, [serializeRow(row)]))[0] });
+  return json({ item: (await conSolicitudesYPuede(s, user, TABLE, [serializeRow(row)]))[0] });
 }
 
 export async function createExtractionSample({ request, s }: RouteContext): Promise<Response> {
@@ -271,6 +273,8 @@ export async function createExtractionSample({ request, s }: RouteContext): Prom
   const actuo = cargoActuante(request, permiso);
 
   const payload = await readJson(request);
+  // Contraseñas de firmantes enviadas al guardar: se verifican antes de cualquier otra escritura.
+  await verificarFirmasConPassword(s, user, payload);
   const tipo = await resolveType(s, payload, null);
   if (!tipo) {
     return json({ message: "Tipo de extraccion no valido" }, 400);
@@ -289,7 +293,9 @@ export async function createExtractionSample({ request, s }: RouteContext): Prom
   // Fase 5: solo quien esta asignado a la muestra (o la coordinacion).
   await exigirAsignacion(s, user, await recepcionDe(s, "muestras_procesamiento", data.procesamiento_id), permiso.auth);
   // Solo se extrae a partir de un procesamiento vigente.
-  await assertOrigin(s, "muestras_procesamiento", data.procesamiento_id, { requerido: ORIGEN_REQUERIDO });
+  const origen = await assertOrigin(s, "muestras_procesamiento", data.procesamiento_id, { requerido: ORIGEN_REQUERIDO });
+  // El folio de la etapa anterior sale del registro vinculado, no de lo que mande el cliente.
+  if (origen) data.folio_procesamiento_num = toIntOrNull(origen.folio_num);
   const supervision = marcaSupervision(permiso);
   if (data.estado === "anulada") data.estado = "registrada";
   data.equipos_json = jsonText(await snapshotEquipos(s, normalizeEquipos(payload.equipos)));
@@ -339,7 +345,7 @@ export async function createExtractionSample({ request, s }: RouteContext): Prom
     await s.rollback();
     // Fase 12: si el folio lo asigno el servidor, el choque es de concurrencia: se relanza y apiRoute reintenta.
     if (isFolioConflict(error) && toIntOrNull(payload.folio_num)) {
-      return json({ message: `El folio ${tipo} ${String(data.folio_num).padStart(7, "0")} ya existe` }, 409);
+      return json({ message: `El folio ${formatearFolio(tipo, data.folio_num)} ya existe` }, 409);
     }
     throw error;
   }
@@ -354,6 +360,8 @@ export async function updateExtractionSample({ request, s, params }: RouteContex
   const actuo = cargoActuante(request, permiso);
   await assertEditableAsync(s, antes, TABLE);
   const payload = await readJson(request);
+  // Contraseñas de firmantes enviadas al guardar: se verifican antes de cualquier otra escritura.
+  await verificarFirmasConPassword(s, user, payload);
   const tipo = await resolveType(s, payload, extractionId);
   if (!tipo) {
     return json({ message: "Tipo de extraccion no valido" }, 400);
@@ -371,7 +379,9 @@ export async function updateExtractionSample({ request, s, params }: RouteContex
   // Fase 5: solo quien esta asignado a la muestra (o la coordinacion).
   await exigirAsignacion(s, user, await recepcionDe(s, "muestras_procesamiento", data.procesamiento_id), permiso.auth);
   // El origen se valida tambien al editar.
-  await assertOrigin(s, "muestras_procesamiento", data.procesamiento_id, { requerido: ORIGEN_REQUERIDO });
+  const origen = await assertOrigin(s, "muestras_procesamiento", data.procesamiento_id, { requerido: ORIGEN_REQUERIDO });
+  // El folio de la etapa anterior sale del registro vinculado, no de lo que mande el cliente.
+  if (origen) data.folio_procesamiento_num = toIntOrNull(origen.folio_num);
   const supervision = marcaSupervision(permiso);
   if (data.estado === "anulada" || ["completada", "analizada"].includes(String(antes?.estado || ""))) data.estado = String(antes?.estado || "registrada");
   data.equipos_json = jsonText(await snapshotEquipos(s, normalizeEquipos(payload.equipos)));
@@ -427,7 +437,7 @@ export async function updateExtractionSample({ request, s, params }: RouteContex
   } catch (error) {
     await s.rollback();
     if (isFolioConflict(error)) {
-      return json({ message: `El folio ${tipo} ${String(data.folio_num).padStart(7, "0")} ya existe` }, 409);
+      return json({ message: `El folio ${formatearFolio(tipo, data.folio_num)} ya existe` }, 409);
     }
     throw error;
   }

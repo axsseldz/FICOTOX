@@ -1,7 +1,7 @@
 "use client";
 
 import { API_BASE_URL, getJsonAuth } from "./api";
-import { getStoredToken, getStoredUser } from "./session";
+import { getStoredToken } from "./session";
 import { useResource } from "./store";
 
 /*
@@ -27,7 +27,7 @@ export interface Persona {
 let cache: Persona[] | null = null;
 let pending: Promise<Persona[]> | null = null;
 
-export const loadPersonal = (): Promise<Persona[]> => {
+const loadPersonal = (): Promise<Persona[]> => {
   if (cache) return Promise.resolve(cache);
   if (pending) return pending;
   const token = getStoredToken();
@@ -44,10 +44,6 @@ export const loadPersonal = (): Promise<Persona[]> => {
   return pending;
 };
 
-export const resetPersonal = (): void => {
-  cache = null;
-};
-
 export function usePersonal(): Persona[] {
   const resource = useResource<Persona[]>("personal", async () => {
     cache = null;
@@ -55,9 +51,3 @@ export function usePersonal(): Persona[] {
   });
   return resource.data || cache || [];
 }
-
-/* Nombre de la persona con sesión (sin rol ni correo), para prellenar "quién". */
-export const activeUserName = (): string => {
-  const user = getStoredUser() || {};
-  return String(user.nombre || user.email || "").trim();
-};

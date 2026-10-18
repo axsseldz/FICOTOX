@@ -63,7 +63,8 @@ const truthy = (name, fallback = "false") => ["1", "true", "yes", "on"].includes
 function resolveSqlitePath() {
   const configured = (process.env.SQLITE_PATH || "").trim();
   if (configured) return path.resolve(rootDir, configured);
-  return path.join(rootDir, "instance", "ficotox.sqlite3");
+  const datos = (process.env.FICOTOX_DATA_DIR || "").trim();
+  return path.join(datos ? path.resolve(rootDir, datos) : rootDir, "instance", "ficotox.sqlite3");
 }
 
 if (!(process.env.DATABASE_URL || "").trim()) {
@@ -93,6 +94,34 @@ const fallar = (mensaje, codigo = 1) => {
   if (errores.length) fallar(`FICOTOX no arranca en produccion: ${errores.join("; ")}. Define un JWT_SECRET aleatorio de al menos 32 caracteres en .env (npm run configurar).`, SALIDA_FATAL);
 }
 
+// Hosting con volumen (Railway): importar un respaldo en el primer arranque, ANTES de iniciar el servidor
+// (scripts/importar-respaldo-railway.mjs). Solo actua si no existe la base; si algo falla, no se arranca.
+{
+  const datos = (process.env.FICOTOX_DATA_DIR || "").trim() ? path.resolve(rootDir, process.env.FICOTOX_DATA_DIR) : path.dirname(instanceDir);
+  const hayRespaldo = fs.existsSync(path.join((process.env.FICOTOX_IMPORT_DIR || "").trim() ? path.resolve(rootDir, process.env.FICOTOX_IMPORT_DIR) : path.join(datos, "import"), "ficotox-respaldo.tar.gz"));
+  const enHosting = truthy("FICOTOX_IMPORTAR") || !!(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID) || !!(process.env.IMPORTAR_URL || "").trim() || hayRespaldo;
+  if (enHosting && !(process.env.DATABASE_URL || "").trim()) {
+    const codigo = await new Promise((resolve) => {
+      const proceso = spawn(process.execPath, [path.join(rootDir, "scripts", "importar-respaldo-railway.mjs")], { cwd: rootDir, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+      for (const [flujo, error] of [[proceso.stdout, false], [proceso.stderr, true]]) {
+        let pendiente = "";
+        flujo.on("data", (d) => {
+          pendiente += d;
+          const lineas = pendiente.split(/\r?\n/);
+          pendiente = lineas.pop() || "";
+          for (const linea of lineas) if (linea.trim()) avisar(linea, error);
+        });
+      }
+      proceso.on("error", (e) => {
+        avisar(`[importación] no se pudo ejecutar el importador (${e.message}).`, true);
+        resolve(1);
+      });
+      proceso.on("exit", (c) => resolve(c ?? 1));
+    });
+    if (codigo !== 0) fallar("FICOTOX no arranca: la importación del respaldo falló (ver el motivo arriba).", SALIDA_FATAL);
+  }
+}
+
 const standaloneDir = path.join(rootDir, ".next", "standalone");
 const serverFile = path.join(standaloneDir, "server.js");
 if (!fs.existsSync(serverFile)) fallar("FICOTOX no arranca: no existe el build de produccion. Ejecuta primero: npm run build", SALIDA_FATAL);
@@ -102,7 +131,7 @@ if (!fs.existsSync(serverFile)) fallar("FICOTOX no arranca: no existe el build d
 {
   const { bloqueoVivo } = await import("../src/lib/shared/bloqueo.mjs");
   const datos = bloqueoVivo(path.join(instanceDir, "servidor.lock"));
-  if (datos) fallar(`FICOTOX no arranca: ya hay un servidor sobre esta instancia (pid ${datos.pid}${datos.puerto ? `, puerto ${datos.puerto}` : ""}). Si es el servicio, detenlo primero con npm run detener; si no hay ninguno, ver docs/INSTALACION.md, «Solución de problemas».`, SALIDA_FATAL);
+  if (datos) fallar(`FICOTOX no arranca: ya hay un servidor sobre esta instancia (pid ${datos.pid}${datos.puerto ? `, puerto ${datos.puerto}` : ""}). Si es el servicio, detenlo primero con npm run detener; si no hay ninguno, ver README.md, «Solución de problemas».`, SALIDA_FATAL);
 }
 
 // Un solo lanzador por instancia: lanzador.lock se toma de forma atomica ("wx") ANTES de tocar nada
@@ -221,7 +250,7 @@ async function anunciarCuandoResponda(proceso) {
   const { esperarSalud } = await import("./lib/operacion.mjs");
   const salud = await esperarSalud({ ...process.env, PORT: port }, 600);
   if (!salud.ok || hijo !== proceso) return;
-  avisar(`FICOTOX escuchando en ${esquema}://${host}:${port}${esquema === "http" ? " (HTTP sin cifrar: ver HTTPS en docs/INSTALACION.md)" : ""}`);
+  avisar(`FICOTOX escuchando en ${esquema}://${host}:${port}${esquema === "http" ? " (HTTP sin cifrar: ver HTTPS en README.md)" : ""}`);
   if (!navegadorAbierto && truthy("FICOTOX_OPEN_BROWSER", process.env.FLASK_OPEN_BROWSER ?? "true")) {
     navegadorAbierto = true;
     const command = process.platform === "win32" ? ["cmd", ["/c", "start", "", url]] : process.platform === "darwin" ? ["open", [url]] : ["xdg-open", [url]];

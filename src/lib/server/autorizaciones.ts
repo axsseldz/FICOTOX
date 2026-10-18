@@ -41,7 +41,7 @@ async function serializar(s: Session, filas: Row[]): Promise<AutorizacionPersona
   });
 }
 
-export async function autorizacionesDe(s: Session, usuarioId: number): Promise<AutorizacionPersonal[]> {
+async function autorizacionesDe(s: Session, usuarioId: number): Promise<AutorizacionPersonal[]> {
   const filas = await s.query<Row>(`SELECT * FROM ${TABLE} WHERE usuario_id = :id ORDER BY revocada_en IS NOT NULL, tipo, clave, id DESC`, { id: usuarioId });
   return serializar(s, filas);
 }

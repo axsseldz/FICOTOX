@@ -7,6 +7,7 @@
  *   npm test                         # API + navegador
  *   npm test -- --api                # solo API
  *   npm test -- --rebuild-fixture    # regenera antes la base congelada (npm run test:fixture)
+ *   npm test -- --solo=e2e/flujo-completo.mjs   # solo el recorrido de punta a punta
  *   CHROME_PATH=/ruta/a/chrome npm test
  *
  * Antes de escribir nada comprueba dos cosas: que el puerto este libre (para no
@@ -114,7 +115,7 @@ const ENTORNO_FASE10 = (testDb) => ({ EVIDENCIA_MAX_MB: "25", EVIDENCIA_OBLIGATO
 const SMTP_PRUEBA = { SMTP_HOST: "prueba", SMTP_PORT: "2525", SMTP_USER: "ficotox", SMTP_PASS: "prueba", SMTP_FROM: "FICOTOX <informes@ficotox.local>" };
 const SIN_SMTP = { SMTP_HOST: "", SMTP_PORT: "", SMTP_USER: "", SMTP_PASS: "", SMTP_FROM: "" };
 const arrancarServidor = async (tz = "America/Tijuana", smtp = SMTP_PRUEBA) => {
-  server = spawn("npx", ["next", "dev", "-p", String(PORT)], { cwd: root, stdio: ["ignore", "ignore", "inherit"], env: { ...process.env, SQLITE_PATH: testDb, PORT: String(PORT), TZ: tz, ...ENTORNO_FASE2, ...ENTORNO_FASE10(testDb), ...smtp } });
+  server = spawn("npx", ["next", "dev", "-p", String(PORT)], { cwd: root, stdio: ["ignore", "ignore", "inherit"], env: { ...process.env, SQLITE_PATH: testDb, FICOTOX_INSTANCE_DIR: path.dirname(testDb), PORT: String(PORT), TZ: tz, ...ENTORNO_FASE2, ...ENTORNO_FASE10(testDb), ...smtp } });
   const salud = await waitFor(`http://localhost:${PORT}/api/health/db`);
   if (!salud) throw new Error("El servidor de pruebas no respondio");
   if (salud.archivo !== esperado) {
@@ -137,15 +138,18 @@ try {
   console.log("\n=== datos-apoyo.mjs");
   if (await run(path.join(here, "datos-apoyo.mjs"), api)) throw new Error("No se pudieron crear los datos de apoyo de las pruebas");
 
+  // Suites del navegador: servidor de prueba, Chrome y, en solo lectura, la copia de la base (para comprobar lo que no se ve en pantalla).
+  const entornoUi = () => ({ BASE: `http://localhost:${PORT}`, CHROME_PATH: chrome, CREDENCIALES_ROLES: CREDENCIALES, DATOS_APOYO_FILE: datosApoyo, TEST_DB_PATH: testDb, BETTER_SQLITE3: path.join(root, "node_modules/better-sqlite3") });
+
   if (solo) {
     console.log(`\n=== ${solo}`);
-    const esUi = solo.startsWith("ui/");
-    failed += (await run(path.join(here, solo), esUi ? { BASE: `http://localhost:${PORT}`, CHROME_PATH: chrome, CREDENCIALES_ROLES: CREDENCIALES, DATOS_APOYO_FILE: datosApoyo } : api)) ? 1 : 0;
+    const esUi = solo.startsWith("ui/") || solo.startsWith("e2e/");
+    failed += (await run(path.join(here, solo), esUi ? entornoUi() : api)) ? 1 : 0;
     throw new Error("__solo__");
   }
 
   // api-roles corre despues de api-dsp y api-sgc: crea registros y personas de prueba que alterarian los folios que esas suites esperan.
-  for (const file of ["api-dsp.mjs", "api-sgc.mjs", "api-roles.mjs", "api-seguridad.mjs", "api-segregacion.mjs", "api-autorizaciones.mjs", "api-muestras.mjs", "api-informes.mjs", "api-documentos.mjs", "api-cierre.mjs", "api-evidencias.mjs", "api-incidencias.mjs", "api-no-conformidades.mjs", "api-produccion.mjs", "respaldos.mjs"]) {
+  for (const file of ["api-dsp.mjs", "api-sgc.mjs", "api-roles.mjs", "api-seguridad.mjs", "api-segregacion.mjs", "api-autorizaciones.mjs", "api-muestras.mjs", "api-informes.mjs", "api-documentos.mjs", "api-documentos-flujo.mjs", "api-documentos-fase3.mjs", "api-documentos-aceptacion.mjs", "api-cierre.mjs", "api-evidencias.mjs", "api-incidencias.mjs", "api-no-conformidades.mjs", "api-produccion.mjs", "api-mantenimiento-reportes.mjs", "respaldos.mjs"]) {
     console.log(`\n=== ${file}`);
     failed += (await run(path.join(here, file), api)) ? 1 : 0;
   }
@@ -168,10 +172,13 @@ try {
     if (!existsSync(chrome)) {
       console.log(`\n(navegador omitido: no se encontro Chrome en ${chrome}; define CHROME_PATH)`);
     } else {
-      for (const file of ["roles.mjs", "dsp.mjs", "sgc.mjs", "seguridad.mjs", "fechas.mjs", "segregacion.mjs", "autorizaciones.mjs", "etiquetas.mjs", "auditoria.mjs", "evidencias.mjs", "no-conformidades.mjs"]) {
+      for (const file of ["roles.mjs", "dsp.mjs", "sgc.mjs", "seguridad.mjs", "fechas.mjs", "segregacion.mjs", "autorizaciones.mjs", "etiquetas.mjs", "auditoria.mjs", "evidencias.mjs", "no-conformidades.mjs", "validacion.mjs", "documentos.mjs", "documentos-flujo.mjs", "documentos-fase3.mjs", "documentos-ficha.mjs", "documentos-listas.mjs", "documentos-inicio.mjs", "visor.mjs", "animaciones.mjs", "firmantes.mjs", "mantenimiento-reporte.mjs", "calidad-visor.mjs"]) {
         console.log(`\n=== ui/${file}`);
-        failed += (await run(path.join(here, "ui", file), { BASE: `http://localhost:${PORT}`, CHROME_PATH: chrome, CREDENCIALES_ROLES: CREDENCIALES, DATOS_APOYO_FILE: datosApoyo })) ? 1 : 0;
+        failed += (await run(path.join(here, "ui", file), entornoUi())) ? 1 : 0;
       }
+      // Recorrido de punta a punta del laboratorio (despues de las suites del navegador: no depende de folios exactos).
+      console.log("\n=== e2e/flujo-completo.mjs");
+      failed += (await run(path.join(here, "e2e", "flujo-completo.mjs"), entornoUi())) ? 1 : 0;
     }
   }
 

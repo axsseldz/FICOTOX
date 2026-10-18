@@ -1,3 +1,5 @@
+import { formatearFolio } from "../../shared/folios";
+import { banderasPuede } from "../puede-registro";
 import { createHash } from "node:crypto";
 
 import { exigirSinRetencion, retencionesActivas } from "./calidad/bloqueos";
@@ -47,10 +49,10 @@ function informesDir(): string {
 }
 
 export function informeFolio(row: Row | null | undefined): string {
-  return `IR ${String(row?.folio_num || 0).padStart(7, "0")}`;
+  return formatearFolio("IR", row?.folio_num);
 }
 
-export function serializeInforme(row: Row): Row {
+function serializeInforme(row: Row): Row {
   const item: Row = { ...row };
   item.excepciones = excepcionesDe(row);
   delete item.excepciones_json;
@@ -120,7 +122,7 @@ function methodLabel(value: string, otro?: string | null): string {
 /* Copia congelada de los analisis aprobados que el informe reporta. */
 function snapshotAnalyses(rows: Row[]): InformeAnalisis[] {
   return rows.map((a) => ({
-    folio: `A ${String(a.folio_num || 0).padStart(7, "0")}`,
+    folio: formatearFolio("A", a.folio_num),
     tipo: analysisLabel(String(a.tipo_analisis || "")),
     metodo: methodLabel(String(a.metodo || ""), a.metodo_otro as string | null),
     metodo_referencia: (a.metodo_referencia as string | null) || null,
@@ -147,7 +149,7 @@ async function loadRecepcion(s: Session, id: number | null): Promise<Row> {
   const row = await snapshotRow(s, "muestras_recepcion", id);
   if (!row) throw new HttpError(404, { message: "Recepcion no encontrada" });
   if (["anulada", "rechazada"].includes(String(row.estado || ""))) throw new HttpError(409, { message: "La recepcion esta anulada o rechazada; no se puede informar" });
-  exigirSinSupervisionPendiente(row, `La recepcion R ${String(row.folio_num || 0).padStart(7, "0")}`, "informar a partir de ella");
+  exigirSinSupervisionPendiente(row, `La recepcion ${formatearFolio("R", row.folio_num)}`, "informar a partir de ella");
   return row;
 }
 
@@ -158,7 +160,7 @@ async function loadRecepcion(s: Session, id: number | null): Promise<Row> {
 async function exigirAnalisisSinSolicitud(s: Session, ids: number[], que: string): Promise<void> {
   for (const analisisId of ids) {
     const fila = await s.queryOne<Row>("SELECT folio_num FROM muestras_analisis WHERE id = :id", { id: analisisId });
-    await exigirSinSolicitudPendiente(s, "muestras_analisis", analisisId, `El analisis A ${String(fila?.folio_num || 0).padStart(7, "0")}`, que);
+    await exigirSinSolicitudPendiente(s, "muestras_analisis", analisisId, `El analisis ${formatearFolio("A", fila?.folio_num)}`, que);
   }
 }
 
@@ -197,12 +199,6 @@ function assertDraft(row: Row | null): Row {
   return row;
 }
 
-export async function getNextFolio({ request, s }: RouteContext): Promise<Response> {
-  const user = await requireUser(request);
-  await requirePermission(s, user, "informes", "V");
-  return json({ next_folio: await nextFolioNum(s, TABLE) });
-}
-
 export async function listInformes({ request, s }: RouteContext): Promise<Response> {
   const user = await requireUser(request);
   const permiso = await requirePermission(s, user, "informes", "V");
@@ -232,9 +228,11 @@ export async function listInformes({ request, s }: RouteContext): Promise<Respon
     { search, search_like: `%${search}%`, estado, recepcion_id: recepcionId, incluir_anulados: includeAnulados ? 1 : 0, ...supFiltro.params },
   );
   const pendientes = await pendientesDe(s, TABLE, rows.map((r) => Number(r.id)));
+  const banderas = await banderasPuede(s, permiso.auth, TABLE, rows.map((r) => Number(r.id)), new Set(rows.filter((r) => pendientes.has(String(r.id))).map((r) => Number(r.id))));
   return json({
     items: rows.map((row) => {
       const item: Row = { ...row, folio: informeFolio(row), solicitud_pendiente: pendientes.has(String(row.id)) ? serializarSolicitud(pendientes.get(String(row.id))!) : null, cliente: safeJsonLoad(row.cliente_json, {}), analisis: safeJsonLoad<number[]>(row.analisis_ids_json, []).length, entrega: safeJsonLoad(row.entrega_json, null) };
+      item.puede = banderas.get(Number(row.id)) || {};
       delete item.cliente_json;
       delete item.analisis_ids_json;
       delete item.entrega_json;
@@ -261,6 +259,7 @@ export async function getInforme({ request, s, params }: RouteContext): Promise<
     return v && !excepcionPara(excepcionesDe(row), yo, accion) ? v.mensaje : null;
   };
   item.segregacion = { revisar: await bloqueo("revisar"), autorizar: await bloqueo("autorizar") };
+  item.puede = (await banderasPuede(s, await cargarAutorizacion(s, user), TABLE, [id], new Set(pendiente ? [id] : []), true)).get(id) || {};
   // En borrador los analisis se leen en vivo; autorizado, del congelado.
   if (["borrador", "en_revision"].includes(String(row.estado))) {
     const analyses = await loadAnalyses(s, item.analisis_ids as number[]);
@@ -271,6 +270,8 @@ export async function getInforme({ request, s, params }: RouteContext): Promise<
   item.recepcion = recepcion ? { id: recepcion.id, folio_num: recepcion.folio_num, solicitante: recepcion.solicitante, fecha_recepcion: recepcion.fecha_recepcion, estado: recepcion.estado, decision_aceptacion: recepcion.decision_aceptacion } : null;
   // Fase 6: integridad del PDF final (su SHA-256 contra el guardado al liberar).
   item.pdf_integridad = await integridadPdf(row);
+  // Versiones del mismo informe (enmiendas) para el visor del PDF.
+  item.versiones = (await s.query<Row>(`SELECT id, version, estado, sustituye_a, archivo_pdf FROM ${TABLE} WHERE folio_num = :folio ORDER BY version`, { folio: row.folio_num })).map((v) => ({ id: v.id, version: v.version, estado: v.estado, sustituye_a: v.sustituye_a, tiene_pdf: !!v.archivo_pdf }));
   // Fase 11: retenciones activas por no conformidad (no se libera ni se envia mientras existan).
   // El motivo es de la NC: solo con calidad:V total (a los demas, el folio de la NC y la fecha bastan para saber por que no se libera).
   const calidadTotal = !!permisoDe(await cargarAutorizacion(s, user), "calidad", "V", { objeto: "nc" })?.alcances.includes("total");
@@ -303,6 +304,8 @@ export async function createInforme({ request, s }: RouteContext): Promise<Respo
   const recepcion = await loadRecepcion(s, data.recepcion_id);
   const analyses = await loadAnalyses(s, data.analisis_ids);
   if (analyses.some((a) => Number(a.recepcion_id) !== Number(recepcion.id))) return json({ message: "Todos los analisis deben pertenecer a la recepcion del informe" }, 400);
+  // El cliente es dato obligatorio del informe (si no se manda, se toma el solicitante de la recepción).
+  if (!normalizeCliente(data.cliente, recepcion).nombre) return json({ message: "Indica el nombre del cliente" }, 400);
   await exigirAnalisisSinSolicitud(s, data.analisis_ids, "incluir en un informe");
   const folio = data.folio_num || (await nextFolioNum(s, TABLE));
   const userId = userIdFromClaims(user);
@@ -361,6 +364,8 @@ export async function updateInforme({ request, s, params }: RouteContext): Promi
   const recepcion = await loadRecepcion(s, data.recepcion_id || Number(antes.recepcion_id));
   const analyses = await loadAnalyses(s, data.analisis_ids);
   if (analyses.some((a) => Number(a.recepcion_id) !== Number(recepcion.id))) return json({ message: "Todos los analisis deben pertenecer a la recepcion del informe" }, 400);
+  // El cliente es dato obligatorio del informe (si no se manda, se toma el solicitante de la recepción).
+  if (!normalizeCliente(data.cliente, recepcion).nombre) return json({ message: "Indica el nombre del cliente" }, 400);
   await exigirAnalisisSinSolicitud(s, data.analisis_ids, "incluir en un informe");
   await s.execute(
     `
@@ -440,7 +445,7 @@ async function buildRender(s: Session, row: Row, analyses: Row[]): Promise<Infor
     motivo_enmienda: (row.motivo_enmienda as string | null) || null,
     fecha_emision: String(row.fecha_emision || hoyLocal()),
     cliente,
-    recepcion: { folio: `R ${String(recepcion?.folio_num || 0).padStart(7, "0")}`, fecha_recepcion: (recepcion?.fecha_recepcion as string | null) || null, fecha_muestra: (recepcion?.fecha_muestra as string | null) || null, medio: (recepcion?.medio_recepcion as string | null) || null },
+    recepcion: { folio: formatearFolio("R", recepcion?.folio_num), fecha_recepcion: (recepcion?.fecha_recepcion as string | null) || null, fecha_muestra: (recepcion?.fecha_muestra as string | null) || null, medio: (recepcion?.medio_recepcion as string | null) || null },
     muestras: safeJsonLoad(String(row.muestras_json || "[]"), []),
     analisis: analyses.length ? snapshotAnalyses(analyses) : safeJsonLoad(String(row.resultados_json || "[]"), []),
     declaraciones,
@@ -491,7 +496,7 @@ export async function authorizeInforme({ request, s, params }: RouteContext): Pr
   if (!analyses.length) return json({ message: "El informe no incluye analisis" }, 400);
   await exigirAnalisisSinSolicitud(s, ids, "autorizar en un informe");
   const noAprobados = analyses.filter((a) => String(a.estado) !== "aprobado");
-  if (noAprobados.length) return json({ message: `Hay analisis sin aprobar: ${noAprobados.map((a) => `A ${String(a.folio_num).padStart(7, "0")}`).join(", ")}` }, 409);
+  if (noAprobados.length) return json({ message: `Hay analisis sin aprobar: ${noAprobados.map((a) => formatearFolio("A", a.folio_num)).join(", ")}` }, 409);
 
   const now = new Date().toISOString();
   const fechaEmision = strippedOrNull(payload.fecha_emision, 10) || String(antes.fecha_emision || hoyLocal());
@@ -526,7 +531,7 @@ export async function liberarInforme({ request, s, params }: RouteContext): Prom
   const ids = safeJsonLoad<number[]>(String(antes.analisis_ids_json || "[]"), []);
   const analyses = await loadAnalyses(s, ids);
   const noAprobados = analyses.filter((a) => String(a.estado) !== "aprobado");
-  if (!analyses.length || noAprobados.length) return json({ message: noAprobados.length ? `Hay analisis sin aprobar: ${noAprobados.map((a) => `A ${String(a.folio_num).padStart(7, "0")}`).join(", ")}` : "El informe no incluye analisis" }, 409);
+  if (!analyses.length || noAprobados.length) return json({ message: noAprobados.length ? `Hay analisis sin aprobar: ${noAprobados.map((a) => formatearFolio("A", a.folio_num)).join(", ")}` : "El informe no incluye analisis" }, 409);
   await exigirReauth(s, request, user, "informes:A");
   const now = new Date().toISOString();
   await s.execute(
@@ -554,7 +559,7 @@ export function exigirSinRequiereEnmienda(row: Row, que: string): void {
 }
 
 /* Fase 6: compara el SHA-256 del PDF en disco con el guardado al liberar. */
-export async function integridadPdf(row: Row): Promise<"ok" | "alterado" | "faltante" | null> {
+async function integridadPdf(row: Row): Promise<"ok" | "alterado" | "faltante" | null> {
   if (!row.archivo_pdf || !row.pdf_sha256) return null;
   const ruta = path.join(informesDir(), String(row.archivo_pdf));
   if (!fs.existsSync(ruta)) return "faltante";
@@ -640,7 +645,7 @@ async function violacionInforme(s: Session, usuarioId: number, informe: Row, ana
   for (const analisisId of analisisIds) {
     const fila = await s.queryOne<Row>("SELECT id, folio_num, creado_por FROM muestras_analisis WHERE id = :id", { id: analisisId });
     if (!fila) continue;
-    porAnalisis.push({ folio: `A ${String(fila.folio_num || 0).padStart(7, "0")}`, elaboradores: await elaboradoresDe(s, "muestras_analisis", analisisId, fila.creado_por) });
+    porAnalisis.push({ folio: formatearFolio("A", fila.folio_num), elaboradores: await elaboradoresDe(s, "muestras_analisis", analisisId, fila.creado_por) });
   }
   return evaluarInforme(usuarioId, elaboradores, porAnalisis, accion);
 }
@@ -711,34 +716,47 @@ export async function amendInforme({ request, s, params }: RouteContext): Promis
   return json({ message: "Enmienda creada en borrador", id: nuevoId, version: maxVersion + 1 }, 201);
 }
 
+/*
+ * GET /api/informes/:id/pdf. Sin parametros (o modo=descargar): el PDF final,
+ * o una vista previa si aun no se libera, y queda "descargar" en la bitacora.
+ * modo=ver (visor de la plataforma): solo el PDF final, en linea y sin
+ * bitacora (leer no se registra); si el archivo falta o no coincide con su
+ * huella SHA-256 se registra la alerta y la incidencia automatica como al descargar.
+ */
 export async function getInformePdf({ request, s, params }: RouteContext): Promise<Response> {
   const id = intParam(params.id);
   const user = await requireUser(request);
   await requirePermission(s, user, "informes", "V");
   const row = await snapshotRow(s, TABLE, id);
   if (!row) return json({ message: "Informe no encontrado" }, 404);
+  const ver = new URL(request.url).searchParams.get("modo") === "ver";
   let pdf: Buffer;
   const integridad = await integridadPdf(row);
+  const alertar = async (motivo: string, clave: string, descripcion: string, detalle: Record<string, unknown>) => {
+    await registrarAuditoria(s, user, { accion: "alerta_integridad", entidad: TABLE, entidadId: id, referencia: informeFolio(row), motivo, detalle });
+    // Fase 11: incidencia automatica (la reporta el sistema; una por PDF alterado).
+    await incidenciaPorAlertaIntegridad(s, { clave, descripcion, registros: [{ entidad: TABLE, entidad_id: id, referencia: informeFolio(row) }] });
+  };
   if (row.archivo_pdf && fs.existsSync(path.join(informesDir(), String(row.archivo_pdf)))) {
     pdf = await fs.promises.readFile(path.join(informesDir(), String(row.archivo_pdf)));
     // Fase 6: si la huella no coincide con la guardada al liberar, se avisa en la bitacora (y en la ficha).
-    if (integridad === "alterado") {
-      await registrarAuditoria(s, user, { accion: "alerta_integridad", entidad: TABLE, entidadId: id, referencia: informeFolio(row), motivo: "El SHA-256 del PDF no coincide con el guardado al liberar", detalle: { esperado: row.pdf_sha256, obtenido: createHash("sha256").update(pdf).digest("hex") } });
-      // Fase 11: incidencia automatica (la reporta el sistema; una por PDF alterado).
-      await incidenciaPorAlertaIntegridad(s, { clave: `informe:${id}:${row.pdf_sha256}`, descripcion: `El PDF final del informe ${informeFolio(row)} no coincide con su huella SHA-256 registrada al liberarlo (alerta de integridad).`, registros: [{ entidad: TABLE, entidad_id: id, referencia: informeFolio(row) }] });
-    }
+    if (integridad === "alterado") await alertar("El SHA-256 del PDF no coincide con el guardado al liberar", `informe:${id}:${row.pdf_sha256}`, `El PDF final del informe ${informeFolio(row)} no coincide con su huella SHA-256 registrada al liberarlo (alerta de integridad).`, { esperado: row.pdf_sha256, obtenido: createHash("sha256").update(pdf).digest("hex") });
+  } else if (ver && row.archivo_pdf) {
+    await alertar("El PDF final del informe no está en el servidor", `informe:${id}:faltante:${row.pdf_sha256}`, `El PDF final del informe ${informeFolio(row)} no está en el servidor (alerta de integridad).`, { esperado: row.pdf_sha256, archivo: row.archivo_pdf });
+    await s.commit();
+    return json({ message: "El PDF del informe no está en el servidor; se registró una alerta de integridad", codigo: "archivo_faltante" }, 404);
   } else {
-    // Borrador: vista previa generada al vuelo, marcada como tal.
+    // Sin PDF final (borrador, revisión, autorizado): vista previa generada al vuelo, marcada como tal. Con modo=ver (el visor) no se registra en la bitacora.
     const analyses = await loadAnalyses(s, safeJsonLoad<number[]>(String(row.analisis_ids_json || "[]"), []));
     const render = await buildRender(s, row, analyses);
     render.declaraciones = { ...render.declaraciones, opiniones: [render.declaraciones.opiniones, "VISTA PREVIA — informe no liberado"].filter(Boolean).join("\n") };
     pdf = await renderInformePdf(render);
   }
-  await registrarAuditoria(s, user, { accion: "descargar", entidad: TABLE, entidadId: id, referencia: informeFolio(row) });
+  if (!ver) await registrarAuditoria(s, user, { accion: "descargar", entidad: TABLE, entidadId: id, referencia: informeFolio(row) });
   await s.commit();
   return new Response(new Uint8Array(pdf), {
     status: 200,
-    headers: { "Content-Type": "application/pdf", "Content-Length": String(pdf.length), "X-Integridad-Pdf": integridad || "sin_pdf_final", "Content-Disposition": `inline; filename="${informeFolio(row).replace(/\s+/g, "-")}-v${row.version}.pdf"` },
+    headers: { "Content-Type": "application/pdf", "Content-Length": String(pdf.length), "X-Integridad-Pdf": integridad || "sin_pdf_final", "Content-Disposition": `inline; filename="${informeFolio(row).replace(/\s+/g, "-")}-v${row.version}.pdf"`, ...(ver ? { "Cache-Control": "private, no-store" } : {}) },
   });
 }
 

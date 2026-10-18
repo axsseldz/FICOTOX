@@ -9,7 +9,7 @@ export default function NotFound() {
         <h1 className="display text-[36px] text-ink">Esta página no existe</h1>
         <p className="max-w-sm text-[14px] text-ink-3">Revisa la dirección o vuelve al inicio y usa la búsqueda.</p>
       </div>
-      <Link href="/" className="press inline-flex h-10 items-center rounded-[10px] bg-brand px-5 text-[14px] font-medium text-white hover:bg-brand-strong">
+      <Link href="/" className="press inline-flex h-10 items-center rounded-[10px] bg-brand px-5 text-[14px] font-medium text-on-accent hover:bg-brand-strong">
         Ir al inicio
       </Link>
     </main>

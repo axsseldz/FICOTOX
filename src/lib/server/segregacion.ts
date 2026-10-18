@@ -13,7 +13,8 @@ import { excepcionPara, type ExcepcionSegregacion, type Violacion } from "../sha
  */
 
 // Fase 11: incidencias (evaluar), no conformidades (verificar, cerrar) y suspensiones (reanudar).
-export const TABLAS_CON_EXCEPCION = ["muestras_analisis", "informes", "documentos_sgc", "incidencias", "no_conformidades", "suspensiones"] as const;
+// documentos_sgc se retiro con la regla 5 (flujo anterior; Documentos SGC tiene su propia segregacion en modules/sgc/flujo.ts).
+export const TABLAS_CON_EXCEPCION = ["muestras_analisis", "informes", "incidencias", "no_conformidades", "suspensiones"] as const;
 export type TablaConExcepcion = (typeof TABLAS_CON_EXCEPCION)[number];
 
 /*

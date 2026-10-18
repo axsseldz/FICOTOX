@@ -1,5 +1,6 @@
 "use client";
 
+import { formatearFolio } from "@/lib/shared/folios";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -18,8 +19,11 @@ import { filterManualInventario, findInsumoByAutoQuery, findInsumoOption, findUn
 import { formatProcessingFolio, isSampleReadOnly, sampleStatusLabel } from "@/lib/client/samples";
 import { formatActiveUserSignature } from "@/lib/client/session";
 import { invalidate } from "@/lib/client/store";
+import { seOfrece, usePuedeCrear } from "@/lib/client/puede";
 import type { ApiRecord } from "@/lib/client/types";
-import { Callout, ChoiceCard, ChoiceGrid, FormCard, FormPage, FormTable, PersonCard, StepRow, formTd, formTh, missingMessage, missingSections, openFormSection, type FormSectionDef } from "./FormLayout";
+import { Callout, ChoiceCard, ChoiceGrid, FormCard, FormPage, FormTable, PersonCard, StepRow, formTd, formTh, personaId, type FormSectionDef } from "./FormLayout";
+import { CampoValidado, MensajeCampo, useValidacion } from "@/components/ui/Validacion";
+import { msg, type Problema } from "@/lib/client/mensajes";
 import { InsumoSearch, InventarioRows, collectInventarioRows, newInventarioRow } from "./InsumoSearch";
 import { SolicitudCallout, SupervisionCallout } from "./status";
 import { formatearHora } from "@/lib/shared/fechas";
@@ -262,32 +266,55 @@ const SECTIONS: FormSectionDef[] = [
 export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord | null; prefillReceptionId?: number | null }) {
   const router = useRouter();
   const { token, can } = useSession();
+  const puedeCrear = usePuedeCrear();
   const [form, setForm] = useState<ProcessingForm>(() => (item ? formFromItem(item) : defaultForm()));
   // Fase 5: firmas ligadas a cuentas (procesó, supervisó).
   const [firmantes, setFirmantes] = useState<Record<string, FirmanteState>>(() => ({ proceso: firmanteDe(item, "proceso"), superviso: firmanteDe(item, "superviso") }));
-  const firmante = (rol: string) => ({ firmante: firmantes[rol], onFirmante: (v: FirmanteState) => setFirmantes((prev) => ({ ...prev, [rol]: v })) });
+  const firmante = (rol: string) => ({ nuevo: !item?.id, firmante: firmantes[rol], onFirmante: (v: FirmanteState) => setFirmantes((prev) => ({ ...prev, [rol]: v })) });
   const [receptions, setReceptions] = useState<ApiRecord[]>([]);
   const [equipos, setEquipos] = useState<ApiRecord[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const detailCache = useRef(new Map<number, ApiRecord>());
   const editing = !!item?.id;
-  const canEdit = editing ? can("ensayos", "E", { objeto: "procesamiento", borrador: String(item?.estado || "registrada") === "registrada" }) : can("ensayos", "C", { objeto: "procesamiento", borrador: true });
+  const canEdit = editing ? seOfrece(item, "editar", can("ensayos", "E", { objeto: "procesamiento", borrador: String(item?.estado || "registrada") === "registrada" })) : puedeCrear("procesamiento", can("ensayos", "C", { objeto: "procesamiento", borrador: true }));
   // Con una solicitud de autorizacion pendiente (Fase 3) el registro no se edita.
   const readOnly = editing && (isSampleReadOnly(item?.estado) || !canEdit || !!item?.solicitud_pendiente);
   const patch = (changes: Partial<ProcessingForm>) => setForm((prev) => ({ ...prev, ...changes }));
   const stepKeys = form.organismo === "bivalvos" ? BIVALVOS_STEPS.map(([k]) => k) : form.organismo === "sardinas" ? SARDINAS_STEPS.map(([k]) => k) : [];
-  const completeness: Record<string, boolean> = {
-    "sec-datos": !!form.folio && !!form.fecha,
-    "sec-muestra": !!form.receptionId && (form.muestraTipo === "lote" ? !!form.loteRows?.some((r) => r.checked) : !!form.idInterno.trim()),
-    "sec-organismo": !!form.organismo && (form.organismo !== "otro" || !!form.otroOrganismoText.trim()) && form.partes.length > 0,
-    "sec-proceso": form.organismo === "otro" ? !!form.otroProcesamiento.trim() : stepKeys.length > 0 && stepKeys.some((k) => form.steps[k]),
-    "sec-resguardo": Object.values(form.resguardo).some(Boolean),
-    "sec-personal": !!form.quienProceso.trim() && !!form.quienSuperviso.trim(),
+  const procesoId = personaId("Quien procesó");
+  const supervisoId = personaId("Quien supervisó");
+  /* Reglas del formato, en orden: dan la completitud de la guía, el aviso del encabezado y el pop-up al guardar. */
+  const reglas = (): Problema[] => {
+    const out: Problema[] = [];
+    const en = (seccion: string, grupo: string) => (campo: string, mensaje: string) => out.push({ campo, mensaje, seccion, grupo });
+    const datos = en("sec-datos", "Datos generales");
+    if (!form.folio) datos("p-folio", msg.indica("el folio de procesamiento"));
+    if (!form.fecha) datos("p-fecha", msg.indica("la fecha de procesamiento"));
+    const mu = en("sec-muestra", "Muestra");
+    if (!form.receptionId) mu("p-recepcion", msg.elige("la recepción de origen"));
+    if (form.muestraTipo === "lote") {
+      if (!form.loteRows?.some((r) => r.checked)) mu("p-lote", msg.marca("al menos una muestra del lote"));
+    } else if (!form.idInterno.trim()) mu("p-id", msg.indica("el ID interno de la muestra"));
+    const org = en("sec-organismo", "Organismo");
+    if (!form.organismo) org("p-organismo", msg.elige("el tipo de organismo"));
+    else if (form.organismo === "otro" && !form.otroOrganismoText.trim()) org("p-organismo-otro", msg.indica("el tipo de organismo"));
+    if (!form.partes.length) org("p-partes", msg.marca("al menos una parte del organismo"));
+    const proc = en("sec-proceso", "Procesamiento");
+    if (form.organismo === "otro") {
+      if (!form.otroProcesamiento.trim()) proc("p-otro", msg.escribe("el procedimiento aplicado"));
+    } else if (!stepKeys.length || !stepKeys.some((k) => form.steps[k])) proc("p-pasos", form.organismo ? msg.marca("al menos un paso realizado") : msg.elige("primero el tipo de organismo"));
+    if (!Object.values(form.resguardo).some(Boolean)) en("sec-resguardo", "Resguardo")("p-resguardo", msg.elige("dónde queda la molienda"));
+    const per = en("sec-personal", "Personal");
+    if (!form.quienProceso.trim()) per(procesoId, msg.elige("a quien procesó"));
+    if (!form.quienSuperviso.trim()) per(supervisoId, msg.elige("a quien supervisó"));
+    return out;
   };
+  const v = useValidacion({ titulo: editing ? "No se pudo guardar el procesamiento" : "No se pudo registrar el procesamiento", reglas: readOnly ? () => [] : reglas });
   // Opcional: verde solo cuando hay insumos con referencia; si no, queda sin evaluar.
   const optionalDone: Record<string, boolean | undefined> = { "sec-insumos": form.inventarioRows.some((row) => (row.ref || row.nombre || "").trim()) ? true : undefined };
-  const sections: FormSectionDef[] = [...SECTIONS, ...(editing ? [{ id: "sec-historial", label: "Historial", optional: true }] : [])].map((section) => ({ ...section, complete: readOnly ? undefined : section.optional ? optionalDone[section.id] : completeness[section.id] }));
+  const sections: FormSectionDef[] = [...SECTIONS, ...(editing ? [{ id: "sec-historial", label: "Historial", optional: true }] : [])].map((section) => ({ ...section, complete: readOnly ? undefined : section.optional ? optionalDone[section.id] : v.seccionCompleta(section.id) }));
+  const camposServidor = { folio: "p-folio", id_interno: "p-id", "firma:proceso": procesoId, "firma:superviso": supervisoId };
+  const ubicacionServidor = { folio: { seccion: "sec-datos", grupo: "Datos generales" }, id_interno: { seccion: "sec-muestra", grupo: "Muestra" }, "firma:proceso": { seccion: "sec-personal", grupo: "Personal" }, "firma:superviso": { seccion: "sec-personal", grupo: "Personal" } };
 
   const receptionDetail = async (id: number): Promise<ApiRecord | null> => {
     const cached = detailCache.current.get(id);
@@ -423,26 +450,14 @@ export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord |
     };
   };
 
-  const fail = (message: string, section: string) => {
-    setError(message);
-    toast.error(message);
-    openFormSection(section);
-  };
-
   const handleSave = async () => {
+    if (!v.validar()) return;
+    if (!canEdit) return v.avisar({ que: "No tienes permiso para guardar este procesamiento.", hacer: "Pide a la administración que revise tus roles y permisos." });
     await loadInsumoOptions();
     const current = autoResolve(form);
-    const missing = missingSections(sections);
-    if (missing.length) return fail(missingMessage(missing), missing[0].id);
     setForm(current);
     const payload = { ...buildPayload(current), firmantes: firmantesPayload(firmantes) };
-    if (!payload.folio_num) return fail("El folio de procesamiento es obligatorio", "sec-datos");
-    if (payload.muestra_tipo === "unica" && !payload.id_interno) return fail("Captura el ID interno de la muestra", "sec-muestra");
-    if (payload.muestra_tipo === "lote" && !payload.lote_seleccion.length) return fail("Selecciona al menos una muestra del lote", "sec-muestra");
-    if (!payload.tipo_organismo.length) return fail("Selecciona el tipo de organismo", "sec-organismo");
-    if (!canEdit) return fail("No tienes permiso para esta acción", "sec-datos");
     setSubmitting(true);
-    setError(null);
     try {
       if (editing) {
         await sendJsonAuth("PUT", `${API_BASE_URL}/samples/processing/${item!.id}`, token, payload);
@@ -454,9 +469,7 @@ export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord |
       invalidate("muestras", "movimientos", "consumibles", "reactivos", "dashboard");
       router.push("/muestras/procesamiento");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudo guardar el procesamiento";
-      setError(message);
-      toast.error(message);
+      v.errorServidor(err, camposServidor, ubicacionServidor);
       setSubmitting(false);
     }
   };
@@ -483,7 +496,7 @@ export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord |
       status={sampleStatusLabel(form.estado)}
       statusTone={readOnly ? "danger" : "brand"}
       sections={sections}
-      error={error}
+      validacion={v}
       readOnly={readOnly}
       after={
         editing ? (
@@ -520,7 +533,7 @@ export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord |
       <FormCard id="sec-datos" title="Datos generales" description="Folio, fecha y recepción de origen.">
         <FormGrid cols={4}>
           <Field label="Folio P" htmlFor="p-folio" required>
-            <Input id="p-folio" type="number" min="1" inputMode="numeric" value={form.folio} onChange={(event) => patch({ folio: event.target.value })} mono invalid={!!error && !form.folio} />
+            <Input id="p-folio" type="number" min="1" inputMode="numeric" value={form.folio} onChange={(event) => patch({ folio: event.target.value })} mono />
           </Field>
           <Field label="Fecha" htmlFor="p-fecha" required>
             <DateInput id="p-fecha" value={form.fecha} onChange={(value) => patch({ fecha: value })} />
@@ -540,7 +553,7 @@ export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord |
               <option value="">Sin vincular</option>
               {receptions.map((option) => (
                 <option key={option.id} value={option.id}>
-                  R {String(option.folio_num || "").padStart(7, "0")} · {option.solicitante || option.id_interno || "Sin solicitante"}
+                  {formatearFolio("R", option.folio_num)} · {option.solicitante || option.id_interno || "Sin solicitante"}
                 </option>
               ))}
             </Select>
@@ -555,13 +568,14 @@ export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord |
         </ChoiceGrid>
         {!isLote ? (
           <Field label="ID interno" htmlFor="p-id" required>
-            <Input id="p-id" maxLength={100} value={form.idInterno} onChange={(event) => patch({ idInterno: event.target.value })} mono invalid={!!error && !form.idInterno.trim()} className="max-w-sm" />
+            <Input id="p-id" maxLength={100} value={form.idInterno} onChange={(event) => patch({ idInterno: event.target.value })} mono className="max-w-sm" />
           </Field>
         ) : form.loteRows === null ? (
           <EmptyState compact title="Vincula una recepción" description="Selecciona el folio de recepción para cargar las muestras del lote." />
         ) : !form.loteRows.length ? (
           <EmptyState compact title="Sin muestras de lote" description="La recepción vinculada no contiene muestras de lote." />
         ) : (
+          <CampoValidado id="p-lote">
           <FormTable minWidth={640}>
             <thead>
                 <tr>
@@ -596,12 +610,13 @@ export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord |
                 ))}
               </tbody>
             </FormTable>
+          </CampoValidado>
         )}
       </FormCard>
 
       <FormCard id="sec-organismo" title="Organismo" description="Tipo de organismo y parte a procesar.">
         <div className="grid gap-6 lg:grid-cols-2">
-          <div className="flex flex-col gap-2">
+          <CampoValidado id="p-organismo" className="flex flex-col gap-2">
             <p className="text-[13px] font-medium text-ink-2">Tipo de organismo</p>
             {(
               [
@@ -612,21 +627,26 @@ export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord |
             ).map(([value, label, description]) => (
               <ChoiceCard key={value} type="radio" name="p-organismo" checked={form.organismo === value} onChange={() => patch({ organismo: value })} label={label} description={description} />
             ))}
-            {form.organismo === "otro" ? <Input placeholder="Especificar tipo de organismo" value={form.otroOrganismoText} onChange={(event) => patch({ otroOrganismoText: event.target.value })} aria-label="Otro organismo" /> : null}
-          </div>
-          <div className="flex flex-col gap-2">
+            {form.organismo === "otro" ? (
+              <>
+                <Input id="p-organismo-otro" placeholder="Especificar tipo de organismo" value={form.otroOrganismoText} onChange={(event) => patch({ otroOrganismoText: event.target.value })} aria-label="Otro organismo" />
+                <MensajeCampo id="p-organismo-otro" />
+              </>
+            ) : null}
+          </CampoValidado>
+          <CampoValidado id="p-partes" className="flex flex-col gap-2">
             <p className="text-[13px] font-medium text-ink-2">Parte del organismo</p>
             {PARTES.map(([value, label]) => (
               <ChoiceCard key={value} checked={form.partes.includes(value)} onChange={(checked) => patch({ partes: checked ? [...form.partes.filter((v) => v !== value), value] : form.partes.filter((v) => v !== value) })} label={label} />
             ))}
             {form.partes.includes("otro") ? <Input placeholder="Especificar otra parte" value={form.otroParteText} onChange={(event) => patch({ otroParteText: event.target.value })} aria-label="Otra parte" /> : null}
-          </div>
+          </CampoValidado>
         </div>
       </FormCard>
 
       <FormCard id="sec-proceso" title="Procesamiento" description={form.organismo ? "Marca los pasos realizados y registra equipo y peso donde aplique." : "Selecciona el tipo de organismo para ver los pasos."}>
         {form.organismo === "bivalvos" ? (
-          <div className="flex flex-col">
+          <CampoValidado id="p-pasos" className="flex flex-col">
             {BIVALVOS_STEPS.map(([id, , label], index) => (
               <StepRow key={id} number={index + 1} label={label} checked={!!form.steps[id]} onCheckedChange={(checked) => setStep(id, checked)}>
                 {id === "procBiv6" && form.steps[id] ? equipoSelect(form.biv6Equipo, (v) => patch({ biv6Equipo: v }), "Cronómetro (CR)") : null}
@@ -640,9 +660,9 @@ export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord |
                 {id === "procBiv8" && form.steps[id] ? <InsumoSearch tipo="consumible" value={form.biv8BolsaRef} onChange={(ref) => patch({ biv8BolsaRef: ref })} placeholder="Bolsa hermética (se descuenta 1 pieza)" /> : null}
               </StepRow>
             ))}
-          </div>
+          </CampoValidado>
         ) : form.organismo === "sardinas" ? (
-          <div className="flex flex-col">
+          <CampoValidado id="p-pasos" className="flex flex-col">
             {SARDINAS_STEPS.map(([id, , label], index) => (
               <StepRow key={id} number={index + 1} label={label} checked={!!form.steps[id]} onCheckedChange={(checked) => setStep(id, checked)}>
                 {id === "procSar3" && form.steps[id] ? equipoSelect(form.sar3Equipo, (v) => patch({ sar3Equipo: v }), "Licuadora (LC)") : null}
@@ -655,22 +675,26 @@ export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord |
                 {id === "procSar5" && form.steps[id] ? <InsumoSearch tipo="consumible" value={form.sar5BolsaRef} onChange={(ref) => patch({ sar5BolsaRef: ref })} placeholder="Bolsa hermética (se descuenta 1 pieza)" /> : null}
               </StepRow>
             ))}
-          </div>
+          </CampoValidado>
         ) : form.organismo === "otro" ? (
           <Field label="Procedimiento aplicado" htmlFor="p-otro">
             <Textarea id="p-otro" rows={4} placeholder="Describe el proceso de preparación para este organismo" value={form.otroProcesamiento} onChange={(event) => patch({ otroProcesamiento: event.target.value })} />
           </Field>
         ) : (
-          <EmptyState compact title="Sin organismo seleccionado" description="Elige bivalvos, sardinas u otro en la sección anterior." />
+          <CampoValidado id="p-pasos">
+            <EmptyState compact title="Sin organismo seleccionado" description="Elige bivalvos, sardinas u otro en la sección anterior." />
+          </CampoValidado>
         )}
       </FormCard>
 
       <FormCard id="sec-resguardo" title="Resguardo de la molienda" description="Dónde queda la molienda al terminar.">
-        <ChoiceGrid>
-          {RESGUARDO.map(([key, label]) => (
-            <ChoiceCard key={key} checked={!!form.resguardo[key]} onChange={(checked) => patch({ resguardo: { ...form.resguardo, [key]: checked } })} label={label} />
-          ))}
-        </ChoiceGrid>
+        <CampoValidado id="p-resguardo">
+          <ChoiceGrid>
+            {RESGUARDO.map(([key, label]) => (
+              <ChoiceCard key={key} checked={!!form.resguardo[key]} onChange={(checked) => patch({ resguardo: { ...form.resguardo, [key]: checked } })} label={label} />
+            ))}
+          </ChoiceGrid>
+        </CampoValidado>
         <Field label="Observaciones generales" htmlFor="p-obs" className="mt-5">
           <Textarea id="p-obs" rows={3} value={form.observaciones} onChange={(event) => patch({ observaciones: event.target.value })} />
         </Field>

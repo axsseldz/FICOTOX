@@ -14,6 +14,8 @@ import { API_BASE_URL, getJsonAuth, sendFormAuth, sendJsonAuth } from "@/lib/cli
 import { openProtectedFile } from "@/lib/client/files";
 import { invalidate } from "@/lib/client/store";
 import type { ApiRecord } from "@/lib/client/types";
+import { useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
+import { msg, type Problema } from "@/lib/client/mensajes";
 import { formatearFechaHora, hoyLocal } from "@/lib/shared/fechas";
 
 /*
@@ -64,10 +66,31 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
     onCambio?.();
   };
 
+  /* Destinatario: lo exigen el envío manual y el de la plataforma. */
+  const reglasDestinatario = (): Problema[] => {
+    const out: Problema[] = [];
+    if (!form.nombre.trim()) out.push({ campo: "envio-nombre", mensaje: msg.indica("el nombre del destinatario"), grupo: "Destinatario" });
+    if (!form.correo.trim()) out.push({ campo: "envio-correo", mensaje: msg.indica("el correo del destinatario"), grupo: "Destinatario" });
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo.trim())) out.push({ campo: "envio-correo", mensaje: msg.correo, grupo: "Destinatario" });
+    return out;
+  };
+  const vEnvio = useValidacion({
+    titulo: "No se pudo registrar el envío",
+    reglas: () => {
+      const out = reglasDestinatario();
+      if (!form.fecha) out.push({ campo: "envio-fecha", mensaje: msg.indica("la fecha del envío"), grupo: "Envío" });
+      if (!form.hora) out.push({ campo: "envio-hora", mensaje: msg.indica("la hora del envío"), grupo: "Envío" });
+      if (!archivo) out.push({ campo: "envio-evidencia", mensaje: "Adjunta la evidencia del correo enviado (PDF, imagen o .eml)", grupo: "Evidencia" });
+      return out;
+    },
+  });
+  const vConf = useValidacion({
+    titulo: "No se pudo registrar la confirmación",
+    reglas: () => (confirmar && !confirmar.fecha ? [{ campo: "conf-fecha", mensaje: msg.indica("la fecha de la confirmación"), grupo: "Confirmación" }] : []),
+  });
+
   const registrarManual = async () => {
-    if (!form.nombre.trim() || !form.correo.trim()) return toast.error("Indica el nombre y el correo del destinatario");
-    if (!form.fecha || !form.hora) return toast.error("Indica la fecha y la hora del envío");
-    if (!archivo) return toast.error("Adjunta la evidencia del correo enviado (PDF, imagen o .eml)");
+    if (!vEnvio.validar() || !archivo) return;
     const data = new FormData();
     data.append("destinatario_nombre", form.nombre.trim());
     data.append("destinatario_correo", form.correo.trim());
@@ -80,19 +103,21 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
       setArchivo(null);
       setForm((prev) => ({ ...prev, observaciones: "" }));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo registrar el envío");
+      vEnvio.errorServidor(err, { correo: "envio-correo" });
     } finally {
       setEnviando(false);
     }
   };
 
   const enviarSmtp = async () => {
-    if (!form.nombre.trim() || !form.correo.trim()) return toast.error("Indica el nombre y el correo del destinatario");
+    // Desde la plataforma no hace falta evidencia ni fecha: solo el destinatario.
+    const faltan = reglasDestinatario();
+    if (faltan.length) return vEnvio.avisar({ que: "Faltan datos del destinatario para enviar el correo.", hacer: "Completa los campos marcados.", problemas: faltan });
     setEnviando(true);
     try {
       despues(await sendJsonAuth("POST", `${API_BASE_URL}/informes/${item.id}/envios/smtp`, token, { destinatario_nombre: form.nombre.trim(), destinatario_correo: form.correo.trim(), observaciones: form.observaciones.trim() || null }), "Informe enviado");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo enviar el correo");
+      vEnvio.errorServidor(err, { correo: "envio-correo" });
     } finally {
       setEnviando(false);
     }
@@ -100,12 +125,12 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
 
   const guardarConfirmacion = async () => {
     if (!confirmar) return;
-    if (!confirmar.fecha) return toast.error("Indica la fecha de la confirmación");
+    if (!vConf.validar()) return;
     try {
       despues(await sendJsonAuth("POST", `${API_BASE_URL}/informes/${item.id}/envios/${confirmar.envio.id}/confirmar`, token, { confirmacion_en: confirmar.fecha, confirmacion_nota: confirmar.nota.trim() || null }), "Confirmación registrada");
       setConfirmar(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo registrar la confirmación");
+      vConf.errorServidor(err);
     }
   };
 
@@ -149,8 +174,8 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
                   ) : (
                     "—"
                   )}
-                  {e.evidencia_sha256 ? <span className="code block text-[11px] text-ink-4">SHA-256 {String(e.evidencia_sha256).slice(0, 12)}…</span> : null}
-                  {e.message_id ? <span className="code block text-[11px] text-ink-4">{String(e.message_id)}</span> : null}
+                  {e.evidencia_sha256 ? <span className="code block text-[11px] text-ink-3">SHA-256 {String(e.evidencia_sha256).slice(0, 12)}…</span> : null}
+                  {e.message_id ? <span className="code block text-[11px] text-ink-3">{String(e.message_id)}</span> : null}
                 </td>
                 <td className={cn(formTd)}>
                   {e.confirmacion_en ? (
@@ -180,6 +205,7 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
         ) : !enviable ? (
           <Callout tone="info">Solo se envían informes liberados.</Callout>
         ) : (
+          <ValidacionAmbito v={vEnvio}>
           <div className="flex flex-col gap-3 rounded-card border border-line p-4">
             <p className="text-[14px] font-medium text-ink">Registrar envío manual</p>
             <p className="text-[12.5px] text-ink-3">Envía el PDF desde tu correo institucional y registra aquí el envío con la evidencia (PDF, imagen o .eml del correo enviado).</p>
@@ -198,7 +224,7 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
               </Field>
             </FormGrid>
             <Field label="Evidencia del correo enviado" htmlFor="envio-evidencia" required hint="PDF, PNG, JPG, WebP o .eml (máx. 15 MB). Se guarda con su huella SHA-256.">
-              <Input id="envio-evidencia" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.eml,.msg" onChange={(event) => setArchivo(event.target.files?.[0] || null)} />
+              <input id="envio-evidencia" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.eml,.msg" onChange={(event) => setArchivo(event.target.files?.[0] || null)} className="max-w-full text-[13px] text-ink-2 file:mr-3 file:rounded-[8px] file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-[13px] file:font-medium file:text-ink file:shadow-card" />
             </Field>
             <Field label="Observaciones" htmlFor="envio-obs">
               <Textarea id="envio-obs" rows={2} value={form.observaciones} onChange={(event) => setForm({ ...form, observaciones: event.target.value })} />
@@ -216,8 +242,9 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
                 Registrar envío
               </Button>
             </div>
-            <p className="text-[12px] text-ink-4">«Abrir en mi correo» prepara el asunto y el texto; el PDF se adjunta a mano.</p>
+            <p className="text-[12px] text-ink-3">«Abrir en mi correo» prepara el asunto y el texto; el PDF se adjunta a mano.</p>
           </div>
+          </ValidacionAmbito>
         )
       ) : null}
 
@@ -236,6 +263,7 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
         }
       >
         {confirmar ? (
+          <ValidacionAmbito v={vConf}>
           <div className="flex flex-col gap-4">
             <Field label="Fecha de la confirmación" htmlFor="conf-fecha" required>
               <DateInput id="conf-fecha" value={confirmar.fecha} onChange={(value) => setConfirmar({ ...confirmar, fecha: value })} />
@@ -244,6 +272,7 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
               <Textarea id="conf-nota" rows={2} value={confirmar.nota} onChange={(event) => setConfirmar({ ...confirmar, nota: event.target.value })} />
             </Field>
           </div>
+          </ValidacionAmbito>
         ) : null}
       </Dialog>
     </div>

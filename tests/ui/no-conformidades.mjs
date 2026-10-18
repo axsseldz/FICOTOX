@@ -96,10 +96,9 @@ try {
       await page.locator(`[data-incidencia="${incidenciaId}"]`).waitFor();
       const filas = await page.locator("[data-incidencia]").count();
       const propias = ((await api("GET", "/calidad/incidencias", undefined, t.luis)).data?.items || []).length;
-      const indicadores = await page.getByRole("radio", { name: "Indicadores" }).count();
       const aside = page.locator('aside[aria-label="Navegación principal"]');
       const hrefs = await aside.locator("a").evaluateAll((links) => links.map((a) => new URL(a.href).pathname));
-      check("Luis ve solo sus incidencias, sin Indicadores; el menú tiene Incidencias y NC pero no Auditoría", filas === propias && indicadores === 0 && hrefs.includes("/calidad/incidencias") && !hrefs.includes("/auditoria"), `${filas}/${propias} ${indicadores}`);
+      check("Luis ve solo sus incidencias; el menú tiene Incidencias y NC pero no Auditoría", filas === propias && hrefs.includes("/calidad/incidencias") && !hrefs.includes("/auditoria"), `${filas}/${propias}`);
     } catch (err) {
       await captura(page);
       check("flujo de Luis sin errores", false, err instanceof Error ? err.message : String(err));
@@ -113,9 +112,10 @@ try {
     const { context, page } = await nueva();
     try {
       await entrar(page, "ricardo");
-      await page.goto(`${BASE}/`);
-      await page.getByText("Incidencias por evaluar").first().waitFor();
-      check("Inicio de Ricardo: aviso de incidencias por evaluar", true);
+      // El aviso del Inicio ("Por evaluar") lleva a la lista unificada con el filtro de incidencias por evaluar; el Inicio solo muestra las 4 mas urgentes, asi que se prueba el destino.
+      await page.goto(`${BASE}/calidad/incidencias?estado_inc=reportada,en_evaluacion`);
+      await page.locator(`[data-incidencia="${incidenciaId}"]`).waitFor();
+      check("Ricardo: la lista «por evaluar» (destino del aviso del Inicio) trae la incidencia", true);
       await page.goto(`${BASE}/calidad/incidencias/${incidenciaId}`);
       await page.locator("[data-evaluar]").click();
       await page.locator("#eval-just").fill("La falla pudo afectar la extracción del lote");
@@ -186,17 +186,17 @@ try {
     }
   }
 
-  /* ---------- Auditor (indicadores) y Admin tecnico (sin acceso) ---------- */
+  /* ---------- Auditor (lista unificada) y Admin tecnico (sin acceso) ---------- */
   {
     const { context, page } = await nueva();
     try {
       await entrar(page, "hector");
-      await page.goto(`${BASE}/calidad/incidencias?tab=indicadores`);
-      await page.locator("[data-indicadores]").waitFor();
-      check("el Auditor (calidad:V total) ve el tablero de indicadores", true);
+      await page.goto(`${BASE}/calidad/incidencias`);
+      await page.locator("[data-incidencia], [data-nc]").first().waitFor();
+      check("el Auditor (calidad:V total) ve la lista unificada", true);
     } catch (err) {
       await captura(page);
-      check("indicadores del Auditor", false, err instanceof Error ? err.message : String(err));
+      check("lista unificada del Auditor", false, err instanceof Error ? err.message : String(err));
     } finally {
       await context.close();
     }

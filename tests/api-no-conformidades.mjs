@@ -206,7 +206,7 @@ let accLuis, accRicardo, suspEquipo;
   check("la bitácora de la NC registra cada paso", ["crear", "editar", "retener", "suspender", "avanzar", "implementar", "verificar", "reabrir", "reanudar", "liberar_retencion", "comunicar", "cerrar", "descargar"].every((a) => acciones.has(a)), [...acciones].join(","));
 }
 
-/* ================= Permisos: crear NC, anular, indicadores ================= */
+/* ================= Permisos: crear NC, anular ================= */
 {
   const luis = await api("POST", "/calidad/nc", { origen: "auditoria_interna", descripcion: "Hallazgo de auditoría interna sobre registros" }, t.luis);
   const gab = await api("POST", "/calidad/nc", { origen: "auditoria_interna", descripcion: "Hallazgo de auditoría interna sobre registros" }, t.gabriela);
@@ -220,9 +220,6 @@ let accLuis, accRicardo, suspEquipo;
   const pendienteEdita = await api("PUT", `/calidad/nc/${ric.data?.id}`, { impacto_notas: "Cambio con anulación pendiente" }, t.ana);
   const aprueba = await api("POST", `/solicitudes/${pide.data?.solicitud?.id}/aprobar`, { motivo: "Procede" }, t.patricia);
   check("anular NC: sin calidad:AN -> 403; Ana pide (202), con la solicitud pendiente no se edita (409), Patricia aprueba", ricAnula.status === 403 && pide.status === 202 && pendienteEdita.status === 409 && aprueba.status === 200 && fila("SELECT estado FROM no_conformidades WHERE id = ?", ric.data?.id)?.estado === "anulada", `${ricAnula.status} ${pide.status} ${pendienteEdita.status} ${aprueba.status}`);
-  const ind = await api("GET", "/calidad/indicadores", undefined, t.hector);
-  const indLuis = await api("GET", "/calidad/indicadores", undefined, t.luis);
-  check("indicadores: calidad:V total (Auditor 200 con NC cerradas y reaperturas); alcance incidencias -> 403", ind.status === 200 && ind.data?.nc_cerradas >= 1 && ind.data?.reaperturas >= 1 && indLuis.status === 403, `${ind.status} ${indLuis.status}`);
   const csv = await api("GET", "/calidad/nc?formato=csv", undefined, t.hector);
   check("exportar la lista de NC en CSV", csv.status === 200 && String(csv.data).includes("Folio"), `${csv.status}`);
   const jorge = await api("GET", "/calidad/nc", undefined, t.jorge);
@@ -295,7 +292,7 @@ let accLuis, accRicardo, suspEquipo;
   check("reanudar dos veces -> 409", otraVez.status === 409, `${otraVez.status}`);
 }
 
-/* ================= Acciones: vencidas, reasignacion, cancelacion; propuesta documental ================= */
+/* ================= Acciones: vencidas, reasignacion, cancelacion; cambio documental (bandera) ================= */
 {
   const nc = await api("POST", "/calidad/nc", { origen: "auditoria_interna", descripcion: "El procedimiento de limpieza no indica la frecuencia", responsable_id: id.ricardo }, t.ana);
   const N = nc.data?.id;
@@ -311,11 +308,11 @@ let accLuis, accRicardo, suspEquipo;
   const luisCancela = await api("POST", `/calidad/acciones/${vencida.data?.id}/cancelar`, { motivo: "No aplica" }, t.luis);
   const cancela = await api("POST", `/calidad/acciones/${vencida.data?.id}/cancelar`, { motivo: "Se sustituye por el cambio documental" }, t.ricardo);
   check("cancelar una acción: el responsable de la acción sin editar la NC no (403); el responsable de la NC sí", luisCancela.status === 403 && cancela.status === 200, `${luisCancela.status} ${cancela.status}`);
+  // Biblioteca: ya no hay propuestas documentales (410); "requiere cambio documental" queda como bandera de la NC.
   const prop = await api("POST", `/calidad/nc/${N}/propuesta-documental`, { tipo: "nuevo", titulo: "Instructivo de limpieza del área de extracción", motivo: "Definir la frecuencia de limpieza" }, t.ricardo);
-  const p = fila("SELECT nc_id, estado FROM propuestas_documento WHERE id = ?", prop.data?.id);
+  const bandera = await api("PUT", `/calidad/nc/${N}`, { requiere_cambio_documental: true }, t.ricardo);
   const item = await ncDe(N);
-  const dos = await api("POST", `/calidad/nc/${N}/propuesta-documental`, { tipo: "nuevo", titulo: "Otra", motivo: "Otra propuesta" }, t.ricardo);
-  check("la NC genera una propuesta de cambio documental ligada en ambos sentidos (y solo una)", prop.status === 201 && p?.nc_id === N && item?.propuesta?.id === prop.data?.id && item?.requiere_cambio_documental === 1 && dos.status === 409, `${prop.status} ${p?.nc_id} ${dos.status}`);
+  check("propuesta documental desde la NC retirada (410) y la bandera «requiere cambio documental» se guarda", prop.status === 410 && prop.data?.codigo === "retirado" && bandera.status === 200 && item?.requiere_cambio_documental === 1 && !item?.propuesta, `${prop.status} ${bandera.status} ${item?.requiere_cambio_documental}`);
   const pdfPedido = await api("GET", `/calidad/nc/${N}/pdf`, undefined, t.ricardo);
   check("el PDF a pedido de una NC abierta se genera sin guardarse", pdfPedido.status === 200 && pdfPedido.headers.get("x-integridad-pdf") === "a_pedido", `${pdfPedido.status}`);
 }

@@ -1,20 +1,25 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Eye, EyeSlash } from "@phosphor-icons/react";
-import { BrandMark } from "@/components/shell/Brand";
+import { ArrowRight, CircleNotch, Eye, EyeSlash, WarningCircle } from "@phosphor-icons/react";
 import { AVISO_LOGIN_KEY, useSession } from "@/components/session/SessionProvider";
-import { Button } from "@/components/ui/Button";
+import { PantallaAcceso, TarjetaAcceso } from "@/components/session/PantallaAcceso";
 import { Field, Input } from "@/components/ui/Field";
+import { cn } from "@/components/ui/cn";
 import { firstAllowedRoute } from "@/lib/client/nav";
 
 /*
- * Acceso con usuario y contrasena del sistema (Fase 3: sin proveedores
- * externos). Blanco, una sola columna y sin tarjeta: la marca animada, el nombre
- * del sistema y los dos campos. El fondo lleva dos luces océano casi
- * imperceptibles a la deriva; los elementos entran escalonados.
+ * Acceso con usuario y contraseña del sistema (Fase 3: sin proveedores
+ * externos). Diseño en PantallaAcceso: panel océano con la identidad del
+ * laboratorio y el formulario en una tarjeta. La logica no cambia: el mismo
+ * inicio de sesion, el mismo mensaje generico del servidor (no revela si el
+ * correo existe), bloqueo por intentos y redireccion. Solo se agrega una
+ * validacion de interfaz del correo (sin "@") y, al entrar, una transicion
+ * breve antes de ir a la aplicacion.
  */
+
+const SALIDA_MS = 460;
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,8 +27,14 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [mayusculas, setMayusculas] = useState(false);
+  const [errorCorreo, setErrorCorreo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [niega, setNiega] = useState(0);
+  const [saliendo, setSaliendo] = useState(false);
+  // La persona acaba de entrar con el formulario (no llego ya con sesion): se anima la salida.
+  const enviado = useRef(false);
   // Fase 2: por que se cerro la sesion (revocada, cuenta fuera de vigencia...).
   const [aviso, setAviso] = useState<string | null>(null);
   useEffect(() => {
@@ -40,81 +51,136 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    if (status === "authenticated") {
-      router.replace(firstAllowedRoute(permissions) || "/");
+    if (status !== "authenticated") return;
+    const destino = firstAllowedRoute(permissions) || "/";
+    if (!enviado.current) {
+      router.replace(destino);
+      return;
     }
+    // Transicion breve (< 600 ms): la tarjeta se desvanece y el logo se expande; sin animacion con movimiento reducido.
+    const reducir = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    void Promise.resolve().then(() => setSaliendo(true));
+    const t = window.setTimeout(() => router.replace(destino), reducir ? 0 : SALIDA_MS);
+    return () => window.clearTimeout(t);
   }, [status, permissions, router]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
+    // Validacion de interfaz: un correo sin "@" no se envia (la respuesta del servidor no cambia).
+    if (!email.includes("@")) {
+      setErrorCorreo("Escribe tu correo completo, por ejemplo nombre@cicese.mx");
+      setNiega((n) => n + 1);
+      document.getElementById("login-email")?.focus();
+      return;
+    }
+    setErrorCorreo(null);
     setSubmitting(true);
+    enviado.current = true;
     try {
       await loginWithEmail(email.trim(), password);
     } catch (err) {
+      enviado.current = false;
       setError(err instanceof Error ? err.message : "No se pudo iniciar sesión");
+      setNiega((n) => n + 1);
       setSubmitting(false);
     }
   };
 
-  const fieldClass = "h-12 rounded-[12px] border-line bg-white text-[15px] shadow-[0_1px_2px_rgba(16,32,43,0.04)] hover:border-line-strong focus:bg-white";
+  const revisarMayusculas = (event: KeyboardEvent<HTMLInputElement>) => setMayusculas(event.getModifierState?.("CapsLock") ?? false);
+
+  const fieldClass = "h-12 rounded-[12px] bg-surface-2/70 text-[15px] hover:border-line-strong focus:bg-surface";
 
   return (
-    <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[#fbfbfd] px-6 py-12 text-ink">
-      <div className="light-field" aria-hidden="true" />
-
-      <section className="stagger relative flex w-full max-w-[380px] flex-col items-center" aria-labelledby="login-title">
-        <BrandMark size={88} animated className="drop-shadow-[0_18px_30px_rgba(10,84,104,0.22)]" />
-
-        <h1 id="login-title" className="mt-7 text-[30px] font-bold tracking-[-0.035em] text-ink">
-          FICOTOX
-        </h1>
-        <p className="mt-1.5 text-center text-[15px] text-ink-2">Sistema Integrado de Gestión de Laboratorio</p>
-        <p className="eyebrow mt-3 text-ink-3">LN-FICOTOX · CICESE</p>
+    <PantallaAcceso saliendo={saliendo}>
+      <TarjetaAcceso niega={niega} saliendo={saliendo}>
+        <div className="flex flex-col gap-1">
+          <h1 id="login-title" className="text-[26px] font-bold tracking-[-0.03em] text-ink">
+            Bienvenido
+          </h1>
+          <p className="text-[14.5px] text-ink-2">Inicia sesión con tu cuenta del laboratorio</p>
+        </div>
 
         {aviso ? (
-          <p role="status" className="mt-8 w-full rounded-[10px] bg-warning-soft px-3 py-2 text-center text-[13px] text-warning-text">
+          <p role="status" className="mt-5 rounded-[12px] bg-warning-soft px-3.5 py-2.5 text-[13px] text-warning-text">
             {aviso}
           </p>
         ) : null}
 
-        <form onSubmit={handleSubmit} className="mt-10 flex w-full flex-col gap-4" noValidate>
-            <Field label="Correo institucional" htmlFor="login-email">
-              <Input id="login-email" type="email" autoComplete="email" inputMode="email" placeholder="nombre@cicese.mx" value={email} onChange={(event) => setEmail(event.target.value)} required autoFocus className={fieldClass} />
-            </Field>
-            <Field label="Contraseña" htmlFor="login-password">
-              <Input
-                id="login-password"
-                type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-                className={fieldClass}
-                trailing={
-                  <button type="button" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"} className="press rounded-full p-1.5 text-ink-3 hover:bg-surface-3 hover:text-ink">
+        <form onSubmit={handleSubmit} className="mt-7 flex flex-col gap-4" noValidate aria-labelledby="login-title">
+          <Field label="Correo" htmlFor="login-email" error={errorCorreo}>
+            <Input
+              id="login-email"
+              type="email"
+              autoComplete="email"
+              inputMode="email"
+              placeholder="nombre@cicese.mx"
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                if (errorCorreo && event.target.value.includes("@")) setErrorCorreo(null);
+              }}
+              invalid={!!errorCorreo}
+              aria-describedby={errorCorreo ? "login-email-error" : undefined}
+              required
+              autoFocus
+              className={fieldClass}
+            />
+          </Field>
+          <Field label="Contraseña" htmlFor="login-password">
+            <Input
+              id="login-password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              onKeyDown={revisarMayusculas}
+              onKeyUp={revisarMayusculas}
+              onBlur={() => setMayusculas(false)}
+              aria-describedby={mayusculas ? "login-mayus" : undefined}
+              required
+              className={fieldClass}
+              trailing={
+                <button type="button" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"} aria-pressed={showPassword} className="press rounded-full p-1.5 text-ink-3 hover:bg-surface-3 hover:text-ink">
+                  <span key={showPassword ? "o" : "v"} className="acceso-ojo block">
                     {showPassword ? <EyeSlash size={17} /> : <Eye size={17} />}
-                  </button>
-                }
-              />
-            </Field>
+                  </span>
+                </button>
+              }
+            />
+          </Field>
+          {mayusculas ? (
+            <p id="login-mayus" className="-mt-2 flex items-center gap-1.5 text-[12.5px] text-warning-text animate-rise-in motion-reduce:animate-none">
+              <WarningCircle size={14} weight="fill" aria-hidden="true" /> Bloq Mayús está activado
+            </p>
+          ) : null}
+
+          <div aria-live="assertive" aria-atomic="true">
             {error ? (
-              <p role="alert" className="rounded-[10px] bg-danger-soft px-3 py-2 text-[13px] text-danger-text">
+              <p role="alert" className="flex items-start gap-2 rounded-[12px] bg-danger-soft px-3.5 py-2.5 text-[13px] text-danger-text animate-rise-in motion-reduce:animate-none">
+                <WarningCircle size={16} weight="fill" className="mt-px shrink-0" aria-hidden="true" />
                 {error}
               </p>
             ) : null}
-            <Button type="submit" size="lg" block loading={submitting} iconRight={<ArrowRight size={16} weight="bold" />} className="mt-2 h-12 rounded-[12px] text-[15px] shadow-[0_8px_20px_-8px_rgba(15,122,149,0.55)]">
-              Entrar
-            </Button>
-          </form>
-      </section>
+          </div>
 
-      <footer className="absolute bottom-6 left-0 right-0 px-6 text-center text-[12px] leading-relaxed text-ink-4">
-        Laboratorio Nacional de Análisis, Monitoreo e Investigación sobre Ficotoxinas
-        <br />
-        Centro de Investigación Científica y de Educación Superior de Ensenada, B.C.
-      </footer>
-    </main>
+          <button
+            type="submit"
+            disabled={submitting || saliendo}
+            aria-busy={submitting || undefined}
+            className="press relative mt-1 flex h-12 w-full items-center justify-center overflow-hidden rounded-[12px] bg-brand text-[15px] font-semibold text-on-accent shadow-[0_8px_20px_-10px_rgba(15,122,149,0.6)] hover:bg-brand-strong focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none disabled:cursor-default disabled:hover:bg-brand"
+          >
+            <span className={cn("flex items-center gap-2 transition-[opacity,translate] duration-200 ease-[var(--ease-spring)]", submitting || saliendo ? "-translate-y-2 opacity-0" : "opacity-100")}>
+              Entrar <ArrowRight size={16} weight="bold" aria-hidden="true" />
+            </span>
+            <span aria-hidden={!(submitting || saliendo)} className={cn("absolute inset-0 flex items-center justify-center transition-[opacity,translate] duration-200 ease-[var(--ease-spring)]", submitting || saliendo ? "opacity-100" : "translate-y-2 opacity-0")}>
+              <CircleNotch size={20} weight="bold" className={submitting || saliendo ? "animate-spin" : undefined} />
+              <span className="sr-only">Entrando…</span>
+            </span>
+          </button>
+        </form>
+      </TarjetaAcceso>
+    </PantallaAcceso>
   );
 }

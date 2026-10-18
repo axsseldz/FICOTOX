@@ -9,13 +9,11 @@ import { diasEntre, fechaSola, formatearFecha, hoyLocal } from "../shared/fechas
  * sesion de pagina, igual que en el app.js de la interfaz original.
  */
 
-export type InsumoTipo = "reactivo" | "consumible" | "equipo";
-
 export interface InsumoOption {
   ref: string;
   label: string;
   cantidad_actual?: number | null;
-  piezas?: number | null;
+  existencia?: number | null;
   unidad?: string;
   /* Solo reactivos: lote (se sugiere como folio de preparación de soluciones). */
   lote?: string | null;
@@ -68,8 +66,8 @@ export const loadInsumoOptions = (): Promise<void> => {
       }));
       consumiblesCache = ((Array.isArray(cData) ? cData : cData.items || []) as ApiRecord[]).map((c) => ({
         ref: String(c.id),
-        piezas: c.piezas ?? null,
-        unidad: "piezas",
+        existencia: c.existencia ?? null,
+        unidad: "unidades",
         label: [c.producto, c.catalogo_parte_cas].filter(Boolean).join(" · ") || String(c.id),
       }));
       // Los equipos se referencian por id (los registros viejos guardaban el nombre; ver findInsumoOption).
@@ -131,7 +129,7 @@ export const equipoAlert = (option: InsumoOption | null | undefined, today: stri
   return null;
 };
 
-export const normalizeInsumoText = (value: unknown): string =>
+const normalizeInsumoText = (value: unknown): string =>
   String(value || "")
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")

@@ -9,7 +9,7 @@ import { formatearFecha } from "../shared/fechas";
  * declaraciones, desviaciones y personas que autorizan.
  */
 
-export interface InformeResultado {
+interface InformeResultado {
   id_muestra: string;
   resultado: number | null;
   resultado_texto: string | null;
@@ -33,7 +33,7 @@ export interface InformeAnalisis {
   resultados: InformeResultado[];
 }
 
-export interface InformeFirma {
+interface InformeFirma {
   nombre: string | null;
   cargo: string | null;
   fecha: string | null;

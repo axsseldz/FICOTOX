@@ -12,6 +12,7 @@
  * - Al asignar se avisa (sin bloquear) si la persona no tiene las
  *   autorizaciones FX-THF-AP de los analisis solicitados.
  */
+import { formatearFolio } from "../shared/folios";
 import { requireUser, userIdFromClaims, type CurrentUser } from "./auth";
 import { registrarAuditoria, snapshotRow } from "./audit";
 import { vigentesDe } from "./autorizaciones";
@@ -34,7 +35,7 @@ export async function estaAsignado(s: Session, usuarioId: number, recepcionId: n
 }
 
 /* Recepciones asignadas (vigentes) a una persona. */
-export async function recepcionesAsignadas(s: Session, usuarioId: number): Promise<number[]> {
+async function recepcionesAsignadas(s: Session, usuarioId: number): Promise<number[]> {
   const filas = await s.query<{ recepcion_id: number }>(`SELECT DISTINCT recepcion_id FROM ${TABLE} WHERE usuario_id = :u AND revocado_en IS NULL`, { u: usuarioId });
   return filas.map((f) => Number(f.recepcion_id));
 }
@@ -66,7 +67,7 @@ export async function exigirAsignacion(s: Session, user: CurrentUser, recepcionI
   if (esCoordinacion(autorizacion)) return;
   if (await estaAsignado(s, autorizacion.userId, recepcionId)) return;
   const folio = await s.scalar("SELECT folio_num FROM muestras_recepcion WHERE id = :id", { id: recepcionId });
-  throw new HttpError(403, { message: `No estás asignado a la muestra R ${String(folio || recepcionId).padStart(7, "0")}; pide a la coordinación técnica que te la asigne`, codigo: "no_asignado" });
+  throw new HttpError(403, { message: `No estás asignado a la muestra ${formatearFolio("R", folio || recepcionId)}; pide a la coordinación técnica que te la asigne`, codigo: "no_asignado" });
 }
 
 /* ---------- Endpoints ---------- */
@@ -77,7 +78,7 @@ async function recepcionAsignable(s: Session, recepcionId: number): Promise<Row>
   return row;
 }
 
-const folioR = (row: Row) => `R ${String(row.folio_num || 0).padStart(7, "0")}`;
+const folioR = (row: Row) => formatearFolio("R", row.folio_num);
 
 async function listar(s: Session, recepcionId: number): Promise<Row[]> {
   return s.query<Row>(

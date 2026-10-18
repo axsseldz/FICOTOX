@@ -1,15 +1,18 @@
 "use client";
 
+import { formatearFolio } from "@/lib/shared/folios";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowsClockwise, FilePdf, FloppyDisk, LockKey, PaperPlaneTilt, Prohibit, SealCheck } from "@phosphor-icons/react";
+import { ArrowsClockwise, BookOpenText, FilePdf, FloppyDisk, LockKey, PaperPlaneTilt, Prohibit, SealCheck } from "@phosphor-icons/react";
 import { IncidenciasFormCard } from "@/components/features/calidad/IncidenciasDelRegistro";
 import { RecordHistory } from "@/components/features/audit/RecordHistory";
 import { BotonSegregado, FolioChip, SegregacionCallout, SolicitudCallout, SupervisionCallout } from "@/components/features/samples/status";
 import { SignDialog } from "@/components/features/samples/SignDialog";
-import { Callout, FlowSteps, FormCard, FormPage, FormTable, PersonCard, ReadValue, SignoffCard, formTd, formTh, missingMessage, missingSections, openFormSection, type FormSectionDef } from "@/components/features/samples/FormLayout";
+import { Callout, FlowSteps, FormCard, FormPage, FormTable, PersonCard, ReadValue, SignoffCard, formTd, formTh, personaId, type FormSectionDef } from "@/components/features/samples/FormLayout";
+import { CampoValidado, useValidacion } from "@/components/ui/Validacion";
+import { msg, type Problema } from "@/lib/client/mensajes";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
@@ -18,10 +21,11 @@ import { DateInput } from "@/components/ui/DateInput";
 import { ActionMenu, usePrompt, type MenuItem } from "@/components/ui/Overlay";
 import { Badge, EmptyState } from "@/components/ui/Primitives";
 import { API_BASE_URL, getJsonAuth, sendJsonAuth } from "@/lib/client/api";
-import { openProtectedFile } from "@/lib/client/files";
+import { descargarPdfInforme } from "@/lib/client/informes-pdf";
 import { fmtDate, isoDate, parseIntOrNull, todayIso } from "@/lib/client/format";
 import { formatActiveUserSignature } from "@/lib/client/session";
 import { invalidate } from "@/lib/client/store";
+import { seOfrece } from "@/lib/client/puede";
 import type { ApiRecord } from "@/lib/client/types";
 import { folioNc } from "@/lib/shared/calidad";
 import { ANALYSIS_METHODS, ANALYSIS_TYPES, REPORT_DEFAULT_STATEMENTS, REPORT_STATES } from "@/lib/shared/sgc";
@@ -123,13 +127,12 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
   const [recepcionInfo, setRecepcionInfo] = useState<ApiRecord | null>((item?.recepcion as ApiRecord) || null);
   const [descargoSugerido, setDescargoSugerido] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [sign, setSign] = useState<"revisar" | "autorizar" | "liberar" | null>(null);
   const [signing, setSigning] = useState(false);
   const editing = !!item?.id;
   const estado = String(item?.estado || "borrador");
   // E solo en borrador (Fase 1): en revisión o después se corrige por enmienda o anulación.
-  const canEdit = editing ? can("informes", "E", { objeto: "informe", borrador: true }) && estado === "borrador" : can("informes", "C", { objeto: "informe", borrador: true });
+  const canEdit = editing ? seOfrece(item, "editar", can("informes", "E", { objeto: "informe", borrador: true })) && estado === "borrador" : can("informes", "C", { objeto: "informe", borrador: true });
   // Con una solicitud de autorizacion pendiente (Fase 3) el informe no se edita.
   const draft = !editing || (canEdit && !item?.solicitud_pendiente);
   const patch = (changes: Partial<InformeState>) => setForm((prev) => ({ ...prev, ...changes }));
@@ -183,22 +186,35 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
     observaciones: form.observaciones.trim() || null,
   });
 
-  const fail = (message: string, section: string) => {
-    setError(message);
-    toast.error(message);
-    openFormSection(section);
+  /*
+   * Reglas del formato, en el orden en que aparecen. La misma lista da la
+   * completitud de la guía, el aviso del encabezado y el pop-up al guardar.
+   */
+  const elaboroId = personaId("Elaboró");
+  const reglas = (): Problema[] => {
+    const out: Problema[] = [];
+    const en = (seccion: string, grupo: string) => (campo: string, mensaje: string) => out.push({ campo, mensaje, seccion, grupo });
+    const ori = en("sec-origen", "Recepción y cliente");
+    if (!form.recepcionId) ori("i-rec", msg.elige("la recepción que se informa"));
+    if (!form.clienteNombre.trim()) ori("i-cli", msg.indica("el nombre del cliente"));
+    if (form.recepcionId && !muestras.length) en("sec-muestras", "Ítems ensayados")("i-muestras", "La recepción elegida no tiene muestras para informar");
+    if (!form.analisisIds.length) en("sec-analisis", "Análisis incluidos")("i-analisis", msg.marca("al menos un análisis aprobado"));
+    const dec = en("sec-declaraciones", "Declaraciones");
+    if (!form.alcance.trim()) dec("i-alc", msg.escribe("el alcance de los resultados"));
+    if (!form.reglaDecision.trim()) dec("i-regla", msg.escribe("la regla de decisión"));
+    if (descargoSugerido && !form.descargo.trim()) dec("i-desc", msg.escribe("el descargo: la muestra se aceptó con desviación"));
+    if (!form.elaboradoNombre.trim()) en("sec-firmas", "Elaboró")(elaboroId, msg.elige("quién elabora el informe"));
+    return out;
   };
+  const v = useValidacion({ titulo: editing ? "No se pudo guardar el informe" : "No se pudo crear el informe", reglas: draft ? reglas : () => [] });
+  const camposServidor = { cliente: "i-cli" };
+  const ubicacionServidor = { cliente: { seccion: "sec-origen", grupo: "Recepción y cliente" } };
 
   const handleSave = async () => {
     const payload = buildPayload();
-    const incompletas = missingSections(sections);
-    if (incompletas.length) return fail(missingMessage(incompletas), incompletas[0].id);
-    if (!payload.recepcion_id) return fail("Selecciona la recepción que se informa", "sec-origen");
-    if (!payload.cliente.nombre) return fail("Indica el nombre del cliente", "sec-origen");
-    if (!payload.analisis_ids.length) return fail("Incluye al menos un análisis aprobado", "sec-analisis");
-    if (!canEdit) return fail("No tienes permiso para esta acción", "sec-origen");
+    if (!v.validar()) return;
+    if (!canEdit) return v.avisar({ que: "No tienes permiso para guardar este informe.", hacer: "Pide a la administración que revise tus roles y permisos." });
     setSubmitting(true);
-    setError(null);
     try {
       if (editing) {
         await sendJsonAuth("PUT", `${API_BASE_URL}/informes/${item!.id}`, token, payload);
@@ -213,9 +229,7 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
       invalidate("informes", "muestras", "dashboard");
       router.push("/informes");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudo guardar el informe";
-      setError(message);
-      toast.error(message);
+      v.errorServidor(err, camposServidor, ubicacionServidor);
       setSubmitting(false);
     }
   };
@@ -232,7 +246,7 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
       setSign(null);
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo completar la acción");
+      v.errorServidor(err);
     } finally {
       setSigning(false);
     }
@@ -250,7 +264,7 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
       invalidate("informes", "dashboard", "solicitudes");
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo anular");
+      v.errorServidor(err);
     }
   };
 
@@ -264,18 +278,21 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
       invalidate("informes", "dashboard");
       router.push(`/informes/${created.id}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo crear la enmienda");
+      v.errorServidor(err);
     }
   };
 
   const verPdf = () => {
     if (!item) return;
-    void openProtectedFile(`${API_BASE_URL}/informes/${item.id}/pdf`, token, `${String(item.folio || "informe").replace(/\s+/g, "-")}.pdf`);
+    router.push(`/informes/${item.id}/ver`);
   };
 
   const toggleAnalisis = (id: number, checked: boolean) => patch({ analisisIds: checked ? Array.from(new Set([...form.analisisIds, id])) : form.analisisIds.filter((v) => v !== id) });
-  const canReview = can("informes", "R");
-  const canAuthorize = can("informes", "A");
+  // Banderas del servidor: rol + autorización FX-THF-AP de cada actividad; la segregación se explica en el botón.
+  const canReview = seOfrece(item, "revisar", can("informes", "R"));
+  const canAuthorize = seOfrece(item, "autorizar", can("informes", "A"));
+  const canLiberar = seOfrece(item, "liberar", can("informes", "A"));
+  const canEnviar = seOfrece(item, "enviar", can("informes", "A"));
   // Segregacion (Fase 3): por que la persona actual no puede revisar o autorizar este informe (null = puede).
   const segregacion = (item?.segregacion || {}) as { revisar?: string | null; autorizar?: string | null };
   const excepciones = (item?.excepciones || []) as Array<{ solicitud_id: number; accion: string }>;
@@ -294,7 +311,7 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
       toast.info(String(data.message || "Excepción solicitada"));
       invalidate("solicitudes");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo solicitar la excepción");
+      v.errorServidor(err);
     }
   };
   const resultadosCongelados = (item?.resultados || []) as ApiRecord[];
@@ -310,20 +327,23 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
   const enviable = ["liberado", "enviado"].includes(estado);
   const folioLabel = editing ? `${item!.folio} · v${item!.version}` : "Nuevo informe";
 
+  // Completitud con las mismas reglas que el guardado (la guía y el aviso del encabezado no se contradicen).
+  const completa = (id: string) => (draft ? v.seccionCompleta(id) && (id !== "sec-muestras" || muestras.length > 0) : undefined);
   const sections: FormSectionDef[] = [
-    { id: "sec-origen", label: "Recepción y cliente", complete: draft ? !!form.recepcionId && !!form.clienteNombre.trim() : undefined },
-    { id: "sec-muestras", label: "Ítems ensayados", complete: draft ? muestras.length > 0 : undefined },
-    { id: "sec-analisis", label: "Análisis incluidos", complete: draft ? form.analisisIds.length > 0 : undefined },
-    { id: "sec-declaraciones", label: "Declaraciones", complete: draft ? !!form.alcance.trim() && !!form.reglaDecision.trim() && (!descargoSugerido || !!form.descargo.trim()) : undefined },
-    { id: "sec-firmas", label: "Elaboró, revisó, autorizó", complete: draft ? !!form.elaboradoNombre.trim() : undefined },
+    { id: "sec-origen", label: "Recepción y cliente", complete: completa("sec-origen") },
+    { id: "sec-muestras", label: "Ítems ensayados", complete: completa("sec-muestras") },
+    { id: "sec-analisis", label: "Análisis incluidos", complete: completa("sec-analisis") },
+    { id: "sec-declaraciones", label: "Declaraciones", complete: completa("sec-declaraciones") },
+    { id: "sec-firmas", label: "Elaboró, revisó, autorizó", complete: completa("sec-firmas") },
     ...(editing ? [{ id: "sec-historial", label: "Historial", optional: true }] : []),
   ];
 
   // Acciones secundarias (PDF, enmienda, anulación) van en un menú para que la cabecera solo muestre el siguiente paso.
   const moreItems: MenuItem[] = [];
-  if (editing) moreItems.push({ label: estado === "borrador" || estado === "en_revision" ? "Vista previa del PDF" : "Ver PDF", description: "Abre el documento en una pestaña nueva", icon: <FilePdf size={16} weight="duotone" />, tone: "brand", onSelect: verPdf });
-  if (editing && ["autorizado", "liberado", "enviado", "anulado"].includes(estado) && can("informes", "C")) moreItems.push({ label: "Emitir enmienda…", description: "Nueva versión que sustituye a esta", icon: <ArrowsClockwise size={16} weight="duotone" />, onSelect: enmendar });
-  if (editing && estado !== "anulado" && can("informes", "AN")) moreItems.push({ label: "Anular informe…", description: "El PDF queda sin validez", icon: <Prohibit size={16} weight="duotone" />, tone: "danger", separatorBefore: true, onSelect: anular });
+  if (editing) moreItems.push({ label: item?.archivo_pdf ? "Ver informe" : estado === "borrador" || estado === "en_revision" ? "Vista previa del PDF" : "Ver PDF", description: item?.archivo_pdf ? "Leer el PDF final en la plataforma" : "Vista previa (sin validez) en la plataforma", icon: <FilePdf size={16} weight="duotone" />, tone: "brand", onSelect: verPdf });
+  if (editing && item?.archivo_pdf) moreItems.push({ label: "Descargar PDF", description: "Documento liberado con SHA-256", icon: <FilePdf size={16} weight="duotone" />, onSelect: () => void descargarPdfInforme(item, token) });
+  if (editing && ["autorizado", "liberado", "enviado", "anulado"].includes(estado) && seOfrece(item, "enmendar", can("informes", "C"))) moreItems.push({ label: "Emitir enmienda…", description: "Nueva versión que sustituye a esta", icon: <ArrowsClockwise size={16} weight="duotone" />, onSelect: enmendar });
+  if (editing && estado !== "anulado" && seOfrece(item, "anular", can("informes", "AN"))) moreItems.push({ label: "Anular informe…", description: "El PDF queda sin validez", icon: <Prohibit size={16} weight="duotone" />, tone: "danger", separatorBefore: true, onSelect: anular });
 
   const failedLabel = estado === "anulado" ? "Anulado" : estado === "sustituido" ? "Sustituido por enmienda" : undefined;
 
@@ -336,7 +356,7 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
       status={REPORT_STATES[estado]?.label || estado}
       statusTone={REPORT_STATES[estado]?.tone || "neutral"}
       sections={sections}
-      error={error}
+      validacion={v}
       readOnly={!draft}
       after={
         editing ? (
@@ -344,7 +364,7 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
             {/* Fase 6: los envíos se registran con el informe ya en solo lectura (fuera del fieldset desactivado). */}
             <FormCard id="sec-envios" title="Envíos por correo" description="A quién, cuándo y cómo se envió el informe liberado, con la evidencia de cada envío.">
               {editing && enviable && token ? (
-                <EnviosPanel item={item!} token={token} puedeEnviar={canAuthorize} bloqueo={bloqueoEnmienda} onCambio={() => router.refresh()} />
+                <EnviosPanel item={item!} token={token} puedeEnviar={canEnviar} bloqueo={bloqueoEnmienda} onCambio={() => router.refresh()} />
               ) : (
                 <Callout tone="info">{estado === "autorizado" ? "Libera el informe para generar el PDF final; después se registra su envío por correo." : "El envío por correo se registra una vez liberado el informe."}</Callout>
               )}
@@ -361,6 +381,11 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
           <Button variant="secondary" onClick={() => router.push("/informes")}>
             {draft ? "Cancelar" : "Volver"}
           </Button>
+          {editing && item?.archivo_pdf ? (
+            <Button variant="secondary" icon={<BookOpenText size={16} />} onClick={() => router.push(`/informes/${item.id}/ver`)}>
+              Ver informe
+            </Button>
+          ) : null}
           {moreItems.length ? <ActionMenu items={moreItems} label="Más acciones" header={editing ? String(item!.folio) : undefined} /> : null}
           {editing && estado === "borrador" && canReview ? (
             <BotonSegregado bloqueo={segregacion.revisar} onSolicitar={() => solicitarExcepcion("revisar")}>
@@ -376,7 +401,7 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
               </Button>
             </BotonSegregado>
           ) : null}
-          {editing && estado === "autorizado" && canAuthorize ? (
+          {editing && estado === "autorizado" && canLiberar ? (
             <Button icon={<LockKey size={16} />} onClick={() => setSign("liberar")} disabled={!!bloqueoEnmienda} title={bloqueoEnmienda || undefined}>
               Liberar
             </Button>
@@ -421,7 +446,7 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
       ) : null}
       {editing && estado === "borrador" && canReview ? <AvisoAutorizacion requisitos={requisitosInforme("revisar")} accion="revisar este informe" /> : null}
       {editing && estado === "en_revision" && canAuthorize ? <AvisoAutorizacion requisitos={requisitosInforme("autorizar")} accion="autorizar este informe" /> : null}
-      {editing && estado === "autorizado" && canAuthorize ? <AvisoAutorizacion requisitos={requisitosInforme("liberar")} accion="liberar este informe" /> : null}
+      {editing && estado === "autorizado" && canLiberar ? <AvisoAutorizacion requisitos={requisitosInforme("liberar")} accion="liberar este informe" /> : null}
       <SegregacionCallout bloqueo={editing && estado === "borrador" && canReview ? segregacion.revisar : editing && estado === "en_revision" && canAuthorize ? segregacion.autorizar : null} accion={estado === "en_revision" ? "autorizar" : "revisar"} onSolicitar={() => solicitarExcepcion(estado === "en_revision" ? "autorizar" : "revisar")} />
       {item?.motivo_anulacion ? (
         <Callout tone="danger" title="Informe anulado">
@@ -447,7 +472,7 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
               <option value="">Seleccionar</option>
               {recepciones.map((r) => (
                 <option key={r.id} value={r.id}>
-                  R {String(r.folio_num).padStart(7, "0")} · {r.solicitante || r.id_interno || ""} · {fmtDate(r.fecha_recepcion)}
+                  {formatearFolio("R", r.folio_num)} · {r.solicitante || r.id_interno || ""} · {fmtDate(r.fecha_recepcion)}
                 </option>
               ))}
             </Select>
@@ -481,6 +506,7 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
       </FormCard>
 
       <FormCard id="sec-muestras" title="Ítems ensayados" description="Descripción e identificación de las muestras tal como se recibieron (7.8.2 g).">
+        <CampoValidado id="i-muestras">
         {!muestras.length ? (
           <EmptyState compact title="Sin muestras" description="Selecciona una recepción para cargar sus muestras." />
         ) : (
@@ -509,14 +535,17 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
               </tbody>
             </FormTable>
         )}
+        </CampoValidado>
       </FormCard>
 
       <FormCard id="sec-analisis" title="Análisis incluidos" description={draft ? "Solo análisis aprobados de esta recepción. Los resultados se copian al informe al liberarlo." : "Resultados congelados al liberar el informe."}>
         {draft ? (
           !disponibles.length ? (
-            <EmptyState compact title="No hay análisis aprobados" description="Aprueba los análisis de esta recepción para poder informarlos." />
+            <CampoValidado id="i-analisis">
+              <EmptyState compact title="No hay análisis aprobados" description="Aprueba los análisis de esta recepción para poder informarlos." />
+            </CampoValidado>
           ) : (
-            <div className="flex flex-col gap-2">
+            <CampoValidado id="i-analisis" className="flex flex-col gap-2">
               {disponibles.map((a) => {
                 const id = Number(a.id);
                 const resultados = (a.resultados || []) as ApiRecord[];
@@ -535,7 +564,7 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
                   </div>
                 );
               })}
-            </div>
+            </CampoValidado>
           )
         ) : (
           <div className="flex flex-col gap-4">
@@ -602,7 +631,7 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
             <SignoffCard title="Revisó" name={item?.revisado_nombre} cargo={item?.revisado_cargo} at={item?.revisado_en} note={excepcionDe("revisar") ? `Revisión autorizada por excepción, solicitud #${excepcionDe("revisar")!.solicitud_id}` : null} hint={editing ? "Se firma con “Marcar revisado”." : "Después de crear el borrador."} />
             <SignoffCard title="Autorizó" name={item?.autorizado_nombre} cargo={item?.autorizado_cargo} at={item?.autorizado_en} note={excepcionDe("autorizar") ? `Autorización autorizada por excepción, solicitud #${excepcionDe("autorizar")!.solicitud_id}` : null} hint={editing ? "Se firma con “Autorizar” tras la revisión." : "Después de la revisión."} />
             <SignoffCard title="Liberó" name={item?.liberado_nombre} cargo={item?.liberado_cargo} at={item?.liberado_en} hint={editing ? "Se firma con “Liberar”: genera el PDF final." : "Después de la autorización."}>
-              {item?.pdf_sha256 ? <p className="code mt-1 text-[11px] text-ink-4">SHA-256 {String(item.pdf_sha256).slice(0, 16)}…</p> : null}
+              {item?.pdf_sha256 ? <p className="code mt-1 text-[11px] text-ink-3">SHA-256 {String(item.pdf_sha256).slice(0, 16)}…</p> : null}
             </SignoffCard>
           </div>
         </div>

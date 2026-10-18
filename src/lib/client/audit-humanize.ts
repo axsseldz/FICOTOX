@@ -1,685 +1,102 @@
+import { formatearFolio } from "../shared/folios";
 import type { ApiRecord } from "@/lib/client/types";
-import { ACCION_KEYS, MODULOS, alcanceLabel, isAccion, isModulo } from "@/lib/shared/permisos";
-import { ACCEPTANCE_DECISIONS, ANALYSIS_STATES, AUDIT_ENTITIES, CLIENT_CONTACT_MEDIA, DISPOSAL_TYPES, DOCUMENT_STATES, RECEPTION_DELIVERY_MEDIA, REPORT_DELIVERY_MEDIA, REPORT_STATES, SAMPLE_STATES, STORAGE_PLACES } from "@/lib/shared/sgc";
-import { TIPO_EVIDENCIA_ART, fmtBytes, huellaCorta } from "@/lib/shared/adjuntos";
-import { ESTADOS_NC, ORIGEN_AUTOMATICO_LABEL, TIPO_INCIDENCIA_LABEL } from "@/lib/shared/calidad";
+import { ACCION_KEYS, isAccion, isModulo } from "@/lib/shared/permisos";
+import { VERBOS_DOCUMENTALES } from "@/lib/client/permisos-legibles";
+import { ACCEPTANCE_DECISIONS, ANALYSIS_METHODS, ANALYSIS_STATES, ANALYSIS_TYPES, CLIENT_CONTACT_MEDIA, DISPOSAL_TYPES, DOCUMENT_STATES, RECEPTION_ANALYSIS_TYPES, RECEPTION_DELIVERY_MEDIA, RECEPTION_METHODS, RECEPTION_SAMPLE_TYPES, REPORT_DELIVERY_MEDIA, REPORT_STATES, SAMPLE_STATES, STORAGE_PLACES } from "@/lib/shared/sgc";
+import { TIPO_EVIDENCIA_ART } from "@/lib/shared/adjuntos";
+import { ACTIVIDADES_AUTORIZABLES, METODOS_AUTORIZABLES } from "@/lib/shared/autorizaciones";
+import { CLASIFICACION_NC_LABEL, ESTADOS_ACCION, ESTADOS_INCIDENCIA, ESTADOS_NC, IMPACTO_LABEL, MEDIO_COMUNICACION_LABEL, METODO_CAUSA_LABEL, ORIGEN_AUTOMATICO_LABEL, ORIGEN_NC_LABEL, TIPO_INCIDENCIA_LABEL } from "@/lib/shared/calidad";
 import { diaSemana, diasEntre, fechaSola, formatearFecha, formatearFechaHora, formatearFechaLarga, formatearHora, hoyLocal, instanteDe } from "../shared/fechas";
 
 /*
- * Traduce una entrada de la bitacora de auditoria a lenguaje llano:
- * "Daniela Cortés marcó revisado el análisis A 0000004" + hechos clave
- * (estado anterior → nuevo, a quién se entregó, qué disposición...) + una
- * lista de cambios con etiquetas en español y valores legibles, sin JSON.
+ * Catalogo de lenguaje simple de la bitacora (Auditoria y el historial de
+ * cada registro). Para personal de laboratorio sin conocimientos tecnicos:
+ * nada que parezca codigo (ids, sellos, rutas, JSON, nombres de campos).
+ * Centraliza tres cosas por cada tipo de actividad y modulo:
+ *   1. la frase de la lista ("Mariana imprimió la etiqueta de la recepción R 0000001");
+ *   2. el parrafo "Que paso", en lenguaje cotidiano;
+ *   3. la etiqueta legible y el formato de cada dato que puede cambiar (FIELD);
+ *      los datos sin etiqueta conocida no se muestran.
+ * Solo presentacion: la bitacora, sus sellos, permisos y alcances no cambian.
  */
-
-export type AuditTone = "neutral" | "brand" | "success" | "warning" | "danger" | "ink";
-
-export interface HumanChange {
-  /* Etiqueta del campo en español. */
-  label: string;
-  before: string;
-  after: string;
-  /* Cambio de estado: se muestra como par de etiquetas. */
-  isState?: boolean;
-  /* Para listas (equipos, documentos): lineas ya redactadas en vez de antes/despues. */
-  lines?: string[];
-}
 
 export interface HumanEntry {
   id: number;
   when: Date | null;
+  /* Nombre de quien actuo ("" si no se sabe; vacio tambien en lo que hizo la plataforma). */
   actor: string;
-  actorEmail: string | null;
   isSystem: boolean;
-  /* Frase completa sin el actor: "creó la recepción R 0000011". */
+  /* Cargo con el que actuo, si se guardo. */
+  cargo: string | null;
+  /* Frase sin quien actuo: "imprimió la etiqueta de la recepción R 0000001". */
   action: string;
-  /* Solo el verbo, para el icono/tono. */
+  /* Frase completa para la lista y el titulo del detalle. */
+  frase: string;
+  /* Parrafo "Que paso". */
+  quePaso: string;
+  /* "Que cambio": una frase por dato. */
+  cambios: string[];
   verb: string;
-  tone: AuditTone;
-  entityLabel: string;
+  entidad: string;
+  entidadId: string | null;
+  /* Area en palabras ("Recepción de muestras"). */
+  area: string;
   reference: string | null;
-  /* Hechos cortos para mostrar como chips: "Estado: Registrada → Anulada". */
-  facts: string[];
   motivo: string | null;
-  changes: HumanChange[];
+  /* Ficha del registro (null si no tiene: sistema, sesiones). */
   href: string | null;
-  hash: string | null;
+  /* Usuario + accion + registro: para agrupar repeticiones seguidas. */
+  claveGrupo: string;
 }
 
-type Cambios = Record<string, { antes?: unknown; despues?: unknown } | unknown>;
-
-const ENTITY_NOUN: Record<string, { art: string; noun: string; plural: string }> = {
-  muestras_recepcion: { art: "la", noun: "recepción", plural: "recepciones" },
-  muestras_procesamiento: { art: "el", noun: "procesamiento", plural: "procesamientos" },
-  muestras_extraccion: { art: "la", noun: "extracción", plural: "extracciones" },
-  muestras_analisis: { art: "el", noun: "análisis", plural: "análisis" },
-  informes: { art: "el", noun: "informe", plural: "informes" },
-  documentos_sgc: { art: "el", noun: "documento", plural: "documentos" },
-  reactivos: { art: "el", noun: "reactivo", plural: "reactivos" },
-  consumibles: { art: "el", noun: "consumible", plural: "consumibles" },
-  equipos: { art: "el", noun: "equipo", plural: "equipos" },
-  mantenimientos: { art: "el", noun: "mantenimiento", plural: "mantenimientos" },
-  reportes_mantenimiento: { art: "el", noun: "reporte de mantenimiento", plural: "reportes de mantenimiento" },
-  usuarios: { art: "el", noun: "usuario", plural: "usuarios" },
-  roles: { art: "el", noun: "rol", plural: "roles" },
-  sesion: { art: "la", noun: "sesión", plural: "sesiones" },
-  respaldos: { art: "el", noun: "respaldo", plural: "respaldos" },
-  incidencias: { art: "la", noun: "incidencia", plural: "incidencias" },
-  no_conformidades: { art: "la", noun: "no conformidad", plural: "no conformidades" },
-  acciones_correctivas: { art: "la", noun: "acción correctiva", plural: "acciones correctivas" },
-  suspensiones: { art: "la", noun: "suspensión", plural: "suspensiones" },
-};
-
-export const ACTION_TONE: Record<string, AuditTone> = {
-  crear: "brand",
-  editar: "neutral",
-  anular: "danger",
-  restaurar: "warning",
-  baja: "danger",
-  reactivar: "warning",
-  revisar: "warning",
-  aprobar: "success",
-  autorizar: "success",
-  entregar: "ink",
-  rechazar: "danger",
-  aceptar: "success",
-  cerrar: "ink",
-  reponer: "brand",
-  importar: "brand",
-  eliminar: "danger",
-  login: "neutral",
-  login_fallido: "danger",
-  descargar: "neutral",
-  asignar_rol: "brand",
-  revocar_rol: "danger",
-  vencer_rol: "warning",
-  acotar_rol: "warning",
-  // Fase 2: seguridad de cuentas y supervision.
-  reauth_fallida: "danger",
-  bloquear: "danger",
-  desbloquear: "warning",
-  cambiar_password: "neutral",
-  restablecer_password: "warning",
-  cerrar_sesiones: "neutral",
-  cambiar_vigencia: "warning",
-  visto_bueno: "success",
-  regresar_supervision: "warning",
-  cambiar_cargo: "neutral",
-  // Fase 3: solicitudes de autorizacion de un segundo usuario.
-  solicitar: "warning",
-  aprobar_solicitud: "success",
-  rechazar_solicitud: "danger",
-  cancelar_solicitud: "neutral",
-  vencer_solicitud: "warning",
-  // Fase 4: autorizaciones del personal (FX-THF-AP).
-  otorgar_autorizacion: "success",
-  revocar_autorizacion: "danger",
-  vencer_autorizacion: "warning",
-  // Fase 5: etiquetas imprimibles de la recepcion.
-  imprimir_etiquetas: "neutral",
-  // Fase 5: asignacion, flujo del analisis, decisiones de la recepcion y firmas ligadas a cuentas.
-  asignar_muestra: "brand",
-  revocar_asignacion: "warning",
-  enviar_revision: "brand",
-  devolver: "warning",
-  enmendar: "warning",
-  sustituir: "neutral",
-  cambiar_folio: "warning",
-  reabrir: "warning",
-  confirmar_firma: "neutral",
-  // Fase 6: liberacion y envio por correo del informe.
-  liberar: "success",
-  enviar: "ink",
-  confirmar_envio: "success",
-  requiere_enmienda: "danger",
-  alerta_integridad: "danger",
-  // Fase 7: control documental.
-  publicar: "success",
-  confirmar_lectura: "success",
-  proponer: "brand",
-  // Fase 9: exportacion para auditoria.
-  exportar: "neutral",
-  // Fase 10: evidencia instrumental y respaldos.
-  adjuntar: "brand",
-  anular_adjunto: "danger",
-  respaldar: "brand",
-  restaurar_respaldo: "warning",
-  // Fase 11: incidencias, no conformidades y acciones correctivas.
-  reportar: "warning",
-  evaluar: "neutral",
-  cerrar_sin_nc: "success",
-  escalar: "danger",
-  avanzar: "brand",
-  implementar: "success",
-  iniciar_accion: "brand",
-  cancelar: "danger",
-  reasignar: "warning",
-  verificar: "success",
-  suspender: "danger",
-  reanudar: "success",
-  retener: "danger",
-  liberar_retencion: "success",
-  comunicar: "ink",
-  afectar: "warning",
-};
-
-/*
- * Permisos de un rol (filas { modulo, accion, alcance }) en lenguaje llano, por
- * modulo: "Muestras: C, E (Recepción)". Se usa en la bitacora y en Roles.
- */
-export function resumenPermisos(filas: unknown): Map<string, string> {
-  const porModulo = new Map<string, Map<string, string[]>>();
-  for (const fila of Array.isArray(filas) ? filas : []) {
-    if (!fila || typeof fila !== "object") continue;
-    const { modulo, accion, alcance } = fila as ApiRecord;
-    if (!isModulo(modulo) || !isAccion(accion)) continue;
-    const grupos = porModulo.get(modulo) || new Map<string, string[]>();
-    const clave = String(alcance || "total");
-    grupos.set(clave, [...(grupos.get(clave) || []), accion]);
-    porModulo.set(modulo, grupos);
-  }
-  const out = new Map<string, string>();
-  for (const modulo of MODULOS) {
-    const grupos = porModulo.get(modulo.clave);
-    if (!grupos) continue;
-    const partes = [...grupos.entries()]
-      .sort(([a], [b]) => (a === "total" ? -1 : b === "total" ? 1 : a.localeCompare(b)))
-      .map(([alcance, acciones]) => {
-        const lista = acciones.sort((x, y) => ACCION_KEYS.indexOf(x as never) - ACCION_KEYS.indexOf(y as never)).join(", ");
-        return alcance === "total" ? lista : `${lista} (${alcanceLabel(alcance)})`;
-      });
-    out.set(modulo.nombre, partes.join("; "));
-  }
-  return out;
+/* Lo que el detalle puede aportar para hablar con nombres y unidades. */
+export interface ContextoActividad {
+  /* id de cuenta -> nombre. */
+  personas?: Map<number, string>;
+  /* Datos completos de la entrada (solo si quien consulta puede verlos). */
+  datos?: { antes: ApiRecord | null; nuevos: ApiRecord | null } | null;
 }
 
-/* Diferencia entre dos matrices de permisos, una linea por modulo que cambio. */
-function diffPermisos(antes: unknown, despues: unknown): string[] {
-  const a = resumenPermisos(antes);
-  const b = resumenPermisos(despues);
-  const lines: string[] = [];
-  for (const modulo of MODULOS) {
-    const x = a.get(modulo.nombre) || "sin permiso";
-    const y = b.get(modulo.nombre) || "sin permiso";
-    if (x !== y) lines.push(`${modulo.nombre}: ${x} → ${y}`);
-  }
-  return lines;
-}
+type Cambios = Record<string, unknown>;
 
-const esMatrizPermisos = (value: unknown) => Array.isArray(value) && value.some((item) => !!item && typeof item === "object" && "modulo" in (item as object) && "accion" in (item as object));
-
-/* Etiquetas de campos. Lo que no esta aqui se muestra con el nombre "humanizado" (guiones bajos → espacios). */
-const FIELD_LABELS: Record<string, string> = {
-  estado: "Estado",
-  estado_previo: "Estado anterior",
-  motivo_anulacion: "Motivo de anulación",
-  motivo_enmienda: "Motivo de la enmienda",
-  anulado_en: "Anulado el",
-  restaurado_en: "Restaurado el",
-  revisado_en: "Revisado el",
-  revisado_nombre: "Revisó",
-  revisado_cargo: "Cargo de quien revisó",
-  revision_observaciones: "Observaciones de la revisión",
-  aprobado_en: "Aprobado el",
-  aprobado_nombre: "Aprobó",
-  autorizado_en: "Autorizado el",
-  autorizado_nombre: "Autorizó",
-  autorizado_cargo: "Cargo de quien autorizó",
-  fecha_emision: "Fecha de emisión",
-  fecha_recepcion: "Fecha de recepción",
-  hora_recepcion: "Hora de recepción",
-  fecha_procesamiento: "Fecha de procesamiento",
-  fecha_extraccion: "Fecha de extracción",
-  fecha_analisis: "Fecha de análisis",
-  fecha_muestra: "Fecha de la muestra",
-  decision_aceptacion: "Decisión de aceptación",
-  id_interno: "ID interno",
-  solicitante: "Solicitante",
-  recibido_por: "Recibido por",
-  medio_recepcion: "Medio de recepción",
-  tipo_organismo: "Tipo de organismo",
-  parte_organismo: "Parte del organismo",
-  tipo_molienda: "Tipo de molienda",
-  tipo_registro: "Formato",
-  tipo_analisis: "Tipo de análisis",
-  metodo: "Método",
-  metodo_otro: "Otro método",
-  metodo_referencia: "Referencia del método",
-  observaciones: "Observaciones",
-  observaciones_generales: "Observaciones generales",
-  cliente_nombre: "Cliente",
-  cliente_contacto: "Contacto del cliente",
-  cliente_direccion: "Dirección del cliente",
-  alcance: "Alcance de los resultados",
-  regla_decision: "Regla de decisión",
-  desviaciones: "Desviaciones del método",
-  descargo: "Descargo",
-  opiniones: "Opiniones e interpretaciones",
-  elaborado_nombre: "Elaboró",
-  elaborado_cargo: "Cargo de quien elaboró",
-  analista_nombre: "Analista",
-  nombre_quien_proceso: "Quien procesó",
-  nombre_quien_superviso: "Quien supervisó",
-  equipos_json: "Equipos utilizados",
-  disposicion_json: "Disposición final",
-  entrega_json: "Entrega al cliente",
-  resultados_json: "Resultados",
-  uso_inventario_json: "Insumos usados",
-  analisis_ids_json: "Análisis incluidos",
-  nombre: "Nombre",
-  producto: "Producto",
-  clave: "Clave",
-  clave_documento: "Clave del documento",
-  titulo: "Título",
-  revision: "Revisión",
-  cantidad_actual: "Cantidad actual",
-  cantidad_total: "Cantidad total",
-  unidad: "Unidad",
-  caducidad: "Caducidad",
-  lote: "Lote",
-  marca: "Marca",
-  ubicacion: "Ubicación",
-  stock_minimo: "Stock mínimo",
-  stock_actual: "Stock actual",
-  fecha_programada: "Fecha programada",
-  fecha_realizada: "Fecha realizada",
-  proxima_calibracion: "Próxima calibración",
-  responsable: "Responsable",
-  email: "Correo",
-  rol: "Rol",
-  rol_id: "Rol",
-  id_rol: "Rol",
-  activo: "Activo",
-  avatar: "Avatar",
-  version: "Versión",
-  archivo_pdf: "Archivo PDF",
-  fecha: "Fecha",
-  medio: "Medio",
-  a_quien: "Entregado a",
-  remanentes: "Remanentes",
-  tipo: "Tipo",
-  tipo_otro: "Otro tipo",
-  persona: "Persona contactada",
-  respuesta: "Respuesta del cliente",
-  decision: "Decisión",
-  disposicion: "Disposición",
-  excepcion: "Excepción",
-  insertados: "Registros insertados",
-  actualizados: "Registros actualizados",
-  permisos: "Permisos",
-  proveedor: "Proveedor",
-  localizacion: "Localización",
-  sub_localizacion: "Sublocalización",
-  existe_usuario: "Usuario existente",
-  nueva_revision_de: "Nueva revisión del documento",
-  revisiones_obsoletas: "Revisiones marcadas como obsoletas",
-  enmienda_de: "Enmienda del informe",
-  sustituye_a: "Sustituye a",
-  baja_en: "Dado de baja el",
-  baja_motivo: "Motivo de la baja",
-  reactivado_en: "Reactivado el",
-  motivo_restauracion: "Motivo de la restauración",
-  fecha_baja: "Fecha de baja",
-  descripcion: "Descripción",
-  categoria: "Categoría",
-  proveedor_nombre: "Proveedor",
-  costo: "Costo",
-  presentacion: "Presentación",
-  numero_serie: "Número de serie",
-  modelo: "Modelo",
-  frecuencia: "Frecuencia",
-  tipo_mantenimiento: "Tipo de mantenimiento",
-  resultado: "Resultado",
-  area: "Área",
-  tipo_documento: "Tipo de documento",
-  fecha_vigencia: "Fecha de vigencia",
-  proxima_revision: "Próxima revisión",
-  elaboro: "Elaboró",
-  reviso: "Revisó",
-  aprobo: "Aprobó",
-  archivo: "Archivo",
-  can_read: "Ver",
-  can_create: "Crear",
-  can_update: "Editar",
-  can_delete: "Anular / dar de baja",
-  creado_cargo: "Cargo con el que se capturó",
-  anulado_cargo: "Cargo de quien anuló",
-  aprobado_cargo: "Cargo de quien aprobó",
-  entregado_cargo: "Cargo de quien entregó",
-  registrado_cargo: "Cargo de quien registró",
-  vigente_desde: "Vigente desde",
-  vigente_hasta: "Vigente hasta",
-  actuo_como: "Actuó como",
-  es_sistemico: "Usuario del sistema",
-  ultimo_acceso: "Último acceso",
-  contrasena: "Contraseña",
-  tipo_cuenta: "Tipo de cuenta",
-  supervisor_id: "Supervisor",
-  motivo_ultimo_cambio: "Motivo del último cambio de vigencia",
-  bloqueado_hasta: "Bloqueada hasta",
-  cargo_predeterminado: "Cargo predeterminado",
-  debe_cambiar_password: "Debe cambiar su contraseña",
-  requiere_supervision: "Requiere visto bueno",
-  supervision_estado: "Supervisión",
-  supervision_observaciones: "Observaciones del supervisor",
-  cantidad: "Cantidad",
-  movimientos_repuestos: "Movimientos de inventario repuestos",
-  ignorados: "Filas ignoradas",
-  errores: "Errores",
-  bivalvos_steps_json: "Pasos (bivalvos)",
-  sardinas_steps_json: "Pasos (sardinas)",
-  lote_seleccion_json: "Muestras del lote",
-  datos_solicitante_json: "Datos del solicitante",
-  datos_custodio_json: "Custodio y resguardo",
-  inspeccion_json: "Inspección visual",
-  aceptacion_json: "Decisión de aceptación",
-  comunicacion_cliente_json: "Comunicación al cliente",
-  analisis_json: "Análisis solicitado",
-  resguardo_json: "Resguardo",
-  cliente_json: "Cliente",
-  elaboro_json: "Elaboró",
-  pasos_json: "Pasos del protocolo",
-  resultados_congelados_json: "Resultados incluidos",
-  controles_json: "Controles de calidad",
-  condiciones_json: "Condiciones ambientales",
-  equipo_json: "Equipo",
-  nombre_entrega: "Entregó la muestra",
-  nombre_cargo_firma: "Nombre y cargo",
-  lugar_resguardo: "Lugar de resguardo",
-  lugar_otro: "Detalle del lugar",
-  temperatura_llegada: "Temperatura de llegada",
-  checklist: "Requisitos",
-  requisito: "Requisito",
-  observacion: "Observación",
-  tipos: "Tipos",
-  metodos: "Métodos",
-  tipos_muestra: "Tipos de muestra",
-  hora: "Hora",
-  peso: "Peso",
-  equipo: "Equipo",
-  uso: "Uso",
-  clave_bitacora: "Clave de bitácora",
-  folio_bitacora: "Folio de bitácora",
-  folio_num: "Folio",
-  folio: "Folio",
-  cargo: "Cargo",
-  id_muestra: "Muestra",
-  limite_regulatorio: "Límite aplicable",
-  limite_deteccion: "Límite de detección",
-  limite_cuantificacion: "Límite de cuantificación",
-  incertidumbre: "Incertidumbre",
-  cumple: "Conformidad",
-  resultado_texto: "Resultado (texto)",
-};
-
-/* Campos tecnicos o duplicados que no aportan al usuario. */
-const HIDDEN_FIELDS = new Set([
-  "id",
-  "hash",
-  "pdf_sha256",
-  "sha256",
-  "pdf",
-  "revisado_firma",
-  "aprobado_firma",
-  "autorizado_firma",
-  "elaborado_firma",
-  "analista_firma",
-  "firma",
-  "revisado_por",
-  "aprobado_por",
-  "autorizado_por",
-  "anulado_por",
-  "restaurado_por",
-  "registrado_por",
-  "entregado_por",
-  "creado_por",
-  "actualizado_por",
-  "usuario_id",
-  "created_at",
-  "updated_at",
-  "actualizado_en",
-  "registrado_en",
-  "entregado_en",
-  "password_hash",
-  "id_mantenimiento",
-  // Fase 2: datos internos de sesion y supervision.
-  "token_version",
-  "intentos_desde",
-  "supervision_solicitada_por",
-  "supervision_solicitada_en",
-  "supervisado_por",
-  "supervisado_en",
-  // Copia interna del estado para poder restaurar; el cambio de estado ya se muestra.
-  "estado_previo",
-  // Ids de relaciones.
-  "id_equipo",
-  "equipo_id",
-  "id_permiso",
-  "hojas",
-  // Columnas heredadas del sistema anterior que duplican a las actuales.
-  "amount_in_stock",
-  "item_name",
-  "nombre_crm",
-  "unidad_total",
-  "total_litros_2025",
-  "fecha_vencimiento",
-]);
-
-/* Campos 0/1 que en realidad son sí/no. */
-const BOOLEAN_FIELDS = new Set(["activo", "trabajar", "conformidad", "muestra_unica", "requiere_extraccion", "es_blanco", "vigente", "obsoleto", "existe_usuario", "es_sistemico"]);
-const isBooleanField = (key: string) => BOOLEAN_FIELDS.has(key) || key.startsWith("can_");
-/* Ademas de la lista, todo campo "*_por" es un id de usuario: no se muestra. */
-const isHidden = (key: string) => HIDDEN_FIELDS.has(key) || (key.endsWith("_por") && key !== "recibido_por") || key.endsWith("_rol_id") || key === "asignacion_id";
-
-const catalogLabel = (items: { value: string; label: string }[], value: unknown) => items.find((item) => item.value === String(value))?.label;
-
-const STATE_BY_ENTITY: Record<string, Record<string, { label: string }>> = {
-  muestras_recepcion: SAMPLE_STATES,
-  muestras_procesamiento: SAMPLE_STATES,
-  muestras_extraccion: SAMPLE_STATES,
-  muestras_analisis: ANALYSIS_STATES,
-  informes: REPORT_STATES,
-  documentos_sgc: DOCUMENT_STATES,
-};
-const GENERIC_STATES: Record<string, string> = { pendiente: "Pendiente", vencido: "Vencido", completado: "Completado", programado: "Programado", cancelado: "Cancelado", activo: "Activo", inactivo: "Inactivo", baja: "Dado de baja", vigente: "Vigente", obsoleto: "Obsoleto" };
-
-const CONSUMED_DETAIL = new Set(["enmienda_de", "enmienda", "nueva_revision_de", "avatar", "contrasena", "excepcion", "revisiones_obsoletas", "pdf", "sha256", "a_quien", "medio", "fecha", "decision", "disposicion", "cantidad", "insertados", "actualizados", "ignorados", "errores", "hojas", "movimientos_repuestos", "proveedor", "existe_usuario", "motivo", "permisos", "rol", "rol_id", "asignacion_id", "vigente_desde", "vigente_hasta", "actuo_como", "ip", "tipo", "bloqueado_hasta", "cambios", "roles_acotados", "cambio_obligatorio", "sesiones", "otras_sesiones", "supervisado", "antes", "despues", "tipo_cuenta", "supervisor_id", "adjunto_id", "tipo_evidencia", "descripcion", "nombre", "tamano_bytes", "vista_previa", "integridad", "esperado", "obtenido", "adjuntos_heredados", "respaldo_id", "archivos", "incluye_llave", "llave_huella", "bitacora_ultimo_id", "tamano", "manifest_sha256", "origen", "modo", "responsable", "origen_automatico", "registros", "impacto", "nc", "etapa", "accion_correctiva", "fecha_compromiso", "implementacion", "resultado", "suspension", "sigue_suspendido_por", "informe", "informe_estado", "contacto", "propuesta_documental", "titulo", "pdf_sha256", "incidencia", "de", "a", "reaperturas", "acta", "verificacion", "detalle"]);
-const DELIVERY_PHRASE: Record<string, string> = { correo: "por correo electrónico", impreso: "en mano (impreso)", portal: "por el portal o carpeta compartida", otro: "por otro medio" };
-const exceptionLabel = (value: unknown) => {
-  const text = String(value);
-  if (/misma persona/.test(text)) return "Excepción: la misma persona hizo dos pasos que normalmente hacen personas distintas";
-  return `Excepción: ${text}`;
-};
-
-/* Fase 3: la accion se hizo por una excepcion de segregacion aprobada por un segundo usuario. */
-const excepcionSegregacionLabel = (detalle: Record<string, unknown>): string | null => {
-  const e = detalle.excepcion_segregacion as { solicitud_id?: unknown } | undefined;
-  return e && typeof e === "object" ? `Por excepción de segregación (solicitud #${String(e.solicitud_id ?? "?")})` : null;
-};
-/* Fase 3: la accion la ejecuto un segundo usuario al aprobar una solicitud, o el script de alta sin solicitud. */
-const solicitudLabel = (detalle: Record<string, unknown>): string | null => {
-  if (detalle.solicitud_id !== undefined && detalle.solicitud_id !== null) return `Ejecutada al aprobar la solicitud #${String(detalle.solicitud_id)}${detalle.solicitado_por ? ` (pedida por el usuario #${String(detalle.solicitado_por)})` : ""}`;
-  if (detalle.sin_solicitud) return `Sin solicitud de segundo usuario: ${String(detalle.sin_solicitud)}`;
-  return null;
-};
-const TIPO_SOLICITUD_LABEL: Record<string, string> = {
-  anular_registro: "anular",
-  restaurar_registro: "restaurar",
-  anular_informe: "anular",
-  excepcion_segregacion: "una excepción de segregación para",
-  asignar_rol: "asignar un rol a",
-  reactivar_cuenta: "reactivar la cuenta",
-  ampliar_vigencia: "ampliar la vigencia de la cuenta",
-};
-
-const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-/* Instante -> dd/mm/aaaa HH:mm en la zona del laboratorio. */
-export function fmtWhen(value: unknown): string {
-  if (!value) return "—";
-  return instanteDe(value) ? formatearFechaHora(value) : String(value);
-}
-
-const fmtDateOnly = (value: string) => formatearFecha(value);
-
-const humanKey = (key: string) => {
-  const clean = key.replace(/_json$/, "").replace(/_/g, " ");
-  return clean.charAt(0).toUpperCase() + clean.slice(1);
-};
-
-export const fieldLabel = (key: string) => FIELD_LABELS[key] || humanKey(key);
-
-/* Valor legible segun el campo y la entidad. */
-export function humanValue(key: string, value: unknown, entidad?: string): string {
-  if (value === null || value === undefined || value === "" || value === "-") return "vacío";
-  if (value === "[firma]") return "firma registrada";
-  if (typeof value === "boolean") return value ? "Sí" : "No";
-  if (isBooleanField(key) && (value === 0 || value === 1 || value === "0" || value === "1")) return String(value) === "1" ? "Sí" : "No";
-  if (key === "id_rol" || key === "rol_id") return `rol #${String(value)}`;
-  if (typeof value === "number") return value.toLocaleString("es-MX");
-  if (typeof value === "string") {
-    if (key === "estado" || key === "estado_previo") {
-      const table = (entidad && STATE_BY_ENTITY[entidad]) || {};
-      return table[value]?.label || GENERIC_STATES[value] || humanKey(value);
-    }
-    if (key === "decision_aceptacion" || key === "decision") return catalogLabel(ACCEPTANCE_DECISIONS, value) || humanKey(value);
-    if (key === "disposicion" || (key === "tipo" && catalogLabel(DISPOSAL_TYPES, value))) return catalogLabel(DISPOSAL_TYPES, value) || humanKey(value);
-    if (key === "medio") return catalogLabel(REPORT_DELIVERY_MEDIA, value) || catalogLabel(CLIENT_CONTACT_MEDIA, value) || humanKey(value);
-    if (key === "medio_recepcion") return catalogLabel(RECEPTION_DELIVERY_MEDIA, value) || humanKey(value);
-    if (key === "lugar_resguardo") return catalogLabel(STORAGE_PLACES, value) || humanKey(value);
-    if (ISO_DATETIME.test(value)) return fmtWhen(value);
-    if (ISO_DATE.test(value)) return fmtDateOnly(value);
-    return value;
-  }
-  if (Array.isArray(value)) {
-    if (!value.length) return "vacío";
-    return value.map((item) => (typeof item === "object" && item ? describeObject(item as ApiRecord, entidad) : humanValue(key, item, entidad))).join("; ");
-  }
-  if (typeof value === "object") return describeObject(value as ApiRecord, entidad);
-  return String(value);
-}
-
-/* Un objeto (disposicion, entrega, equipo...) como "Etiqueta: valor · Etiqueta: valor". */
-function describeObject(obj: ApiRecord, entidad?: string): string {
-  if (obj.nombre && (obj.clave_bitacora !== undefined || obj.equipo_id !== undefined)) {
-    // Equipo utilizado en un formato.
-    const parts = [String(obj.nombre)];
-    if (obj.uso) parts.push(String(obj.uso));
-    if (obj.clave_bitacora || obj.folio_bitacora) parts.push(`bitácora ${[obj.clave_bitacora, obj.folio_bitacora ? `folio ${obj.folio_bitacora}` : null].filter(Boolean).join(" ")}`);
-    return parts.join(" · ");
-  }
-  const parts: string[] = [];
-  for (const [key, value] of Object.entries(obj)) {
-    if (isHidden(key) || value === null || value === undefined || value === "") continue;
-    parts.push(`${fieldLabel(key)}: ${humanValue(key, value, entidad)}`);
-  }
-  return parts.join(" · ") || "vacío";
-}
-
+const cap = (t: string) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
+const esVacio = (v: unknown) => v === null || v === undefined || v === "" || v === "-" || (Array.isArray(v) && v.length === 0);
+const texto = (v: unknown) => (v === null || v === undefined ? "" : String(v).trim());
 const isPair = (value: unknown): value is { antes?: unknown; despues?: unknown } => !!value && typeof value === "object" && !Array.isArray(value) && ("antes" in (value as object) || "despues" in (value as object));
-
-const itemKey = (item: unknown, index: number) => {
-  if (item && typeof item === "object") {
-    const record = item as ApiRecord;
-    const base = record.equipo_id ?? record.id ?? record.ref ?? record.clave ?? record.nombre ?? record.id_muestra ?? record.requisito ?? index;
-    return record.tipo && record.ref !== undefined ? `${String(record.tipo)}:${String(base)}` : String(base);
-  }
-  return String(item);
-};
-
 const isPlainObject = (value: unknown): value is ApiRecord => !!value && typeof value === "object" && !Array.isArray(value);
+const igual = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
-/* Claves que cambiaron entre dos objetos, una linea por clave. */
-function diffObjects(before: ApiRecord, after: ApiRecord, entidad?: string): string[] {
-  const lines: string[] = [];
-  for (const field of new Set([...Object.keys(before), ...Object.keys(after)])) {
-    if (isHidden(field)) continue;
-    const a = before[field];
-    const b = after[field];
-    if (JSON.stringify(a ?? null) === JSON.stringify(b ?? null)) continue;
-    if (Array.isArray(a) && Array.isArray(b)) {
-      for (const line of diffLists(a, b, entidad)) lines.push(`${fieldLabel(field)}: ${line}`);
-      continue;
-    }
-    if (isPlainObject(a) && isPlainObject(b)) {
-      for (const line of diffObjects(a, b, entidad)) lines.push(`${fieldLabel(field)} · ${line}`);
-      continue;
-    }
-    lines.push(`${fieldLabel(field)}: ${humanValue(field, a, entidad)} → ${humanValue(field, b, entidad)}`);
-  }
-  return lines;
-}
+/* ---------------------------------------------------------------------------
+ * Registros: articulo, nombre, area y ficha
+ * ------------------------------------------------------------------------- */
 
-/* Diferencia entre dos listas: agregados, quitados y modificados, en frases. */
-function diffLists(before: unknown[], after: unknown[], entidad?: string): string[] {
-  const lines: string[] = [];
-  const mapBefore = new Map(before.map((item, i) => [itemKey(item, i), item]));
-  const mapAfter = new Map(after.map((item, i) => [itemKey(item, i), item]));
-  for (const [key, item] of mapAfter) {
-    const prev = mapBefore.get(key);
-    if (prev === undefined) {
-      lines.push(`Se agregó: ${humanValue("", item, entidad)}`);
-      continue;
-    }
-    if (JSON.stringify(prev) === JSON.stringify(item)) continue;
-    if (prev && item && typeof prev === "object" && typeof item === "object") {
-      const name = (item as ApiRecord).nombre || (item as ApiRecord).id_muestra || (item as ApiRecord).requisito || (item as ApiRecord).clave || key;
-      const changed: string[] = [];
-      for (const field of new Set([...Object.keys(prev as object), ...Object.keys(item as object)])) {
-        if (isHidden(field)) continue;
-        const a = (prev as ApiRecord)[field];
-        const b = (item as ApiRecord)[field];
-        if (JSON.stringify(a) !== JSON.stringify(b)) changed.push(`${fieldLabel(field).toLowerCase()} ${humanValue(field, a, entidad)} → ${humanValue(field, b, entidad)}`);
-      }
-      lines.push(`${String(name)}: ${changed.join(", ") || "modificado"}`);
-    } else {
-      lines.push(`${humanValue("", prev, entidad)} → ${humanValue("", item, entidad)}`);
-    }
-  }
-  for (const [key, item] of mapBefore) if (!mapAfter.has(key)) lines.push(`Se quitó: ${humanValue("", item, entidad)}`);
-  return lines;
-}
-
-function humanChanges(cambios: Cambios, entidad: string): HumanChange[] {
-  const out: HumanChange[] = [];
-  for (const [key, raw] of Object.entries(cambios || {})) {
-    if (key === "_detalle" || isHidden(key)) continue;
-    const pair = isPair(raw) ? raw : { antes: undefined, despues: raw };
-    const before = pair.antes;
-    const after = pair.despues;
-    if (JSON.stringify(before ?? null) === JSON.stringify(after ?? null)) continue;
-    if (key === "permisos" && (esMatrizPermisos(before) || esMatrizPermisos(after))) {
-      const lines = diffPermisos(before, after);
-      if (lines.length) out.push({ label: "Permisos", before: "", after: "", lines });
-      continue;
-    }
-    if (key === "analisis_ids_json" && Array.isArray(before || []) && Array.isArray(after || [])) {
-      // Ids internos: solo cuenta cuántos entraron o salieron.
-      const b = new Set((before || []) as unknown[]);
-      const a = new Set((after || []) as unknown[]);
-      const added = [...a].filter((x) => !b.has(x)).length;
-      const removed = [...b].filter((x) => !a.has(x)).length;
-      const lines = [added ? `Se agregó ${added === 1 ? "1 análisis" : `${added} análisis`}` : null, removed ? `Se quitó ${removed === 1 ? "1 análisis" : `${removed} análisis`}` : null].filter(Boolean) as string[];
-      if (lines.length) out.push({ label: fieldLabel(key), before: "", after: "", lines });
-      continue;
-    }
-    if (Array.isArray(before) && Array.isArray(after)) {
-      const lines = diffLists(before, after, entidad);
-      if (lines.length) out.push({ label: fieldLabel(key), before: "", after: "", lines });
-      continue;
-    }
-    if (isPlainObject(before) && isPlainObject(after)) {
-      // Dos objetos: solo las claves que cambiaron, no el objeto entero dos veces.
-      const lines = diffObjects(before, after, entidad);
-      if (lines.length) out.push({ label: fieldLabel(key), before: "", after: "", lines });
-      continue;
-    }
-    out.push({ label: fieldLabel(key), before: humanValue(key, before, entidad), after: humanValue(key, after, entidad), isState: key === "estado" });
-  }
-  // El estado primero; el resto en orden alfabetico por etiqueta.
-  return out.sort((a, b) => Number(!!b.isState) - Number(!!a.isState) || a.label.localeCompare(b.label, "es"));
-}
+const ENTIDAD: Record<string, { art: "el" | "la"; noun: string; plural: string; area: string }> = {
+  muestras_recepcion: { art: "la", noun: "recepción", plural: "recepciones", area: "Recepción de muestras" },
+  muestras_procesamiento: { art: "el", noun: "procesamiento", plural: "procesamientos", area: "Procesamiento de muestras" },
+  muestras_extraccion: { art: "la", noun: "extracción", plural: "extracciones", area: "Extracción" },
+  muestras_analisis: { art: "el", noun: "análisis", plural: "análisis", area: "Análisis" },
+  informes: { art: "el", noun: "informe", plural: "informes", area: "Informes de resultados" },
+  documentos_sgc: { art: "el", noun: "documento", plural: "documentos", area: "Documentos (sistema anterior)" },
+  biblioteca_documentos: { art: "el", noun: "documento", plural: "documentos", area: "Biblioteca (retirada)" },
+  biblioteca_categorias: { art: "la", noun: "categoría", plural: "categorías", area: "Biblioteca (retirada)" },
+  sgc_documentos: { art: "el", noun: "documento", plural: "documentos", area: "Documentos SGC" },
+  sgc_solicitudes: { art: "la", noun: "solicitud de documento", plural: "solicitudes de documentos", area: "Documentos SGC" },
+  reactivos: { art: "el", noun: "reactivo", plural: "reactivos", area: "Inventario de reactivos" },
+  consumibles: { art: "el", noun: "consumible", plural: "consumibles", area: "Inventario de consumibles" },
+  equipos: { art: "el", noun: "equipo", plural: "equipos", area: "Equipos" },
+  mantenimientos: { art: "el", noun: "mantenimiento", plural: "mantenimientos", area: "Mantenimiento de equipos" },
+  reportes_mantenimiento: { art: "el", noun: "reporte de mantenimiento", plural: "reportes de mantenimiento", area: "Mantenimiento de equipos" },
+  usuarios: { art: "la", noun: "cuenta", plural: "cuentas", area: "Usuarios y accesos" },
+  roles: { art: "el", noun: "rol", plural: "roles", area: "Roles y permisos" },
+  sesion: { art: "la", noun: "sesión", plural: "sesiones", area: "Inicio de sesión" },
+  respaldos: { art: "el", noun: "respaldo", plural: "respaldos", area: "Respaldos" },
+  incidencias: { art: "la", noun: "incidencia", plural: "incidencias", area: "Incidencias" },
+  no_conformidades: { art: "la", noun: "no conformidad", plural: "no conformidades", area: "No conformidades" },
+  acciones_correctivas: { art: "la", noun: "acción correctiva", plural: "acciones correctivas", area: "Acciones correctivas" },
+  suspensiones: { art: "la", noun: "suspensión", plural: "suspensiones", area: "No conformidades" },
+  esquema: { art: "la", noun: "plataforma", plural: "plataforma", area: "Plataforma" },
+  auditoria: { art: "el", noun: "registro de actividad", plural: "registro de actividad", area: "Registro de actividad" },
+};
 
 const ENTITY_ROUTE: Partial<Record<string, (id: string, referencia: string) => string>> = {
   muestras_recepcion: (id) => `/muestras/recepcion/${id}`,
@@ -687,7 +104,12 @@ const ENTITY_ROUTE: Partial<Record<string, (id: string, referencia: string) => s
   muestras_extraccion: (id) => `/muestras/extraccion/${id}`,
   muestras_analisis: (id) => `/muestras/analisis/${id}`,
   informes: (id) => `/informes/${id}`,
-  documentos_sgc: (_id, ref) => `/documentos?buscar=${encodeURIComponent(ref)}`,
+  // Flujo anterior y Biblioteca (retirados): sin pantalla propia; llevan a Documentos SGC.
+  documentos_sgc: () => "/documentos",
+  biblioteca_documentos: () => "/documentos",
+  biblioteca_categorias: () => "/documentos",
+  sgc_documentos: (id) => `/documentos/${id}`,
+  sgc_solicitudes: (id) => `/documentos/solicitudes?abrir=${id}`,
   reactivos: (_id, ref) => `/inventario/reactivos?buscar=${encodeURIComponent(ref)}`,
   consumibles: (_id, ref) => `/inventario/consumibles?buscar=${encodeURIComponent(ref)}`,
   equipos: (_id, ref) => `/inventario/equipos?buscar=${encodeURIComponent(ref)}`,
@@ -698,424 +120,1026 @@ const ENTITY_ROUTE: Partial<Record<string, (id: string, referencia: string) => s
   roles: () => `/administracion/roles`,
 };
 
-export function humanizeAuditEntry(entry: ApiRecord): HumanEntry {
-  const entidad = String(entry.entidad || "");
-  const accion = String(entry.accion || "");
-  // El servidor guarda "mantenimiento calibracion equipo 12"; aqui basta "calibración · equipo 12".
-  const referencia = entry.referencia ? String(entry.referencia).replace(/^mantenimiento\s+(\w+)\s+equipo\s+(\d+)$/i, (_m, tipo: string, id: string) => `de ${tipo.replace("calibracion", "calibración").replace("verificacion", "verificación")} del equipo #${id}`) : null;
-  const cambios = (entry.cambios || {}) as Cambios;
-  const detalle = ((cambios._detalle as ApiRecord | undefined) || {}) as ApiRecord;
-  const noun = ENTITY_NOUN[entidad] || { art: "el", noun: (AUDIT_ENTITIES[entidad] || entidad || "registro").toLowerCase(), plural: "registros" };
-  const obj = referencia ? `${noun.art} ${noun.noun} ${referencia}` : `${noun.art === "la" ? "una" : "un"} ${noun.noun}`;
-  // "de el informe" → "del informe".
-  const de = (phrase: string) => (phrase.startsWith("el ") ? `del ${phrase.slice(3)}` : `de ${phrase}`);
-  const estado = isPair(cambios.estado) ? cambios.estado : null;
-  const facts: string[] = [];
-  let action: string;
+/* Acciones de sesion: sin ficha ni area de registro. */
+const ACCIONES_DE_SESION = new Set(["login", "login_fallido", "reauth_fallida", "cerrar_sesiones"]);
 
-  switch (accion) {
-    case "crear":
-      if (detalle.accion_correctiva) {
-        action = `agregó la acción correctiva #${String(detalle.accion_correctiva)} a ${obj}`;
-        if (detalle.responsable) facts.push(`Responsable: ${String(detalle.responsable)}${detalle.fecha_compromiso ? ` · compromiso ${humanValue("fecha", detalle.fecha_compromiso)}` : ""}`);
-      } else if (detalle.enmienda_de || detalle.enmienda) action = `emitió ${obj} como enmienda (sustituye a la versión anterior)`;
-      else if (detalle.nueva_revision_de) action = `creó una nueva revisión ${de(obj)}`;
-      else action = `creó ${obj}`;
-      break;
-    case "editar": {
-      const keys = Object.keys(cambios).filter((k) => k !== "_detalle" && !isHidden(k) && k !== "estado_previo");
-      if (estado && keys.length === 1) action = `cambió el estado ${de(obj)} a ${humanValue("estado", estado.despues, entidad)}`;
-      else if (detalle.avatar) action = "cambió su avatar";
-      else if (detalle.contrasena) {
-        action = `cambió la contraseña ${de(obj)}`;
-        if (keys.length) facts.push(`${keys.length} dato${keys.length === 1 ? "" : "s"} más editado${keys.length === 1 ? "" : "s"}`);
-      } else if (entidad === "no_conformidades" && detalle.accion_correctiva) action = `editó la acción correctiva #${String(detalle.accion_correctiva)} ${de(obj)}`;
-      else action = `editó ${obj}`;
-      break;
-    }
-    case "anular":
-      action = `anuló ${obj}`;
-      if (Number(detalle.movimientos_repuestos)) facts.push(`Se repuso el inventario (${Number(detalle.movimientos_repuestos)} movimiento${Number(detalle.movimientos_repuestos) === 1 ? "" : "s"})`);
-      if (solicitudLabel(detalle)) facts.push(solicitudLabel(detalle)!);
-      break;
-    case "restaurar":
-      action = `restauró ${obj}`;
-      if (solicitudLabel(detalle)) facts.push(solicitudLabel(detalle)!);
-      break;
-    case "baja":
-      action = `dio de baja ${obj}`;
-      break;
-    case "reactivar":
-      action = `reactivó ${obj}`;
-      if (solicitudLabel(detalle)) facts.push(solicitudLabel(detalle)!);
-      break;
-    case "revisar":
-      action = `marcó como revisado ${obj}`;
-      if (detalle.excepcion) facts.push(exceptionLabel(detalle.excepcion));
-      if (excepcionSegregacionLabel(detalle)) facts.push(excepcionSegregacionLabel(detalle)!);
-      break;
-    case "aprobar":
-      action = `aprobó ${obj}`;
-      if (detalle.excepcion) facts.push(exceptionLabel(detalle.excepcion));
-      if (excepcionSegregacionLabel(detalle)) facts.push(excepcionSegregacionLabel(detalle)!);
-      {
-        const obsoletas = Array.isArray(detalle.revisiones_obsoletas) ? detalle.revisiones_obsoletas.length : Number(detalle.revisiones_obsoletas || 0);
-        if (obsoletas > 0) facts.push(obsoletas === 1 ? "La revisión anterior quedó obsoleta" : `${obsoletas} revisiones anteriores quedaron obsoletas`);
+/* ---------------------------------------------------------------------------
+ * Datos: etiqueta legible (con articulo) y formato
+ * ------------------------------------------------------------------------- */
+
+/*
+ * Nombre de cada dato con su articulo ("la fecha de recepción"). La etiqueta
+ * de las listas es el mismo texto sin articulo. Lo que no esta aqui no se
+ * muestra (ids, sellos, firmas, columnas internas).
+ */
+const FIELD: Record<string, string> = {
+  // Generales
+  // Documentos SGC (ficha y revision)
+  proceso: "el proceso o subproceso",
+  confidencialidad: "la confidencialidad",
+  palabras_clave: "las palabras clave",
+  propietario_id: "el propietario",
+  motivo_cambio: "el motivo del cambio",
+  apartados_afectados: "los apartados afectados",
+  descripcion_cambio: "la descripción del cambio",
+  fecha_vigencia: "la fecha de vigencia",
+  fecha_proxima_revision: "la fecha de próxima revisión",
+  ubicacion_historica: "la ubicación histórica",
+  regla_conservacion: "la regla de conservación",
+  elaborador_id: "el elaborador",
+  revisor_id: "el revisor",
+  autorizador_id: "el autorizador",
+  estado: "el estado",
+  nombre: "el nombre",
+  titulo: "el título",
+  descripcion: "la descripción",
+  observaciones: "las observaciones",
+  observacion: "la observación",
+  observaciones_generales: "las observaciones generales",
+  clave: "la clave",
+  categoria: "la categoría",
+  tipo: "el tipo",
+  fecha: "la fecha",
+  hora: "la hora",
+  version: "la versión",
+  activo: "la condición de activo",
+  responsable: "el responsable",
+  ubicacion: "la ubicación",
+  motivo_anulacion: "el motivo de la anulación",
+  motivo_enmienda: "el motivo de la corrección",
+  revision_observaciones: "las observaciones de la revisión",
+  devolucion_observaciones: "las observaciones de la devolución",
+  supervision_observaciones: "las observaciones de la supervisión",
+  supervision_estado: "la supervisión",
+  requiere_supervision: "la necesidad de visto bueno",
+  supervisor_id: "el supervisor",
+  // Recepción
+  fecha_emision: "la fecha de emisión",
+  fecha_recepcion: "la fecha de recepción",
+  hora_recepcion: "la hora de recepción",
+  recibido_por: "quien recibió",
+  medio_recepcion: "el medio de recepción",
+  solicitante: "el solicitante",
+  muestra_unica: "la muestra única",
+  fecha_muestra: "la fecha de la muestra",
+  id_interno: "el ID interno",
+  especificaciones: "las especificaciones",
+  decision_aceptacion: "la decisión de aceptación",
+  analisis_json: "el análisis solicitado",
+  inspeccion_json: "la inspección visual",
+  datos_solicitante_json: "los datos de quien entregó",
+  datos_custodio_json: "los datos de custodia",
+  aceptacion_json: "los datos de aceptación",
+  disposicion_json: "la disposición final",
+  lote_muestras_json: "las muestras del lote",
+  tipos: "los tipos de análisis",
+  metodos: "los métodos",
+  tipos_muestra: "los tipos de muestra",
+  checklist: "los requisitos",
+  requisito: "el requisito",
+  nombre_entrega: "quien entregó la muestra",
+  conformidad: "la conformidad",
+  nombre_cargo_firma: "el nombre y cargo",
+  lugar_resguardo: "el lugar de resguardo",
+  lugar_otro: "el detalle del lugar",
+  temperatura_llegada: "la temperatura de llegada",
+  comunicacion_cliente: "la comunicación con el cliente",
+  requerida: "la necesidad de avisar al cliente",
+  persona: "la persona contactada",
+  respuesta: "la respuesta del cliente",
+  medio: "el medio",
+  disposicion: "la disposición",
+  nombre_organismo: "el organismo",
+  sitio_muestreo: "el sitio de muestreo",
+  // Procesamiento y extracción
+  fecha_procesamiento: "la fecha de procesamiento",
+  hora_procesamiento: "la hora de procesamiento",
+  muestra_tipo: "el tipo de muestra",
+  tipo_organismo_json: "el tipo de organismo",
+  parte_organismo_json: "la parte del organismo",
+  tipo_organismo_otro: "el otro tipo de organismo",
+  parte_organismo_otro: "la otra parte del organismo",
+  bivalvos_steps_json: "los pasos para bivalvos",
+  sardinas_steps_json: "los pasos para sardinas",
+  otro_procesamiento: "el otro procesamiento",
+  resguardo_json: "el resguardo",
+  lote_seleccion_json: "las muestras del lote",
+  nombre_quien_proceso: "quien procesó",
+  nombre_quien_superviso: "quien supervisó",
+  fecha_extraccion: "la fecha de extracción",
+  hora_extraccion: "la hora de extracción",
+  tipo_molienda: "el tipo de molienda",
+  pasos_json: "los pasos del protocolo",
+  registro_pesos_json: "el registro de pesos",
+  equipos_json: "los equipos utilizados",
+  uso_inventario_json: "los reactivos y consumibles usados",
+  nombre_quien_extrajo: "quien extrajo",
+  nombre_quien_limpieza: "quien hizo la limpieza",
+  clave_bitacora: "la clave de bitácora",
+  folio_bitacora: "el folio de bitácora",
+  uso: "el uso",
+  // Análisis
+  tipo_analisis: "el tipo de análisis",
+  metodo: "el método",
+  metodo_otro: "el otro método",
+  metodo_referencia: "la referencia del método",
+  fecha_analisis: "la fecha del análisis",
+  hora_inicio: "la hora de inicio",
+  hora_fin: "la hora de término",
+  equipo_nombre: "el equipo",
+  condiciones_json: "las condiciones ambientales",
+  resultados_json: "los resultados",
+  controles_json: "los controles de calidad",
+  analista_nombre: "el analista",
+  revisado_nombre: "quien revisó",
+  aprobado_nombre: "quien aprobó",
+  id_muestra: "la muestra",
+  resultado: "el resultado",
+  resultado_texto: "el resultado en texto",
+  unidad: "la unidad",
+  incertidumbre: "la incertidumbre",
+  limite_deteccion: "el límite de detección",
+  limite_cuantificacion: "el límite de cuantificación",
+  limite_regulatorio: "el límite aplicable",
+  cumple: "la conformidad",
+  // Informes
+  cliente_json: "los datos del cliente",
+  muestras_json: "las muestras del informe",
+  analisis_ids_json: "los análisis incluidos",
+  declaraciones_json: "las declaraciones",
+  elaborado_nombre: "quien elaboró",
+  autorizado_nombre: "quien autorizó",
+  liberado_nombre: "quien liberó",
+  entrega_json: "la entrega al cliente",
+  a_quien: "a quién se entregó",
+  requiere_enmienda: "la marca de corrección pendiente",
+  requiere_enmienda_motivo: "el motivo de la corrección pendiente",
+  cliente_nombre: "el cliente",
+  cliente_contacto: "el contacto del cliente",
+  cliente_direccion: "la dirección del cliente",
+  alcance: "el alcance de los resultados",
+  regla_decision: "la regla de decisión",
+  desviaciones: "las desviaciones del método",
+  descargo: "el descargo",
+  opiniones: "las opiniones e interpretaciones",
+  // Inventario
+  producto: "el producto",
+  marca: "la marca",
+  proveedor: "el proveedor",
+  numero_cas: "el número CAS",
+  cas: "el número CAS",
+  cantidad_actual: "la existencia",
+  cantidad: "la cantidad",
+  piezas: "las piezas",
+  existencia: "la existencia",
+  cantidad_por_pieza: "la cantidad por pieza",
+  stock_minimo: "la existencia mínima",
+  stock_maximo: "la existencia máxima",
+  caducidad: "la caducidad",
+  lote: "el lote",
+  localizacion: "la localización",
+  caducidad_indefinida: "si la caducidad es indefinida",
+  capacidad: "la capacidad por envase",
+  unidad_capacidad: "la unidad de la capacidad",
+  catalogo: "el número de catálogo",
+  parte: "el número de parte",
+  serie: "el número de serie",
+  nuevo_usado: "la condición",
+  sub_localizacion: "la sublocalización",
+  presentacion: "la presentación",
+  contenedor: "el contenedor",
+  tamano_capacidad: "el tamaño o capacidad",
+  tipo_reactivo: "el tipo de reactivo",
+  fecha_ingreso: "la fecha de ingreso",
+  fecha_apertura: "la fecha de apertura",
+  baja_motivo: "el motivo de la baja",
+  // Equipos y mantenimiento
+  modelo: "el modelo",
+  numero_serie: "el número de serie",
+  fecha_prox_calibracion: "la próxima calibración",
+  id_responsable: "el responsable",
+  fecha_programada: "la fecha programada",
+  fecha_realizado: "la fecha en que se realizó",
+  tecnico_proveedor: "el técnico o proveedor",
+  // Cuentas y roles
+  email: "el correo",
+  departamento: "el departamento",
+  tipo_cuenta: "el tipo de cuenta",
+  vigente_desde: "el inicio de la vigencia",
+  vigente_hasta: "el fin de la vigencia",
+  motivo_ultimo_cambio: "el motivo del último cambio de vigencia",
+  debe_cambiar_password: "la obligación de cambiar la contraseña",
+  bloqueado_hasta: "el bloqueo",
+  cargo_predeterminado: "el cargo predeterminado",
+  avatar: "la figura de perfil",
+  permisos: "los permisos",
+  // Calidad
+  fecha_hora_ocurrencia: "la fecha en que ocurrió",
+  accion_inmediata: "la acción inmediata",
+  impacto_resultados: "el impacto en los resultados",
+  decision_evaluacion: "la decisión de la evaluación",
+  justificacion: "la justificación",
+  origen: "el origen",
+  clasificacion: "la clasificación",
+  requisito_incumplido: "el requisito incumplido",
+  responsable_id: "el responsable",
+  afecta_resultados_emitidos: "la afectación de resultados ya emitidos",
+  trabajo_detenido: "la detención del trabajo",
+  notificar_cliente: "el aviso al cliente",
+  impacto_notas: "las notas del impacto",
+  impacto_evaluado_por: "quien evaluó el impacto",
+  impacto_evaluado_en: "la fecha de evaluación del impacto",
+  metodo_causa: "el método para encontrar la causa",
+  desarrollo_causa: "el análisis de la causa",
+  causa_raiz: "la causa raíz",
+  requiere_accion_correctiva: "la necesidad de acción correctiva",
+  justificacion_sin_accion: "la justificación para no hacer acción correctiva",
+  requiere_actualizar_riesgos: "la actualización de riesgos",
+  nota_riesgos: "la nota de riesgos",
+  requiere_cambio_documental: "la necesidad de cambio documental",
+  verificacion_programada: "la verificación programada",
+  conclusion: "la conclusión",
+  fecha_compromiso: "la fecha compromiso",
+  // Biblioteca
+  etiquetas: "las etiquetas",
+  fecha_documento: "la fecha del documento",
+  visibilidad: "la visibilidad",
+  orden: "el orden",
+  activa: "la condición de activa",
+};
+
+/* Datos que son si/no. */
+const BOOLEAN_FIELDS = new Set(["activo", "activa", "muestra_unica", "conformidad", "requerida", "requiere_supervision", "debe_cambiar_password", "requiere_enmienda", "requiere_accion_correctiva", "requiere_actualizar_riesgos", "requiere_cambio_documental", "trabajo_detenido", "cumple"]);
+/* Datos que son una persona (id de cuenta). */
+const PERSON_FIELDS = new Set(["supervisor_id", "id_responsable", "responsable_id", "impacto_evaluado_por"]);
+/* Datos de texto largo: se cita el texto nuevo en vez de "de … a …". */
+const LONG_FIELDS = new Set(["descripcion", "observaciones", "observaciones_generales", "observacion", "especificaciones", "revision_observaciones", "devolucion_observaciones", "supervision_observaciones", "accion_inmediata", "justificacion", "impacto_notas", "desarrollo_causa", "causa_raiz", "justificacion_sin_accion", "nota_riesgos", "conclusion", "alcance", "desviaciones", "descargo", "opiniones", "motivo_enmienda", "requiere_enmienda_motivo", "motivo_ultimo_cambio", "baja_motivo", "motivo_anulacion"]);
+/* Cantidades que suben o bajan. */
+const QUANTITY_FIELDS = new Set(["cantidad_actual", "existencia", "cantidad", "piezas", "stock_minimo", "stock_maximo"]);
+
+const sinArticulo = (n: string) => n.replace(/^(el|la|los|las) /, "");
+const fieldLabel = (key: string): string | null => (FIELD[key] ? cap(sinArticulo(FIELD[key])) : null);
+
+const catalogo = (items: Array<{ value: string; label: string }>, value: unknown) => items.find((item) => item.value === String(value))?.label;
+
+const ESTADOS_POR_ENTIDAD: Record<string, Record<string, { label: string }>> = {
+  muestras_recepcion: SAMPLE_STATES,
+  muestras_procesamiento: SAMPLE_STATES,
+  muestras_extraccion: SAMPLE_STATES,
+  muestras_analisis: ANALYSIS_STATES,
+  informes: REPORT_STATES,
+  documentos_sgc: DOCUMENT_STATES,
+  incidencias: ESTADOS_INCIDENCIA,
+  no_conformidades: ESTADOS_NC,
+  acciones_correctivas: ESTADOS_ACCION,
+};
+const ESTADOS_GENERALES: Record<string, string> = { fuera_servicio: "Fuera de servicio", calibracion_pendiente: "Calibración pendiente", en_calibracion: "En calibración", en_reparacion: "En reparación", en_verificacion: "En verificación",  pendiente: "Pendiente", vencido: "Vencido", completado: "Completado", programado: "Programado", en_proceso: "En proceso", cancelado: "Cancelado", activo: "Activo", inactivo: "Inactivo", baja: "Dado de baja", vigente: "Vigente", obsoleto: "Obsoleto", operativo: "Operativo", fuera_de_servicio: "Fuera de servicio", en_mantenimiento: "En mantenimiento", suspendido: "Suspendido" };
+
+/* Valor tecnico ("alcoholes_solventes") en palabras ("Alcoholes solventes"). */
+const palabras = (v: string) => (/^[a-z0-9_]+$/.test(v) ? cap(v.replace(/_/g, " ")) : v);
+
+const unidadDe = (ctx: ContextoActividad): string => texto(ctx.datos?.nuevos?.unidad || ctx.datos?.antes?.unidad);
+const numero = (n: number) => n.toLocaleString("es-MX", { maximumFractionDigits: 4 });
+
+/*
+ * Valor legible de un dato, o null si no se puede decir en palabras (un id
+ * que no se conoce, un objeto sin etiquetas): entonces no se muestra.
+ */
+function valorLegible(key: string, value: unknown, entidad: string, ctx: ContextoActividad = {}): string | null {
+  if (esVacio(value)) return null;
+  if (value === "[firma]") return "firma registrada";
+  if (PERSON_FIELDS.has(key)) return ctx.personas?.get(Number(value)) || null;
+  if (typeof value === "boolean") return value ? "Sí" : "No";
+  if (BOOLEAN_FIELDS.has(key) && [0, 1, "0", "1", "sí", "si", "no"].includes(value as never)) return ["1", "sí", "si"].includes(String(value)) ? "Sí" : "No";
+  if (["afecta_resultados_emitidos", "notificar_cliente"].includes(key)) return value === "si" ? "Sí" : value === "no" ? "No" : palabras(String(value));
+  if (typeof value === "number") return QUANTITY_FIELDS.has(key) && unidadDe(ctx) ? `${numero(value)} ${unidadDe(ctx)}` : numero(value);
+  if (typeof value === "string") {
+    const v = value.trim();
+    if (key === "estado") return (ESTADOS_POR_ENTIDAD[entidad] || {})[v]?.label || ESTADOS_GENERALES[v] || palabras(v);
+    if (key === "decision_aceptacion" || key === "decision") return catalogo(ACCEPTANCE_DECISIONS, v) || palabras(v);
+    if (key === "disposicion" || (key === "tipo" && catalogo(DISPOSAL_TYPES, v))) return catalogo(DISPOSAL_TYPES, v) || palabras(v);
+    if (key === "medio") return catalogo(REPORT_DELIVERY_MEDIA, v) || catalogo(CLIENT_CONTACT_MEDIA, v) || MEDIO_COMUNICACION_LABEL[v] || palabras(v);
+    if (key === "medio_recepcion") return catalogo(RECEPTION_DELIVERY_MEDIA, v) || palabras(v);
+    if (key === "lugar_resguardo") return catalogo(STORAGE_PLACES, v) || palabras(v);
+    if (key === "tipo_muestra" || key === "muestra_tipo") return catalogo(RECEPTION_SAMPLE_TYPES, v) || palabras(v);
+    if (key === "tipo_analisis") return catalogo(ANALYSIS_TYPES, v) || catalogo(RECEPTION_ANALYSIS_TYPES, v) || palabras(v);
+    if (key === "metodo") return catalogo(ANALYSIS_METHODS, v) || catalogo(RECEPTION_METHODS, v) || palabras(v);
+    if (key === "decision_evaluacion") return ({ cerrar_sin_nc: "Cerrar sin abrir una no conformidad", escalar: "Convertir en no conformidad" } as Record<string, string>)[v] || palabras(v);
+    if (key === "impacto_resultados") return IMPACTO_LABEL[v] || palabras(v);
+    if (key === "clasificacion") return CLASIFICACION_NC_LABEL[v] || palabras(v);
+    if (key === "metodo_causa") return METODO_CAUSA_LABEL[v] || palabras(v);
+    if (key === "origen") return ORIGEN_NC_LABEL[v] || ORIGEN_AUTOMATICO_LABEL[v] || palabras(v);
+    if (key === "tipo" && entidad === "incidencias") return TIPO_INCIDENCIA_LABEL[v] || palabras(v);
+    if (key === "tipo_cuenta") return v === "temporal" ? "Temporal" : "Permanente";
+    if (key === "visibilidad") return v === "roles" ? "Solo algunos roles" : "Todos";
+    if (key === "bloqueado_hasta") return `hasta ${formatearFechaHora(v)}`;
+    if (QUANTITY_FIELDS.has(key) && /^-?\d+(\.\d+)?$/.test(v)) return valorLegible(key, Number(v), entidad, ctx);
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)) return formatearFechaHora(v);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return formatearFecha(v);
+    if (key === "etiquetas" && v.startsWith("[")) {
+      try {
+        const lista = JSON.parse(v) as unknown[];
+        return lista.length ? lista.map(String).join(", ") : null;
+      } catch {
+        return v;
       }
-      break;
-    case "autorizar":
-      action = `autorizó ${obj}${detalle.pdf ? " y se generó el PDF" : ""}`;
-      if (detalle.excepcion) facts.push(exceptionLabel(detalle.excepcion));
-      if (excepcionSegregacionLabel(detalle)) facts.push(excepcionSegregacionLabel(detalle)!);
-      break;
-    case "solicitar": {
-      const que = TIPO_SOLICITUD_LABEL[String(detalle.tipo)] || String(detalle.accion || "una acción crítica sobre");
-      action = `solicitó autorización para ${que} ${obj}`;
-      if (detalle.solicitud_id !== undefined) facts.push(`Solicitud #${String(detalle.solicitud_id)}${detalle.aprueba ? ` · la aprueba quien tenga ${String(detalle.aprueba)}` : ""}${detalle.vence_en ? ` · vence ${fmtWhen(detalle.vence_en)}` : ""}`);
-      break;
     }
-    case "aprobar_solicitud":
-      action = `aprobó la solicitud #${String(detalle.solicitud_id ?? "?")} (${TIPO_SOLICITUD_LABEL[String(detalle.tipo)] || String(detalle.accion || "")} ${obj}) como segundo usuario`;
-      if (detalle.solicitado_por) facts.push(`Pedida por el usuario #${String(detalle.solicitado_por)}`);
-      break;
-    case "rechazar_solicitud":
-      action = `rechazó la solicitud #${String(detalle.solicitud_id ?? "?")} (${TIPO_SOLICITUD_LABEL[String(detalle.tipo)] || String(detalle.accion || "")} ${obj})`;
-      break;
-    case "cancelar_solicitud":
-      action = `canceló su solicitud #${String(detalle.solicitud_id ?? "?")} (${TIPO_SOLICITUD_LABEL[String(detalle.tipo)] || String(detalle.accion || "")} ${obj})`;
-      break;
-    case "vencer_solicitud":
-      action = `venció la solicitud #${String(detalle.solicitud_id ?? "?")} (${TIPO_SOLICITUD_LABEL[String(detalle.tipo)] || String(detalle.accion || "")} ${obj}) sin resolverse`;
-      break;
-    case "otorgar_autorizacion":
-    case "revocar_autorizacion":
-    case "vencer_autorizacion": {
-      const aut = detalle.autorizacion ? `la autorización "${String(detalle.autorizacion)}"` : "una autorización";
-      action =
-        accion === "otorgar_autorizacion"
-          ? `otorgó ${aut}${referencia ? ` a ${referencia}` : ""} (FX-THF-AP)`
-          : accion === "revocar_autorizacion"
-            ? `revocó ${aut}${referencia ? ` de ${referencia}` : ""} (FX-THF-AP)`
-            : `venció ${aut}${referencia ? ` de ${referencia}` : ""} (FX-THF-AP)`;
-      if (detalle.vigente_desde || detalle.vigente_hasta) facts.push(`Vigencia: desde ${detalle.vigente_desde ? humanValue("fecha", detalle.vigente_desde) : "—"}${detalle.vigente_hasta ? ` hasta ${humanValue("fecha", detalle.vigente_hasta)}` : " sin fecha de fin"}`);
-      if (detalle.folio_fx_thf_ap) facts.push(`Folio FX-THF-AP: ${String(detalle.folio_fx_thf_ap)}`);
-      break;
+    return palabras(v);
+  }
+  if (Array.isArray(value)) {
+    const partes = value.map((item) => (isPlainObject(item) ? nombreDeElemento(item, entidad, ctx) : valorLegible(key === "tipos" || key === "metodos" || key === "tipos_muestra" ? singularDe(key) : key, item, entidad, ctx))).filter((p): p is string => !!p);
+    return partes.length ? partes.join(", ") : null;
+  }
+  if (isPlainObject(value)) {
+    const partes = Object.entries(value)
+      .map(([k, v]) => {
+        const etiqueta = fieldLabel(k);
+        const legible = etiqueta ? valorLegible(k, v, entidad, ctx) : null;
+        return etiqueta && legible ? `${etiqueta.toLowerCase()}: ${legible}` : null;
+      })
+      .filter(Boolean);
+    return partes.length ? partes.join(" · ") : null;
+  }
+  return null;
+}
+
+/* Los elementos de "tipos" se leen como "tipo_analisis", etc. */
+const singularDe = (key: string) => ({ tipos: "tipo_analisis", metodos: "metodo", tipos_muestra: "tipo_muestra" })[key] || key;
+
+/* Nombre corto de un elemento de una lista (equipo, muestra, requisito…), o null si no tiene. */
+function nombreDeElemento(item: ApiRecord, entidad: string, ctx: ContextoActividad): string | null {
+  const nombre = item.nombre || item.producto || item.id_muestra || item.id_interno || item.requisito || item.titulo || item.nombre_organismo;
+  if (nombre) return String(nombre);
+  if (item.value && item.label) return String(item.label);
+  void entidad;
+  void ctx;
+  return null;
+}
+
+/* ---------------------------------------------------------------------------
+ * "Que cambio": una frase por dato
+ * ------------------------------------------------------------------------- */
+
+const MAX_LARGO = 160;
+const recortar = (t: string) => (t.length > MAX_LARGO ? `${t.slice(0, MAX_LARGO - 1).trimEnd()}…` : t);
+
+/* Frase para un dato que cambio de `antes` a `despues`. */
+function fraseDeCambio(key: string, antes: unknown, despues: unknown, entidad: string, ctx: ContextoActividad, referencia: string | null, prefijo = ""): string[] {
+  const nombre = FIELD[key];
+  if (!nombre || igual(antes, despues)) return [];
+  // Listas: agregados, quitados y modificados.
+  if (Array.isArray(antes) || Array.isArray(despues)) return frasesDeLista(key, Array.isArray(antes) ? antes : [], Array.isArray(despues) ? despues : [], entidad, ctx, prefijo);
+  // Objetos: cada dato interno con su propia frase, precedida del nombre del grupo.
+  if (isPlainObject(antes) || isPlainObject(despues)) {
+    const a = isPlainObject(antes) ? antes : {};
+    const b = isPlainObject(despues) ? despues : {};
+    const grupo = `${prefijo}${cap(sinArticulo(nombre))}: `;
+    return [...new Set([...Object.keys(a), ...Object.keys(b)])].flatMap((k) => fraseDeCambio(k, a[k], b[k], entidad, ctx, null, grupo));
+  }
+  const a = valorLegible(key, antes, entidad, ctx);
+  const b = valorLegible(key, despues, entidad, ctx);
+  if (a === null && b === null) return [];
+  const sujeto = key === "cantidad_actual" && referencia ? `${nombre} de ${referencia}` : nombre;
+  const decir = (frase: string) => `${prefijo}${prefijo ? frase.charAt(0).toLowerCase() + frase.slice(1) : cap(frase)}`;
+  if ((key === "activo" || key === "activa") && a !== null && b !== null) return [decir(b === "Sí" ? "se activó." : "se desactivó.")];
+  const plural = /^(los|las) /.test(nombre);
+  const agrego = plural ? "se agregaron" : "se agregó";
+  const cambio = plural ? "cambiaron" : "cambió";
+  if (a === null && nombre.startsWith("quien ")) return [decir(`se registró ${nombre.replace(/^quien/, "quién")}: ${b}.`)];
+  if (a === null) return [decir(LONG_FIELDS.has(key) ? `${agrego} ${nombre}: «${recortar(b!)}».` : `${agrego} ${nombre}: ${b}.`)];
+  if (b === null) return [decir(`${plural ? "se quitaron" : "se quitó"} ${nombre}.`)];
+  if (LONG_FIELDS.has(key)) return [decir(`${nombre} ${cambio} a: «${recortar(b)}».`)];
+  const na = Number(antes);
+  const nb = Number(despues);
+  if (QUANTITY_FIELDS.has(key) && Number.isFinite(na) && Number.isFinite(nb) && antes !== "" && despues !== "") return [decir(`${sujeto} ${nb > na ? "subió" : "bajó"} de ${a} a ${b}.`)];
+  return [decir(`${sujeto} ${cambio} de ${a} a ${b}.`)];
+}
+
+const claveDeElemento = (item: unknown, index: number) => {
+  if (isPlainObject(item)) {
+    const base = item.equipo_id ?? item.id ?? item.ref ?? item.clave ?? item.nombre ?? item.id_muestra ?? item.requisito ?? item.value ?? index;
+    return item.tipo && item.ref !== undefined ? `${String(item.tipo)}:${String(base)}` : String(base);
+  }
+  return String(item);
+};
+
+function frasesDeLista(key: string, antes: unknown[], despues: unknown[], entidad: string, ctx: ContextoActividad, prefijo: string): string[] {
+  const nombre = FIELD[key];
+  // Reactivos y consumibles usados: se guardan por referencia interna; se cuenta en palabras.
+  if (key === "uso_inventario_json" || key === "analisis_ids_json") {
+    const a = new Map(antes.map((x, i) => [claveDeElemento(x, i), x]));
+    const b = new Map(despues.map((x, i) => [claveDeElemento(x, i), x]));
+    const agregados = [...b.keys()].filter((k) => !a.has(k)).length;
+    const quitados = [...a.keys()].filter((k) => !b.has(k)).length;
+    const cambiados = [...b.keys()].filter((k) => a.has(k) && !igual(a.get(k), b.get(k))).length;
+    const cosa = key === "uso_inventario_json" ? ["insumo", "insumos"] : ["análisis", "análisis"];
+    const n = (x: number) => (x === 1 ? `1 ${cosa[0]}` : `${x} ${cosa[1]}`);
+    const frases: string[] = [];
+    if (agregados) frases.push(`Se ${agregados === 1 ? "agregó" : "agregaron"} ${n(agregados)} a ${nombre}.`);
+    if (quitados) frases.push(`Se ${quitados === 1 ? "quitó" : "quitaron"} ${n(quitados)} de ${nombre}.`);
+    if (cambiados) frases.push(key === "uso_inventario_json" ? `Cambió la cantidad usada de ${n(cambiados)}.` : `Cambiaron ${n(cambiados)}.`);
+    return frases.map((f) => (prefijo ? `${prefijo}${f.charAt(0).toLowerCase()}${f.slice(1)}` : f));
+  }
+  const frases: string[] = [];
+  const a = new Map(antes.map((x, i) => [claveDeElemento(x, i), x]));
+  const b = new Map(despues.map((x, i) => [claveDeElemento(x, i), x]));
+  const dicho = (x: unknown) => (isPlainObject(x) ? nombreDeElemento(x, entidad, ctx) : valorLegible(singularDe(key), x, entidad, ctx));
+  for (const [k, item] of b) {
+    if (!a.has(k)) {
+      const d = dicho(item);
+      frases.push(d ? `Se agregó a ${nombre}: ${d}.` : `Se agregó un elemento a ${nombre}.`);
+    } else if (!igual(a.get(k), item) && isPlainObject(item) && isPlainObject(a.get(k))) {
+      const d = dicho(item);
+      const internas = [...new Set([...Object.keys(a.get(k) as ApiRecord), ...Object.keys(item)])].flatMap((campo) => fraseDeCambio(campo, (a.get(k) as ApiRecord)[campo], item[campo], entidad, ctx, null, d ? `${d}: ` : ""));
+      frases.push(...(internas.length ? internas : [d ? `Cambió ${d} en ${nombre}.` : `Cambió un elemento de ${nombre}.`]));
     }
-    case "asignar_muestra":
-      action = `asignó ${obj} a ${String(detalle.persona || "una persona")}`;
-      if (detalle.aviso_autorizaciones) facts.push(`Aviso: ${String(detalle.aviso_autorizaciones)}`);
-      break;
-    case "revocar_asignacion":
-      action = `quitó la asignación ${de(obj)} a ${String(detalle.persona || "una persona")}`;
-      break;
-    case "enviar_revision":
-      action = `envió a revisión ${obj}`;
-      break;
-    case "devolver":
-      action = `devolvió con observaciones ${obj}`;
-      break;
-    case "enmendar":
-      action = detalle.enmienda_id ? `abrió una enmienda (versión ${String(detalle.version ?? "?")}) ${de(obj)}` : `registró la versión ${String(detalle.version ?? "?")} ${de(obj)} como enmienda`;
-      if (Number(detalle.adjuntos_heredados)) facts.push(`Heredó ${Number(detalle.adjuntos_heredados)} evidencia(s) instrumental(es) de la versión anterior`);
-      break;
-    case "sustituir":
-      action = `${obj} quedó sustituido por su enmienda${detalle.version ? ` (versión ${String(detalle.version)})` : ""}`;
-      break;
-    case "cambiar_folio":
-      action = `cambió el folio ${de(obj)}${detalle.folio_anterior ? ` (antes R ${String(detalle.folio_anterior).padStart(7, "0")})` : ""}`;
-      break;
-    case "reabrir":
-      if (entidad === "no_conformidades") {
-        action = `reabrió ${obj}: la verificación fue no eficaz y regresa a análisis`;
-        if (detalle.reaperturas) facts.push(`Reapertura número ${String(detalle.reaperturas)}`);
-      } else action = `reabrió ${obj}${detalle.de ? ` (de "${String(detalle.de)}" a "${String(detalle.a || "")}")` : ""}`;
-      break;
-    // Fase 11: incidencias, NC y acciones correctivas.
-    case "reportar":
-      action = `reportó ${obj}`;
-      if (detalle.origen_automatico) facts.push(`Registro automático: ${ORIGEN_AUTOMATICO_LABEL[String(detalle.origen_automatico)] || String(detalle.origen_automatico)}`);
-      if (detalle.tipo) facts.push(`Tipo: ${TIPO_INCIDENCIA_LABEL[String(detalle.tipo)] || String(detalle.tipo)}`);
-      if (detalle.registros) facts.push(`Registros: ${String(detalle.registros)}`);
-      break;
-    case "evaluar":
-      action = `inició la evaluación de ${obj}`;
-      break;
-    case "cerrar_sin_nc":
-      action = `cerró ${obj} sin no conformidad`;
-      break;
-    case "escalar":
-      // Sobre la NC: la incidencia que se le agrego (una NC agrupa varias).
-      action = entidad === "no_conformidades" ? `agregó la incidencia ${String(detalle.incidencia || "")} a ${obj}` : `escaló ${obj} a la ${String(detalle.nc || "no conformidad")}`;
-      break;
-    case "avanzar":
-      action = `pasó ${obj} a la etapa "${ESTADOS_NC[String(detalle.etapa)]?.label || String(detalle.etapa || "")}"`;
-      break;
-    case "iniciar_accion":
-      action = `inició la acción correctiva #${String(detalle.accion_correctiva ?? "?")} ${de(obj)}`;
-      break;
-    case "implementar":
-      action = `marcó como implementada la acción correctiva #${String(detalle.accion_correctiva ?? "?")} ${de(obj)}`;
-      if (detalle.implementacion) facts.push(`Implementación: ${String(detalle.implementacion)}`);
-      break;
-    case "cancelar":
-      action = `canceló la acción correctiva #${String(detalle.accion_correctiva ?? "?")} ${de(obj)}`;
-      break;
-    case "reasignar":
-      action = detalle.accion_correctiva ? `reasignó la acción correctiva #${String(detalle.accion_correctiva)} ${de(obj)}` : `cambió el responsable ${de(obj)}`;
-      break;
-    case "verificar":
-      action = `verificó la eficacia ${de(obj)}: ${detalle.resultado === "eficaz" ? "eficaz" : "no eficaz"}`;
-      break;
-    case "suspender":
-    case "reanudar": {
-      const verbo = accion === "suspender" ? "suspendió" : "reanudó";
-      action = entidad === "no_conformidades" ? `${verbo} ${String(detalle.suspension || "un método o equipo")} por ${obj}` : `${verbo} ${obj}${detalle.nc ? ` (${String(detalle.nc)})` : ""}`;
-      if (detalle.sigue_suspendido_por) facts.push(`Sigue suspendido por ${String(detalle.sigue_suspendido_por)}`);
-      break;
+  }
+  for (const [k, item] of a) {
+    if (!b.has(k)) {
+      const d = dicho(item);
+      frases.push(d ? `Se quitó de ${nombre}: ${d}.` : `Se quitó un elemento de ${nombre}.`);
     }
-    case "retener":
-    case "liberar_retencion": {
-      const verbo = accion === "retener" ? "retuvo" : "liberó la retención de";
-      action = entidad === "informes" ? `${verbo} ${obj}${detalle.nc ? ` (${String(detalle.nc)})` : ""}` : `${verbo} ${String(detalle.informe || "un informe")} por ${obj}`;
-      break;
+  }
+  return frases.map((f) => (prefijo ? `${prefijo}${f.charAt(0).toLowerCase()}${f.slice(1)}` : f));
+}
+
+/* Permisos en palabras para la bitacora: "en Muestras puede ver, registrar y editar". */
+const VERBO_PERMISO: Record<string, string> = { V: "ver", C: "registrar", E: "editar", R: "revisar", A: "aprobar", AN: "anular", G: "administrar", ...VERBOS_DOCUMENTALES };
+const NOMBRE_MODULO: Record<string, string> = { usuarios: "Usuarios y accesos", documentos: "Documentos SGC", muestras: "Muestras", ensayos: "Ensayos", informes: "Informes", equipos: "Equipos", inventario: "Inventario", calidad: "Calidad", respaldos: "Respaldos", compras: "Compras" };
+const unirConY = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`);
+function permisosEnPalabras(filas: unknown): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const fila of Array.isArray(filas) ? filas : []) {
+    if (!isPlainObject(fila) || !isModulo(fila.modulo) || !isAccion(fila.accion)) continue;
+    const modulo = NOMBRE_MODULO[String(fila.modulo)];
+    out.set(modulo, [out.get(modulo), String(fila.accion)].filter(Boolean).join(","));
+  }
+  for (const [m, acciones] of out) {
+    const verbos = [...new Set(acciones.split(","))].sort((x, y) => ACCION_KEYS.indexOf(x as never) - ACCION_KEYS.indexOf(y as never)).map((a) => VERBO_PERMISO[a] || a);
+    out.set(m, unirConY(verbos));
+  }
+  return out;
+}
+function frasesDePermisos(antes: unknown, despues: unknown): string[] {
+  const a = permisosEnPalabras(antes);
+  const b = permisosEnPalabras(despues);
+  const frases: string[] = [];
+  for (const modulo of Object.values(NOMBRE_MODULO)) {
+    const x = a.get(modulo);
+    const y = b.get(modulo);
+    if (x === y) continue;
+    if (!x) frases.push(`Ahora puede ${y} en ${modulo}.`);
+    else if (!y) frases.push(`Ya no tiene permisos en ${modulo}.`);
+    else frases.push(`En ${modulo} ahora puede ${y} (antes: ${x}).`);
+  }
+  return frases;
+}
+
+/* Todas las frases de "Que cambio" de una entrada. */
+function frasesDeCambios(cambios: Cambios, entidad: string, ctx: ContextoActividad, referencia: string | null): string[] {
+  const frases: string[] = [];
+  const pares = Object.entries(cambios || {}).filter(([k]) => k !== "_detalle");
+  // El estado primero.
+  pares.sort(([a], [b]) => Number(b === "estado") - Number(a === "estado"));
+  for (const [key, raw] of pares) {
+    const par = isPair(raw) ? raw : { antes: undefined, despues: raw };
+    if (key === "permisos") {
+      frases.push(...frasesDePermisos(par.antes, par.despues));
+      continue;
     }
-    case "comunicar":
-      action = `registró una comunicación con el cliente en ${obj}`;
-      if (detalle.contacto) facts.push(`Con ${String(detalle.contacto)}${detalle.medio ? ` · ${String(detalle.medio)}` : ""}${detalle.fecha ? ` · ${humanValue("fecha", detalle.fecha)}` : ""}`);
-      break;
-    case "afectar":
-      action = `marcó ${String(detalle.informe || "un informe")} como afectado por ${obj}`;
-      break;
-    case "confirmar_firma":
-      action = `${String(detalle.firmante || referencia || "una persona")} confirmó su firma con contraseña`;
-      break;
-    case "imprimir_etiquetas": {
-      const n = Number(detalle.etiquetas || 0);
-      action = `imprimió ${n === 1 ? "la etiqueta" : `${n || ""} etiquetas`.trim()} ${de(obj)}`.replace(/\s+/g, " ");
-      if (detalle.formato) facts.push(detalle.formato === "hoja" ? "Formato: hoja completa" : "Formato: etiqueta 50 × 25 mm");
-      break;
-    }
-    case "publicar":
-      action = `publicó ${obj} (vigente)`;
-      if (detalle.distribuido_a) facts.push(`distribuido a ${String(detalle.distribuido_a)} persona(s)`);
-      break;
-    case "confirmar_lectura":
-      action = `confirmó la lectura de ${obj} (leí y comprendí)`;
-      break;
+    frases.push(...fraseDeCambio(key, par.antes, par.despues, entidad, ctx, referencia));
+  }
+  return [...new Set(frases)];
+}
+
+/* ---------------------------------------------------------------------------
+ * Datos principales de un registro nuevo
+ * ------------------------------------------------------------------------- */
+
+const PRINCIPALES: Record<string, string[]> = {
+  muestras_recepcion: ["solicitante", "id_interno", "fecha_recepcion", "medio_recepcion", "decision_aceptacion", "estado"],
+  muestras_procesamiento: ["id_interno", "fecha_procesamiento", "muestra_tipo", "nombre_quien_proceso", "estado"],
+  muestras_extraccion: ["id_interno", "fecha_extraccion", "tipo_molienda", "nombre_quien_extrajo", "estado"],
+  muestras_analisis: ["tipo_analisis", "metodo", "fecha_analisis", "analista_nombre", "equipo_nombre", "estado"],
+  informes: ["version", "fecha_emision", "elaborado_nombre", "estado"],
+  reactivos: ["nombre", "producto", "marca", "cantidad_actual", "ubicacion", "caducidad"],
+  consumibles: ["producto", "marca", "proveedor", "piezas", "contenedor"],
+  equipos: ["nombre", "marca", "modelo", "numero_serie", "ubicacion", "fecha_prox_calibracion"],
+  mantenimientos: ["tipo", "fecha_programada", "tecnico_proveedor", "estado"],
+  usuarios: ["nombre", "email", "departamento", "tipo_cuenta", "vigente_hasta"],
+  roles: ["nombre", "descripcion"],
+  incidencias: ["tipo", "fecha_hora_ocurrencia", "descripcion", "impacto_resultados"],
+  no_conformidades: ["clasificacion", "origen", "descripcion", "requisito_incumplido"],
+  biblioteca_documentos: ["titulo", "clave", "descripcion", "fecha_documento", "visibilidad"],
+  sgc_documentos: ["clave", "titulo", "area", "tipo", "confidencialidad"],
+};
+
+/* De 3 a 6 datos clave de un registro recien creado, con su etiqueta. */
+export function datosPrincipales(entidad: string, datos: ApiRecord | null | undefined, ctx: ContextoActividad = {}): Array<{ etiqueta: string; valor: string }> {
+  if (!datos) return [];
+  const claves = PRINCIPALES[entidad] || Object.keys(datos);
+  const out: Array<{ etiqueta: string; valor: string }> = [];
+  for (const key of claves) {
+    const etiqueta = fieldLabel(key);
+    if (!etiqueta || LONG_FIELDS.has(key) && key !== "descripcion") continue;
+    const valor = valorLegible(key, datos[key], entidad, { ...ctx, datos: { antes: null, nuevos: datos } });
+    if (!valor) continue;
+    out.push({ etiqueta, valor: key === "descripcion" ? recortar(valor) : valor });
+    if (out.length >= 6) break;
+  }
+  return out;
+}
+
+/* ---------------------------------------------------------------------------
+ * Frases y "Que paso" por tipo de actividad
+ * ------------------------------------------------------------------------- */
+
+/* Lo que se pidio en una solicitud de autorizacion, como verbo. */
+const SOLICITUD_QUE: Record<string, string> = {
+  anular_registro: "anular",
+  restaurar_registro: "restaurar",
+  anular_informe: "anular",
+  anular_calidad: "anular",
+  excepcion_segregacion: "firmar como excepción",
+  asignar_rol: "asignar un rol a",
+  reactivar_cuenta: "reactivar",
+  ampliar_vigencia: "ampliar la vigencia de",
+  cambiar_folio: "cambiar el folio de",
+  reabrir_recepcion: "reabrir",
+  obsoletar_documento: "declarar obsoleto",
+};
+function queSeSolicito(detalle: ApiRecord): string {
+  const tipo = String(detalle.tipo || "");
+  if (tipo === "decision_recepcion") return detalle.accion === "rechazada" ? "rechazar" : "aceptar con desviación";
+  return SOLICITUD_QUE[tipo] || "hacer un cambio en";
+}
+
+/* Versiones de la plataforma en palabras (bitacora de migraciones). */
+const ACTUALIZACIONES: Record<number, string> = {
+  9: "preparar su estructura inicial",
+  10: "guardar la evidencia instrumental de los análisis",
+  11: "registrar incidencias, no conformidades y acciones correctivas",
+  12: "mejorar el manejo interno de las firmas",
+  13: "agregar la Biblioteca de documentos",
+};
+
+const DELIVERY: Record<string, string> = { correo: "por correo electrónico", impreso: "en mano (impreso)", portal: "por el portal o una carpeta compartida", otro: "por otro medio" };
+
+interface Partes {
+  /* Frase sin actor (o frase completa si es de la plataforma). */
+  accion: string;
+  quePaso: string;
+  /* Si la frase ya es completa (la plataforma), no lleva actor delante. */
+  sinActor?: boolean;
+}
+
+/* Documentos SGC (Fase 2): solicitudes, decisiones del flujo, renovacion y obsolescencia. */
+function redactarSgc(accion: string, d: ApiRecord, O: string, quien: string, ref: string | null): Partes | null {
+  const papel = d.papel === "revisor" ? "como revisor" : d.papel === "autorizador" ? "como autorizador" : "";
+  if (d.renovacion) {
+    if (accion === "crear") return { accion: `inició la renovación ${de(O)}`, quePaso: `${quien} inició la renovación de vigencia ${de(O)}, sin cambiar su contenido.` };
+    if (accion === "revisar") return { accion: `confirmó la vigencia ${de(O)}`, quePaso: `${quien} confirmó, como revisor, que ${O} sigue vigente sin cambios.` };
+    if (accion === "autorizar") return { accion: `autorizó la renovación ${de(O)}`, quePaso: `${quien} autorizó la renovación: ${O} sigue vigente con nueva fecha de próxima revisión.` };
+    if (accion === "rechazar") return { accion: `rechazó la renovación ${de(O)}`, quePaso: `${quien} rechazó la renovación ${de(O)}.` };
+  }
+  switch (accion) {
     case "proponer":
-      if (entidad === "no_conformidades") action = `creó desde ${obj} una propuesta de cambio documental${detalle.titulo ? `: ${String(detalle.titulo)}` : ""}`;
-      else action = `${detalle.tipo === "cambio" ? "solicitó un cambio" : "propuso un documento"}: ${obj}${detalle.nc ? ` (desde ${String(detalle.nc)})` : ""}`;
-      break;
-    case "exportar": {
-      const n = Number(detalle.filas || 0);
-      const lista = ["incidencias", "no_conformidades", "acciones_correctivas"].includes(entidad) ? `exportó la lista de ${ENTITY_NOUN[entidad].plural}` : null;
-      action = `${lista || (String(referencia || "").startsWith("Historial") ? "exportó el historial" : "exportó la bitácora")} (${n} ${n === 1 ? "fila" : "filas"}, CSV)`;
-      break;
+      return { accion: ref ? `propuso un cambio a ${O}` : "propuso un documento nuevo", quePaso: `${quien} registró una solicitud ${ref && !/^Solicitud/.test(ref) ? `de cambio a ${O}` : "de documento nuevo"} para Mejora Continua.` };
+    case "aceptar":
+      return { accion: `aceptó ${O}`, quePaso: `${quien} aceptó ${O} y asignó elaborador, revisor y autorizador.` };
+    case "revisar":
+      return { accion: `revisó y aceptó ${O}`, quePaso: `${quien} revisó ${O} y lo aceptó; pasa a autorización.` };
+    case "devolver":
+      return { accion: `devolvió ${O} con comentarios`, quePaso: `${quien} devolvió ${O} ${papel} con comentarios; vuelve a borrador para corregirse.` };
+    case "rechazar":
+      return { accion: `rechazó ${O}`, quePaso: d.tipo !== undefined && !d.revision ? `${quien} rechazó ${O}.` : `${quien} rechazó ${O} ${papel}; esa revisión queda cancelada y la vigente sigue en uso.` };
+    case "autorizar":
+      return { accion: `autorizó ${O}`, quePaso: `${quien} autorizó la emisión ${de(O)}; falta que Mejora Continua la publique.` };
+    case "reasignar":
+      return { accion: `reasignó los responsables ${de(O)}`, quePaso: `${quien} cambió a los responsables ${de(O)}.` };
+    case "anular":
+      if (d.obsoletar) return { accion: `declaró obsoleto ${O}`, quePaso: `${quien} aprobó la solicitud: ${O} queda obsoleto, fuera de los puntos de uso y conservado en el historial.` };
+      return null;
+    case "publicar":
+      if (d.sustituye) return { accion: `publicó ${O}`, quePaso: `${quien} publicó ${O}: queda vigente y la revisión ${texto((d.sustituye as ApiRecord).revision)} queda obsoleta.` };
+      return null;
+    default:
+      return null;
+  }
+}
+const de = (frase: string) => (frase.startsWith("el ") ? `del ${frase.slice(3)}` : `de ${frase}`);
+
+function redactar(record: ApiRecord, actor: string, sistema: boolean): Partes {
+  const entidad = String(record.entidad || "");
+  const accion = String(record.accion || "");
+  const cambios = (record.cambios || {}) as Cambios;
+  const d = ((cambios._detalle as ApiRecord | undefined) || {}) as ApiRecord;
+  const meta = ENTIDAD[entidad] || { art: "el" as const, noun: "registro", plural: "registros", area: "" };
+  const ref = referenciaLegible(record);
+  const O = ref ? `${meta.art} ${meta.noun} ${ref}` : `${meta.art === "la" ? "una" : "un"} ${meta.noun}`;
+  const de = (frase: string) => (frase.startsWith("el ") ? `del ${frase.slice(3)}` : `de ${frase}`);
+  const a = (frase: string) => (frase.startsWith("el ") ? `al ${frase.slice(3)}` : `a ${frase}`);
+  const quien = actor || "Alguien";
+  const estado = isPair(cambios.estado) ? cambios.estado : null;
+  const conSolicitud = d.solicitud_id !== undefined && d.solicitud_id !== null ? " Lo hizo al autorizar la solicitud de otra persona." : "";
+  const excepcion = d.excepcion || d.excepcion_segregacion ? " Se permitió por una excepción autorizada, porque normalmente lo hace otra persona." : "";
+
+  if (entidad === "sgc_documentos" || entidad === "sgc_solicitudes") {
+    const sgc = redactarSgc(accion, d, O, quien, ref);
+    if (sgc) return sgc;
+  }
+  switch (accion) {
+    case "crear": {
+      if (d.accion_correctiva) return { accion: `agregó una acción correctiva ${a(O)}`, quePaso: `${quien} agregó una acción correctiva ${a(O)}${d.responsable ? `, a cargo de ${texto(d.responsable)}` : ""}${d.fecha_compromiso ? `, con fecha compromiso ${formatearFecha(d.fecha_compromiso)}` : ""}.` };
+      if (d.enmienda_de || d.enmienda) return { accion: `emitió una versión corregida ${de(O)}`, quePaso: `${quien} emitió una versión corregida ${de(O)}. La versión anterior queda reemplazada, pero se conserva.` };
+      if (entidad === "usuarios") return { accion: `dio de alta ${O}`, quePaso: `${quien} creó una cuenta nueva en la plataforma${ref ? ` para ${ref}` : ""}.` };
+      if (entidad === "roles") return { accion: `creó el rol ${ref ? `«${ref}»` : "nuevo"}`, quePaso: `${quien} creó el rol ${ref ? `«${ref}»` : "nuevo"} y definió qué puede hacer quien lo tenga.` };
+      if (entidad === "mantenimientos") return { accion: `programó un mantenimiento`, quePaso: `${quien} programó un mantenimiento de equipo.` };
+      if (entidad === "sgc_documentos") return { accion: `creó la ficha ${de(O)}`, quePaso: `${quien} creó la ficha ${de(O)} con la clave autorizada y su revisión ${texto(d.revision)} en borrador.` };
+      const usa = entidad === "muestras_extraccion" || entidad === "muestras_procesamiento" || entidad === "muestras_analisis";
+      const inventario = usa && Array.isArray(d.uso_inventario) ? " y se descontaron del inventario los reactivos y consumibles usados" : "";
+      return { accion: `registró ${O}`, quePaso: `${quien} registró ${O}${inventario}.` };
     }
-    case "liberar":
-      action = `liberó ${obj}`;
-      if (detalle.sha256) facts.push(`PDF final SHA-256 ${String(detalle.sha256).slice(0, 16)}…`);
-      break;
-    case "enviar": {
-      // El correo llega ya parcialmente oculto desde el servidor (h***@dominio).
-      const a = detalle.destinatario ? ` a ${String(detalle.destinatario)}` : "";
-      const correo = detalle.correo ? ` (${String(detalle.correo)})` : "";
-      action = `envió por correo ${obj}${a}${correo}`;
-      facts.push(detalle.medio === "smtp" ? "Medio: desde la plataforma (SMTP)" : "Medio: registro manual con evidencia");
-      if (detalle.version) facts.push(`Versión ${String(detalle.version)}`);
-      if (detalle.enviado_en) facts.push(`Enviado: ${humanValue("enviado_en", detalle.enviado_en)}`);
-      break;
+    case "editar": {
+      const claves = Object.keys(cambios).filter((k) => k !== "_detalle" && FIELD[k]);
+      if (d.contrasena) return { accion: `cambió la contraseña ${de(O)}`, quePaso: `${quien} cambió la contraseña ${de(O)}.` };
+      if (d.avatar) return { accion: "cambió su figura de perfil", quePaso: `${quien} cambió su figura de perfil.` };
+      // Foto de perfil propia: subir, quitar la propia o que otra persona (usuarios:G) la quite, con motivo.
+      if (d.foto_perfil === "cambiada") return { accion: "cambió su foto de perfil", quePaso: `${quien} cambió su foto de perfil.` };
+      if (d.foto_perfil === "quitada") return { accion: "quitó su foto de perfil", quePaso: `${quien} quitó su foto de perfil.` };
+      if (d.foto_perfil === "quitada_por_otro") return { accion: `quitó la foto de perfil de ${ref || "otra persona"}`, quePaso: `${quien} quitó la foto de perfil de ${ref || "otra persona"}.` };
+      if (estado && claves.length === 1) {
+        const nuevo = valorLegible("estado", estado.despues, entidad) || "otro estado";
+        return { accion: `cambió el estado ${de(O)} a ${nuevo}`, quePaso: `${quien} cambió el estado ${de(O)} a «${nuevo}».` };
+      }
+      if (entidad === "no_conformidades" && d.accion_correctiva) return { accion: `modificó una acción correctiva ${de(O)}`, quePaso: `${quien} modificó los datos de una acción correctiva ${de(O)}.` };
+      return { accion: `modificó ${O}`, quePaso: `${quien} modificó datos ${de(O)}.` };
     }
-    case "confirmar_envio":
-      action = `registró la confirmación de recepción ${de(obj)}${detalle.correo ? ` (${String(detalle.correo)})` : ""}`;
-      break;
-    case "requiere_enmienda":
-      action = `marcó ${obj} como "requiere enmienda"`;
-      break;
-    case "alerta_integridad":
-      if (detalle.adjunto_id) {
-        const que = `${TIPO_EVIDENCIA_ART[String(detalle.tipo_evidencia)] || "la evidencia"} "${String(detalle.descripcion || detalle.nombre || "")}"`;
-        action = detalle.integridad === "faltante" ? `detectó que falta el archivo de ${que} ${de(obj)} (alerta de integridad)` : `detectó una alerta de integridad en ${que} ${de(obj)}: el archivo no coincide con su huella SHA-256`;
-        facts.push(`Archivo: ${String(detalle.nombre || "")}`);
-        if (detalle.esperado) facts.push(`Huella esperada ${huellaCorta(detalle.esperado)}${detalle.obtenido ? ` · obtenida ${huellaCorta(detalle.obtenido)}` : ""}`);
-      } else action = `detectó que el PDF ${de(obj)} no coincide con su huella SHA-256`;
-      break;
-    case "adjuntar":
-    case "anular_adjunto": {
-      const que = `${TIPO_EVIDENCIA_ART[String(detalle.tipo_evidencia)] || "la evidencia"} "${String(detalle.descripcion || "")}"`;
-      action = accion === "adjuntar" ? `adjuntó ${que} ${obj.startsWith("el ") ? `al ${obj.slice(3)}` : `a ${obj}`}` : `anuló ${que} ${de(obj)} (el archivo se conserva)`;
-      if (detalle.nombre) facts.push(`Archivo: ${String(detalle.nombre)}${detalle.tamano_bytes ? ` · ${fmtBytes(Number(detalle.tamano_bytes))}` : ""}`);
-      if (detalle.sha256) facts.push(`SHA-256 ${huellaCorta(detalle.sha256)}`);
-      break;
+    case "anular": {
+      if (entidad === "reportes_mantenimiento") return { accion: `quitó ${O}`, quePaso: `${quien} quitó ${O} del mantenimiento. El PDF se conserva para consulta.` };
+      const repuso = Number(d.movimientos_repuestos) ? " Los reactivos y consumibles que había usado se devolvieron al inventario." : "";
+      return { accion: `anuló ${O}`, quePaso: `${quien} anuló ${O}. El registro se conserva para consulta, pero ya no cuenta para el trabajo del laboratorio.${repuso}${conSolicitud}` };
     }
-    case "respaldar":
-      action = `creó el respaldo ${referencia || ""}`.trim();
-      if (detalle.archivos !== undefined) facts.push(`${Number(detalle.archivos)} archivo(s) · ${detalle.incluye_llave ? "incluye la llave de la bitácora (solo local)" : "sin llave"}`);
-      break;
-    case "restaurar_respaldo":
-      action = `registró la restauración desde el respaldo ${referencia || ""}`.trim();
-      if (detalle.responsable) facts.push(`Responsable: ${String(detalle.responsable)}`);
-      break;
+    case "restaurar":
+      return { accion: `restauró ${O}`, quePaso: `${quien} restauró ${O}, que estaba ${entidad === "biblioteca_documentos" ? "archivado" : meta.art === "la" ? "anulada" : "anulado"}; vuelve a estar ${meta.art === "la" ? "activa" : "activo"}.${conSolicitud}` };
+    case "baja":
+      return { accion: `dio de baja ${O}`, quePaso: `${quien} dio de baja ${O}. Ya no aparece como disponible, pero su información se conserva.` };
+    case "reactivar":
+      return { accion: `reactivó ${O}`, quePaso: `${quien} volvió a activar ${O}.${conSolicitud}` };
+    case "revisar":
+      return { accion: `revisó ${O}`, quePaso: `${quien} revisó ${O} y lo dejó listo para el siguiente paso.${excepcion}` };
+    case "aprobar":
+      return { accion: `aprobó ${O}`, quePaso: `${quien} aprobó ${O}.${excepcion}` };
+    case "autorizar":
+      return { accion: `autorizó ${O}`, quePaso: `${quien} autorizó ${O}${entidad === "informes" ? " y se generó su documento en PDF" : ""}.${excepcion}` };
     case "entregar": {
-      const to = detalle.a_quien ? ` a ${String(detalle.a_quien)}` : "";
-      const medio = detalle.medio ? ` ${DELIVERY_PHRASE[String(detalle.medio)] || `por ${String(detalle.medio)}`}` : "";
-      action = `registró la entrega ${de(obj)}${to}${medio}`;
-      if (detalle.fecha) facts.push(`Fecha de entrega: ${humanValue("fecha", detalle.fecha)}`);
-      break;
+      const medio = d.medio ? ` ${DELIVERY[String(d.medio)] || `por ${palabras(String(d.medio)).toLowerCase()}`}` : "";
+      return { accion: `registró la entrega ${de(O)}`, quePaso: `${quien} registró que ${O} se entregó${d.a_quien ? ` a ${texto(d.a_quien)}` : ""}${medio}${d.fecha ? ` el ${formatearFecha(d.fecha)}` : ""}.` };
     }
     case "rechazar":
-      action = `rechazó ${obj}`;
-      break;
+      return { accion: `rechazó ${O}`, quePaso: entidad === "muestras_recepcion" ? `${quien} rechazó la muestra de ${O} porque no cumplió las condiciones para recibirla. Se abrió una incidencia para revisarlo.` : `${quien} rechazó ${O}.` };
     case "aceptar":
-      action = detalle.decision === "aceptada_con_desviacion" ? `aceptó con desviación ${obj}` : `aceptó ${obj}`;
-      break;
+      return d.decision === "aceptada_con_desviacion"
+        ? { accion: `aceptó con desviación ${O}`, quePaso: `${quien} aceptó la muestra de ${O} aunque no cumplía todas las condiciones. Se abrió una incidencia para evaluar si afecta los resultados.` }
+        : { accion: `aceptó ${O}`, quePaso: `${quien} aceptó la muestra de ${O}: cumplió las condiciones para recibirla.` };
     case "cerrar":
-      action = `cerró ${obj}`;
-      if (detalle.disposicion) facts.push(`Disposición final: ${humanValue("disposicion", detalle.disposicion)}`);
-      break;
-    case "reponer":
-      action = detalle.cantidad ? `repuso ${humanValue("cantidad", detalle.cantidad)} unidades ${de(obj)}` : `repuso existencias ${de(obj)}`;
-      break;
+      if (entidad === "muestras_recepcion") return { accion: `cerró ${O}`, quePaso: `${quien} cerró ${O}${d.disposicion ? ` y registró qué se hizo con la muestra: ${valorLegible("disposicion", d.disposicion, entidad) || "disposición final"}` : ""}.` };
+      return { accion: `cerró ${O}`, quePaso: `${quien} cerró ${O}.` };
     case "importar": {
-      const n = Number(detalle.insertados || 0);
-      const u = Number(detalle.actualizados || 0);
-      action = `importó ${noun.plural} desde un archivo`;
-      if (n) facts.push(`${n.toLocaleString("es-MX")} nuevos`);
-      if (u) facts.push(`${u.toLocaleString("es-MX")} actualizados`);
-      if (Number(detalle.ignorados)) facts.push(`${Number(detalle.ignorados).toLocaleString("es-MX")} filas ignoradas`);
-      if (Number(detalle.errores)) facts.push(`${Number(detalle.errores).toLocaleString("es-MX")} con error`);
-      break;
+      const n = Number(d.insertados || 0);
+      const u = Number(d.actualizados || 0);
+      return { accion: `cargó ${meta.plural} desde una hoja de cálculo`, quePaso: `${quien} cargó ${meta.plural} desde una hoja de cálculo${n || u ? `: ${[n ? `${numero(n)} nuevos` : null, u ? `${numero(u)} actualizados` : null].filter(Boolean).join(" y ")}` : ""}.` };
     }
     case "eliminar":
-      action = `eliminó ${obj}`;
-      break;
-    case "descargar":
-      if (detalle.adjunto_id) {
-        const que = `${TIPO_EVIDENCIA_ART[String(detalle.tipo_evidencia)] || "la evidencia"} "${String(detalle.nombre || "")}"`;
-        // "de el cromatograma" -> "del cromatograma".
-        action = detalle.vista_previa ? `abrió la vista previa ${de(que)} ${de(obj)}` : `descargó ${que} ${de(obj)}`;
+      return { accion: `eliminó ${O}`, quePaso: `${quien} eliminó ${O}.` };
+    case "reponer": {
+      const mov = String(d.tipo || "entrada");
+      const cuandoMov = d.fecha_movimiento ? ` (movimiento del ${formatearFecha(d.fecha_movimiento)})` : "";
+      if (mov === "salida" || mov === "consumo") {
+        const c = Number(d.cantidad) ? ` de ${numero(Number(d.cantidad))}` : "";
+        return { accion: `registró ${mov === "consumo" ? "un consumo" : "una salida"} de ${ref || meta.noun} del inventario`, quePaso: `${quien} registró ${mov === "consumo" ? "un consumo" : "una salida"}${c} de ${ref || `un ${meta.noun}`} del inventario${cuandoMov}.` };
       }
-      else if (entidad === "no_conformidades") action = `descargó el PDF ${detalle.pdf === "final" ? "final " : "(a pedido) "}${de(obj)}`;
-      else action = entidad === "informes" ? `descargó el PDF ${de(obj)}` : `descargó ${obj}`;
-      break;
+      if (mov === "ajuste") return { accion: `ajustó la existencia de ${ref || meta.noun} por conteo físico`, quePaso: `${quien} ajustó la existencia de ${ref || `un ${meta.noun}`} por conteo físico${Number.isFinite(Number(d.existencia_nueva)) && d.existencia_nueva !== null ? ` (quedó en ${numero(Number(d.existencia_nueva))})` : ""}.` };
+      const cant = Number(d.cantidad) ? ` de ${numero(Number(d.cantidad))} ${Number(d.cantidad) === 1 ? "unidad" : "unidades"}` : "";
+      return { accion: `registró una entrada de ${ref || meta.noun} al inventario`, quePaso: `${quien} registró una entrada${cant} de ${ref || `un ${meta.noun}`} al inventario${cuandoMov}.` };
+    }
     case "login":
-      action = "inició sesión";
-      break;
+      return { accion: "entró a la plataforma", quePaso: `${quien} entró a la plataforma.` };
+    case "login_fallido": {
+      const cuenta = ref ? ` con la cuenta ${ref}` : "";
+      const razon = d.existe_usuario === false ? " Ese correo no corresponde a ninguna cuenta." : d.existe_usuario === true ? " La contraseña no fue correcta." : "";
+      return { accion: `Hubo un intento fallido de entrar${cuenta}`, quePaso: `Alguien intentó entrar a la plataforma${cuenta} y no lo logró.${razon}`, sinActor: true };
+    }
+    case "reauth_fallida":
+      if (!actor) return { accion: `Alguien no pudo confirmar su identidad${ref ? ` con la cuenta ${ref}` : ""}`, quePaso: `Se escribió mal la contraseña${ref ? ` de la cuenta ${ref}` : ""} al confirmar una acción importante, así que la acción no se hizo.`, sinActor: true };
+      return { accion: "no pudo confirmar su identidad", quePaso: `${quien} escribió mal su contraseña al confirmar una acción importante, así que la acción no se hizo.` };
+    case "descargar": {
+      if (entidad === "sgc_documentos") return { accion: `descargó ${d.tipo === "fuente" ? "el archivo fuente" : "el PDF"} ${de(O)}`, quePaso: `${quien} descargó ${d.tipo === "fuente" ? "el archivo fuente" : "el PDF de consulta"} ${de(O)}${d.nombre ? ` («${texto(d.nombre)}»)` : ""}.` };
+      if (entidad === "biblioteca_documentos") return { accion: `descargó ${O}`, quePaso: `${quien} descargó una copia ${de(O)}${d.version ? ` (versión ${texto(d.version)})` : ""}.` };
+      if (d.adjunto_id) {
+        const que = `${TIPO_EVIDENCIA_ART[String(d.tipo_evidencia)] || "la evidencia"}`;
+        return d.vista_previa ? { accion: `abrió ${que} ${de(O)}`, quePaso: `${quien} abrió para consultar ${que} ${de(O)}.` } : { accion: `descargó ${que} ${de(O)}`, quePaso: `${quien} descargó ${que} ${de(O)}.` };
+      }
+      if (entidad === "informes" || entidad === "no_conformidades") return { accion: `descargó el PDF ${de(O)}`, quePaso: `${quien} descargó el documento PDF ${de(O)}.` };
+      return { accion: `descargó ${O}`, quePaso: `${quien} descargó ${O}.` };
+    }
     case "asignar_rol":
     case "revocar_rol":
     case "vencer_rol":
     case "acotar_rol": {
-      const rol = detalle.rol ? `el rol "${String(detalle.rol)}"` : "un rol";
-      const quien = referencia ? ` ${accion === "asignar_rol" || accion === "revocar_rol" ? "a" : "de"} ${referencia}` : "";
-      action =
-        accion === "asignar_rol" ? `asignó ${rol}${quien}` : accion === "revocar_rol" ? `revocó ${rol}${quien}` : accion === "acotar_rol" ? `acotó ${rol}${quien} a la vigencia de su cuenta` : `terminó la vigencia de ${rol}${quien}`;
-      if (detalle.vigente_desde || detalle.vigente_hasta) {
-        facts.push(`Vigencia: desde ${humanValue("vigente_desde", detalle.vigente_desde)}${detalle.vigente_hasta ? ` hasta ${humanValue("vigente_hasta", detalle.vigente_hasta)}` : " sin fecha de fin"}`);
-      }
-      if (solicitudLabel(detalle)) facts.push(solicitudLabel(detalle)!);
-      break;
+      const rol = d.rol ? `el rol «${texto(d.rol)}»` : "un rol";
+      const persona = ref || "una persona";
+      const vigencia = d.vigente_hasta ? ` hasta el ${formatearFecha(d.vigente_hasta)}` : "";
+      if (accion === "asignar_rol") return { accion: `asignó ${rol} a ${persona}`, quePaso: `${quien} le dio a ${persona} ${rol}${vigencia}.${conSolicitud}` };
+      if (accion === "revocar_rol") return { accion: `quitó ${rol} a ${persona}`, quePaso: `${quien} le quitó a ${persona} ${rol}.` };
+      if (accion === "acotar_rol") return { accion: `ajustó la vigencia ${de(rol)} de ${persona}`, quePaso: `${quien} ajustó ${rol} de ${persona} para que no dure más que su cuenta${vigencia}.` };
+      return { accion: `Terminó la vigencia ${de(rol)} de ${persona}`, quePaso: `${cap(rol)} de ${persona} dejó de estar vigente porque llegó su fecha de fin.`, sinActor: true };
     }
-    case "login_fallido":
-      action = `intento de acceso fallido${referencia ? ` con ${referencia}` : ""}`;
-      if (detalle.motivo) facts.push(String(detalle.motivo));
-      else if (detalle.existe_usuario === false) facts.push("El correo no corresponde a ningún usuario");
-      else if (detalle.existe_usuario === true) facts.push("Contraseña incorrecta");
-      break;
-    case "reauth_fallida":
-      action = `no pudo confirmar su identidad${referencia ? ` (${referencia})` : ""}`;
-      facts.push("Contraseña incorrecta al confirmar una acción crítica");
-      break;
     case "bloquear":
-      action = `se bloqueó la cuenta ${referencia || ""}`.trim();
-      if (detalle.bloqueado_hasta) facts.push(`Bloqueada hasta ${fmtWhen(detalle.bloqueado_hasta)}`);
-      if (detalle.tipo === "reauth") facts.push("Por confirmaciones de identidad fallidas");
-      break;
+      return { accion: `Se bloqueó la cuenta ${ref || ""}`.trim(), quePaso: `La cuenta ${ref || ""} se bloqueó por varios intentos fallidos${d.bloqueado_hasta ? `, hasta el ${formatearFechaHora(d.bloqueado_hasta)}` : ""}. Es una medida de seguridad.`.replace("  ", " "), sinActor: true };
     case "desbloquear":
-      action = `desbloqueó la cuenta ${referencia || ""}`.trim();
-      break;
+      return { accion: `desbloqueó la cuenta ${ref || ""}`.trim(), quePaso: `${quien} desbloqueó la cuenta ${ref || ""}; ya puede volver a entrar.`.replace(" ;", ";") };
     case "cambiar_password":
-      action = "cambió su contraseña";
-      facts.push("Sus demás sesiones se cerraron");
-      break;
+      return { accion: "cambió su contraseña", quePaso: `${quien} cambió su contraseña. Sus otras sesiones abiertas se cerraron por seguridad.` };
     case "restablecer_password":
-      action = `restableció la contraseña de ${referencia || "una cuenta"}`;
-      facts.push("Contraseña temporal: debe cambiarla al entrar; sus sesiones se cerraron");
-      break;
+      return { accion: `restableció la contraseña de ${ref || "una cuenta"}`, quePaso: `${quien} le asignó a ${ref || "una cuenta"} una contraseña temporal; deberá cambiarla al entrar.` };
     case "cerrar_sesiones":
-      action = "cerró su sesión en todos los dispositivos";
-      break;
-    case "cambiar_vigencia": {
-      action = `cambió la vigencia de la cuenta ${referencia || ""}`.trim();
-      if (solicitudLabel(detalle)) facts.push(solicitudLabel(detalle)!);
-      const cambiosCuenta = (detalle.cambios || {}) as Record<string, { antes?: unknown; despues?: unknown }>;
-      for (const [campo, par] of Object.entries(cambiosCuenta)) {
-        if (!par || typeof par !== "object") continue;
-        const valor = (v: unknown) => (v === null || v === undefined || v === "" ? "sin definir" : campo === "tipo_cuenta" ? (v === "temporal" ? "temporal" : "permanente") : campo === "supervisor_id" ? `usuario #${String(v)}` : humanValue(campo, v, entidad));
-        facts.push(`${fieldLabel(campo)}: ${valor(par.antes)} → ${valor(par.despues)}`);
-      }
-      if (detalle.tipo_cuenta === "temporal") facts.push(`Cuenta temporal${detalle.vigente_hasta ? ` hasta ${humanValue("vigente_hasta", detalle.vigente_hasta)}` : ""}`);
-      if (Number(detalle.roles_acotados)) facts.push(`${Number(detalle.roles_acotados)} rol${Number(detalle.roles_acotados) === 1 ? "" : "es"} acotado${Number(detalle.roles_acotados) === 1 ? "" : "s"} a la nueva vigencia`);
-      break;
-    }
+      return { accion: "cerró su sesión en todos sus dispositivos", quePaso: `${quien} cerró su sesión en todos los equipos donde la tenía abierta.` };
+    case "cambiar_vigencia":
+      return { accion: `cambió la vigencia de la cuenta de ${ref || "una persona"}`, quePaso: `${quien} cambió hasta cuándo puede usar la plataforma ${ref || "una persona"}${d.vigente_hasta ? ` (ahora hasta el ${formatearFecha(d.vigente_hasta)})` : d.tipo_cuenta === "permanente" ? " (ahora es permanente)" : ""}.${conSolicitud}` };
     case "visto_bueno":
-      action = `dio el visto bueno a ${obj}`;
-      break;
+      return { accion: `dio el visto bueno ${a(O)}`, quePaso: `${quien} revisó y dio su visto bueno ${a(O)}, que había capturado una persona en formación.` };
     case "regresar_supervision":
-      action = `regresó con observaciones ${obj}`;
-      break;
+      return { accion: `regresó ${O} con observaciones`, quePaso: `${quien} regresó ${O} con observaciones, para que quien lo capturó lo corrija.` };
     case "cambiar_cargo":
-      action = detalle.despues ? `fijó su cargo predeterminado: ${String(detalle.despues)}` : "quitó su cargo predeterminado";
-      if (detalle.antes) facts.push(`Antes: ${String(detalle.antes)}`);
-      break;
+      return d.despues
+        ? { accion: "cambió su cargo predeterminado", quePaso: `${quien} eligió «${texto(d.despues)}» como el cargo con el que firma normalmente.` }
+        : { accion: "quitó su cargo predeterminado", quePaso: `${quien} quitó su cargo predeterminado; elegirá el cargo cada vez que firme.` };
+    case "solicitar": {
+      const que = queSeSolicito(d);
+      return { accion: `pidió permiso para ${que} ${O}`, quePaso: `${quien} pidió permiso para ${que} ${O}. La solicitud quedó esperando que otra persona autorizada la apruebe.` };
+    }
+    case "aprobar_solicitud": {
+      const que = queSeSolicito(d);
+      return { accion: `autorizó la solicitud para ${que} ${O}`, quePaso: `${quien} autorizó la solicitud de ${nombrePersona(d.solicitado_por) || "otra persona"} para ${que} ${O}, y el cambio se aplicó.` };
+    }
+    case "rechazar_solicitud": {
+      const que = queSeSolicito(d);
+      return { accion: `rechazó la solicitud para ${que} ${O}`, quePaso: `${quien} rechazó la solicitud para ${que} ${O}; no se hizo ningún cambio.` };
+    }
+    case "cancelar_solicitud": {
+      const que = queSeSolicito(d);
+      return { accion: `canceló su solicitud para ${que} ${O}`, quePaso: `${quien} retiró la solicitud que había hecho para ${que} ${O}; no se hizo ningún cambio.` };
+    }
+    case "vencer_solicitud": {
+      const que = queSeSolicito(d);
+      return { accion: `Venció la solicitud para ${que} ${O}`, quePaso: `Nadie resolvió a tiempo la solicitud para ${que} ${O}, así que se cerró sin aplicar el cambio.`, sinActor: true };
+    }
+    case "otorgar_autorizacion":
+    case "revocar_autorizacion":
+    case "vencer_autorizacion": {
+      const etiquetaClave = d.clave ? catalogo(ACTIVIDADES_AUTORIZABLES, d.clave) || catalogo(METODOS_AUTORIZABLES, d.clave) || palabras(String(d.clave)) : null;
+      const actividad = d.autorizacion ? `«${texto(d.autorizacion)}»` : etiquetaClave ? `«${etiquetaClave}»` : "una actividad";
+      const persona = ref || "una persona";
+      if (accion === "otorgar_autorizacion") return { accion: `autorizó a ${persona} para ${actividad}`, quePaso: `${quien} registró que ${persona} tiene autorización para ${actividad}${d.vigente_hasta ? ` hasta el ${formatearFecha(d.vigente_hasta)}` : ""}.` };
+      if (accion === "revocar_autorizacion") return { accion: `retiró a ${persona} la autorización para ${actividad}`, quePaso: `${quien} retiró a ${persona} la autorización para ${actividad}.` };
+      return { accion: `Venció la autorización de ${persona} para ${actividad}`, quePaso: `La autorización de ${persona} para ${actividad} llegó a su fecha de fin.`, sinActor: true };
+    }
+    case "imprimir_etiquetas": {
+      const n = Number(d.etiquetas || 0);
+      const muestras = Array.isArray(d.id_internos) && d.id_internos.length ? ` (${d.id_internos.map(String).join(", ")})` : "";
+      const que = n > 1 ? `${n} etiquetas` : "la etiqueta";
+      return { accion: `imprimió ${que} ${de(O)}`, quePaso: `${quien} imprimió ${n > 1 ? `${n} etiquetas` : "una etiqueta"} de la muestra ${de(O)}${muestras}${d.formato === "hoja" || String(d.formato || "").startsWith("hoja") ? " en hoja carta" : ""}.` };
+    }
+    case "asignar_muestra":
+      return { accion: `asignó ${O} a ${texto(d.persona) || "una persona"}`, quePaso: `${quien} le asignó a ${texto(d.persona) || "una persona"} el trabajo de ${O}.` };
+    case "revocar_asignacion":
+      return { accion: `quitó a ${texto(d.persona) || "una persona"} la asignación ${de(O)}`, quePaso: `${quien} quitó a ${texto(d.persona) || "una persona"} del trabajo de ${O}.` };
+    case "enviar_revision":
+      if (entidad === "sgc_documentos") return { accion: `envió a revisión ${O}`, quePaso: `${quien} envió ${O} al revisor; desde ahora sus archivos ya no se pueden cambiar.` };
+      return { accion: `envió a revisión ${O}`, quePaso: `${quien} terminó ${O} y lo envió para que lo revisen.` };
+    case "devolver":
+      return { accion: `devolvió ${O} con observaciones`, quePaso: `${quien} devolvió ${O} con observaciones, para que se corrija antes de aprobarlo.` };
+    case "enmendar":
+      return { accion: `abrió una corrección ${de(O)}`, quePaso: `${quien} abrió una nueva versión ${de(O)} para corregirlo. La versión anterior se conserva.` };
+    case "sustituir":
+      if (entidad === "reportes_mantenimiento") return { accion: `reemplazó ${O} por otro PDF`, quePaso: `${quien} reemplazó ${O} por otro PDF. El anterior se conserva para consulta.` };
+      if (entidad === "sgc_documentos") return { accion: `sustituyó un archivo ${de(O)}`, quePaso: `${quien} sustituyó un archivo ${de(O)} mientras estaba en borrador. El archivo anterior se conserva.` };
+      return { accion: `${cap(O)} quedó reemplazado por su versión corregida`, quePaso: `${cap(O)} quedó reemplazado por una versión corregida${actor ? ` (lo registró ${actor})` : ""}. Se conserva para consulta.`, sinActor: true };
+    case "cambiar_folio":
+      return { accion: `cambió el folio ${de(O)}`, quePaso: `${quien} cambió el folio ${de(O)}${d.folio_anterior ? ` (antes era ${formatearFolio("R", d.folio_anterior)})` : ""}.${conSolicitud}` };
+    case "reabrir":
+      if (entidad === "no_conformidades") return { accion: `reabrió ${O}`, quePaso: `${quien} reabrió ${O}: las acciones no resolvieron el problema, así que se vuelve a analizar.` };
+      return { accion: `reabrió ${O}`, quePaso: `${quien} reabrió ${O}; vuelve al estado en que estaba antes de cerrarse.${conSolicitud}` };
+    case "confirmar_firma":
+      if (texto(d.firmante) && texto(d.firmante) !== actor) return { accion: `${texto(d.firmante)} confirmó su firma con su contraseña`, quePaso: `${texto(d.firmante)} confirmó con su contraseña que la firma es suya, en el equipo de ${quien}.`, sinActor: true };
+      return { accion: "confirmó su firma con su contraseña", quePaso: `${quien} confirmó con su contraseña que la firma es suya.` };
+    case "liberar":
+      return { accion: `liberó ${O}`, quePaso: `${quien} liberó ${O}: quedó listo para enviarse al cliente.` };
+    case "enviar":
+      return { accion: `envió ${O} por correo`, quePaso: `${quien} envió ${O} al cliente${d.destinatario ? ` (${texto(d.destinatario)})` : ""}${d.medio === "smtp" ? " desde la plataforma" : ""}.` };
+    case "confirmar_envio":
+      return { accion: `registró que el cliente recibió ${O}`, quePaso: `${quien} registró que el cliente confirmó haber recibido ${O}.` };
+    case "requiere_enmienda":
+      return { accion: `${cap(O)} quedó marcado para corregirse`, quePaso: `Se marcó que ${O} necesita una versión corregida${actor ? ` (lo registró ${actor})` : ""}.`, sinActor: true };
+    case "alerta_integridad":
+      if (entidad === "auditoria") return { accion: "Se detectó un posible cambio no autorizado en el registro de actividad", quePaso: "La revisión automática encontró que el registro de actividad pudo haberse modificado fuera de la plataforma. Se avisó a Calidad con una incidencia automática. Avisa a la Coordinación de Mejora Continua.", sinActor: true };
+      if (entidad === "respaldos") return { accion: "Se detectó un problema en un respaldo", quePaso: "La revisión de un respaldo encontró archivos que no coinciden con los originales. Se avisó a Calidad con una incidencia automática.", sinActor: true };
+      return { accion: `Se detectó un posible cambio no autorizado en el archivo ${de(O)}`, quePaso: `${d.integridad === "faltante" ? `No se encontró el archivo ${de(O)}` : `El archivo ${de(O)} ya no coincide con el original`}. Se avisó a Calidad con una incidencia automática.`, sinActor: true };
+    case "subir":
+      if (entidad === "sgc_documentos") return { accion: `cargó un archivo ${a(O)}`, quePaso: `${quien} cargó un archivo ${a(O)} (en borrador).` };
+      return { accion: `subió ${ref ? `el documento «${ref}»` : "un documento"} a la biblioteca`, quePaso: `${quien} subió ${ref ? `el documento «${ref}»` : "un documento"} a la biblioteca${d.visibilidad === "roles" ? "; solo lo ven algunos roles" : ""}.` };
+    case "subir_version":
+      return { accion: `subió una nueva versión ${de(O)}`, quePaso: `${quien} subió una nueva versión ${de(O)}. La versión anterior se conserva.${d.nota_version ? ` Nota: «${texto(d.nota_version)}».` : ""}` };
+    case "archivar":
+      return { accion: `archivó ${O}`, quePaso: `${quien} archivó ${O}: ya no aparece en la biblioteca, pero se conserva.` };
+    case "categoria":
+      return Object.keys(cambios).some((k) => k !== "_detalle")
+        ? { accion: `modificó la categoría «${ref || ""}» de la biblioteca`, quePaso: `${quien} modificó la categoría «${ref || ""}» de la biblioteca.` }
+        : { accion: `creó la categoría «${ref || ""}» en la biblioteca`, quePaso: `${quien} creó la categoría «${ref || ""}» en la biblioteca.` };
+    case "publicar":
+      if (entidad === "sgc_documentos" && d.carga_inicial) return { accion: `registró como vigente ${O}`, quePaso: `${quien} registró ${O} como vigente en la carga inicial: el documento ya estaba autorizado fuera de la plataforma.` };
+      if (entidad === "sgc_documentos") return { accion: `publicó ${O}`, quePaso: `${quien} publicó ${O}: queda vigente.` };
+      return { accion: `publicó ${O}`, quePaso: `${quien} publicó ${O} como vigente (sistema anterior de documentos).` };
+    case "nueva_revision":
+      return { accion: `abrió una revisión nueva ${de(O)}`, quePaso: `${quien} abrió la revisión ${texto(d.revision)} ${de(O)} en borrador. La revisión vigente sigue en uso mientras tanto.` };
+    case "consultar":
+      return { accion: `consultó ${O}`, quePaso: `${quien} abrió para consultar ${O} (documento ${String(d.confidencialidad) === "confidencial" ? "confidencial" : "restringido"}).` };
+    case "confirmar_lectura":
+      return { accion: `confirmó que leyó ${O}`, quePaso: `${quien} confirmó que leyó y comprendió ${O} (sistema anterior de documentos).` };
+    case "proponer":
+      return { accion: entidad === "no_conformidades" ? `propuso un cambio de documento desde ${O}` : `propuso ${O}`, quePaso: `${quien} propuso un documento nuevo o un cambio (sistema anterior de documentos).` };
+    case "exportar": {
+      const historial = /^Historial/.test(texto(record.referencia));
+      const lista = ["incidencias", "no_conformidades", "acciones_correctivas"].includes(entidad);
+      const que = lista ? `la lista de ${meta.plural}` : historial ? `el historial ${de(`${meta.art} ${meta.noun}`)}` : "el registro de actividad";
+      return { accion: `descargó una copia ${de(que)}`, quePaso: `${quien} descargó una copia ${de(que)} en una hoja de cálculo.${lista ? "" : " Esta opción ya no existe en la plataforma."}` };
+    }
+    case "adjuntar":
+    case "anular_adjunto": {
+      const que = TIPO_EVIDENCIA_ART[String(d.tipo_evidencia)] || "una evidencia";
+      const desc = d.descripcion ? ` «${texto(d.descripcion)}»` : "";
+      return accion === "adjuntar"
+        ? { accion: `adjuntó ${que}${desc} ${a(O)}`, quePaso: `${quien} adjuntó ${que}${desc} ${a(O)}.` }
+        : { accion: `anuló ${que}${desc} ${de(O)}`, quePaso: `${quien} anuló ${que}${desc} ${de(O)}. El archivo se conserva para consulta.` };
+    }
+    case "respaldar":
+      return sistema
+        ? { accion: "Se creó un respaldo automático", quePaso: "La plataforma guardó automáticamente una copia de seguridad de toda su información.", sinActor: true }
+        : { accion: "creó un respaldo", quePaso: `${quien} guardó una copia de seguridad de toda la información de la plataforma.` };
+    case "respaldo_fallido":
+      return { accion: "falló la creación de un respaldo", quePaso: `No se pudo terminar un respaldo${sistema ? "" : ` que ${quien} intentó crear`}. Revisa que haya espacio en el disco.`, sinActor: sistema };
+    case "probar_restauracion": {
+      const res = String(d.resultado || "");
+      const frase = res === "aprobada" ? "La prueba salió bien: el respaldo se puede recuperar." : res === "fallida" ? "La prueba encontró problemas: no confíes en ese respaldo hasta revisarlo." : "La prueba no pudo terminarse.";
+      return { accion: `probó la restauración de un respaldo${res === "aprobada" ? " (salió bien)" : res === "fallida" ? " (encontró problemas)" : ""}`, quePaso: `${quien} probó recuperar un respaldo en una copia aparte, sin tocar la plataforma. ${frase}` };
+    }
+    case "restaurar_respaldo":
+      return { accion: "Se restauró un respaldo", quePaso: `La información de la plataforma se recuperó desde una copia de seguridad${d.responsable ? `; lo hizo ${texto(d.responsable)}` : ""}.`, sinActor: true };
+    case "reportar":
+      if (sistema || d.origen_automatico) return { accion: `Se registró automáticamente ${O}`, quePaso: `La plataforma registró ${O} por su cuenta${d.origen_automatico ? `: ${(ORIGEN_AUTOMATICO_LABEL[String(d.origen_automatico)] || palabras(String(d.origen_automatico))).toLowerCase()}` : ""}. Calidad debe evaluarla.`, sinActor: true };
+      return { accion: `reportó ${O}`, quePaso: `${quien} reportó ${O}${d.tipo ? ` (${(TIPO_INCIDENCIA_LABEL[String(d.tipo)] || palabras(String(d.tipo))).toLowerCase()})` : ""}. Calidad debe evaluarla.` };
+    case "evaluar":
+      return { accion: `empezó a evaluar ${O}`, quePaso: `${quien} empezó a evaluar ${O} para decidir qué hacer.` };
+    case "cerrar_sin_nc":
+      return { accion: `cerró ${O} sin abrir una no conformidad`, quePaso: `${quien} evaluó ${O} y la cerró: no fue necesario abrir una no conformidad.` };
+    case "escalar":
+      return entidad === "no_conformidades"
+        ? { accion: `agregó la incidencia ${texto(d.incidencia)} ${a(O)}`.replace("  ", " "), quePaso: `${quien} agregó la incidencia ${texto(d.incidencia)} ${a(O)}.`.replace("  ", " ") }
+        : { accion: `convirtió ${O} en una no conformidad`, quePaso: `${quien} decidió que ${O} es una no conformidad${d.nc ? ` y abrió la ${texto(d.nc)}` : ""}.` };
+    case "avanzar": {
+      const etapa = ESTADOS_NC[String(d.etapa)]?.label || palabras(String(d.etapa || ""));
+      return { accion: `pasó ${O} a la etapa «${etapa}»`, quePaso: `${quien} pasó ${O} a la etapa «${etapa}».` };
+    }
+    case "iniciar_accion":
+      return { accion: `inició una acción correctiva ${de(O)}`, quePaso: `${quien} empezó a trabajar en una acción correctiva ${de(O)}.` };
+    case "implementar":
+      return { accion: `marcó como hecha una acción correctiva ${de(O)}`, quePaso: `${quien} registró que terminó una acción correctiva ${de(O)}${d.implementacion ? `: «${recortar(texto(d.implementacion))}»` : ""}.` };
+    case "cancelar":
+      return { accion: `canceló una acción correctiva ${de(O)}`, quePaso: `${quien} canceló una acción correctiva ${de(O)}.` };
+    case "reasignar":
+      return d.accion_correctiva
+        ? { accion: `cambió el responsable de una acción correctiva ${de(O)}`, quePaso: `${quien} cambió quién se encarga de una acción correctiva ${de(O)}.` }
+        : { accion: `cambió el responsable ${de(O)}`, quePaso: `${quien} cambió quién se encarga ${de(O)}.` };
+    case "verificar":
+      return d.resultado === "eficaz"
+        ? { accion: `confirmó que las acciones ${de(O)} funcionaron`, quePaso: `${quien} verificó que las acciones ${de(O)} resolvieron el problema.` }
+        : { accion: `encontró que las acciones ${de(O)} no funcionaron`, quePaso: `${quien} verificó que las acciones ${de(O)} no resolvieron el problema, así que se vuelve a analizar.` };
+    case "suspender":
+    case "reanudar": {
+      const verbo = accion === "suspender" ? "suspendió" : "reanudó";
+      const que = entidad === "no_conformidades" ? suspensionLegible(texto(d.suspension)) : O;
+      const por = entidad === "no_conformidades" ? ` por ${O}` : d.nc ? ` por la ${texto(d.nc)}` : "";
+      return { accion: `${verbo} ${que}${por}`, quePaso: accion === "suspender" ? `${quien} suspendió ${que}${por}: no se puede usar hasta que se reanude.` : `${quien} reanudó ${que}${por}; ya se puede usar de nuevo.${d.sigue_suspendido_por ? ` Sigue suspendido por ${texto(d.sigue_suspendido_por)}.` : ""}` };
+    }
+    case "retener":
+    case "liberar_retencion": {
+      const informe = entidad === "informes" ? O : texto(d.informe) ? `el informe ${texto(d.informe)}` : "un informe";
+      const por = entidad === "informes" ? (d.nc ? ` por la ${texto(d.nc)}` : "") : ` por ${O}`;
+      return accion === "retener"
+        ? { accion: `retuvo ${informe}${por}`, quePaso: `${quien} detuvo ${informe}${por}: no puede enviarse al cliente mientras siga retenido.` }
+        : { accion: `liberó la retención ${de(informe)}${por}`, quePaso: `${quien} quitó la retención ${de(informe)}${por}; ya puede continuar.` };
+    }
+    case "comunicar":
+      return { accion: `registró una comunicación con el cliente sobre ${O}`, quePaso: `${quien} registró que habló con el cliente sobre ${O}${d.contacto ? ` (con ${texto(d.contacto)})` : ""}${d.fecha ? ` el ${formatearFecha(d.fecha)}` : ""}.` };
+    case "afectar":
+      return { accion: `marcó ${texto(d.informe) ? `el informe ${texto(d.informe)}` : "un informe"} como afectado por ${O}`, quePaso: `${quien} registró que ${texto(d.informe) ? `el informe ${texto(d.informe)}` : "un informe"} se vio afectado por ${O}.` };
+    case "migrar": {
+      const version = Number(d.version || record.entidad_id || 0);
+      if (d.modo === "baseline") return { accion: "La plataforma reconoció la información existente", quePaso: "Al instalar la nueva forma de actualizar la plataforma, se revisó la información existente y se confirmó que estaba completa. No se cambió nada.", sinActor: true };
+      const para = ACTUALIZACIONES[version];
+      return { accion: "La plataforma se actualizó a una nueva versión", quePaso: `La plataforma se actualizó${para ? ` para ${para}` : ""}. Antes de actualizarse se guardó un respaldo automático.`, sinActor: true };
+    }
     default:
-      action = `${accion} ${obj}`;
+      return { accion: `hizo un cambio en ${O}`, quePaso: `${quien} hizo un cambio en ${O}.` };
   }
+}
 
-  if (estado && accion !== "editar" && accion !== "anular" && accion !== "restaurar") {
-    facts.unshift(`Estado: ${humanValue("estado", estado.antes, entidad)} → ${humanValue("estado", estado.despues, entidad)}`);
+/* "Equipo Centrifuga" -> "el equipo Centrifuga"; "Equipo #1" -> "un equipo"; "Método DSP" -> "el método DSP". */
+function suspensionLegible(t: string): string {
+  if (!t) return "un método o equipo";
+  const m = /^(Equipo|Método)\s+(.*)$/.exec(t);
+  if (!m) return t;
+  const cosa = m[1].toLowerCase();
+  return /#\d/.test(m[2]) || !m[2].trim() ? `un ${cosa}` : `el ${cosa} ${m[2].trim()}`;
+}
+
+/* Nombre de una persona por su id (si se conoce). */
+let personasActuales: Map<number, string> | undefined;
+function nombrePersona(id: unknown): string | null {
+  if (id === null || id === undefined) return null;
+  return personasActuales?.get(Number(id)) || null;
+}
+
+/* Referencia en palabras: folios tal cual; sin ids ni rutas internas. */
+function referenciaLegible(record: ApiRecord): string | null {
+  const ref = texto(record.referencia);
+  if (!ref) return null;
+  const entidad = String(record.entidad || "");
+  if (entidad === "mantenimientos") {
+    const m = /^mantenimiento\s+(\w+)/i.exec(ref);
+    const tipos: Record<string, string> = { calibracion: "de calibración", verificacion: "de verificación", preventivo: "preventivo", correctivo: "correctivo" };
+    return m ? tipos[m[1].toLowerCase()] || null : null;
   }
+  if (/^Historial /.test(ref) || /^Migración|^Línea base/.test(ref)) return null;
+  // Partes con numeros internos ("acción #2", "#14") no se muestran.
+  if (/#\d/.test(ref)) return ref.split(" · ").filter((p) => !/#\d/.test(p) && !/^acción$/i.test(p.trim())).join(" · ").trim() || null;
+  return ref;
+}
 
-  // Cargo con el que actuo quien firmo, reviso, aprobo, autorizo o anulo (Fase 1).
-  const actuo = detalle.actuo_como as ApiRecord | undefined;
-  if (actuo && typeof actuo === "object" && actuo.cargo) facts.push(`Actuó como: ${String(actuo.cargo)}`);
+/* ---------------------------------------------------------------------------
+ * Entrada completa
+ * ------------------------------------------------------------------------- */
 
-  const changes = humanChanges(cambios, entidad);
-  // Alta de un rol: su matriz de permisos, por modulo.
-  if (esMatrizPermisos(detalle.permisos)) {
-    const lines = [...resumenPermisos(detalle.permisos).entries()].map(([modulo, texto]) => `${modulo}: ${texto}`);
-    if (lines.length) changes.push({ label: "Permisos", before: "", after: "", lines });
-  }
+export function humanizeAuditEntry(record: ApiRecord, ctx: ContextoActividad = {}): HumanEntry {
+  personasActuales = ctx.personas;
+  const entidad = String(record.entidad || "");
+  const accion = String(record.accion || "");
+  const cambios = (record.cambios || {}) as Cambios;
+  const d = ((cambios._detalle as ApiRecord | undefined) || {}) as ApiRecord;
+  // Las altas iniciales se guardaron a nombre de "sistema": tambien son de la plataforma.
+  const isSystem = !record.usuario_email && (!record.usuario_nombre || /^sistema$/i.test(String(record.usuario_nombre)));
+  const actor = isSystem ? "" : String(record.usuario_nombre || record.usuario_email || "");
+  const partes = redactar(record, actor, isSystem);
+  // Lo que hizo la plataforma (o un evento sin persona) ya es una frase completa.
+  const sinActor = partes.sinActor || isSystem;
+  const frase = sinActor ? cap(isSystem && !partes.sinActor ? `la plataforma ${partes.accion}` : partes.accion) : `${actor} ${partes.accion}`;
+  const quePaso = isSystem && !partes.sinActor ? partes.quePaso.replace(/^Alguien /, "La plataforma ") : partes.quePaso;
+  const referencia = referenciaLegible(record);
   const route = ENTITY_ROUTE[entidad];
-  const href = route !== undefined && (entry.entidad_id || referencia) ? route(String(entry.entidad_id || ""), referencia || "") : null;
-  const when = entry.fecha_hora ? instanteDe(entry.fecha_hora) : null;
-  if (!entry.usuario_nombre && !entry.usuario_email && ["login_fallido", "bloquear", "reauth_fallida"].includes(accion)) action = action.charAt(0).toUpperCase() + action.slice(1);
-
-  // Lo que quede en `_detalle` sin traducir se muestra como hecho, para no perder datos.
-  for (const [key, value] of Object.entries(detalle)) {
-    if (CONSUMED_DETAIL.has(key) || isHidden(key) || value === null || value === undefined || value === "") continue;
-    facts.push(`${fieldLabel(key)}: ${humanValue(key, value, entidad)}`);
-  }
-
+  const entidadId = record.entidad_id !== null && record.entidad_id !== undefined && record.entidad_id !== "" ? String(record.entidad_id) : null;
+  const href = ACCIONES_DE_SESION.has(accion) || !route || (!entidadId && !referencia) ? null : route(entidadId || "", texto(record.referencia));
+  const actuo = d.actuo_como;
+  const cargo = actuo && typeof actuo === "object" ? texto((actuo as ApiRecord).cargo) || null : typeof actuo === "string" ? actuo : null;
+  // En las migraciones, el "motivo" es el nombre tecnico de la migracion: no se muestra.
+  const motivo = accion === "migrar" || !texto(record.motivo) ? null : texto(record.motivo);
+  const cambiosFrases = record.datos_restringidos ? [] : frasesDeCambios(cambios, entidad, ctx, referencia);
   return {
-    id: Number(entry.id),
-    when,
-    actor: String(entry.usuario_nombre || entry.usuario_email || (["login_fallido", "bloquear", "reauth_fallida"].includes(accion) ? "" : "El sistema")),
-    actorEmail: entry.usuario_email ? String(entry.usuario_email) : null,
-    isSystem: !entry.usuario_nombre && !entry.usuario_email,
-    action,
+    id: Number(record.id),
+    when: record.fecha_hora ? instanteDe(record.fecha_hora) : null,
+    actor,
+    isSystem,
+    cargo,
+    action: partes.accion,
+    frase,
+    quePaso,
+    cambios: cambiosFrases,
     verb: accion,
-    tone: ACTION_TONE[accion] || "neutral",
-    entityLabel: AUDIT_ENTITIES[entidad] || entidad,
+    entidad,
+    entidadId,
+    area: ACCIONES_DE_SESION.has(accion) ? "Inicio de sesión" : ENTIDAD[entidad]?.area || "Plataforma",
     reference: referencia,
-    facts,
-    motivo: entry.motivo ? String(entry.motivo) : null,
-    changes,
-    href: ["login", "login_fallido", "reauth_fallida", "cerrar_sesiones"].includes(accion) ? null : href,
-    hash: entry.hash ? String(entry.hash) : null,
+    motivo,
+    href,
+    claveGrupo: `${texto(record.usuario_email) || texto(record.usuario_nombre) || "sistema"}|${accion}|${entidad}|${entidadId || texto(record.referencia)}`,
   };
 }
 
-/* "Hoy", "Ayer" o la fecha larga, para agrupar la linea de tiempo. */
+/* ---------------------------------------------------------------------------
+ * Fechas en palabras
+ * ------------------------------------------------------------------------- */
+
+/* "Hoy", "Ayer" o "Miércoles 24 de septiembre", para agrupar por dia. */
 export function dayLabel(date: Date | null): string {
   if (!date) return "Sin fecha";
   // Dia local del laboratorio, no del navegador.
@@ -1130,4 +1154,28 @@ export function dayLabel(date: Date | null): string {
 
 export function timeLabel(date: Date | null): string {
   return formatearHora(date, "—");
+}
+
+/* "hace un momento", "hace 5 minutos", "hace 2 horas", "ayer", "hace 4 días". */
+export function haceCuanto(date: Date | null, ahora = new Date()): string {
+  if (!date) return "";
+  const seg = Math.max(0, Math.round((ahora.getTime() - date.getTime()) / 1000));
+  if (seg < 60) return "hace un momento";
+  const min = Math.round(seg / 60);
+  if (min < 60) return min === 1 ? "hace 1 minuto" : `hace ${min} minutos`;
+  const h = Math.round(min / 60);
+  if (h < 24) return h === 1 ? "hace 1 hora" : `hace ${h} horas`;
+  const dias = Math.round(h / 24);
+  if (dias === 1) return "ayer";
+  if (dias < 31) return `hace ${dias} días`;
+  const meses = Math.round(dias / 30);
+  if (meses < 12) return meses === 1 ? "hace 1 mes" : `hace ${meses} meses`;
+  const anios = Math.round(meses / 12);
+  return anios === 1 ? "hace 1 año" : `hace ${anios} años`;
+}
+
+/* "3 de octubre de 2026 a las 16:57". */
+export function fechaYHora(date: Date | null): string {
+  if (!date) return "Sin fecha";
+  return `${formatearFechaLarga(fechaSola(date))} a las ${formatearHora(date)}`;
 }

@@ -1,3 +1,5 @@
+import { formatearFolio } from "../../../shared/folios";
+import { conSolicitudesYPuede } from "../../puede-registro";
 import { requireUser, userIdFromClaims, type CurrentUser } from "../../auth";
 import { incidenciaPorDecisionRecepcion } from "../calidad/automaticas";
 import { actorDe } from "../calidad/comun";
@@ -9,14 +11,14 @@ import { exigirReauth } from "../../seguridad";
 import { crearSolicitud, detalleSolicitud, exigirSinSolicitudPendiente, respuestaSolicitud, serializarSolicitud, type ContextoEjecucion } from "../../solicitudes";
 import { aplicarSupervision, exigirSinSupervisionPendiente, filtroSupervision, marcaSupervision } from "../../supervision";
 
-import { anularOSolicitar, assertEditableAsync, conSolicitudes, deletionNotAllowed, folioLabel, isFolioConflict, nextFolioNum, readMotivo, restaurarOSolicitar } from "../../samples-flow";
+import { anularOSolicitar, assertEditableAsync, deletionNotAllowed, folioLabel, isFolioConflict, nextFolioNum, readMotivo, restaurarOSolicitar } from "../../samples-flow";
 import { ACCEPTANCE_DECISIONS, DISPOSAL_TYPES, RECEPTION_STATE_RANK } from "../../../shared/sgc";
 import { jsonText, safeJsonLoad, searchParam, strippedOrNull, toIntOrNull } from "../helpers";
 
 import { exigirAutorizaciones } from "../../autorizaciones";
 import { requisitosRecepcion } from "../../../shared/autorizaciones";
 import { exigirVistaAsignada, filtroAsignadas, soloAsignado } from "../../asignaciones";
-import { guardarFirmantes, resolverFirmantes, type RolFirma } from "../../firmas";
+import { guardarFirmantes, resolverFirmantes, verificarFirmasConPassword, type RolFirma } from "../../firmas";
 
 /*
  * Portado de modules/samples/recepcion.py del backend Flask original.
@@ -37,7 +39,7 @@ const FIRMAS_RECEPCION: RolFirma[] = [{ rol: "recibio", columnaNombre: "recibido
  */
 const CAMPOS_ESTADO = ["id", "folio_num", "tipo_registro", "solicitante", "fecha_emision", "fecha_recepcion", "hora_recepcion", "fecha_muestra", "estado", "creado_en", "anulado_en"];
 
-export function vistaEstado(row: Row): Row {
+function vistaEstado(row: Row): Row {
   const out: Row = { solo_estado: true };
   for (const campo of CAMPOS_ESTADO) if (campo in row) out[campo] = row[campo];
   return out;
@@ -188,7 +190,7 @@ export async function listReceptionSamples({ request, s }: RouteContext): Promis
     { search, search_like: `%${search}%`, incluir_anuladas: includeAnuladas ? 1 : 0, ...supFiltro.params, ...asignadas.params },
   );
   return json({
-    items: (await conSolicitudes(s, TABLE, rows)).map((row) => {
+    items: (await conSolicitudesYPuede(s, user, TABLE, rows)).map((row) => {
       if (soloEstado(permiso)) return vistaEstado(row);
       const item: Row = { ...row, analisis: safeJsonLoad(row.analisis_json, {}) };
       delete item.analisis_json;
@@ -211,7 +213,7 @@ export async function getReceptionSample({ request, s, params }: RouteContext): 
   if (soloEstado(permiso)) return json({ item: vistaEstado(row) });
   // Etapas derivadas, para mostrar la cadena completa desde la recepcion.
   const procesamientos = await s.query("SELECT id, folio_num, estado FROM muestras_procesamiento WHERE recepcion_id = :id ORDER BY folio_num", { id: sampleId });
-  return json({ item: { ...(await conSolicitudes(s, TABLE, [serializeRow(row)]))[0], procesamientos } });
+  return json({ item: { ...(await conSolicitudesYPuede(s, user, TABLE, [serializeRow(row)]))[0], procesamientos } });
 }
 
 export async function createReceptionSample({ request, s }: RouteContext): Promise<Response> {
@@ -221,9 +223,12 @@ export async function createReceptionSample({ request, s }: RouteContext): Promi
   const supervision = marcaSupervision(permiso);
 
   const payload = await readJson(request);
+  // Contraseñas de firmantes enviadas al guardar: se verifican antes de cualquier otra escritura.
+  await verificarFirmasConPassword(s, user, payload);
   const data = normalizePayload(payload);
   // Fase 4: autorizacion FX-THF-AP de quien captura.
   await exigirAutorizaciones(s, user, requisitosRecepcion());
+  if (!data.solicitante) return json({ message: "Indica el solicitante" }, 400);
   if (!data.folio_num) {
     data.folio_num = await nextFolioNum(s, TABLE);
   }
@@ -297,12 +302,16 @@ export async function updateReceptionSample({ request, s, params }: RouteContext
   // Fase 5: con alcance "asignado" solo se edita lo asignado (o registrado por la persona).
   if (antes) await exigirVistaAsignada(s, permiso, antes);
   const payload = await readJson(request);
+  // Contraseñas de firmantes enviadas al guardar: se verifican antes de cualquier otra escritura.
+  await verificarFirmasConPassword(s, user, payload);
   const data = normalizePayload(payload);
   // Fase 4: autorizacion FX-THF-AP de quien captura.
   await exigirAutorizaciones(s, user, requisitosRecepcion());
   if (!data.folio_num) {
     return json({ message: "El folio es obligatorio" }, 400);
   }
+  // Campo 3 del formato FX-TCF-GMR: obligatorio al guardar (las recepciones anteriores sin él se abren igual).
+  if (!data.solicitante) return json({ message: "Indica el solicitante" }, 400);
   // Fase 5: el folio ya no se edita; cambiarlo requiere solicitud (POST /folio).
   if (antes && Number(data.folio_num) !== Number(antes.folio_num)) return json({ message: "El folio de la recepción ya no se edita; usa \"Cambiar folio\" (requiere motivo y autorización de la Coord. Técnica)", codigo: "folio_bloqueado" }, 409);
   const invalid = validateAcceptance(data);
@@ -481,7 +490,7 @@ export async function ejecutarDecisionRecepcion(ctx: ContextoEjecucion): Promise
 }
 
 async function aplicarCambioFolio(s: Session, user: CurrentUser, antes: Row, folio: number, motivo: string, detalle: Record<string, unknown>): Promise<Row> {
-  if (await s.scalar(`SELECT id FROM ${TABLE} WHERE folio_num = :folio AND id <> :id`, { folio, id: antes.id })) throw new HttpError(409, { message: `El folio R ${String(folio).padStart(7, "0")} ya existe` });
+  if (await s.scalar(`SELECT id FROM ${TABLE} WHERE folio_num = :folio AND id <> :id`, { folio, id: antes.id })) throw new HttpError(409, { message: `El folio ${formatearFolio("R", folio)} ya existe` });
   await s.execute(`UPDATE ${TABLE} SET folio_num = :folio WHERE id = :id`, { folio, id: antes.id });
   const despues = (await snapshotRow(s, TABLE, Number(antes.id)))!;
   await registrarAuditoria(s, user, { accion: "cambiar_folio", entidad: TABLE, entidadId: Number(antes.id), referencia: folioLabel(TABLE, despues), antes, despues, motivo, detalle: { folio_anterior: antes.folio_num, folio_nuevo: folio, ...detalle } });
@@ -534,7 +543,7 @@ export async function cambiarFolioRecepcion({ request, s, params }: RouteContext
   await exigirReauth(s, request, user, "muestras:E");
   const solicitud = await crearSolicitud(s, user, { tipo: "cambiar_folio", entidad: TABLE, entidadId: Number(antes.id), referencia: folioLabel(TABLE, antes), accion: "cambiar_folio", datos: { folio_num: folio }, motivo, cargo: actuo.cargo });
   await s.commit();
-  return respuestaSolicitud(solicitud, `el cambio de folio de ${solicitud.referencia} a R ${String(folio).padStart(7, "0")}`);
+  return respuestaSolicitud(solicitud, `el cambio de folio de ${solicitud.referencia} a ${formatearFolio("R", folio)}`);
 }
 
 /* POST /api/samples/reception/:id/reabrir { motivo }: directo con muestras:A; si no, solicitud. */

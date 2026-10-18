@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, type HTMLAttributes, type ReactNode } from "react";
+import { useFiguraDe } from "./Figura";
+import { urlFoto, useFotoDe, useFotoUrl } from "./FotoPerfil";
 import { AvatarArt } from "./AvatarArt";
 import { cn } from "./cn";
 
@@ -8,14 +10,20 @@ import { cn } from "./cn";
 
 export type Tone = "neutral" | "brand" | "success" | "warning" | "danger" | "bloom" | "ink";
 
+/*
+ * Paleta tonal de insignias (README.md): fondo tenue del tono, texto del
+ * mismo tono y un borde sutil. brand = información / en curso; neutral = cerrado,
+ * borrador, archivado; "ink" es un alias del gris tonal (nunca un fondo claro u
+ * oscuro sólido, que en oscuro brillaba más que el resto).
+ */
 const TONES: Record<Tone, string> = {
-  neutral: "bg-surface-3 text-ink-2",
-  brand: "bg-brand-soft text-brand-strong",
-  success: "bg-success-soft text-success-text",
-  warning: "bg-warning-soft text-warning-text",
-  danger: "bg-danger-soft text-danger-text",
-  bloom: "bg-bloom-soft text-[#9a4a1f]",
-  ink: "bg-ink text-white",
+  neutral: "bg-surface-3 text-ink-2 ring-1 ring-inset ring-line-strong/50",
+  brand: "bg-brand-soft text-brand-strong ring-1 ring-inset ring-brand-strong/15",
+  success: "bg-success-soft text-success-text ring-1 ring-inset ring-success-text/15",
+  warning: "bg-warning-soft text-warning-text ring-1 ring-inset ring-warning-text/15",
+  danger: "bg-danger-soft text-danger-text ring-1 ring-inset ring-danger-text/15",
+  bloom: "bg-bloom-soft text-bloom-text ring-1 ring-inset ring-bloom-text/15",
+  ink: "bg-surface-3 text-ink-2 ring-1 ring-inset ring-line-strong/50",
 };
 
 export function Badge({ tone = "neutral", dot, className, children }: { tone?: Tone; dot?: boolean; className?: string; children: ReactNode }) {
@@ -97,26 +105,26 @@ export function Kbd({ children }: { children: ReactNode }) {
 }
 
 /*
- * Avatar: una ilustracion del catalogo (`AvatarArt`). Si la persona no ha
- * elegido, se deriva del correo para que siempre le toque la misma.
+ * Avatar de una persona: su foto propia si eligio "Foto" y tiene una (128 px
+ * en listas, 512 en tamaños grandes; circular, con el mismo borde que las
+ * figuras y una aparicion suave); si no, o si la foto falla, su figura del
+ * catalogo (`AvatarArt`): la elegida o, si no eligio, la que le toca siempre.
  */
-export function Avatar({ name, email, avatar, size = "md", className }: { name?: string; email?: string; avatar?: string | null; size?: "xs" | "sm" | "md" | "lg" | "xl"; className?: string }) {
+export function Avatar({ id, name, email, avatar, size = "md", className, animado }: { id?: unknown; name?: unknown; email?: unknown; avatar?: unknown; size?: "xs" | "sm" | "md" | "lg" | "xl"; className?: string; animado?: "siempre" | "al-pasar" | false }) {
   const px = { xs: 24, sm: 28, md: 36, lg: 48, xl: 72 }[size];
-  return <AvatarArt avatar={avatar} seed={(email || name || "?").trim().toLowerCase()} size={px} className={cn("rounded-full shadow-[0_1px_2px_rgba(16,32,43,0.18)]", className)} />;
-}
-
-export function Stat({ label, value, hint, tone = "neutral", icon, className }: { label: ReactNode; value: ReactNode; hint?: ReactNode; tone?: "neutral" | "brand" | "warning" | "danger" | "success"; icon?: ReactNode; className?: string }) {
-  const valueTone = { neutral: "text-ink", brand: "text-brand-strong", warning: "text-warning-text", danger: "text-danger", success: "text-success-text" }[tone];
-  return (
-    <div className={cn("flex flex-col gap-1.5 rounded-card bg-surface p-4 shadow-card", className)}>
-      <div className="flex items-center justify-between gap-2 text-[13px] text-ink-3">
-        <span>{label}</span>
-        {icon ? <span className="text-ink-4">{icon}</span> : null}
-      </div>
-      <p className={cn("tnum text-[26px] font-semibold leading-none tracking-[-0.02em]", valueTone)}>{value}</p>
-      {hint ? <p className="text-[12.5px] text-ink-3">{hint}</p> : null}
-    </div>
-  );
+  const seed = String(email || name || "?").trim().toLowerCase();
+  // La misma figura que en Mi cuenta: la elegida o, si no eligio, una distinta a la de los demas (directorio), siempre la misma.
+  const figura = useFiguraDe(avatar, seed);
+  const foto = useFotoDe({ id, email, nombre: name });
+  const url = useFotoUrl(foto ? urlFoto(foto.id, foto.version, size === "xl" ? 512 : 128) : null);
+  const [fallida, setFallida] = useState<string | null>(null);
+  if (url && fallida !== url) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- blob: de la foto pedida con sesion
+      <img src={url} alt={String(name || email || "Foto de perfil")} width={px} height={px} onError={() => setFallida(url)} className={cn("foto-perfil shrink-0 rounded-full bg-surface-3 object-cover shadow-card", className)} style={{ width: px, height: px }} />
+    );
+  }
+  return <AvatarArt avatar={figura} seed={seed} size={px} animado={animado} className={cn("rounded-full shadow-card", className)} />;
 }
 
 /*
@@ -147,7 +155,8 @@ export function StockMeter({ current, max, min, unit, low, size = "sm", label, c
   return (
     <div className={cn("flex min-w-[140px] flex-col", size === "lg" ? "gap-2" : "gap-1", className)}>
       <div className={cn("relative w-full overflow-hidden rounded-full bg-surface-3", size === "lg" ? "h-2.5" : "h-1.5")} role="progressbar" aria-valuenow={Math.round(percent)} aria-valuemin={0} aria-valuemax={100} aria-label={typeof label === "string" ? label : reading}>
-        <div className={cn("h-full rounded-full transition-[width,background-color] duration-700 ease-[var(--ease-spring)]", bar, state === "empty" && "animate-pulse")} style={{ width: ready ? `${percent}%` : "0%" }} />
+        {/* La barra ocupa todo el riel y se recorre con transform (sin animar el ancho): el riel redondeado la recorta igual. */}
+        <div className={cn("h-full w-full rounded-full transition-[translate,background-color] duration-700 ease-[var(--ease-spring)]", bar, state === "empty" && "animate-pulse")} style={{ translate: `${ready ? percent - 100 : -100}% 0` }} />
         {minPercent !== null ? <span className="absolute top-0 h-full w-0.5 bg-ink/35" style={{ left: `calc(${minPercent}% - 1px)` }} title={`Mínimo: ${fmtNumber(min as number)}${u}`} aria-hidden="true" /> : null}
       </div>
       <div className={cn("tnum flex items-center justify-between gap-2", size === "lg" ? "text-[13px]" : "text-[12px]")}>
@@ -159,10 +168,6 @@ export function StockMeter({ current, max, min, unit, low, size = "sm", label, c
 }
 
 const fmtNumber = (value: number) => value.toLocaleString("es-MX", { maximumFractionDigits: 3 });
-
-export function Divider({ className }: { className?: string }) {
-  return <hr className={cn("border-0 border-t border-line", className)} />;
-}
 
 /* Fila "etiqueta · valor" para fichas de detalle (estilo lista de ajustes). */
 export function DetailRow({ label, children, className }: { label: ReactNode; children: ReactNode; className?: string }) {

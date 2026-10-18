@@ -25,6 +25,7 @@
  * verificacion independiente de todos los responsables evita cerrar una NC con
  * acciones "eficaces" por separado que en conjunto no eliminan la causa.
  */
+import { formatearFolio } from "../../../shared/folios";
 import { syncEquipoEstado } from "../inventory";
 import { expandirPermisos, permite } from "../../../shared/permisos";
 import { incidenciaPorAlertaIntegridad } from "./automaticas";
@@ -48,7 +49,7 @@ import { accionVisible } from "./adjuntos";
 import { retencionesActivas, suspensionesActivas } from "./bloqueos";
 import { referenciaDe } from "./registros";
 import { renderNcPdf } from "./nc-pdf";
-import { insertarPropuesta } from "../documentos-flujo";
+import { funcionalidadRetirada } from "../../retirado";
 
 const CLASIFICACIONES = new Set(["menor", "mayor", "critica"]);
 
@@ -268,12 +269,12 @@ async function detalleNc(s: Session, acc: AccesoCalidad, nc: Row): Promise<Row> 
     // Con alcance "incidencias", de las incidencias ajenas agrupadas en la NC solo el folio y el estado.
     incidencias: incidencias.map((i) => (acc.total || Number(i.reportada_por) === acc.yo ? { ...i, folio: folioIncidencia(i.folio_num) } : { id: i.id, folio_num: i.folio_num, estado: i.estado, folio: folioIncidencia(i.folio_num), restringida: true })),
     // Enmiendas de cada informe afectado (7.10: la correccion se hace con el flujo de enmienda existente).
-    afectados: await Promise.all(afectados.map(async (a) => (a.entidad === "informes" ? { ...a, enmiendas: (await s.query<Row>("SELECT id, folio_num, version, estado FROM informes WHERE sustituye_a = :id ORDER BY version", { id: a.entidad_id })).map((e) => ({ id: e.id, estado: e.estado, referencia: `IR ${String(e.folio_num).padStart(7, "0")} v${e.version}` })) } : a))),
+    afectados: await Promise.all(afectados.map(async (a) => (a.entidad === "informes" ? { ...a, enmiendas: (await s.query<Row>("SELECT id, folio_num, version, estado FROM informes WHERE sustituye_a = :id ORDER BY version", { id: a.entidad_id })).map((e) => ({ id: e.id, estado: e.estado, referencia: `${formatearFolio("IR", e.folio_num)} v${e.version}` })) } : a))),
     acciones: acciones.map((a) => ({ ...a, vencida: accionVencida(a, hoy), responsable_vigente: Number(a.responsable_activo) === 1 && (!a.responsable_vigente_hasta || String(a.responsable_vigente_hasta) >= hoy) })),
     verificaciones,
     comunicaciones: comunicaciones.map((c) => ({ ...c, informe_ids: JSON.parse(String(c.informe_ids_json || "[]")) })),
     suspensiones,
-    retenciones: retenciones.map((r) => ({ ...r, informe: `IR ${String(r.informe_folio || 0).padStart(7, "0")}${Number(r.informe_version || 1) > 1 ? ` v${r.informe_version}` : ""}` })),
+    retenciones: retenciones.map((r) => ({ ...r, informe: `${formatearFolio("IR", r.informe_folio)}${Number(r.informe_version || 1) > 1 ? ` v${r.informe_version}` : ""}` })),
     propuesta,
     solicitud_pendiente: pendiente ? serializarSolicitud(pendiente) : null,
     segregacion: { verificar: bloqueo(evaluarVerificacion(acc.yo, responsablesAcciones), "verificar"), cerrar: bloqueo(evaluarCierreNc(acc.yo, responsablesNc(nc)), "cerrar") },
@@ -805,34 +806,15 @@ export async function pdfNc({ request, s, params }: RouteContext): Promise<Respo
   return new Response(new Uint8Array(bytes), { status: 200, headers: { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${folioNc(nc.folio_num).replace(" ", "-")}.pdf"`, "X-Content-Type-Options": "nosniff", "X-Integridad-Pdf": integridad, ...(nc.pdf_sha256 ? { "X-Pdf-Sha256": String(nc.pdf_sha256) } : {}) } });
 }
 
-/* ---------- Propuesta de cambio documental (Fase 7) ---------- */
+/* ---------- Propuesta de cambio documental (retirada) ---------- */
 
-/* POST /api/calidad/nc/:id/propuesta-documental { tipo: cambio | nuevo, documento_id?, titulo?, motivo } */
-export async function proponerCambioDocumental({ request, s, params }: RouteContext): Promise<Response> {
-  const user = await requireUser(request);
-  const acc = await accesoCalidad(s, user, "nc");
-  const nc = await ncVisible(s, acc, intParam(params.id), true);
-  exigirEditable(acc, nc);
-  // Como el flujo normal de propuestas (Fase 7): hay que poder ver los documentos.
-  await requirePermission(s, user, "documentos", "V");
-  if (nc.propuesta_documento_id) throw new HttpError(409, { message: "La NC ya tiene su propuesta documental" });
-  const p = await readJson(request);
-  const tipo = String(p.tipo || "cambio") === "nuevo" ? "nuevo" : "cambio";
-  const motivo = exigirTexto(p.motivo, 5, "Indica qué se debe cambiar");
-  let documentoId: number | null = null;
-  let titulo = String(p.titulo || "").trim().slice(0, 220);
-  if (tipo === "cambio") {
-    const doc = await snapshotRow(s, "documentos_sgc", Number(p.documento_id) || 0);
-    if (!doc || String(doc.estado) !== "vigente") throw new HttpError(409, { message: "Elige un documento vigente para proponer su cambio" });
-    documentoId = Number(doc.id);
-    titulo = titulo || `Cambio a ${doc.clave}: ${doc.titulo}`;
-  }
-  if (!titulo) throw new HttpError(400, { message: "Indica el título del documento propuesto" });
-  const propuestaId = await insertarPropuesta(s, user, { tipo, documentoId, titulo, motivo: `${motivo} (${folioNc(nc.folio_num)})`, ncId: Number(nc.id), ncFolio: folioNc(nc.folio_num) });
-  await s.execute(`UPDATE ${T.nc} SET propuesta_documento_id = :p, requiere_cambio_documental = 1 WHERE id = :id`, { p: propuestaId, id: nc.id });
-  await auditar(s, user, nc, "proponer", { motivo, detalle: { propuesta_documental: propuestaId, titulo } });
-  await s.commit();
-  return json({ message: "Propuesta de cambio documental creada y ligada a la NC", id: propuestaId }, 201);
+/*
+ * POST /api/calidad/nc/:id/propuesta-documental — retirado junto con el flujo
+ * anterior de control documental: "requiere cambio documental" queda como bandera con nota
+ * en la NC. Las NC que ya apuntan a una propuesta la conservan en solo lectura.
+ */
+export async function proponerCambioDocumental(): Promise<Response> {
+  return funcionalidadRetirada();
 }
 
 /* ---------- Anular (segundo usuario) ---------- */
@@ -903,4 +885,3 @@ export async function violacionParaExcepcionSuspension(s: Session, user: Current
   return { violacion: evaluarReanudacion(userIdFromClaims(user) as number, su.suspendida_por), row: su, referencia: `${su.tipo === "metodo" ? `Método ${su.clave}` : `Equipo #${su.clave}`} (${folioNc(su.nc_folio)})` };
 }
 
-export { CLASIFICACION_NC_LABEL };

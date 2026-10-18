@@ -94,8 +94,8 @@ export const metodoDeExtraccion = (tipoRegistro: unknown): string | null => {
   return tipo === "E-A" ? "ASP" : tipo === "E-D" ? "DSP" : null;
 };
 
-export const etiquetaMetodo = (clave: string): string => METODOS_AUTORIZABLES.find((m) => m.value === clave)?.label || clave;
-export const etiquetaActividad = (clave: string): string => ACTIVIDADES_AUTORIZABLES.find((a) => a.value === clave)?.label || clave;
+const etiquetaMetodo = (clave: string): string => METODOS_AUTORIZABLES.find((m) => m.value === clave)?.label || clave;
+const etiquetaActividad = (clave: string): string => ACTIVIDADES_AUTORIZABLES.find((a) => a.value === clave)?.label || clave;
 
 export function etiquetaAutorizacion(tipo: string, clave: string, equipo?: string | null): string {
   if (tipo === "actividad") return etiquetaActividad(clave);

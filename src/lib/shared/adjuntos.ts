@@ -22,8 +22,6 @@ export const TIPOS_EVIDENCIA = [
   { value: "foto", label: "Fotografía" },
   { value: "otro", label: "Otro" },
 ] as const;
-export type TipoEvidencia = (typeof TIPOS_EVIDENCIA)[number]["value"];
-
 export const TIPO_EVIDENCIA_LABEL: Record<string, string> = Object.fromEntries(TIPOS_EVIDENCIA.map((t) => [t.value, t.label]));
 
 /* Articulo para las frases de la bitacora: "adjuntó el cromatograma", "adjuntó la hoja de cálculo". */
@@ -60,8 +58,6 @@ export const MIME_EVIDENCIA: Record<string, string> = {
  * TIFF se descarga (Chrome y Firefox no lo muestran y la hoja quedaria vacia).
  */
 export const VISTA_PREVIA = new Set(["pdf", "png", "jpg", "jpeg"]);
-
-export const EVIDENCIA_MAX_MB_DEFAULT = 25;
 export const DESCRIPCION_MIN = 5;
 export const MOTIVO_MIN = 5;
 
@@ -96,7 +92,7 @@ const empiezaCon = (bytes: Uint8Array, firma: number[], desde = 0) => firma.ever
 const ascii = (bytes: Uint8Array, n: number) => Array.from(bytes.slice(0, n), (b) => String.fromCharCode(b)).join("");
 
 /* Contenido peligroso aunque se renombre: ejecutables, scripts, HTML y SVG. */
-export function contenidoPeligroso(bytes: Uint8Array): string | null {
+function contenidoPeligroso(bytes: Uint8Array): string | null {
   if (empiezaCon(bytes, [0x4d, 0x5a])) return "un ejecutable de Windows";
   if (empiezaCon(bytes, [0x7f, 0x45, 0x4c, 0x46])) return "un ejecutable";
   const macho = [[0xfe, 0xed, 0xfa, 0xce], [0xfe, 0xed, 0xfa, 0xcf], [0xce, 0xfa, 0xed, 0xfe], [0xcf, 0xfa, 0xed, 0xfe], [0xca, 0xfe, 0xba, 0xbe]];
@@ -111,7 +107,7 @@ export function contenidoPeligroso(bytes: Uint8Array): string | null {
 }
 
 /* HTML, SVG o script en cualquier parte de un archivo de texto. */
-export function marcadoActivo(bytes: Uint8Array): boolean {
+function marcadoActivo(bytes: Uint8Array): boolean {
   let texto = "";
   for (let i = 0; i < bytes.length; i += 65536) texto += String.fromCharCode(...bytes.subarray(i, Math.min(i + 65536, bytes.length)));
   // Entidades numericas decodificadas (java&#x73;cript:) y sin espacios de relleno antes de buscar.
@@ -129,7 +125,7 @@ export function marcadoActivo(bytes: Uint8Array): boolean {
 export function problemaDeContenido(ext: string, bytes: Uint8Array): string | null {
   if (!bytes.length) return "El archivo está vacío";
   const peligro = contenidoPeligroso(bytes);
-  if (peligro) return `El contenido del archivo es ${peligro}; no se admite como evidencia`;
+  if (peligro) return `El contenido del archivo es ${peligro}; no se admite`;
   const zip = empiezaCon(bytes, [0x50, 0x4b, 0x03, 0x04]) || empiezaCon(bytes, [0x50, 0x4b, 0x05, 0x06]);
   const ok: Record<string, boolean> = {
     pdf: ascii(bytes, 5) === "%PDF-",
@@ -140,14 +136,19 @@ export function problemaDeContenido(ext: string, bytes: Uint8Array): string | nu
     tiff: empiezaCon(bytes, [0x49, 0x49, 0x2a, 0x00]) || empiezaCon(bytes, [0x4d, 0x4d, 0x00, 0x2a]),
     zip,
     xlsx: zip,
+    // Biblioteca: Office abierto (zip) e imagen WebP (RIFF....WEBP).
+    docx: zip,
+    pptx: zip,
+    webp: ascii(bytes, 4) === "RIFF" && ascii(bytes.slice(8, 12), 4) === "WEBP",
     xls: empiezaCon(bytes, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
     cdf: ascii(bytes, 3) === "CDF" || empiezaCon(bytes, [0x89, 0x48, 0x44, 0x46]),
     csv: !bytes.slice(0, 8192).includes(0),
     txt: !bytes.slice(0, 8192).includes(0),
+    md: !bytes.slice(0, 8192).includes(0),
   };
   if (!(ext in ok)) return "Formato no permitido";
-  // Texto (csv, txt): se revisa TODO el contenido, no solo el inicio, por si trae HTML, SVG o script en medio.
-  if ((ext === "csv" || ext === "txt") && marcadoActivo(bytes)) return "El archivo de texto contiene HTML, SVG o script; no se admite como evidencia";
+  // Texto (csv, txt, md): se revisa TODO el contenido, no solo el inicio, por si trae HTML, SVG o script en medio.
+  if ((ext === "csv" || ext === "txt" || ext === "md") && marcadoActivo(bytes)) return "El archivo de texto contiene HTML, SVG o script; no se admite";
   return ok[ext] ? null : `El contenido no corresponde a un archivo .${ext}`;
 }
 

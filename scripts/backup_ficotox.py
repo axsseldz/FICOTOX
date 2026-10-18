@@ -290,7 +290,7 @@ def make_sqlite_backup(project_root: Path, destination_dir: Path, include_key: b
         raise RuntimeError("Node.js no esta instalado o no esta en PATH (el respaldo usa scripts/respaldar-ficotox.mjs).")
 
     result = subprocess.run(
-        [node, str(project_root / "scripts" / "respaldar-ficotox.mjs"), "--json"],
+        [node, str(project_root / "scripts" / "respaldar-ficotox.mjs"), "--json", "--etiqueta", "automatico"],
         cwd=project_root,
         # Misma carpeta local que este script (backups/ o --local-backup-dir / FICOTOX_BACKUP_DIR).
         env={**os.environ, "FICOTOX_BACKUP_DIR": str(destination_dir.parent)},

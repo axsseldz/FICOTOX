@@ -35,6 +35,8 @@ export interface AppConfig {
   AUTORIZACIONES_OBLIGATORIAS: boolean;
   /* Fase 10: evidencia instrumental de los analisis (tamano maximo por archivo y si es obligatoria al enviar a revision). */
   EVIDENCIA_MAX_MB: number;
+  /* Documentos SGC: tamano maximo por archivo (MB). DOCUMENTOS_MAX_MB (antes BIBLIOTECA_MAX_MB, que se sigue leyendo). */
+  DOCUMENTOS_MAX_MB: number;
   EVIDENCIA_OBLIGATORIA_ANALISIS: boolean;
   /* Fase 10: respaldos locales (carpeta, cuantos se conservan) y avisos (horas sin respaldo, dias sin prueba de restauracion). */
   RESPALDOS_DIR: string;
@@ -92,6 +94,9 @@ function resolveSqlitePath(baseDir: string): string {
   if (configured) {
     return path.resolve(/*turbopackIgnore: true*/ baseDir, configured);
   }
+  // FICOTOX_DATA_DIR (volumen de un hosting): <datos>/instance/ficotox.sqlite3.
+  const datos = (process.env.FICOTOX_DATA_DIR || "").trim();
+  if (datos) return path.join(/*turbopackIgnore: true*/ path.resolve(baseDir, datos), "instance", "ficotox.sqlite3");
   return path.join(/*turbopackIgnore: true*/ baseDir, "instance", "ficotox.sqlite3");
 }
 
@@ -139,17 +144,19 @@ export function getConfig(): AppConfig {
     LOGIN_VENTANA_MIN: envInt("LOGIN_VENTANA_MIN", 15),
     LOGIN_BLOQUEO_MIN: envInt("LOGIN_BLOQUEO_MIN", 15),
     LOGIN_IP_MAX_INTENTOS: envInt("LOGIN_IP_MAX_INTENTOS", 20),
-    TRUST_PROXY: envBool("TRUST_PROXY", "false"),
+    // Detras del proxy de un hosting: TRUST_PROXY=true o 1.
+    TRUST_PROXY: ["true", "1"].includes((process.env.TRUST_PROXY ?? "false").trim().toLowerCase()),
     SUPERVISAR_CUENTAS_TEMPORALES: envBool("SUPERVISAR_CUENTAS_TEMPORALES", "true"),
     SESION_INACTIVIDAD_MIN: envInt("SESION_INACTIVIDAD_MIN", 30),
     REAUTH_TTL_MIN: envInt("REAUTH_TTL_MIN", 5),
     SOLICITUD_VENCE_DIAS: envInt("SOLICITUD_VENCE_DIAS", 7),
     AUTORIZACIONES_OBLIGATORIAS: envBool("AUTORIZACIONES_OBLIGATORIAS", "true"),
     EVIDENCIA_MAX_MB: envInt("EVIDENCIA_MAX_MB", 25),
+    DOCUMENTOS_MAX_MB: envInt("DOCUMENTOS_MAX_MB", envInt("BIBLIOTECA_MAX_MB", 50)),
     EVIDENCIA_OBLIGATORIA_ANALISIS: envBool("EVIDENCIA_OBLIGATORIA_ANALISIS", "true"),
     // Misma carpeta que scripts/backup_ficotox.py: FICOTOX_BACKUP_DIR o <proyecto>/backups.
     // turbopackIgnore: la carpeta se decide en tiempo de ejecucion; sin esto el build standalone copiaria backups/.
-    RESPALDOS_DIR: process.env.FICOTOX_BACKUP_DIR ? path.resolve(/*turbopackIgnore: true*/ BASE_DIR, process.env.FICOTOX_BACKUP_DIR) : path.join(/*turbopackIgnore: true*/ BASE_DIR, "backups"),
+    RESPALDOS_DIR: process.env.FICOTOX_BACKUP_DIR ? path.resolve(/*turbopackIgnore: true*/ BASE_DIR, process.env.FICOTOX_BACKUP_DIR) : path.join(/*turbopackIgnore: true*/ process.env.FICOTOX_DATA_DIR ? path.resolve(BASE_DIR, process.env.FICOTOX_DATA_DIR) : BASE_DIR, "backups"),
     RESPALDO_RETENCION: envInt("RESPALDO_RETENCION", 30),
     RESPALDO_AVISO_HORAS: envInt("RESPALDO_AVISO_HORAS", 24),
     PRUEBA_RESTAURACION_AVISO_DIAS: envInt("PRUEBA_RESTAURACION_AVISO_DIAS", 90),

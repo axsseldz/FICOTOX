@@ -11,14 +11,15 @@
  *   datos/ficotox.sqlite3   snapshot consistente con la API de respaldo en linea
  *                           de SQLite (funciona con el servidor encendido y con WAL)
  *   archivos/<carpeta>/...  informes (PDF y evidencias de envio), evidencias,
- *                           documentos_sgc y maintenance_reports
+ *                           documentos_sgc (flujo anterior, solo lectura),
+ *                           biblioteca, maintenance_reports y calidad
  *   manifest.json           fecha, host, version (commit), motor, conteos por
  *                           tabla, bitacora (entradas, ultimo id y sello),
  *                           archivos con tamano y SHA-256, huella de la llave
  *   llave/llave-bitacora.txt  (separada; solo en el respaldo local) la llave del
  *                           sello de la bitacora. Nunca JWT_SECRET, SMTP ni otros secretos.
  * MySQL/MariaDB: se respalda con mysqldump (scripts/backup_ficotox.py y
- * docs/RESPALDO_Y_RECUPERACION.md); esta implementacion es solo para SQLite.
+ * README.md); esta implementacion es solo para SQLite.
  */
 import { VERSION_ACTUAL } from "../server/migraciones/motor.mjs";
 import { createHash, createHmac } from "node:crypto";
@@ -58,6 +59,20 @@ export const TABLAS_PRINCIPALES = [
   "informes",
   "envios_informe",
   "documentos_sgc",
+  "biblioteca_documentos",
+  "biblioteca_versiones",
+  "sgc_documentos",
+  "sgc_revisiones",
+  "sgc_archivos",
+  // Documentos SGC (fases 2 y 3): flujo, solicitudes, renovaciones, externos, distribucion y lecturas.
+  "sgc_areas",
+  "sgc_tipos",
+  "sgc_flujo_acciones",
+  "sgc_solicitudes",
+  "sgc_renovaciones",
+  "sgc_externos",
+  "sgc_distribucion",
+  "sgc_lecturas",
   "reactivos",
   "consumibles",
   "equipos",
@@ -67,8 +82,10 @@ export const TABLAS_PRINCIPALES = [
 ];
 
 /* Carpetas de la instancia con archivos que se respaldan. */
-// Fase 11: "calidad" (PDF "Registro de no conformidad").
-export const CARPETAS_ARCHIVOS = ["informes", "evidencias", "documentos_sgc", "maintenance_reports", "calidad"];
+// Fase 11: "calidad" (PDF "Registro de no conformidad"). Biblioteca: "biblioteca" (versiones de los documentos).
+// Fotos de perfil: "avatares" (opcional; si no hay fotos, la carpeta no existe y no pasa nada).
+// Documentos SGC (migracion 22): "sgc" (archivos fuente y PDF de consulta de cada revision).
+export const CARPETAS_ARCHIVOS = ["informes", "evidencias", "documentos_sgc", "biblioteca", "sgc", "maintenance_reports", "calidad", "avatares"];
 
 export const ARCHIVO_LLAVE = path.join(/*turbopackIgnore: true*/ "llave", "llave-bitacora.txt");
 export const CARPETA_ACTAS = "pruebas-restauracion";
@@ -108,7 +125,8 @@ export function resolverEntorno(baseDir, env = process.env) {
       const raw = databaseUrl.replace(/^sqlite:\/*/, "");
       sqlitePath = path.isAbsolute(raw) ? raw : path.resolve(/*turbopackIgnore: true*/ baseDir, raw);
     } else {
-      sqlitePath = String(env.SQLITE_PATH || "").trim() ? path.resolve(/*turbopackIgnore: true*/ baseDir, String(env.SQLITE_PATH).trim()) : path.join(/*turbopackIgnore: true*/ baseDir, "instance", "ficotox.sqlite3");
+      const datos = String(env.FICOTOX_DATA_DIR || "").trim();
+      sqlitePath = String(env.SQLITE_PATH || "").trim() ? path.resolve(/*turbopackIgnore: true*/ baseDir, String(env.SQLITE_PATH).trim()) : path.join(/*turbopackIgnore: true*/ datos ? path.resolve(baseDir, datos) : baseDir, "instance", "ficotox.sqlite3");
     }
   }
   const instanceDir = env.FICOTOX_INSTANCE_DIR ? path.resolve(/*turbopackIgnore: true*/ baseDir, env.FICOTOX_INSTANCE_DIR) : sqlitePath ? path.dirname(sqlitePath) : path.join(/*turbopackIgnore: true*/ baseDir, "instance");
@@ -121,7 +139,7 @@ export function resolverEntorno(baseDir, env = process.env) {
     motor,
     sqlitePath,
     instanceDir,
-    respaldosDir: env.FICOTOX_BACKUP_DIR ? path.resolve(/*turbopackIgnore: true*/ baseDir, env.FICOTOX_BACKUP_DIR) : path.join(/*turbopackIgnore: true*/ baseDir, "backups"),
+    respaldosDir: env.FICOTOX_BACKUP_DIR ? path.resolve(/*turbopackIgnore: true*/ baseDir, env.FICOTOX_BACKUP_DIR) : path.join(/*turbopackIgnore: true*/ String(env.FICOTOX_DATA_DIR || "").trim() ? path.resolve(baseDir, String(env.FICOTOX_DATA_DIR).trim()) : baseDir, "backups"),
     secretKey: env.SECRET_KEY || "",
     retencion: entero("RESPALDO_RETENCION", 30),
     puerto: entero("PORT", entero("FLASK_PORT", 5000)),
@@ -156,6 +174,8 @@ export const huellaManifest = (carpeta) => createHash("sha256").update(fs.readFi
 
 /* Rutas que un manifest puede declarar: la base y archivos dentro de las carpetas respaldadas, sin "..", "." ni segmentos vacios. */
 export const RUTA_BASE = "datos/ficotox.sqlite3";
+/* Carpeta de las copias de "Probar restauracion": junto a la carpeta de la instancia (en una instalacion normal, en la raiz del proyecto). La usan el script y el servidor. */
+export const carpetaRestauradas = (instanceDir) => path.join(/*turbopackIgnore: true*/ path.dirname(path.resolve(/*turbopackIgnore: true*/ instanceDir)), "instance-restaurada");
 export function rutaArchivoValida(ruta) {
   if (typeof ruta !== "string" || !ruta || ruta.includes("\\") || ruta.includes("\0") || path.isAbsolute(ruta)) return false;
   const partes = ruta.split("/");
@@ -287,7 +307,7 @@ export async function crearRespaldo(opciones) {
 }
 
 export async function iniciarRespaldo({ Sqlite, sqlitePath, instanceDir, respaldosDir, secretKey, baseDir, incluirLlave = true, etiqueta = null, ahora = new Date() }) {
-  if (!sqlitePath) throw new Error("Esta instalación usa MySQL/MariaDB: respalda la base con mysqldump (ver docs/RESPALDO_Y_RECUPERACION.md)");
+  if (!sqlitePath) throw new Error("Esta instalación usa MySQL/MariaDB: respalda la base con mysqldump (ver README.md)");
   if (!fs.existsSync(sqlitePath)) throw new Error(`No existe la base SQLite: ${sqlitePath}`);
   fs.mkdirSync(respaldosDir, { recursive: true });
   const { id, tmp, final } = reservarId(respaldosDir, ahora);

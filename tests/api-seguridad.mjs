@@ -12,7 +12,7 @@
  *   por tiempo y manual;
  * - reautenticacion: sin token, vencido, reutilizado, de otra accion o persona;
  * - sesiones (token_version, cerrar en todos, JWT 8 h), contrasenas,
- *   secretos en produccion, CORS, revision de accesos y bitacora sin hashes.
+ *   secretos en produccion, CORS y bitacora sin hashes (la revision de accesos se integro en Usuarios).
  */
 import "./lib/reauth-auto.mjs";
 import { spawn, spawnSync } from "node:child_process";
@@ -419,7 +419,7 @@ const temporal = (extra = {}) => ({ tipo_cuenta: "temporal", vigente_hasta: "209
   check("bitacora sin contrasenas ni hashes", fugas.length === 0 && !!auditoria("cambiar_password", u.email) && !!auditoria("restablecer_password", u.email), `fugas=${fugas.length}`);
 }
 
-/* ================= 8. Secretos, CORS, revision de accesos ================= */
+/* ================= 8. Secretos y CORS ================= */
 {
   const dir = mkdtempSync(path.join(os.tmpdir(), "ficotox-secretos-"));
   const envVacio = path.join(dir, "vacio.env");
@@ -448,17 +448,6 @@ const temporal = (extra = {}) => ({ tipo_cuenta: "temporal", vigente_hasta: "209
 
   const verificar = await api("GET", "/audit/verify", undefined, QA);
   check("la verificacion de la bitacora informa el origen de la llave (sin revelarla) y sigue en verde", verificar.data?.ok === true && ["SECRET_KEY", "auditoria.key"].includes(verificar.data?.llave?.origen), JSON.stringify(verificar.data?.llave));
-
-  const rev = await api("GET", "/admin/accesos?desde=2020-01-01", undefined, QA);
-  check("revision de accesos: cuentas, temporales, vencimientos, bloqueos y eventos", rev.status === 200 && rev.data?.cuentas?.length > 0 && rev.data?.temporales?.some((c) => c.email === DIEGO) && Array.isArray(rev.data?.vencimientos) && rev.data?.eventos?.some((e) => e.accion === "bloquear") && rev.data?.eventos?.some((e) => e.accion === "cambiar_vigencia"), `${rev.status}`);
-  const csv = await fetch(`${BASE}/admin/accesos?formato=csv&seccion=cuentas`, { headers: { Authorization: `Bearer ${QA}` } });
-  const csvTexto = await csv.text();
-  const csvEv = await fetch(`${BASE}/admin/accesos?formato=csv&seccion=eventos&desde=2020-01-01`, { headers: { Authorization: `Bearer ${QA}` } });
-  check("revision de accesos: exportacion CSV de cuentas y eventos", csv.status === 200 && /text\/csv/.test(csv.headers.get("content-type") || "") && csvTexto.includes("tipo_cuenta") && csvTexto.includes(DIEGO) && csvEv.status === 200 && (await csvEv.text()).includes("bloquear"), `${csv.status} ${csvEv.status}`);
-  const analista = await token("luis.castro@ficotox.local");
-  const propia = await api("GET", "/admin/accesos", undefined, analista);
-  const aux = await api("GET", "/admin/accesos", undefined, await token("carmen.aguilar@ficotox.local"));
-  check("revision de accesos con usuarios:V propio: solo la propia cuenta", propia.status === 200 && propia.data?.cuentas?.length === 1 && aux.status === 200 && aux.data?.cuentas?.length === 1, `${propia.status} ${propia.data?.cuentas?.length} ${aux.status}`);
 }
 
 const fallidas = results.filter((r) => !r.ok);

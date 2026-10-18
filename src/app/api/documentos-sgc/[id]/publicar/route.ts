@@ -1,4 +1,4 @@
-import { apiRoute } from "@/lib/server/http";
-import { publicarDocumento } from "@/lib/server/modules/documentos-flujo";
+import { funcionalidadRetirada } from "@/lib/server/retirado";
 
-export const POST = apiRoute(publicarDocumento);
+/* Flujo de control documental retirado por decision del laboratorio (el control documental vigente es Documentos SGC, /api/sgc). */
+export const POST = funcionalidadRetirada;

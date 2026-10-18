@@ -80,6 +80,10 @@ export type AuditAction =
   | "confirmar_envio"
   | "requiere_enmienda"
   | "alerta_integridad"
+  | "subir"
+  | "subir_version"
+  | "archivar"
+  | "categoria"
   | "publicar"
   | "confirmar_lectura"
   | "proponer"
@@ -87,6 +91,8 @@ export type AuditAction =
   | "adjuntar"
   | "anular_adjunto"
   | "respaldar"
+  | "respaldo_fallido"
+  | "probar_restauracion"
   | "restaurar_respaldo"
   | "reportar"
   | "evaluar"
@@ -103,7 +109,12 @@ export type AuditAction =
   | "retener"
   | "liberar_retencion"
   | "comunicar"
-  | "afectar";
+  | "afectar"
+  | "nueva_revision"
+  | "consultar"
+  | "distribuir"
+  | "retirar_distribucion"
+  | "recordar";
 
 export interface AuditEntry {
   accion: AuditAction;

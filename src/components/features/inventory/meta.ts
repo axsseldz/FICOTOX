@@ -9,7 +9,7 @@ export const EQUIPO_ESTADOS: Array<{ value: string; label: string; tone: Tone }>
 
 export const MANTENIMIENTO_ESTADOS: Array<{ value: string; label: string; tone: Tone }> = [
   { value: "programado", label: "Programado", tone: "brand" },
-  { value: "en_proceso", label: "En proceso", tone: "warning" },
+  { value: "en_proceso", label: "En proceso", tone: "brand" },
   { value: "completado", label: "Completado", tone: "success" },
   { value: "vencido", label: "Vencido", tone: "danger" },
   { value: "cancelado", label: "Cancelado", tone: "neutral" },

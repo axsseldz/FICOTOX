@@ -3,11 +3,13 @@
  * con los scripts de terminal. Todo sobre carpetas de instance/test (el servidor
  * de prueba respalda en instance/test/backups, FICOTOX_BACKUP_DIR); nunca toca
  * instance/ real ni backups/ real.
- * - Pantalla Respaldos: Jorge (usuarios:G) la ve y crea; Patricia (calidad:V)
- *   solo lectura; Luis no la ve.
+ * - La pantalla Respaldos se retiro (410): el respaldo se crea con npm run respaldar.
  * - Respaldo con el servidor encendido: snapshot valido (integrity_check ok);
  *   manifest con conteos, archivos y huella de la llave; sin secretos.
- * - Restauracion en modo prueba: todas las verificaciones ✅ y acta.
+ * - Restauracion en modo prueba: todas las verificaciones ✅ y acta (incluye los
+ *   reportes PDF de mantenimiento).
+ * - «Probar restauracion» desde la plataforma con la instancia en otra carpeta
+ *   (FICOTOX_INSTANCE_DIR): no deja la copia restaurada.
  * - Respaldo alterado: falla la verificacion 1. Llave distinta o ausente: falla
  *   la verificacion de la bitacora con mensaje claro.
  * - Modo real sin --confirmar o con el servidor encendido: se niega. Modo real
@@ -22,7 +24,9 @@ import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { adjuntarEvidencia } from "./lib/evidencia.mjs";
+import { pdfConTexto } from "./lib/archivos.mjs";
 import { evaluarCadena } from "../src/lib/shared/audit-chain.mjs";
+import { carpetaRestauradas } from "../src/lib/shared/respaldo.mjs";
 import * as awaitCrypto from "node:crypto";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -91,12 +95,10 @@ const leerEnv = () => {
 
 const QA = await login("qa@ficotox.local", "QaFicotox2026!");
 const tJ = await login("jorge.ramirez@ficotox.local");
-const tP = await login("patricia.luna@ficotox.local");
-const tL = await login("luis.castro@ficotox.local");
-const tA = await login("ana.torres@ficotox.local");
 const sufijo = Date.now().toString(36).toUpperCase().slice(-5);
 
-/* Una evidencia en disco para que el respaldo incluya archivos (la suite puede correr sola). */
+/* Una evidencia y un reporte de mantenimiento en disco para que el respaldo incluya archivos (la suite puede correr sola). */
+let reporteMantSha = null;
 {
   const inspeccion = { checklist: Array.from({ length: 7 }, (_, i) => ({ requisito: `Requisito ${i + 1}`, estado: i === 6 ? "NA" : "C", observacion: null })), observaciones_generales: null };
   const id = `RESP-${sufijo}`;
@@ -106,27 +108,38 @@ const sufijo = Date.now().toString(36).toUpperCase().slice(-5);
   const A = (await api("POST", "/samples/analysis", { tipo_analisis: "toxinas_lipofilicas", metodo: "hplc_ms_ms", extraccion_id: E, fecha_analisis: "2026-09-20", analista_nombre: "QA", resultados: [{ id_muestra: id, resultado: 50, unidad: "µg/kg", limite_regulatorio: 160, cumple: "cumple" }] }, QA)).data?.id;
   const r = await adjuntarEvidencia(BASE, QA, A);
   check("datos: un analisis con evidencia en disco", r.status === 201, `${r.status}`);
+  // Y un reporte PDF de mantenimiento (lo adjunta la Administradora Auxiliar).
+  const tC = await login("carmen.aguilar@ficotox.local");
+  // Equipo propio: programar un mantenimiento pone el equipo «En mantenimiento» (no se toca el de los datos de apoyo).
+  const equipoId = (await api("POST", "/inventory/equipos", { nombre: "Equipo respaldo", clave_bitacora: `FX-TCB-RS${sufijo}`, estado: "operativo" }, QA)).data?.id;
+  const M = (await api("POST", "/inventory/mantenimientos", { id_equipo: equipoId, tipo: "preventivo", fecha_programada: "2027-04-01", estado: "programado" }, tC)).data?.id;
+  const pdf = await pdfConTexto(1, "Reporte de servicio para el respaldo");
+  const fd = new FormData();
+  fd.append("archivo", new Blob([pdf]), "servicio.pdf");
+  fd.append("id_mantenimiento", String(M));
+  const rm = await fetch(`${BASE}/documents/maintenance-report`, { method: "POST", headers: { Authorization: `Bearer ${tC}` }, body: fd });
+  reporteMantSha = (await rm.json().catch(() => ({})))?.sha256 || null;
+  check("datos: un reporte PDF de mantenimiento en disco", rm.status === 201 && reporteMantSha === awaitCrypto.createHash("sha256").update(pdf).digest("hex"), `${rm.status}`);
 }
 
-/* ---------- Pantalla Respaldos: permisos ---------- */
+/* ---------- Respaldo por linea de comandos y permisos de Calidad › Respaldos ---------- */
 let respaldoId = null;
 {
-  const [j, p, l, a] = await Promise.all([tJ, tP, tL, tA].map((t) => api("GET", "/respaldos", undefined, t)));
-  check("Jorge (usuarios:G) ve los respaldos y puede crear; Patricia (calidad:V) y Ana solo lectura; Luis 403", j.status === 200 && j.data?.puede_crear === true && p.status === 200 && p.data?.puede_crear === false && a.status === 200 && l.status === 403, `${j.status}/${j.data?.puede_crear} ${p.status}/${p.data?.puede_crear} ${a.status} ${l.status}`);
-  const pCrea = await api("POST", "/respaldos", {}, tP);
-  check("Patricia no crea respaldos (403)", pCrea.status === 403, `${pCrea.status}`);
-  const sinReauth = await api("POST", "/respaldos", {}, tJ, { "X-Sin-Reauth-Auto": "1" });
-  check("crear respaldo exige reautenticacion (401)", sinReauth.status === 401 && sinReauth.data?.codigo === "reauth_required", `${sinReauth.status}`);
-  const crea = await api("POST", "/respaldos", {}, tJ);
-  respaldoId = crea.data?.id;
-  check("con el servidor encendido, Jorge crea un respaldo (201)", crea.status === 201 && !!respaldoId, `${crea.status} ${crea.data?.message}`);
-  const bitacora = (await api("GET", "/audit?accion=respaldar&limit=5", undefined, QA)).data?.items || [];
-  check("el respaldo queda en la bitacora", bitacora.some((e) => e.referencia === respaldoId), `${bitacora.length}`);
-  const lista = (await api("GET", "/respaldos", undefined, tP)).data;
-  check("la lista muestra el respaldo (con llave, sin verificar) y el aviso de prueba de restauracion", lista?.respaldos?.[0]?.id === respaldoId && lista.respaldos[0].incluye_llave === true && lista.respaldos[0].verificacion === null && lista.avisos?.some((x) => x.tipo === "sin_prueba"), JSON.stringify(lista?.avisos));
+  const lista = await api("GET", "/respaldos", undefined, tJ);
+  const sinPermiso = await api("GET", "/respaldos", undefined, QA);
+  const crearSinPermiso = await api("POST", "/respaldos", {}, QA);
+  check("Calidad › Respaldos: el administrador técnico (respaldos:V) ve la lista; quien no tiene el permiso recibe 403 al ver y al crear", lista.status === 200 && Array.isArray(lista.data?.respaldos) && lista.data?.puede_gestionar === true && sinPermiso.status === 403 && crearSinPermiso.status === 403, `${lista.status} ${sinPermiso.status} ${crearSinPermiso.status}`);
+  // Con el servidor encendido: npm run respaldar (snapshot en linea).
+  const r = script("respaldar-ficotox.mjs", ["--json"]);
+  try {
+    respaldoId = JSON.parse(r.out.trim().split("\n").filter((l) => l.startsWith("{")).pop() || "{}").id || null;
+  } catch {
+    respaldoId = null;
+  }
+  check("con el servidor encendido, npm run respaldar crea un respaldo", r.code === 0 && !!respaldoId, `${r.code} ${r.out.slice(0, 160)}`);
   const noti = (await api("GET", "/notificaciones", undefined, tJ)).data?.items || [];
-  const notiLuis = (await api("GET", "/notificaciones", undefined, tL)).data?.items || [];
-  check("la campana avisa a Jorge de la prueba de restauracion pendiente (a Luis no)", noti.some((n) => n.tipo === "prueba_restauracion") && !notiLuis.some((n) => n.href === "/administracion/respaldos"), `${noti.map((n) => n.tipo).join(",")}`);
+  const notiSin = (await api("GET", "/notificaciones", undefined, QA)).data?.items || [];
+  check("la campana avisa de respaldos solo a quien tiene respaldos:V (aquí: la prueba de restauración pendiente)", noti.some((n) => n.tipo === "respaldo") && !notiSin.some((n) => n.tipo === "respaldo"), `${noti.map((n) => n.tipo).join(",")} | ${notiSin.map((n) => n.tipo).join(",")}`);
 }
 
 const carpeta = path.join(BACKUPS, respaldoId || "sin-id");
@@ -142,6 +155,7 @@ const manifest = JSON.parse(fs.readFileSync(path.join(carpeta, "manifest.json"),
   check("manifest: fecha, host, commit, motor, bitacora (ultimo id y sello) y archivos con SHA-256", !!manifest.creado_en && !!manifest.host && manifest.motor === "sqlite" && manifest.esquema_version >= 10 && !!manifest.bitacora.ultimo_hash && manifest.archivos.length > 0 && manifest.archivos.every((a) => /^[0-9a-f]{64}$/.test(a.sha256) && a.tamano >= 0) && manifest.archivos.some((a) => a.ruta.startsWith("archivos/evidencias/")), `${manifest.archivos.length} archivos, commit ${manifest.app?.commit?.slice(0, 7)}`);
   const llave = fs.readFileSync(path.join(carpeta, "llave", "llave-bitacora.txt"), "utf8").trim();
   const huella = (await import("node:crypto")).createHash("sha256").update(llave).digest("hex");
+  check("el reporte PDF de mantenimiento entra en el respaldo (archivos/maintenance_reports/, con su SHA-256)", !!reporteMantSha && manifest.archivos.some((a) => a.ruta.startsWith("archivos/maintenance_reports/") && a.sha256 === reporteMantSha), `${manifest.archivos.filter((a) => a.ruta.startsWith("archivos/maintenance_reports/")).length} archivo(s)`);
   check("la llave va aparte (llave/) y el manifest solo guarda su huella", manifest.llave.incluida === true && manifest.llave.huella === huella && !JSON.stringify(manifest).includes(llave), `${manifest.llave.origen}`);
   const env = leerEnv();
   const secretos = [env.JWT_SECRET, process.env.JWT_SECRET, env.SMTP_PASS, env.FICOTOX_GRAPH_CLIENT_SECRET].filter((v) => v && v.length >= 8);
@@ -157,12 +171,34 @@ let destinoPrueba = null;
   const acta = actaDe(BACKUPS, r.out);
   check("restauracion en modo prueba: exit 0, 8 verificaciones ✅ y acta .md/.json", r.code === 0 && acta?.resultado === "aprobada" && acta.verificaciones.length === 8 && acta.verificaciones.every((v) => v.ok) && acta.modo === "prueba", `${r.code} ${acta?.resultado} ${r.out.split("\n").filter((l) => l.startsWith("❌")).join(" | ")}`);
   check("el modo prueba no toca la instancia real de prueba y deja la copia en el destino", fs.existsSync(path.join(destinoPrueba, "ficotox.sqlite3")) && fs.existsSync(path.join(destinoPrueba, "evidencias")), destinoPrueba);
-  const lista = (await api("GET", "/respaldos", undefined, tJ)).data;
-  check("la pantalla muestra la prueba (resultado, responsable) y el respaldo como verificado", lista?.ultima_prueba?.resultado === "aprobada" && lista.ultima_prueba.responsable === "Administrador técnico (pruebas)" && lista.respaldos.find((x) => x.id === respaldoId)?.verificacion?.resultado === "aprobada" && !lista.avisos.some((x) => x.tipo === "sin_prueba"), JSON.stringify(lista?.ultima_prueba));
-  const md = await api("GET", `/respaldos/actas/${lista?.ultima_prueba?.archivo}`, undefined, tP);
-  check("el acta se descarga (Patricia, solo lectura) y trae verificaciones y conclusion", md.status === 200 && /Acta de prueba de restauración/.test(md.data) && /✅/.test(md.data) && /Conclusión/.test(md.data), `${md.status}`);
-  const traversal = await api("GET", "/respaldos/actas/..%2F..%2Fmanifest", undefined, tJ);
-  check("el nombre del acta se valida (sin rutas)", traversal.status === 404, `${traversal.status}`);
+  check("la restauración copia y verifica los reportes PDF de mantenimiento (verificación 7)", fs.existsSync(path.join(destinoPrueba, "maintenance_reports")) && /reportes PDF de mantenimiento: [1-9]\d* \(0 faltante\(s\), 0 alterado\(s\)\)/.test(verif(acta, 7)?.detalle || ""), `${(verif(acta, 7)?.detalle || "").split("; ").find((x) => x.startsWith("reportes PDF")) || "sin grupo"}`);
+  // Documentos SGC: el respaldo incluye instance/sgc/ con huellas y la restauracion la copia y verifica (paso 7).
+  check("Documentos SGC: el respaldo incluye sus archivos (con SHA-256) y la restauración los copia y verifica", manifest.archivos.some((a) => a.ruta.startsWith("archivos/sgc/")) && fs.existsSync(path.join(destinoPrueba, "sgc")) && verif(acta, 7)?.ok === true && /Documentos SGC/i.test(verif(acta, 7)?.detalle || ""), `${verif(acta, 7)?.detalle}`);
+}
+
+/* ---------- Probar restauracion desde la plataforma: la copia se borra al terminar ---------- */
+// El servidor de prueba tiene la instancia en instance/test (FICOTOX_INSTANCE_DIR, no la raiz del proyecto): el script deja
+// la copia junto a esa carpeta y el servidor debe borrarla con la misma regla. Solo se toca la copia de esta prueba.
+{
+  const restauradas = carpetaRestauradas(TEST_DIR);
+  const inicio = await api("POST", `/respaldos/${respaldoId}/probar`, {}, tJ);
+  let trabajo = inicio.data?.trabajo || null;
+  for (let i = 0; i < 600 && inicio.status === 202 && trabajo?.estado === "en_curso"; i += 1) {
+    await new Promise((r) => setTimeout(r, 500));
+    trabajo = (await api("GET", "/respaldos/estado", undefined, tJ)).data?.trabajo || trabajo;
+  }
+  let acta = null;
+  try {
+    acta = JSON.parse(fs.readFileSync(path.join(BACKUPS, "pruebas-restauracion", `${trabajo?.acta}.json`), "utf8"));
+  } catch {
+    acta = null;
+  }
+  const destino = acta?.destino ? path.resolve(acta.destino) : null;
+  const dentro = !!destino && destino.startsWith(restauradas + path.sep);
+  const quedo = !!destino && fs.existsSync(destino);
+  check("«Probar restauración» con la instancia en otra carpeta: aprobada y no deja la copia en instance-restaurada/ (junto a la instancia)", inicio.status === 202 && trabajo?.resultado === "aprobada" && dentro && !quedo, `${inicio.status} ${trabajo?.estado}/${trabajo?.resultado} destino=${destino} ${quedo ? "QUEDÓ" : "borrada"}`);
+  // Si la plataforma no la borro, la prueba limpia su propia copia (nunca otras de esa carpeta).
+  if (dentro && quedo) fs.rmSync(destino, { recursive: true, force: true });
 }
 
 /* ---------- Respaldo alterado, llave distinta y sin llave ---------- */
@@ -174,6 +210,19 @@ let destinoPrueba = null;
   const r = script("restaurar-ficotox.mjs", ["--respaldo", alterado, "--destino", path.join(TEST_DIR, "restauradas", `alt-${sufijo}`), "--responsable", "Pruebas"]);
   const acta = actaDe(BACKUPS, r.out);
   check("un archivo del respaldo alterado -> falla la verificacion 1 (exit 1)", r.code === 1 && verif(acta, 1)?.ok === false && /alterado/.test(verif(acta, 1)?.detalle || ""), `${r.code} ${verif(acta, 1)?.detalle}`);
+
+  // Documentos SGC (CA-13): un PDF de sgc/ alterado en el respaldo tambien se detecta, y el manifest cuenta todas las tablas sgc_*.
+  const sgcArchivo = manifest.archivos.find((a) => a.ruta.startsWith("archivos/sgc/"));
+  if (sgcArchivo) {
+    const altSgc = path.join(TEST_DIR, "respaldos-alterados", `altsgc-${sufijo}`);
+    fs.cpSync(carpeta, altSgc, { recursive: true });
+    fs.appendFileSync(path.join(altSgc, ...sgcArchivo.ruta.split("/")), "x");
+    const rs = script("restaurar-ficotox.mjs", ["--respaldo", altSgc, "--destino", path.join(TEST_DIR, "restauradas", `altsgc-${sufijo}`), "--responsable", "Pruebas"]);
+    const actaS = actaDe(BACKUPS, rs.out);
+    check("un PDF de Documentos SGC alterado en el respaldo -> falla la verificacion 1 (SHA-256)", rs.code === 1 && verif(actaS, 1)?.ok === false && /alterado/.test(verif(actaS, 1)?.detalle || ""), `${rs.code} ${verif(actaS, 1)?.detalle}`);
+  } else check("un PDF de Documentos SGC alterado en el respaldo -> falla la verificacion 1 (SHA-256)", false, "el respaldo no trae archivos sgc/");
+  const tablasSgc = ["sgc_documentos", "sgc_revisiones", "sgc_archivos", "sgc_flujo_acciones", "sgc_solicitudes", "sgc_renovaciones", "sgc_externos", "sgc_distribucion", "sgc_lecturas"];
+  check("el manifest cuenta todas las tablas del módulo Documentos SGC (y se comparan al restaurar)", tablasSgc.every((t) => typeof manifest.conteos[t] === "number"), tablasSgc.filter((t) => typeof manifest.conteos[t] !== "number").join(","));
 
   const llaveFalsa = path.join(TEST_DIR, `llave-falsa-${sufijo}.txt`);
   fs.writeFileSync(llaveFalsa, "otra-llave-que-no-es-la-del-respaldo-000000\n");
@@ -296,6 +345,9 @@ let destinoPrueba = null;
   const quedan = fs.readdirSync(dir).filter((n) => /^\d{8}-\d{6}/.test(n)).sort();
   check("retencion (1): conserva el mas reciente y nunca borra el ultimo respaldo verificado (un acta de otra copia no cuenta)", quedan.length === 2 && quedan.includes(ids[0]) && quedan.includes(salida.id) && salida.eliminados.includes(ids[1]) && salida.eliminados.includes(ids[2]), `${ids.join(",")} -> ${quedan.join(",")}`);
 }
+
+// Las copias de restauracion de esta suite (todas en instance/test/restauradas) se borran al terminar.
+fs.rmSync(path.join(TEST_DIR, "restauradas"), { recursive: true, force: true });
 
 const failed = results.filter((r) => !r.ok).length;
 console.log(`\n${results.length - failed}/${results.length} pasos OK`);

@@ -155,7 +155,7 @@ export function DateInput({ id, value, onChange, disabled, readOnly, required, i
             setAbierto(true);
           }
         }}
-        className={cn(controlBase, small ? "h-8 text-[13px]" : "h-10 text-[14px]", "tnum pr-9", (invalid || mal) && "border-danger focus:border-danger focus:shadow-[0_0_0_4px_rgba(200,67,59,0.18)]")}
+        className={cn(controlBase, small ? "h-8 text-[13px]" : "h-10 text-[14px]", "tnum pr-9", (invalid || mal) && "border-danger focus:border-danger")}
       />
       <RadixPopover.Root open={abierto} onOpenChange={setAbierto}>
         <RadixPopover.Trigger asChild>
@@ -164,7 +164,7 @@ export function DateInput({ id, value, onChange, disabled, readOnly, required, i
           </button>
         </RadixPopover.Trigger>
         <RadixPopover.Portal>
-          <RadixPopover.Content align="end" sideOffset={6} collisionPadding={12} onOpenAutoFocus={(event) => event.preventDefault()} className="material z-50 origin-[var(--radix-popover-content-transform-origin)] rounded-[16px] p-3 shadow-panel outline-none data-[state=open]:animate-materialize data-[state=closed]:animate-dematerialize">
+          <RadixPopover.Content align="end" sideOffset={6} collisionPadding={12} onOpenAutoFocus={(event) => event.preventDefault()} className="bg-popover border border-line z-[var(--z-popover)] origin-[var(--radix-popover-content-transform-origin)] rounded-[16px] p-3 shadow-panel outline-none data-[state=open]:animate-materialize data-[state=closed]:animate-dematerialize">
             {abierto ? <Calendario valor={valor} min={min} max={max} onElegir={elegir} onCerrar={() => setAbierto(false)} /> : null}
           </RadixPopover.Content>
         </RadixPopover.Portal>
@@ -279,7 +279,7 @@ function Calendario({ valor, min, max, onElegir, onCerrar }: { valor: string; mi
                     aria-label={`${Number(iso.slice(8))} de ${MESES[mes - 1]} de ${anio}`}
                     onClick={() => !fuera(iso) && onElegir(iso)}
                     onFocus={() => setFoco(iso)}
-                    className={cn(boton, "mx-auto", iso === valor ? "bg-brand text-white" : iso === hoy ? "font-semibold text-brand hover:bg-surface-3" : "text-ink hover:bg-surface-3", fuera(iso) && "cursor-not-allowed text-ink-4 hover:bg-transparent")}
+                    className={cn(boton, "mx-auto", iso === valor ? "bg-brand text-on-accent" : iso === hoy ? "font-semibold text-brand hover:bg-surface-3" : "text-ink hover:bg-surface-3", fuera(iso) && "cursor-not-allowed text-ink-4 hover:bg-transparent")}
                   >
                     {Number(iso.slice(8))}
                   </button>

@@ -62,9 +62,53 @@ export function useParamChange(name: string, onChange: (value: string) => void):
   }, [value]);
 }
 
+/* Como `useParamChange`, pero para varios parametros a la vez (avisa una vez por cambio de cualquiera de ellos). */
+export function useParamsChange(names: string[], onChange: () => void): void {
+  const params = useSearchParams();
+  const firma = names.map((name) => params.get(name) || "").join("\u0001");
+  const first = useRef(true);
+  const handler = useRef(onChange);
+  useEffect(() => {
+    handler.current = onChange;
+  });
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    handler.current();
+  }, [firma]);
+}
+
 export function useOpenState<T = null>() {
   const [state, setState] = useState<{ isOpen: boolean; key: number; payload: T | null }>({ isOpen: false, key: 0, payload: null });
   const open = useCallback((payload: T | null = null) => setState((prev) => ({ isOpen: true, key: prev.key + 1, payload })), []);
   const close = useCallback(() => setState((prev) => ({ ...prev, isOpen: false })), []);
   return { isOpen: state.isOpen, key: state.key, payload: state.payload, open, close };
+}
+
+/*
+ * ?abrir=<id>: abre la ventana de detalle de ese registro en cuanto la lista
+ * termina de cargar (lo usa el Inicio para que cada pendiente abra la misma
+ * ventana que su lista). Luego se limpia de la direccion.
+ */
+export function useAbrirDesdeUrl<T extends { id?: unknown }>(filas: T[] | null | undefined, abrir: (indice: number) => void, parametro = "abrir"): void {
+  const params = useSearchParams();
+  const router = useRouter();
+  const valor = params.get(parametro);
+  const abrirRef = useRef(abrir);
+  useEffect(() => {
+    abrirRef.current = abrir;
+  });
+  useEffect(() => {
+    if (!valor || !filas) return;
+    const indice = filas.findIndex((fila) => String(fila.id) === valor);
+    void Promise.resolve().then(() => {
+      if (indice >= 0) abrirRef.current(indice);
+      const next = new URLSearchParams(params.toString());
+      next.delete(parametro);
+      const query = next.toString();
+      router.replace(query ? `?${query}` : window.location.pathname, { scroll: false });
+    });
+  }, [valor, filas, params, router, parametro]);
 }

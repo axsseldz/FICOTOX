@@ -1,9 +1,11 @@
 import { requireUser } from "../auth";
+import { documentosOcultos } from "./sgc/acceso";
 import { exigirVerRegistro } from "../acceso-registro";
-import { advertenciaLlaveBitacora, origenLlaveBitacora, registrarAuditoria, verifyAuditChain } from "../audit";
-import { AUDIT_ACTIONS, AUDIT_ENTITIES } from "../../shared/sgc";
-import { formatearFechaHora, hoyLocal } from "../../shared/fechas";
-import { type Row } from "../db";
+import { advertenciaLlaveBitacora, origenLlaveBitacora, registrarAuditoria, verifyAuditChain, type AuditVerification } from "../audit";
+import { type Row, type Session } from "../db";
+import { incidenciaPorAlertaIntegridad } from "./calidad/automaticas";
+import { alertasDeRespaldo } from "./respaldos";
+import { exportacionBitacoraRetirada } from "../retirado";
 import { json, type RouteContext } from "../http";
 import { cargarAutorizacion, finDiaLocal, inicioDiaLocal, permisoDe, requirePermission, soloEstado, type Autorizacion } from "../rbac";
 import type { Modulo } from "../../shared/permisos";
@@ -74,6 +76,9 @@ const ENTITY_MODULE: Record<string, Modulo> = {
   muestras_analisis: "ensayos",
   informes: "informes",
   documentos_sgc: "documentos",
+  biblioteca_documentos: "documentos",
+  biblioteca_categorias: "documentos",
+  sgc_documentos: "documentos",
   reportes_mantenimiento: "equipos",
   reactivos: "inventario",
   consumibles: "inventario",
@@ -87,10 +92,9 @@ const ENTITY_MODULE: Record<string, Modulo> = {
   suspensiones: "calidad",
 };
 
-/* Filas por archivo CSV de la bitacora (Fase 12): mas alla, exportacion por periodos. */
-export const LIMITE_CSV = Number.parseInt(process.env.BITACORA_CSV_MAX_FILAS || "", 10) > 0 ? Number.parseInt(String(process.env.BITACORA_CSV_MAX_FILAS), 10) : 50_000;
-
 export async function listAudit({ request, s }: RouteContext): Promise<Response> {
+  // Decision confirmada por el laboratorio: la bitacora no se exporta; se consulta solo dentro de la plataforma.
+  if (searchParam(request, "formato")) return exportacionBitacoraRetirada();
   const user = await requireUser(request);
   const entidad = searchParam(request, "entidad");
   const entidadId = searchParam(request, "entidad_id");
@@ -108,21 +112,24 @@ export async function listAudit({ request, s }: RouteContext): Promise<Response>
   const search = searchParam(request, "search");
   const desde = searchParam(request, "desde");
   const hasta = searchParam(request, "hasta");
-  const csv = searchParam(request, "formato") === "csv";
-  // Fase 12: el CSV llega hasta 50 000 filas por archivo; si hay mas, se avisa (en el archivo, en los encabezados y en la interfaz)
-  // y se exporta por periodos (desde/hasta). Se pide una fila de mas para saber si se corto.
-  const limit = Math.min(Math.max(Number.parseInt(searchParam(request, "limit") || (csv ? String(LIMITE_CSV) : "200"), 10) || 200, 1), csv ? LIMITE_CSV : 1000);
+  // Se pide una fila de mas para saber si hay mas resultados.
+  const limit = Math.min(Math.max(Number.parseInt(searchParam(request, "limit") || "200", 10) || 200, 1), 1000);
   // Fase 9: filtro por modulo (las entidades cuyo historial pertenece a ese modulo).
   const moduloFiltro = searchParam(request, "modulo");
   /*
    * Filtros de solo lectura para la vista de /auditoria (no cambian la bitacora):
-   * `acciones` (lista separada por comas: categoria de acciones), `sin_accesos=1`
-   * (oculta inicios de sesion y reautenticaciones; siguen en la bitacora y en el
-   * CSV) y `antes_de` (id: pagina siguiente, del mas reciente al mas antiguo).
+   * `acciones` (lista separada por comas: tipos de actividad), `usuarios` (correos
+   * separados por comas), `entidades` (registros de las areas elegidas),
+   * `sin_accesos=1` (oculta inicios de sesion y reautenticaciones; siguen en la
+   * bitacora) y `antes_de` (id: pagina siguiente, del mas reciente al mas antiguo).
    */
-  const accionesLista = searchParam(request, "acciones").split(",").map((a) => a.trim()).filter((a) => /^[a-z_]{2,40}$/.test(a)).slice(0, 60);
-  const sinAccesos = !csv && searchParam(request, "sin_accesos") === "1";
+  const accionesLista = searchParam(request, "acciones").split(",").map((a) => a.trim()).filter((a) => /^[a-z_]{2,40}$/.test(a)).slice(0, 80);
+  const usuariosLista = searchParam(request, "usuarios").split(",").map((u) => u.trim()).filter((u) => u && u.length <= 200).slice(0, 100);
+  const entidadesLista = searchParam(request, "entidades").split(",").map((e) => e.trim()).filter((e) => /^[a-z_]{2,40}$/.test(e)).slice(0, 40);
+  const sinAccesos = searchParam(request, "sin_accesos") === "1";
   const antesDe = Number.parseInt(searchParam(request, "antes_de") || "0", 10) || 0;
+  // Documentos SGC restringidos o confidenciales que la persona no puede ver: sus eventos no se listan.
+  const ocultos = await documentosOcultos(s, auth);
   const entidadesModulo = moduloFiltro ? Object.entries(ENTITY_MODULE).filter(([, m]) => m === moduloFiltro).map(([e]) => e) : [];
 
   const rows = await s.query<Row>(
@@ -134,13 +141,16 @@ export async function listAudit({ request, s }: RouteContext): Promise<Response>
       AND (:entidad_id = '' OR entidad_id = :entidad_id)
       AND (:accion = '' OR accion = :accion)
       AND (:usuario = '' OR usuario_email LIKE :usuario_like OR usuario_nombre LIKE :usuario_like)
-      AND (:search = '' OR referencia LIKE :search_like OR (motivo LIKE :search_like${calidadTotal(auth) || historialCalidad ? "" : ` AND NOT ${SQL_SENSIBLE_CALIDAD}`}))
+      AND (:search = '' OR referencia LIKE :search_like OR usuario_nombre LIKE :search_like OR (motivo LIKE :search_like${calidadTotal(auth) || historialCalidad ? "" : ` AND NOT ${SQL_SENSIBLE_CALIDAD}`}))
       AND (:desde = '' OR fecha_hora >= :desde_ini)
       AND (:hasta = '' OR fecha_hora <= :hasta_fin)
       ${moduloFiltro ? `AND entidad IN (${entidadesModulo.map((e) => `'${e}'`).join(", ") || "''"})` : ""}
       ${accionesLista.length ? `AND accion IN (${accionesLista.map((_, i) => `:acc${i}`).join(", ")})` : ""}
+      ${usuariosLista.length ? `AND usuario_email IN (${usuariosLista.map((_, i) => `:usr${i}`).join(", ")})` : ""}
+      ${entidadesLista.length ? `AND entidad IN (${entidadesLista.map((_, i) => `:ent${i}`).join(", ")})` : ""}
       ${sinAccesos ? "AND accion NOT IN ('login', 'login_fallido', 'reauth_fallida', 'cerrar_sesiones')" : ""}
       ${antesDe ? "AND id < :antes_de" : ""}
+      ${ocultos.length ? `AND NOT (entidad = 'sgc_documentos' AND entidad_id IN (${ocultos.map((_, i) => `:oc${i}`).join(", ")}))` : ""}
     ORDER BY id DESC
     LIMIT ${limit + 1}
     `,
@@ -158,47 +168,16 @@ export async function listAudit({ request, s }: RouteContext): Promise<Response>
       hasta_fin: /^\d{4}-\d{2}-\d{2}$/.test(hasta) ? finDiaLocal(hasta) : hasta ? `${hasta}T23:59:59.999Z` : "",
       antes_de: antesDe,
       ...Object.fromEntries(accionesLista.map((a, i) => [`acc${i}`, a])),
+      ...Object.fromEntries(usuariosLista.map((u, i) => [`usr${i}`, u])),
+      ...Object.fromEntries(entidadesLista.map((e, i) => [`ent${i}`, e])),
+      ...Object.fromEntries(ocultos.map((o, i) => [`oc${i}`, o])),
     },
   );
   const truncado = rows.length > limit;
   if (truncado) rows.length = limit;
   const total = calidadTotal(auth) || historialCalidad;
   const items = rows.map((row) => sinMotivoDeCalidad(recortar(serialize(row), historialCalidad || datosVisibles(auth, row.entidad)), total));
-  if (csv) {
-    // Fase 9: exportacion para auditoria, con los mismos filtros y alcances; queda en la bitacora.
-    await registrarAuditoria(s, user, { accion: "exportar", entidad: entidad && entidadId ? entidad : "auditoria", entidadId: entidad && entidadId ? entidadId : null, referencia: entidad && entidadId ? `Historial ${AUDIT_ENTITIES[entidad] || entidad} #${entidadId}` : "Bitácora", detalle: { formato: "csv", filas: items.length, truncado, filtros: { entidad, entidad_id: entidadId, accion, usuario, search, desde, hasta, modulo: moduloFiltro } } });
-    await s.commit();
-    // Una celda que empieza con =, +, -, @, tab o retorno se neutraliza con ' (inyeccion de formulas en hojas de calculo).
-    const celda = (v: unknown) => {
-      const texto = String(v ?? "");
-      return `"${(/^[=+\-@\t\r]/.test(texto) ? `'${texto}` : texto).replace(/"/g, '""')}"`;
-    };
-    const lineas = [["Fecha y hora", "Usuario", "Correo", "Acción", "Módulo", "Registro", "Referencia", "Motivo", "Cambios"].map(celda).join(",")];
-    for (const item of items) {
-      const entidadItem = String(item.entidad || "");
-      lineas.push([formatearFechaHora(item.fecha_hora), item.usuario_nombre || "sistema", item.usuario_email, AUDIT_ACTIONS[String(item.accion)] || item.accion, ENTITY_MODULE[entidadItem] || AUDIT_ENTITIES[entidadItem] || entidadItem, `${AUDIT_ENTITIES[entidadItem] || entidadItem}${item.entidad_id ? ` #${item.entidad_id}` : ""}`, item.referencia, item.motivo, item.datos_restringidos ? "(datos restringidos por tu alcance)" : cambiosLegibles(item.cambios)].map(celda).join(","));
-    }
-    // Nunca se corta en silencio: la ultima fila lo dice y los encabezados lo informan a la interfaz.
-    if (truncado) lineas.push([`AVISO: exportación PARCIAL, cortada en ${items.length} filas (hay más registros). Exporta por periodo con los filtros Desde/Hasta para obtener el resto.`].map(celda).join(","));
-    return new Response(`\uFEFF${lineas.join("\r\n")}\r\n`, { status: 200, headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="bitacora-${hoyLocal()}${truncado ? "-parcial" : ""}.csv"`, "X-Bitacora-Filas": String(items.length), "X-Bitacora-Truncado": truncado ? "1" : "0", "Access-Control-Expose-Headers": "X-Bitacora-Filas, X-Bitacora-Truncado" } });
-  }
   return json({ items, total: rows.length, truncado });
-}
-
-/* Cambios en texto legible: "campo: antes → despues; ..." y el detalle como "clave=valor". */
-function cambiosLegibles(cambios: unknown): string {
-  if (!cambios || typeof cambios !== "object") return "";
-  const texto = (v: unknown): string => (v === null || v === undefined || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v).slice(0, 120) : String(v).slice(0, 120));
-  const partes: string[] = [];
-  for (const [campo, valor] of Object.entries(cambios as Record<string, unknown>)) {
-    if (campo === "_detalle" && valor && typeof valor === "object") {
-      for (const [k, v] of Object.entries(valor as Record<string, unknown>)) partes.push(`${k}=${texto(v)}`);
-    } else if (valor && typeof valor === "object" && ("antes" in (valor as object) || "despues" in (valor as object))) {
-      const par = valor as { antes?: unknown; despues?: unknown };
-      partes.push(`${campo}: ${texto(par.antes)} → ${texto(par.despues)}`);
-    } else partes.push(`${campo}: ${texto(valor)}`);
-  }
-  return partes.join("; ");
 }
 
 export async function getAuditEntry({ request, s, params }: RouteContext): Promise<Response> {
@@ -208,6 +187,7 @@ export async function getAuditEntry({ request, s, params }: RouteContext): Promi
   const id = Number.parseInt(String(params.id || ""), 10);
   const row = await s.queryOne<Row>("SELECT * FROM auditoria WHERE id = :id", { id });
   if (!row) return json({ message: "Registro no encontrado" }, 404);
+  if (row.entidad === "sgc_documentos" && (await documentosOcultos(s, auth)).includes(String(row.entidad_id))) return json({ message: "Registro no encontrado" }, 404);
   const item = {
     ...serialize(row),
     hash_anterior: row.hash_anterior,
@@ -217,12 +197,45 @@ export async function getAuditEntry({ request, s, params }: RouteContext): Promi
   return json({ item: sinMotivoDeCalidad(recortar(item, datosVisibles(auth, row.entidad)), calidadTotal(auth)) });
 }
 
-/* Integridad de la cadena de hashes (ISO/IEC 17025 7.11.3). */
+/*
+ * Clave de una alteracion de la cadena: identifica el hecho (primera entrada
+ * alterada o filas faltantes), para no repetir la alerta ni la incidencia en
+ * cada verificacion.
+ */
+const PREFIJO_ALERTA_BITACORA = "bitacora:";
+function claveAlteracion(r: AuditVerification): string {
+  return `${PREFIJO_ALERTA_BITACORA}${r.primer_error ?? "-"}:${r.filas_faltantes_intermedias ?? 0}:${r.filas_faltantes_al_final ?? 0}:${r.triggers_ok === false ? "sin-proteccion" : "ok"}`;
+}
+
+/* Alteracion detectada: alerta en la bitacora e incidencia automatica (una sola vez por hecho). */
+async function alertarAlteracionBitacora(s: Session, r: AuditVerification): Promise<void> {
+  const clave = claveAlteracion(r);
+  const ya = await s.scalar("SELECT id FROM auditoria WHERE accion = 'alerta_integridad' AND entidad = 'auditoria' AND referencia = :clave LIMIT 1", { clave });
+  if (!ya) await registrarAuditoria(s, null, { accion: "alerta_integridad", entidad: "auditoria", entidadId: null, referencia: clave, detalle: { primer_error: r.primer_error, filas_faltantes_intermedias: r.filas_faltantes_intermedias ?? 0, filas_faltantes_al_final: r.filas_faltantes_al_final ?? 0, triggers_ok: r.triggers_ok } });
+  await incidenciaPorAlertaIntegridad(s, { clave, descripcion: "La verificación automática detectó un posible cambio no autorizado en el registro de actividad (bitácora): pudo modificarse o borrarse información fuera de la plataforma.", registros: [] });
+  await s.commit();
+}
+
+/* Hay una alerta de la bitacora sin resolver (incidencia automatica abierta): para el Inicio y la campana. */
+/* La incidencia automatica abierta por un posible cambio no autorizado (id y cuando se reporto), si la hay. */
+export async function alertaBitacora(s: Session): Promise<Row | null> {
+  return (await s.queryOne<Row>("SELECT id, reportada_en FROM incidencias WHERE clave_automatica LIKE :prefijo AND estado IN ('reportada', 'en_evaluacion') ORDER BY id LIMIT 1", { prefijo: `alerta_integridad:${PREFIJO_ALERTA_BITACORA}%` })) ?? null;
+}
+
+/*
+ * Integridad de la cadena de hashes (ISO/IEC 17025 7.11.3). Corre en segundo
+ * plano al abrir Auditoría; si encuentra una alteracion, la registra y crea la
+ * incidencia automatica. La pantalla solo avisa cuando hay un problema.
+ */
 export async function verifyAudit({ request, s }: RouteContext): Promise<Response> {
   const user = await requireUser(request);
   await requirePermission(s, user, "calidad", "V");
-  // Origen de la llave (nunca la llave) y advertencias para /auditoria.
-  return json({ ...(await verifyAuditChain(s)), llave: { origen: origenLlaveBitacora(), advertencias: advertenciaLlaveBitacora() } });
+  const resultado = await verifyAuditChain(s);
+  if (!resultado.ok) await alertarAlteracionBitacora(s, resultado);
+  // Actas de restauracion con la verificacion 1 fallida (la pantalla Respaldos se retiro): alerta e incidencia automatica.
+  if (await alertasDeRespaldo(s)) await s.commit();
+  // Origen de la llave (nunca la llave) y advertencias para Respaldos y la verificacion de la instalacion.
+  return json({ ...resultado, llave: { origen: origenLlaveBitacora(), advertencias: advertenciaLlaveBitacora() } });
 }
 
 export async function auditSummary({ request, s }: RouteContext): Promise<Response> {

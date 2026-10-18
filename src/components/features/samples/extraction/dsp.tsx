@@ -3,6 +3,7 @@
 import { Field, FormGrid, Textarea } from "@/components/ui/Field";
 import { ChoiceCard, ChoiceGrid, FormCard } from "../FormLayout";
 import type { ExtractionProtocol, ProtocolContext, WeightColumnPair } from "./types";
+import { msg, type Problema } from "@/lib/client/mensajes";
 
 /*
  * Formato de extraccion DSP (FX-TCF-GME-D): toxinas lipofilicas / acido
@@ -50,11 +51,17 @@ export const DSP_PROTOCOL: ExtractionProtocol = {
     { id: "sec-aforo", label: "Aforo y filtrado" },
     { id: "sec-hidrolisis", label: "Hidrólisis", optional: true },
   ],
-  sectionComplete: (id, form) => {
+  reglas: (form) => {
     const any = (keys: string[]) => keys.some((key) => !!form.steps[key]);
     const pesos = (form.sampleRows || []).some((row) => !row.esBlanco && !!row.id.trim() && !!String(row.values.peso_muestra || "").trim());
-    if (id === "sec-extraccion") return any(["dsp3", "dsp4", "dsp6", "dsp7", "dsp8"]) && pesos;
-    if (id === "sec-aforo") return any(["dsp9", "dsp10", "dsp11", "dsp12", "dsp13", "dsp14"]);
+    const out: Problema[] = [];
+    if (!any(["dsp3", "dsp4", "dsp6", "dsp7", "dsp8"])) out.push({ campo: "e-paso-dsp3", mensaje: msg.marca("al menos un paso de la extracción (3 a 8)"), seccion: "sec-extraccion", grupo: "Extracción" });
+    if (!pesos) out.push({ campo: "e-pesos-peso_muestra", mensaje: msg.indica("el ID y el peso de al menos una submuestra"), seccion: "sec-extraccion", grupo: "Extracción" });
+    if (!any(["dsp9", "dsp10", "dsp11", "dsp12", "dsp13", "dsp14"])) out.push({ campo: "e-paso-dsp9", mensaje: msg.marca("al menos un paso del aforo y filtrado (9 a 14)"), seccion: "sec-aforo", grupo: "Aforo y filtrado" });
+    return out;
+  },
+  sectionComplete: (id, form) => {
+    const any = (keys: string[]) => keys.some((key) => !!form.steps[key]);
     if (id === "sec-hidrolisis") return form.fields.hidrolisis === "no" ? true : form.fields.hidrolisis === "si" ? any(["dsp15", "dsp16", "dsp17", "dsp18", "dsp19", "dsp20", "dsp21", "dsp22", "dsp23"]) : undefined;
     return undefined;
   },

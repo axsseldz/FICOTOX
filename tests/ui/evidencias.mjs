@@ -5,8 +5,6 @@
  *   vista previa en hoja lateral; anular con motivo y contraseña; mostrar
  *   anulados; enviar a revision; despues, solo lectura (sin zona de carga ni
  *   anular, pero con descarga).
- * - Administracion > Respaldos: Jorge la ve con "Crear respaldo ahora";
- *   Patricia en solo lectura; Luis no la ve (ni en el menu).
  * - Sin errores de consola.
  * Los datos se preparan por la API.
  */
@@ -29,8 +27,6 @@ const check = (name, ok, detail = "") => {
 };
 const stamp = Date.now().toString().slice(-6);
 const LUIS = "luis.castro@ficotox.local";
-const JORGE = "jorge.ramirez@ficotox.local";
-const PATRICIA = "patricia.luna@ficotox.local";
 
 async function api(method, ruta, body, token) {
   const res = await fetch(`${API}${ruta}`, { method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
@@ -84,7 +80,7 @@ const mostrarTodo = async (page) => {
 const adjuntar = async (page, nombre, mimeType, buffer, descripcion, tipo) => {
   await page.locator('input[aria-label="Archivo de evidencia"]').setInputFiles({ name: nombre, mimeType, buffer });
   if (tipo) await page.locator(`select[id^="evidencia-tipo-"]`).selectOption(tipo);
-  await page.locator(`input[id^="evidencia-desc-"]`).fill(descripcion);
+  await page.locator(`textarea[id^="evidencia-desc-"]`).fill(descripcion);
   await page.getByRole("button", { name: "Adjuntar evidencia" }).click();
   await page.locator("[data-adjunto]").filter({ hasText: descripcion }).first().waitFor();
 };
@@ -145,10 +141,6 @@ try {
       const anular = await page.getByRole("button", { name: "Anular…" }).count();
       const descargar = await page.locator("[data-adjunto]").first().getByRole("button", { name: "Descargar" }).isEnabled();
       check("enviado a revisión: solo lectura (sin zona de carga ni anular) pero con descarga", zona === 0 && anular === 0 && descargar, `zona=${zona} anular=${anular} descargar=${descargar}`);
-      const menuRespaldos = await page.getByRole("link", { name: "Respaldos" }).count();
-      await page.goto(`${BASE}/administracion/respaldos`);
-      await page.getByText("Sin acceso a esta sección").waitFor();
-      check("Luis no ve Respaldos (ni en el menú)", menuRespaldos === 0);
     } catch (error) {
       await captura(page);
       throw error;
@@ -157,40 +149,6 @@ try {
     }
   }
 
-  /* ---------- Respaldos: Jorge y Patricia ---------- */
-  {
-    const { context, page } = await nueva();
-    try {
-      await entrar(page, JORGE, credenciales[JORGE]);
-      await page.goto(`${BASE}/administracion/respaldos`);
-      await page.getByRole("heading", { name: "Respaldos locales" }).waitFor();
-      await page.getByText("SQLite", { exact: true }).waitFor();
-      const nBoton = await page.getByRole("button", { name: "Crear respaldo ahora" }).count();
-      const nInstr = await page.getByText("npm run restaurar", { exact: false }).count();
-      check("Jorge ve Respaldos con 'Crear respaldo ahora' y las instrucciones de restauración", nBoton === 1 && nInstr > 0, `boton=${nBoton} instrucciones=${nInstr}`);
-      check("Respaldos aparece en el menú de Administración para Jorge", (await page.getByRole("link", { name: "Respaldos" }).count()) > 0);
-    } catch (error) {
-      await captura(page);
-      throw error;
-    } finally {
-      await context.close();
-    }
-  }
-  {
-    const { context, page } = await nueva();
-    try {
-      await entrar(page, PATRICIA, credenciales[PATRICIA]);
-      await page.goto(`${BASE}/administracion/respaldos`);
-      await page.getByRole("heading", { name: "Respaldos locales" }).waitFor();
-      await page.getByText("SQLite", { exact: true }).waitFor();
-      check("Patricia ve Respaldos en solo lectura (sin 'Crear respaldo ahora')", (await page.getByRole("button", { name: "Crear respaldo ahora" }).count()) === 0 && (await page.getByText("Solo lectura").count()) > 0);
-    } catch (error) {
-      await captura(page);
-      throw error;
-    } finally {
-      await context.close();
-    }
-  }
 } finally {
   await browser.close();
 }

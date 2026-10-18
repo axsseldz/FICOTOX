@@ -1,5 +1,5 @@
 import { REACTIVO_TYPES, type ReactivoTypeConfig } from "./constants";
-import { fmt, parseNumberOrNull } from "./format";
+import { parseNumberOrNull } from "./format";
 import type { ApiRecord } from "./types";
 
 /* Helpers de reactivos identicos a los de el app.js de la interfaz original. */
@@ -52,19 +52,6 @@ export const getReactivoStockInfo = (item: ApiRecord): { current: number | null;
     parseNumberOrNull(item.amount_in_stock) ??
     current;
   return { current, max, unit };
-};
-
-const hasValue = (value: unknown) => value !== null && value !== undefined && value !== "";
-
-export const getReactivoStockText = (item: ApiRecord): string => {
-  if (hasValue(item.restante_190126)) return `${fmt(item.restante_190126)} L restantes`;
-  if (hasValue(item.total_litros_2025)) return `${fmt(item.total_litros_2025)} L`;
-  if (hasValue(item.amount_in_stock)) return fmt(item.amount_in_stock);
-  if (hasValue(item.capacidad_litros)) return `${fmt(item.capacidad_litros)} L`;
-  if (hasValue(item.capacidad_kilos)) return `${fmt(item.capacidad_kilos)} kg`;
-  if (hasValue(item.volumen)) return `${fmt(item.volumen)} volumen`;
-  if (hasValue(item.piezas)) return `${fmt(item.piezas)} piezas`;
-  return "-";
 };
 
 /* Todo lo que necesita el medidor de un reactivo, con la regla de "bajo" compartida. */

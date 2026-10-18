@@ -1,3 +1,4 @@
+import { formatearFolio } from "../shared/folios";
 import type { CurrentUser } from "./auth";
 import { registrarAuditoria, snapshotRow } from "./audit";
 import { esConflictoDeFolio, type Row, type Session } from "./db";
@@ -34,7 +35,7 @@ const LABEL: Record<SampleTable, string> = {
 };
 
 /* Las tablas heredadas usan el femenino ("anulada"); el analisis, el masculino. */
-export const ANULADO_VALUE: Record<SampleTable, string> = {
+const ANULADO_VALUE: Record<SampleTable, string> = {
   muestras_recepcion: "anulada",
   muestras_procesamiento: "anulada",
   muestras_extraccion: "anulada",
@@ -95,15 +96,15 @@ export function folioLabel(table: SampleTable, row: Row | null | undefined): str
   const prefix = table === "muestras_extraccion" ? String(row.tipo_registro || "E-A") : FOLIO_PREFIX[table];
   // Fase 5: las enmiendas de analisis conservan el folio con su version.
   const version = table === "muestras_analisis" && Number(row.version || 1) > 1 ? ` v${row.version}` : "";
-  return `${prefix} ${String(row.folio_num || 0).padStart(7, "0")}${version}`;
+  return `${formatearFolio(prefix, row.folio_num)}${version}`;
 }
 
-export function isAnulado(table: SampleTable, row: Row | null | undefined): boolean {
+function isAnulado(table: SampleTable, row: Row | null | undefined): boolean {
   return !!row && String(row.estado || "") === ANULADO_VALUE[table];
 }
 
 /* Un registro anulado, rechazado, cerrado o aprobado no se edita. */
-export function assertEditable(row: Row | null | undefined, table: SampleTable): void {
+function assertEditable(row: Row | null | undefined, table: SampleTable): void {
   if (!row) throw new HttpError(404, { message: "Registro no encontrado" });
   const estado = String(row.estado || "");
   if (isAnulado(table, row)) throw new HttpError(409, { message: `El registro ${folioLabel(table, row)} esta anulado y no se puede modificar` });
@@ -171,7 +172,7 @@ export function opcionesAnulacion(s: Session, table: SampleTable, id: number): {
               return false;
             }
           });
-          return usado ? `El analisis esta incluido en el informe IR ${String(usado.folio_num).padStart(7, "0")} autorizado; anula o enmienda el informe primero` : null;
+          return usado ? `El analisis esta incluido en el informe ${formatearFolio("IR", usado.folio_num)} autorizado; anula o enmienda el informe primero` : null;
         },
       };
   }
@@ -381,6 +382,9 @@ export function isFolioConflict(error: unknown): boolean {
 
 /* ---------- Inventario de una etapa ---------- */
 
+/* Etapa a la que se vincula el movimiento automatico (el acceso a ese folio ya lo valido el formato que consume). */
+const VINCULO_DE_PREFIJO: Record<string, string> = { PROC: "procesamiento", EXT: "extraccion", ANA: "analisis" };
+
 /*
  * Descuenta los insumos declarados en `uso_inventario_json` con referencias
  * `<prefijo>-<id>-INS-<n>`, para que la anulacion o la reedicion puedan
@@ -423,7 +427,7 @@ export async function applyStageInventory(
     if (!ref) continue;
     const clave = `${tipo}:${String(ref)}`;
     const previo = declaradosAntes.get(clave);
-    const options = { userId, motivo, referencia: `${prefix}-${id}-INS-${idx}`, permitirInactivo: previo !== undefined && (solicitado.get(clave) || 0) <= previo + 1e-9 };
+    const options = { userId, motivo, referencia: `${prefix}-${id}-INS-${idx}`, vinculoTipo: VINCULO_DE_PREFIJO[prefix] ?? null, vinculoId: VINCULO_DE_PREFIJO[prefix] ? id : null, permitirInactivo: previo !== undefined && (solicitado.get(clave) || 0) <= previo + 1e-9 };
     if (tipo === "reactivo") await consumeReactivo(s, ref, item.cantidad || 1, options);
     else if (tipo === "consumible") await consumeConsumible(s, ref, item.cantidad || 1, options);
   }

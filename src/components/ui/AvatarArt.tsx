@@ -296,12 +296,17 @@ export function resolveAvatarKey(avatar: unknown, seed: string): AvatarKey {
 }
 
 /* Dibuja el avatar; `seed` (correo o nombre) decide el avatar por omision. */
-export function AvatarArt({ avatar, seed, size = 36, className, title }: { avatar?: unknown; seed: string; size?: number; className?: string; title?: string }) {
+/*
+ * `animado`: "siempre" (la figura flota suave, p. ej. en la ventana de una
+ * persona), "al-pasar" (solo con el cursor sobre su renglon .group) o false.
+ * Respeta prefers-reduced-motion (globals.css).
+ */
+export function AvatarArt({ avatar, seed, size = 36, className, title, animado = false }: { avatar?: unknown; seed: string; size?: number; className?: string; title?: string; animado?: "siempre" | "al-pasar" | false }) {
   const key = resolveAvatarKey(avatar, seed);
   const def = AVATARS[key];
   const id = useId().replace(/:/g, "");
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" role={title ? "img" : undefined} aria-label={title} aria-hidden={title ? undefined : true} className={cn("shrink-0 select-none", className)}>
+    <svg width={size} height={size} viewBox="0 0 64 64" role={title ? "img" : undefined} aria-label={title} aria-hidden={title ? undefined : true} className={cn("shrink-0 select-none", animado === "siempre" && "avatar-vivo", animado === "al-pasar" && "avatar-al-pasar", className)}>
       <defs>
         <radialGradient id={`${id}-g`} cx="35%" cy="30%" r="80%">
           <stop offset="0%" stopColor={def.from} />
@@ -312,7 +317,9 @@ export function AvatarArt({ avatar, seed, size = 36, className, title }: { avata
         </clipPath>
       </defs>
       <circle cx="32" cy="32" r="32" fill={`url(#${id}-g)`} />
-      <g clipPath={`url(#${id}-c)`}>{def.art}</g>
+      <g clipPath={`url(#${id}-c)`}>
+        <g className="avatar-arte">{def.art}</g>
+      </g>
       <circle cx="32" cy="32" r="31.2" fill="none" stroke="#ffffff" strokeOpacity="0.35" strokeWidth="1.2" />
     </svg>
   );

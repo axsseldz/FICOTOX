@@ -27,7 +27,7 @@ export async function createAccessToken(payload: Record<string, unknown>): Promi
     .sign(secretKey());
 }
 
-export async function decodeAccessToken(token: string): Promise<CurrentUser> {
+async function decodeAccessToken(token: string): Promise<CurrentUser> {
   const { payload } = await jwtVerify(token, secretKey(), { algorithms: ["HS256"] });
   return payload as CurrentUser;
 }

@@ -45,9 +45,9 @@ const copia = (fixture, nombre) => {
   return destino;
 };
 const sha = (archivo) => createHash("sha256").update(fs.readFileSync(archivo)).digest("hex");
-const nueva = async () => {
+const nueva = async (hasta = Infinity) => {
   const db = M.adaptadorSqlite(new Sqlite(":memory:"));
-  for (const m of M.MIGRACIONES) await m.up(db, "sqlite");
+  for (const m of M.MIGRACIONES.filter((x) => x.version <= hasta)) await m.up(db, "sqlite");
   return M.esquemaDe(db);
 };
 const cadena = (conexion) => {
@@ -59,9 +59,44 @@ const cadena = (conexion) => {
 {
   const ref = new Sqlite(copia("fase11", "equivalencia.sqlite3"));
   ref.exec(firmas);
-  const dif = M.diferencias(await M.esquemaDe(M.adaptadorSqlite(ref)), await nueva());
+  // Hasta la migracion 12: la 13 agrega las tablas de la biblioteca (que el codigo anterior no tenia).
+  const dif = M.diferencias(await M.esquemaDe(M.adaptadorSqlite(ref)), await nueva(12));
   ref.close();
-  check("equivalencia: base nueva con migraciones = base del código anterior (Fase 11 + firmas_tokens)", dif.length === 0, dif.slice(0, 3).join("; "));
+  check("equivalencia: base nueva con migraciones 9–12 = base del código anterior (Fase 11 + firmas_tokens)", dif.length === 0, dif.slice(0, 3).join("; "));
+}
+
+/* ---------- Migracion 13: copia de Documentos SGC a la biblioteca ---------- */
+{
+  const inst = path.join(DIR, "biblioteca-inst");
+  fs.mkdirSync(path.join(inst, "documentos_sgc"), { recursive: true });
+  const archivo = path.join(inst, "ficotox.sqlite3");
+  fs.copyFileSync(path.join(root, "tests/fixtures/esquema-anterior-fase11.sqlite3"), archivo);
+  const conexion = new Sqlite(archivo);
+  conexion.exec(firmas);
+  const contenido = { "a1.pdf": "%PDF-1.4 revision 1\n", "a2.pdf": "%PDF-1.4 revision 2 vigente\n", "a3.pdf": "%PDF-1.4 revision 3 borrador\n", "b1.docx": "PK\u0003\u0004 docx" };
+  for (const [nombre, texto] of Object.entries(contenido)) fs.writeFileSync(path.join(inst, "documentos_sgc", nombre), texto);
+  const huella = (n) => createHash("sha256").update(contenido[n]).digest("hex");
+  const ins = conexion.prepare("INSERT INTO documentos_sgc (clave, revision, titulo, tipo, area, estado, archivo_nombre, archivo_original, archivo_sha256, creado_en) VALUES (?, ?, ?, ?, 'GC', ?, ?, ?, ?, '2026-09-01 10:00:00')");
+  ins.run("FX-GCP-CD", 1, "Control de documentos", "P", "obsoleto", "a1.pdf", "control.pdf", huella("a1.pdf"));
+  ins.run("FX-GCP-CD", 2, "Control de documentos", "P", "vigente", "a2.pdf", "control-r2.pdf", huella("a2.pdf"));
+  ins.run("FX-GCP-CD", 3, "Control de documentos (borrador)", "P", "borrador", "a3.pdf", "control-r3.pdf", huella("a3.pdf"));
+  ins.run("FX-GCI-IT", 1, "Instructivo sin vigente", "I", "por_aprobar", "b1.docx", "instructivo.docx", null);
+  ins.run("FX-GCF-SA", 1, "Formato sin archivo", "F", "vigente", null, null, null);
+  const antes = JSON.stringify(conexion.prepare("SELECT * FROM documentos_sgc ORDER BY id").all());
+  const r = await M.aplicarMigraciones(M.adaptadorSqlite(conexion), { Sqlite, clave: CLAVE, appCommit: "prueba", instanceDir: inst, respaldo: async () => "x" });
+  const docs = conexion.prepare("SELECT d.*, c.nombre AS categoria FROM biblioteca_documentos d LEFT JOIN biblioteca_categorias c ON c.id = d.categoria_id ORDER BY d.id").all();
+  const vers = conexion.prepare("SELECT * FROM biblioteca_versiones ORDER BY documento_id, numero").all();
+  const despues = JSON.stringify(conexion.prepare("SELECT * FROM documentos_sgc ORDER BY id").all());
+  const categorias = conexion.prepare("SELECT nombre FROM biblioteca_categorias ORDER BY orden").all().map((c) => c.nombre);
+  conexion.close();
+  const cd = docs.find((d) => d.clave === "FX-GCP-CD");
+  const vcd = vers.filter((v) => v.documento_id === cd?.id);
+  const actual = vcd.find((v) => v.id === cd?.version_actual_id);
+  const copiaOk = vcd.every((v) => fs.existsSync(path.join(inst, "biblioteca", v.nombre_almacenado)) && createHash("sha256").update(fs.readFileSync(path.join(inst, "biblioteca", v.nombre_almacenado))).digest("hex") === v.sha256);
+  check("migración 13: crea las categorías iniciales", categorias.join("|") === "Manual de Calidad|Procedimientos|Instructivos|Formatos|Normas y regulación|Artículos y referencias|Otros", categorias.join(","));
+  check("migración 13: copia los documentos con archivo (la revisión vigente como actual y las anteriores como versiones; el borrador posterior no)", r.aplicadas.some((m) => m.version === 13) && docs.length === 2 && cd?.titulo === "Control de documentos" && cd?.categoria === "Procedimientos" && vcd.length === 2 && actual?.numero === 2 && actual?.sha256 === huella("a2.pdf"), `${docs.length} ${vcd.length} ${actual?.numero}`);
+  check("  … sin vigente, la revisión más reciente; los archivos se copian a biblioteca/<id>/ con su SHA-256", docs.some((d) => d.clave === "FX-GCI-IT") && copiaOk);
+  check("  … y no toca las tablas del flujo anterior", antes === despues);
 }
 
 /* ---------- Linea base ---------- */
@@ -138,7 +173,7 @@ for (const [caso, sql] of [
   check("fallo a mitad de la migración 11: rollback (sin sus tablas ni su registro), el error trae el respaldo previo y el bloqueo se libera", error?.codigo === "fallo" && error.respaldo === "respaldo-pre-migracion" && respaldos.length === 1 && versiones.join() === "9,10" && !calidad && libre, `${error?.codigo} [${versiones}] calidad=${calidad}`);
   const r = await M.aplicarMigraciones(db, { Sqlite, clave: CLAVE, respaldo: async () => "otro" });
   conexion.close();
-  check("  … y al volver a correr termina lo que faltaba", r.aplicadas.map((m) => m.version).join() === "11,12", r.aplicadas.map((m) => m.version).join());
+  check("  … y al volver a correr termina lo que faltaba", r.aplicadas.map((m) => m.version).join() === M.MIGRACIONES.filter((m) => m.version >= 11).map((m) => m.version).join(), r.aplicadas.map((m) => m.version).join());
 }
 
 /* ---------- Checksum y version mayor ---------- */
@@ -185,7 +220,7 @@ for (const [caso, sql] of [
   const filas = c.prepare("SELECT COUNT(*) AS n FROM schema_migraciones").get().n;
   c.close();
   const aplico = [a, b].filter((x) => /Base en la versión/.test(x.salida)).length;
-  check("dos procesos migrando a la vez: solo uno aplica (el otro espera y encuentra la base al día)", a.code === 0 && b.code === 0 && aplico === 1 && entradas === 4 && filas === 4, `${a.code}/${b.code} aplicó=${aplico} entradas=${entradas}`);
+  check("dos procesos migrando a la vez: solo uno aplica (el otro espera y encuentra la base al día)", a.code === 0 && b.code === 0 && aplico === 1 && entradas === M.MIGRACIONES.length && filas === M.MIGRACIONES.length, `${a.code}/${b.code} aplicó=${aplico} entradas=${entradas}`);
 }
 
 /* ---------- Creacion inicial interrumpida (como en MySQL, donde el DDL de la 0009 se confirma solo) ---------- */
@@ -230,7 +265,7 @@ for (const [caso, sql] of [
     error = e;
   }
   const libre = conexion.prepare("SELECT pid FROM schema_migraciones_bloqueo WHERE id = 1").get().pid === null;
-  check("bloqueo de migración de antes del arranque del sistema con su pid vivo (reutilizado): se reconoce huérfano y se migra sin esperar", !error && r?.aplicadas.length === 2 && Date.now() - t0 < 4000 && libre, error?.message || `${Date.now() - t0} ms`);
+  check("bloqueo de migración de antes del arranque del sistema con su pid vivo (reutilizado): se reconoce huérfano y se migra sin esperar", !error && r?.aplicadas.length === M.MIGRACIONES.filter((m) => m.version > 10).length && Date.now() - t0 < 4000 && libre, error?.message || `${Date.now() - t0} ms`);
   conexion.close();
 }
 

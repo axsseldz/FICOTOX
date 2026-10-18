@@ -17,6 +17,8 @@ import { invalidate } from "@/lib/client/store";
 import { DESCRIPCION_MIN, EXTENSIONES_EVIDENCIA, extensionDe, fmtBytes } from "@/lib/shared/adjuntos";
 import { DESCRIPCION_INCIDENCIA_MIN, IMPACTOS, TIPOS_INCIDENCIA } from "@/lib/shared/calidad";
 import { horaLocal, hoyLocal, instanteDeFechaHoraLocal } from "@/lib/shared/fechas";
+import { CampoValidado, useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
+import { msg, type Problema } from "@/lib/client/mensajes";
 
 /*
  * Reportar incidencia (Fase 11): lo puede hacer cualquier persona con
@@ -100,7 +102,6 @@ function ReportarSheet({ registrosIniciales, onClose }: { registrosIniciales: Re
   const [registros, setRegistros] = useState(registrosIniciales);
   const [archivos, setArchivos] = useState<File[]>([]);
   const [enviando, setEnviando] = useState(false);
-  const [intentado, setIntentado] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
   const cerrar = () => {
@@ -109,19 +110,25 @@ function ReportarSheet({ registrosIniciales, onClose }: { registrosIniciales: Re
   };
 
   const ocurrencia = instanteDeFechaHoraLocal(fecha, hora);
-  const errores = {
-    tipo: !tipo ? "Elige el tipo" : null,
-    ocurrencia: !ocurrencia ? "Indica la fecha y la hora" : null,
-    descripcion: descripcion.trim().length < DESCRIPCION_INCIDENCIA_MIN ? `Describe qué pasó (al menos ${DESCRIPCION_INCIDENCIA_MIN} caracteres)` : null,
-  };
-  const valido = !Object.values(errores).some(Boolean);
+  const v = useValidacion({
+    titulo: "No se pudo reportar la incidencia",
+    reglas: () => {
+      const out: Problema[] = [];
+      if (!tipo) out.push({ campo: "inc-tipo", mensaje: msg.elige("el tipo de incidencia"), grupo: "Tipo" });
+      if (!fecha) out.push({ campo: "inc-fecha", mensaje: msg.indica("la fecha en que ocurrió"), grupo: "Cuándo ocurrió" });
+      if (!hora) out.push({ campo: "inc-hora", mensaje: msg.indica("la hora en que ocurrió"), grupo: "Cuándo ocurrió" });
+      else if (ocurrencia && Date.parse(ocurrencia) > Date.now() + 5 * 60_000) out.push({ campo: "inc-hora", mensaje: "La fecha y hora de ocurrencia no pueden ser futuras", grupo: "Cuándo ocurrió" });
+      if (descripcion.trim().length < DESCRIPCION_INCIDENCIA_MIN) out.push({ campo: "inc-desc", mensaje: `Describe qué pasó (al menos ${DESCRIPCION_INCIDENCIA_MIN} caracteres)`, grupo: "Qué pasó" });
+      return out;
+    },
+  });
 
   const agregarArchivos = (lista: FileList | null) => {
     const nuevos: File[] = [];
     for (const file of Array.from(lista || [])) {
       const ext = extensionDe(file.name);
       if (!(EXTENSIONES_EVIDENCIA as readonly string[]).includes(ext)) {
-        toast.error(`${file.name}: formato no permitido`);
+        v.avisar({ que: `«${file.name}» no se puede adjuntar: su formato no está permitido.`, hacer: "Elige una foto, un PDF, una hoja de cálculo o un CSV.", problemas: [{ campo: "inc-archivos-zona", mensaje: "Formato no permitido", grupo: "Fotos o archivos" }] });
         continue;
       }
       if (!file.size) continue;
@@ -132,9 +139,7 @@ function ReportarSheet({ registrosIniciales, onClose }: { registrosIniciales: Re
   };
 
   const enviar = async () => {
-    setIntentado(true);
-    if (!valido) return;
-    if (Date.parse(ocurrencia) > Date.now() + 5 * 60_000) return toast.error("La fecha y hora de ocurrencia no pueden ser futuras");
+    if (!v.validar()) return;
     setEnviando(true);
     try {
       const data = await sendJsonAuth("POST", `${API_BASE_URL}/calidad/incidencias`, token, {
@@ -166,7 +171,7 @@ function ReportarSheet({ registrosIniciales, onClose }: { registrosIniciales: Re
       });
       cerrar();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo reportar la incidencia");
+      v.errorServidor(err, { motivo: "inc-desc" });
     } finally {
       setEnviando(false);
     }
@@ -189,6 +194,7 @@ function ReportarSheet({ registrosIniciales, onClose }: { registrosIniciales: Re
         </>
       }
     >
+      <ValidacionAmbito v={v}>
       <div className="flex flex-col gap-5" data-reportar-incidencia>
         {registros.length ? (
           <Field label="Registros relacionados">
@@ -204,8 +210,8 @@ function ReportarSheet({ registrosIniciales, onClose }: { registrosIniciales: Re
             </div>
           </Field>
         ) : null}
-        <Field label="Tipo" htmlFor="inc-tipo" required error={intentado ? errores.tipo : null}>
-          <Select id="inc-tipo" value={tipo} onChange={(event) => setTipo(event.target.value)} invalid={intentado && !!errores.tipo}>
+        <Field label="Tipo" htmlFor="inc-tipo" required>
+          <Select id="inc-tipo" value={tipo} onChange={(event) => setTipo(event.target.value)}>
             <option value="">Elegir…</option>
             {TIPOS_INCIDENCIA.map((t) => (
               <option key={t.value} value={t.value}>
@@ -215,15 +221,15 @@ function ReportarSheet({ registrosIniciales, onClose }: { registrosIniciales: Re
           </Select>
         </Field>
         <FormGrid>
-          <Field label="¿Cuándo ocurrió?" htmlFor="inc-fecha" required error={intentado ? errores.ocurrencia : null}>
-            <DateInput id="inc-fecha" value={fecha} onChange={setFecha} max={hoyLocal()} invalid={intentado && !!errores.ocurrencia} />
+          <Field label="¿Cuándo ocurrió?" htmlFor="inc-fecha" required>
+            <DateInput id="inc-fecha" value={fecha} onChange={setFecha} max={hoyLocal()} />
           </Field>
           <Field label="Hora" htmlFor="inc-hora" required>
             <Input id="inc-hora" type="time" value={hora} onChange={(event) => setHora(event.target.value)} />
           </Field>
         </FormGrid>
-        <Field label="¿Qué pasó?" htmlFor="inc-desc" required error={intentado ? errores.descripcion : null} hint={`${descripcion.trim().length}/${DESCRIPCION_INCIDENCIA_MIN} caracteres mínimo`}>
-          <Textarea id="inc-desc" rows={4} value={descripcion} onChange={(event) => setDescripcion(event.target.value)} placeholder="Describe lo observado: qué, dónde, con qué equipo o muestra" invalid={intentado && !!errores.descripcion} />
+        <Field label="¿Qué pasó?" htmlFor="inc-desc" required hint={`${descripcion.trim().length}/${DESCRIPCION_INCIDENCIA_MIN} caracteres mínimo`}>
+          <Textarea id="inc-desc" rows={4} value={descripcion} onChange={(event) => setDescripcion(event.target.value)} placeholder="Describe lo observado: qué, dónde, con qué equipo o muestra" />
         </Field>
         <Field label="Acción inmediata" htmlFor="inc-accion" hint="Lo que se hizo en el momento (opcional).">
           <Textarea id="inc-accion" rows={2} value={accion} onChange={(event) => setAccion(event.target.value)} placeholder="Por ejemplo: se detuvo la corrida y se avisó a la coordinación" />
@@ -236,10 +242,12 @@ function ReportarSheet({ registrosIniciales, onClose }: { registrosIniciales: Re
           </ChoiceGrid>
         </Field>
         <Field label="Fotos o archivos" hint="Opcional; hasta 6. Se validan y guardan con su huella SHA-256.">
+          <CampoValidado id="inc-archivos-zona">
           <label htmlFor="inc-archivos" className="press flex cursor-pointer items-center justify-center gap-2 rounded-[12px] border border-dashed border-line-strong bg-surface-2 px-4 py-4 text-[13.5px] font-medium text-ink-2 hover:bg-surface-3">
             <Camera size={18} /> Agregar foto o archivo
             <input ref={input} id="inc-archivos" type="file" multiple accept={ACCEPT} className="sr-only" onChange={(event) => agregarArchivos(event.target.files)} />
           </label>
+          </CampoValidado>
           {archivos.length ? (
             <ul className="mt-2 flex flex-col gap-1.5">
               {archivos.map((file, i) => (
@@ -258,6 +266,7 @@ function ReportarSheet({ registrosIniciales, onClose }: { registrosIniciales: Re
         </Field>
         <Callout tone="info">Reportar no requiere visto bueno ni autorización: queda registrado a tu nombre con fecha y hora.</Callout>
       </div>
+      </ValidacionAmbito>
     </Sheet>
   );
 }

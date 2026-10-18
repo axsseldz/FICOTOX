@@ -2,26 +2,59 @@
 
 import { Suspense, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowCounterClockwise, ArrowsClockwise, Flask, IdentificationCard, PencilSimple, Plus, Trash, UploadSimple } from "@phosphor-icons/react";
-import { IncidenciasDelRegistro } from "@/components/features/calidad/IncidenciasDelRegistro";
+import { ArrowCounterClockwise, ArrowsClockwise, Flask, PencilSimple, Plus, Trash } from "@phosphor-icons/react";
 import { useMenuReportar } from "@/components/features/calidad/ReportarIncidencia";
-import { DetailSheet } from "@/components/features/inventory/DetailSheet";
-import { ImportReactivosSheet, ReactivoSheet } from "@/components/features/inventory/ReactivoSheet";
+import { Caducidad, IconoCategoria } from "@/components/features/inventory/ventanas/comun";
+import { InsumoVentana } from "@/components/features/inventory/ventanas/InsumoVentana";
+import { ReactivoSheet } from "@/components/features/inventory/ReactivoSheet";
 import { StockRefillSheet, type StockRefillTarget } from "@/components/features/inventory/StockRefillSheet";
 import { RequireModule } from "@/components/session/RequireModule";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
-import { FilterChips, FilterMenu, type FilterGroup, type FilterToggle } from "@/components/ui/FilterMenu";
+import { FilterMenu, type FilterGroup, type FilterToggle } from "@/components/ui/FilterMenu";
+import { ListaCuadricula, type ColumnaLista } from "@/components/ui/ListaCuadricula";
 import { ActionMenu, usePrompt, type MenuItem } from "@/components/ui/Overlay";
 import { SearchInput, Toolbar } from "@/components/ui/PageHeader";
-import { Badge, EmptyState, ErrorState, StockMeter, TableSkeleton } from "@/components/ui/Primitives";
-import { CellPrimary, Table, TBody, Td, Th, THead, Tr, TableShell } from "@/components/ui/Table";
+import { Badge, StockMeter, TableSkeleton } from "@/components/ui/Primitives";
 import { API_BASE_URL, getJsonAuth, resolveApiEntity, sendJsonAuth } from "@/lib/client/api";
-import { deadlineTone, fmt, fmtDate, fmtDateTime } from "@/lib/client/format";
-import { useDebouncedValue, useInitialParam, useOpenState, useParamChange, useUrlTrigger } from "@/lib/client/hooks";
+import { deadlineTone, fmt } from "@/lib/client/format";
+import { useDebouncedValue, useInitialParam, useOpenState, useParamChange, useUrlTrigger, useAbrirDesdeUrl } from "@/lib/client/hooks";
 import { formatReactivoName, getReactivoExpiry, getReactivoLocation, getReactivoStockInfo, getReactivoStockState, getReactivoTypeLabel, isReactivoLow } from "@/lib/client/reactivos";
 import { invalidate, useResource } from "@/lib/client/store";
 import type { ApiRecord } from "@/lib/client/types";
+
+/* Columnas fijas: producto (icono por categoria) y marca, ubicacion, caducidad en color y existencia con barra. */
+const COLUMNAS: ColumnaLista[] = [
+  { clave: "producto", titulo: "Producto", ancho: "minmax(260px,1.7fr)" },
+  { clave: "ubicacion", titulo: "Ubicación", ancho: "minmax(140px,0.8fr)" },
+  { clave: "caducidad", titulo: "Caducidad", ancho: "150px" },
+  { clave: "existencia", titulo: "Existencia", ancho: "minmax(180px,1fr)" },
+];
+
+function celdasReactivo(item: ApiRecord) {
+  const stock = getReactivoStockState(item);
+  const inactive = Number(item.activo ?? 1) === 0;
+  const esColumna = (item.tipo_reactivo || item.categoria) === "columnas_cromatograficas";
+  return [
+    <span key="p" className={inactive ? "flex min-w-0 items-center gap-3 opacity-60" : "flex min-w-0 items-center gap-3"}>
+      <IconoCategoria categoria={item.tipo_reactivo || item.categoria} />
+      <span className="flex min-w-0 flex-col">
+        <span className="text-[14.5px] leading-tight font-semibold text-ink">
+          {formatReactivoName(item)}
+          {inactive ? <Badge tone="danger" className="ml-2 align-middle">Baja</Badge> : null}
+        </span>
+        <span className="text-[12.5px] text-ink-3">{[getReactivoTypeLabel(item.tipo_reactivo || item.categoria), item.marca].filter(Boolean).join(" · ")}</span>
+      </span>
+    </span>,
+    <span key="u" className="text-[13.5px] text-ink-2">{getReactivoLocation(item) === "-" ? <span className="text-ink-4">—</span> : getReactivoLocation(item)}</span>,
+    esColumna ? <span key="c" className="text-[13px] text-ink-4">—</span> : Number(item.caducidad_indefinida) === 1 ? <span key="c" className="text-[13.5px] text-ink-2">Indefinida</span> : <Caducidad key="c" value={expiryOf(item)} />,
+    esColumna ? (
+      <span key="e" className="text-[13px] text-ink-3">{[item.lote ? `Lote ${item.lote}` : null, item.nuevo_usado].filter(Boolean).join(" · ") || "Sin existencias"}</span>
+    ) : (
+      <StockMeter key="e" current={stock.current} max={stock.max} min={stock.min} unit={stock.unit} low={stock.low} />
+    ),
+  ];
+}
 
 export default function ReactivosPage() {
   return (
@@ -34,8 +67,9 @@ export default function ReactivosPage() {
 }
 
 type Filter = "todos" | "bajo" | "vencer";
+type Orden = "nombre" | "caducidad" | "existencia";
 
-/* Algunos registros importados traen "-" como caducidad: se trata como vacío. */
+/* Un "-" como caducidad se trata como vacío. */
 const expiryOf = (item: ApiRecord): unknown => {
   const value = getReactivoExpiry(item);
   return value && String(value).trim() !== "-" ? value : null;
@@ -54,9 +88,9 @@ function ReactivosContent() {
   const [showBajas, setShowBajas] = useState(initialFilter === "bajas");
   const debounced = useDebouncedValue(search);
   const modal = useOpenState<ApiRecord>();
-  const importSheet = useOpenState();
   const refill = useOpenState<StockRefillTarget>();
-  const detail = useOpenState<ApiRecord>();
+  const [abierta, setAbierta] = useState<number | null>(null);
+  const [orden, setOrden] = useState<Orden>("nombre");
 
   /* Si ya estamos en la lista y la búsqueda global manda otro ?buscar= o ?filtro=, se aplica. */
   useParamChange("buscar", (value) => setSearch(value));
@@ -79,22 +113,26 @@ function ReactivosContent() {
     if (can("inventario", "C", { objeto: "catalogo_inventario" })) modal.open(null);
   });
 
-  const counts = useMemo(() => {
-    const list = items || [];
-    return { total: list.length, low: list.filter(isLow).length, expiring: list.filter((item) => expiryTone(expiryOf(item))).length };
-  }, [items]);
-
   const visible = useMemo(() => {
-    const list = items || [];
-    if (filter === "bajo") return list.filter(isLow);
-    if (filter === "vencer") return list.filter((item) => expiryTone(expiryOf(item)));
-    return list;
-  }, [items, filter]);
+    let list = items || [];
+    if (filter === "bajo") list = list.filter(isLow);
+    if (filter === "vencer") list = list.filter((item) => expiryTone(expiryOf(item)));
+    const nombre = (i: ApiRecord) => formatReactivoName(i);
+    if (orden === "caducidad") return [...list].sort((a, b) => String(expiryOf(a) || "9999").localeCompare(String(expiryOf(b) || "9999")));
+    if (orden === "existencia") {
+      const pct = (i: ApiRecord) => {
+        const st = getReactivoStockState(i);
+        return st.current === null ? Infinity : st.max ? st.current / st.max : st.current;
+      };
+      return [...list].sort((a, b) => pct(a) - pct(b));
+    }
+    return [...list].sort((a, b) => nombre(a).localeCompare(nombre(b), "es"));
+  }, [items, filter, orden]);
+  useAbrirDesdeUrl(items ? visible : null, setAbierta);
 
   const editReactivo = async (id: number) => {
     try {
       const data = await getJsonAuth(`${API_BASE_URL}/inventory/reactivos/${id}`, token);
-      detail.close();
       modal.open(resolveApiEntity(data));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo cargar el reactivo");
@@ -108,7 +146,6 @@ function ReactivosContent() {
     try {
       await sendJsonAuth("DELETE", `${API_BASE_URL}/inventory/reactivos/${item.id}`, token, { motivo });
       toast.success("Reactivo dado de baja");
-      detail.close();
       invalidate("reactivos", "dashboard");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo dar de baja");
@@ -121,7 +158,6 @@ function ReactivosContent() {
     try {
       await sendJsonAuth("POST", `${API_BASE_URL}/inventory/reactivos/${item.id}/reactivar`, token, { motivo });
       toast.success("Reactivo reactivado");
-      detail.close();
       invalidate("reactivos", "dashboard");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo reactivar");
@@ -134,10 +170,6 @@ function ReactivosContent() {
   const canBaja = can("inventario", "AN");
   const canReactivar = can("inventario", "G");
 
-  const selected = detail.payload;
-  const selectedStock = selected ? getReactivoStockState(selected) : null;
-  const selectedInactive = selected ? Number(selected.activo ?? 1) === 0 : false;
-
   const groups: FilterGroup[] = [
     {
       key: "existencia",
@@ -146,24 +178,41 @@ function ReactivosContent() {
       defaultValue: "todos",
       onChange: (v) => setFilter(v as Filter),
       options: [
-        { value: "todos", label: "Todos", count: items ? counts.total : null },
-        { value: "bajo", label: "Stock bajo (vacío, bajo el mínimo o ≤ 20 %)", count: items ? counts.low : null, tone: counts.low ? "warning" : "neutral" },
-        { value: "vencer", label: "Por vencer o vencidos", count: items ? counts.expiring : null, tone: counts.expiring ? "danger" : "neutral" },
+        { value: "todos", label: "Todos" },
+        { value: "bajo", label: "Existencia baja o vacía" },
+        { value: "vencer", label: "Por vencer o vencidos" },
       ],
     },
   ];
-  const toggles: FilterToggle[] = [{ key: "bajas", label: "Mostrar bajas", description: "Incluye reactivos dados de baja.", checked: showBajas, onChange: setShowBajas }];
+  const toggles: FilterToggle[] = [{ key: "bajas", label: "Mostrar bajas", group: "Vista", checked: showBajas, onChange: setShowBajas }];
+  const ordenar: FilterGroup[] = [
+    {
+      key: "orden",
+      label: "Ordenar por",
+      value: orden,
+      defaultValue: "nombre",
+      showDefault: true,
+      onChange: (v) => setOrden(v as Orden),
+      options: [
+        { value: "nombre", label: "Nombre A–Z" },
+        { value: "caducidad", label: "Caducidad más próxima" },
+        { value: "existencia", label: "Existencia más baja" },
+      ],
+    },
+  ];
 
   const reportar = useMenuReportar();
+  const reponer = (item: ApiRecord) => refill.open({ type: "reactivo", id: Number(item.id), name: formatReactivoName(item), unit: getReactivoStockInfo(item).unit });
+  // Desde la búsqueda ("reponer metanol"): ?reponer=<id> abre la reposición de ese registro.
+  useAbrirDesdeUrl(items ? visible : null, (indice) => (canRellenar ? reponer(visible[indice]) : undefined), "reponer");
   const menuFor = (item: ApiRecord): MenuItem[] => {
     const inactive = Number(item.activo ?? 1) === 0;
-    const { unit } = getReactivoStockInfo(item);
-    const list: MenuItem[] = [{ label: "Ver ficha", description: "Existencia, lote, ubicación y caducidad", icon: <IdentificationCard size={16} weight="duotone" />, tone: "brand", onSelect: () => detail.open(item) }];
-    if (canRellenar && !inactive) list.push({ label: "Rellenar stock", description: "Registrar una entrada", icon: <ArrowsClockwise size={16} weight="duotone" />, tone: "success", onSelect: () => refill.open({ type: "reactivo", id: Number(item.id), name: formatReactivoName(item), unit }) });
+    const list: MenuItem[] = [];
+    if (canRellenar && !inactive) list.push({ label: "Registrar movimiento", description: "Entrada, salida, consumo o ajuste por conteo", icon: <ArrowsClockwise size={16} weight="duotone" />, tone: "success", onSelect: () => reponer(item) });
     if (canEditar) list.push({ label: "Editar", description: "Cambiar datos del reactivo", icon: <PencilSimple size={16} weight="duotone" />, onSelect: () => editReactivo(Number(item.id)) });
     list.push(...reportar("reactivos", item.id, formatReactivoName(item)));
     if (inactive ? canReactivar : canBaja) {
-      if (inactive) list.push({ label: "Reactivar reactivo…", description: "Vuelve al inventario con motivo", icon: <ArrowCounterClockwise size={16} weight="duotone" />, tone: "warning", separatorBefore: true, onSelect: () => reactivarReactivo(item) });
+      if (inactive) list.push({ label: "Reactivar…", description: "Vuelve al inventario con motivo", icon: <ArrowCounterClockwise size={16} weight="duotone" />, tone: "warning", separatorBefore: true, onSelect: () => reactivarReactivo(item) });
       else list.push({ label: "Dar de baja…", description: "Deja de ofrecerse; conserva su historial", icon: <Trash size={16} weight="duotone" />, tone: "danger", separatorBefore: true, onSelect: () => deleteReactivo(item) });
     }
     return list;
@@ -175,11 +224,6 @@ function ReactivosContent() {
         end={
           <>
             {canCreate ? (
-              <Button variant="secondary" icon={<UploadSimple size={16} />} onClick={() => importSheet.open()}>
-                Importar Excel
-              </Button>
-            ) : null}
-            {canCreate ? (
               <Button icon={<Plus size={16} weight="bold" />} onClick={() => modal.open(null)}>
                 Nuevo reactivo
               </Button>
@@ -188,157 +232,45 @@ function ReactivosContent() {
         }
       >
         <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre, lote, CAS o catálogo" className="w-full md:w-[340px]" />
-        <FilterMenu groups={groups} toggles={toggles} />
-        <FilterChips groups={groups} toggles={toggles} />
+        <FilterMenu groups={groups} toggles={toggles} gruposFinales={ordenar} vistaAlFinal />
       </Toolbar>
 
-      <TableShell footer={items ? `${fmt(visible.length)} reactivos${filter !== "todos" ? " en este filtro" : ""}` : undefined}>
-        {resource.error ? (
-          <ErrorState message={resource.error} onRetry={resource.reload} />
-        ) : !items ? (
-          <TableSkeleton cols={5} />
-        ) : !visible.length ? (
-          <EmptyState icon={<Flask size={20} />} title={search || filter !== "todos" ? "Sin coincidencias" : "Aún no hay reactivos"} description={search || filter !== "todos" ? "Prueba con otro término o cambia el filtro." : "Crea el primero o importa el inventario desde Excel."} action={canCreate && !search && filter === "todos" ? <Button onClick={() => modal.open(null)}>Nuevo reactivo</Button> : undefined} />
-        ) : (
-          <Table>
-            <THead>
-              <tr>
-                <Th>Producto</Th>
-                <Th>Categoría</Th>
-                <Th>Ubicación</Th>
-                <Th>Caducidad</Th>
-                <Th>Existencia</Th>
-                <Th align="right" sticky />
-              </tr>
-            </THead>
-            <TBody>
-              {visible.map((item) => {
-                const stock = getReactivoStockState(item);
-                const expiry = expiryOf(item);
-                const tone = expiryTone(expiry);
-                const inactive = Number(item.activo ?? 1) === 0;
-                return (
-                  <Tr key={item.id} interactive onClick={() => detail.open(item)} className={inactive ? "opacity-60" : undefined}>
-                    <Td className="max-w-[300px]">
-                      <div className="flex items-center gap-2">
-                        {inactive ? <Badge tone="danger">Baja</Badge> : null}
-                        <CellPrimary title={formatReactivoName(item)} subtitle={[item.marca, item.catalogo_parte_cas_lote || item.catalogo || item.cas_number || item.numero_cas || (item.lote ? `Lote ${item.lote}` : "")].filter(Boolean).join(" · ")} />
-                      </div>
-                    </Td>
-                    <Td muted className="max-w-[200px]">
-                      {getReactivoTypeLabel(item.tipo_reactivo || item.categoria)}
-                    </Td>
-                    <Td muted className="max-w-[140px] truncate">
-                      {getReactivoLocation(item)}
-                    </Td>
-                    <Td className="whitespace-nowrap">
-                      {expiry ? <span className={tone === "danger" ? "font-medium text-danger" : tone === "warning" ? "font-medium text-warning-text" : "text-ink-2"}>{fmtDate(expiry)}</span> : <span className="text-ink-4">—</span>}
-                    </Td>
-                    <Td>
-                      <StockMeter current={stock.current} max={stock.max} min={stock.min} unit={stock.unit} low={stock.low} />
-                    </Td>
-                    <Td align="right" sticky onClick={(event) => event.stopPropagation()}>
-                      <ActionMenu items={menuFor(item)} header={formatReactivoName(item)} />
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </TBody>
-          </Table>
+      <ListaCuadricula
+        etiqueta="Reactivos"
+        columnas={COLUMNAS}
+        filas={items ? visible : null}
+        error={resource.error}
+        onReintentar={resource.reload}
+        clave={(item) => String(item.id)}
+        onAbrir={(_, i) => setAbierta(i)}
+        activa={(_, i) => abierta === i}
+        celdas={celdasReactivo}
+        extremo={(item) => (
+          <span className="w-9">
+            <ActionMenu items={menuFor(item)} header={formatReactivoName(item)} />
+          </span>
         )}
-      </TableShell>
+        anchoExtremo="52px"
+        propsFila={(item) => ({ "data-reactivo": String(item.id) })}
+        vacio={{
+          icono: <Flask size={20} />,
+          titulo: search || filter !== "todos" ? "Sin coincidencias" : "Aún no hay reactivos",
+          descripcion: search || filter !== "todos" ? "Prueba con otro término o cambia el filtro." : "Crea el primero con «Nuevo reactivo».",
+          accion: canCreate && !search && filter === "todos" ? <Button onClick={() => modal.open(null)}>Nuevo reactivo</Button> : undefined,
+        }}
+      />
+      {items && visible.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-3">{visible.length === 1 ? "1 reactivo" : `${fmt(visible.length)} reactivos`}</p> : null}
 
-      {selected ? (
-        <DetailSheet
-          extra={
-            <section className="flex flex-col gap-1.5">
-              <h3 className="eyebrow px-1 text-ink-3">Incidencias</h3>
-              <IncidenciasDelRegistro entidad="reactivos" id={selected.id} etiqueta={formatReactivoName(selected)} />
-            </section>
-          }
-          open={detail.isOpen}
-          onOpenChange={(open) => {
-            if (!open) detail.close();
-          }}
-          title={formatReactivoName(selected)}
-          subtitle={getReactivoTypeLabel(selected.tipo_reactivo || selected.categoria)}
-          badges={
-            <span className="flex items-center gap-1.5">
-              {selectedInactive ? <Badge tone="danger">Baja</Badge> : null}
-              {expiryTone(expiryOf(selected)) === "danger" ? <Badge tone="danger">Vencido</Badge> : expiryTone(expiryOf(selected)) === "warning" ? <Badge tone="warning">Por vencer</Badge> : null}
-              {selectedStock?.empty ? <Badge tone="danger">Vacío</Badge> : selectedStock?.low ? <Badge tone="warning">Stock bajo</Badge> : null}
-            </span>
-          }
-          hero={
-            selectedStock && selectedStock.current !== null ? (
-              <div className="rounded-[14px] bg-surface-2 p-4 ring-1 ring-line">
-                <p className="text-[12.5px] text-ink-3">Existencia</p>
-                <p className="tnum mt-0.5 text-[26px] font-semibold tracking-[-0.02em] text-ink">
-                  {fmt(selectedStock.current)} <span className="text-[15px] font-medium text-ink-3">de {fmt(selectedStock.max || selectedStock.current)} {selectedStock.unit}</span>
-                </p>
-                <StockMeter className="mt-3" size="lg" current={selectedStock.current} max={selectedStock.max} min={selectedStock.min} unit={selectedStock.unit} low={selectedStock.low} label={selectedStock.min ? `Aviso de stock bajo al llegar a ${fmt(selectedStock.min)} ${selectedStock.unit}` : "Aviso de stock bajo al 20 % de la capacidad"} />
-              </div>
-            ) : null
-          }
-          groups={[
-            {
-              title: "Identificación",
-              rows: [
-                { label: "ID interno", value: selected.id_interno, mono: true },
-                { label: "Lote", value: selected.lote, mono: true },
-                { label: "CAS", value: selected.numero_cas || selected.cas_number, mono: true },
-                { label: "Catálogo", value: selected.catalogo || selected.catalogo_parte_cas_lote, mono: true },
-                { label: "Marca", value: selected.marca },
-                { label: "Proveedor", value: selected.proveedor || selected.vendor },
-              ],
-            },
-            {
-              title: "Resguardo",
-              rows: [
-                { label: "Ubicación", value: getReactivoLocation(selected) },
-                { label: "Caducidad", value: expiryOf(selected) ? fmtDate(expiryOf(selected)) : null },
-                { label: "Fecha de apertura", value: selected.fecha_apertura ? fmtDate(selected.fecha_apertura) : null },
-                { label: "Stock mínimo", value: selected.stock_minimo !== null && selected.stock_minimo !== undefined ? fmt(selected.stock_minimo) : null },
-              ],
-            },
-            {
-              title: "Baja",
-              rows: [
-                { label: "Motivo", value: selectedInactive ? selected.baja_motivo : null },
-                { label: "Fecha", value: selectedInactive && selected.baja_en ? fmtDateTime(selected.baja_en) : null },
-              ],
-            },
-          ]}
-          actions={
-            <>
-              {(selectedInactive ? canReactivar : canBaja) ? (
-                selectedInactive ? (
-                  <Button variant="secondary" icon={<ArrowCounterClockwise size={16} />} onClick={() => reactivarReactivo(selected)}>
-                    Reactivar
-                  </Button>
-                ) : (
-                  <Button variant="ghost" className="mr-auto text-danger hover:bg-danger-soft hover:text-danger" icon={<Trash size={16} />} onClick={() => deleteReactivo(selected)}>
-                    Dar de baja
-                  </Button>
-                )
-              ) : null}
-              {canRellenar && !selectedInactive ? (
-                <Button variant="secondary" icon={<ArrowsClockwise size={16} />} onClick={() => refill.open({ type: "reactivo", id: Number(selected.id), name: formatReactivoName(selected), unit: selectedStock?.unit || "" })}>
-                  Rellenar
-                </Button>
-              ) : null}
-              {canEditar ? (
-                <Button icon={<PencilSimple size={16} />} onClick={() => editReactivo(Number(selected.id))}>
-                  Editar
-                </Button>
-              ) : null}
-            </>
-          }
-        />
-      ) : null}
+      <InsumoVentana
+        tipo="reactivo"
+        items={visible}
+        indice={abierta !== null && abierta < visible.length ? abierta : null}
+        onIndice={setAbierta}
+        onCerrar={() => setAbierta(null)}
+        acciones={{ puedeReponer: canRellenar, puedeEditar: canEditar, puedeBaja: canBaja, puedeReactivar: canReactivar, reponer, editar: (item) => editReactivo(Number(item.id)), darDeBaja: deleteReactivo, reactivar: reactivarReactivo }}
+      />
 
       {modal.key ? <ReactivoSheet key={`modal-${modal.key}`} open={modal.isOpen} item={modal.payload} onClose={modal.close} /> : null}
-      {importSheet.key ? <ImportReactivosSheet key={`import-${importSheet.key}`} open={importSheet.isOpen} onClose={importSheet.close} /> : null}
       {refill.key ? <StockRefillSheet key={`refill-${refill.key}`} open={refill.isOpen} target={refill.payload} onClose={refill.close} /> : null}
     </>
   );

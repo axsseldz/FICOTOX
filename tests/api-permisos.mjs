@@ -50,7 +50,7 @@ const negados = [
   ["/admin/roles", "usuarios (roles)"],
   ["/admin/usuarios", "usuarios"],
   ["/informes", "informes"],
-  ["/documentos-sgc", "documentos"],
+  ["/sgc/documentos", "documentos (Documentos SGC)"],
   ["/audit", "calidad (bitacora completa)"],
 ];
 for (const [ruta, etiqueta] of negados) {

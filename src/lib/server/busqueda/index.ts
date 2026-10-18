@@ -1,0 +1,1 @@
+export { construirIndice } from "./indice";

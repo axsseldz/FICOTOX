@@ -31,8 +31,21 @@ import * as m0009 from "./0009_base_fase9.mjs";
 import * as m0010 from "./0010_adjuntos.mjs";
 import * as m0011 from "./0011_calidad.mjs";
 import * as m0012 from "./0012_firmas_tokens.mjs";
+import * as m0013 from "./0013_biblioteca.mjs";
+import * as m0014 from "./0014_tema.mjs";
+import * as m0015 from "./0015_notificaciones_leidas.mjs";
+import * as m0016 from "./0016_foto_perfil.mjs";
+import * as m0017 from "./0017_busqueda_recientes.mjs";
+import * as m0018 from "./0018_respaldos_permisos.mjs";
+import * as m0019 from "./0019_inventario_campos.mjs";
+import * as m0020 from "./0020_consumibles_unidades.mjs";
+import * as m0021 from "./0021_permisos_acceso_y_biblioteca.mjs";
+import * as m0022 from "./0022_documentos_sgc.mjs";
+import * as m0023 from "./0023_documentos_flujo.mjs";
+import * as m0024 from "./0024_documentos_externos_lecturas.mjs";
+import * as m0025 from "./0025_reportes_mantenimiento_pdf.mjs";
 
-export const MIGRACIONES = [m0009, m0010, m0011, m0012].sort((a, b) => a.version - b.version);
+export const MIGRACIONES = [m0009, m0010, m0011, m0012, m0013, m0014, m0015, m0016, m0017, m0018, m0019, m0020, m0021, m0022, m0023, m0024, m0025].sort((a, b) => a.version - b.version);
 export const VERSION_ACTUAL = MIGRACIONES[MIGRACIONES.length - 1].version;
 /* Versiones que pueden quedar como linea base de una base anterior (las del sistema sin migraciones). */
 export const VERSIONES_BASELINE = [11, 10, 9];
@@ -364,7 +377,8 @@ export async function aplicarMigraciones(db, opciones) {
       avisar(`Aplicando la migración ${m.version} (${m.nombre})…`);
       if (db.motor === "sqlite") await db.begin();
       try {
-        await m.up(db, db.motor);
+        // Migracion 13: la copia de documentos necesita la carpeta de la instancia (archivos).
+        await m.up(db, db.motor, { instanceDir: opciones.instanceDir || null });
         // Prueba de fallo a la mitad (solo con FICOTOX_PRUEBAS=1): el DDL ya se ejecuto dentro de la transaccion.
         if (process.env.FICOTOX_PRUEBAS === "1" && Number(process.env.FICOTOX_PRUEBA_FALLAR_MIGRACION) === m.version) throw new Error(`Fallo simulado en la migración ${m.version}`);
         if (db.motor === "mysql") await db.begin();

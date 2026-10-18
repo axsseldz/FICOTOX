@@ -8,10 +8,12 @@ import { Checkbox, Field, FormGrid, FormSection, Input, Select, Textarea } from 
 import { DateInput } from "@/components/ui/DateInput";
 import { Sheet } from "@/components/ui/Overlay";
 import { API_BASE_URL, getJsonAuth, sendJsonAuth } from "@/lib/client/api";
-import { toDateOnly } from "@/lib/client/format";
+import { isoDate } from "@/lib/client/format";
 import { invalidate } from "@/lib/client/store";
 import type { ApiRecord } from "@/lib/client/types";
 import { EQUIPO_ESTADOS, MANTENIMIENTO_ESTADOS, MANTENIMIENTO_TIPOS } from "./meta";
+import { useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
+import { msg, type Problema } from "@/lib/client/mensajes";
 
 function useActiveUsers(enabled: boolean) {
   const { token, can } = useSession();
@@ -52,14 +54,17 @@ export function EquipoSheet({ open, item, onClose }: { open: boolean; item: ApiR
     modelo: String(item?.modelo || ""),
     ubicacion: String(item?.ubicacion || ""),
     responsable: item?.id_responsable ? String(item.id_responsable) : "",
-    calibracion: toDateOnly(item?.fecha_prox_calibracion),
+    calibracion: isoDate(item?.fecha_prox_calibracion),
     estado: String(item?.estado || "operativo"),
     claveBitacora: String(item?.clave_bitacora || ""),
   });
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const editing = !!item?.id;
   const set = (key: keyof typeof form) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  const v = useValidacion({
+    titulo: editing ? "No se pudo guardar el equipo" : "No se pudo crear el equipo",
+    reglas: () => (form.nombre.trim() ? [] : [{ campo: "e-nombre", mensaje: msg.indica("el nombre del equipo") }]),
+  });
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -74,16 +79,12 @@ export function EquipoSheet({ open, item, onClose }: { open: boolean; item: ApiR
       estado: form.estado || "operativo",
       clave_bitacora: form.claveBitacora.trim() || null,
     };
-    if (!payload.nombre) {
-      setError("El nombre del equipo es obligatorio");
-      return;
-    }
+    if (!v.validar()) return;
     if (!can("equipos", editing ? "E" : "C", { objeto: "equipo" })) {
-      setError("No tienes permiso para esta acción");
+      v.avisar({ que: "No tienes permiso para guardar equipos.", hacer: "Pide a la administración que revise tus roles y permisos." });
       return;
     }
     setSubmitting(true);
-    setError(null);
     try {
       if (editing) {
         await sendJsonAuth("PUT", `${API_BASE_URL}/inventory/equipos/${item!.id}`, token, payload);
@@ -98,7 +99,7 @@ export function EquipoSheet({ open, item, onClose }: { open: boolean; item: ApiR
       invalidate("equipos", "dashboard");
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo guardar el equipo");
+      v.errorServidor(err);
     } finally {
       setSubmitting(false);
     }
@@ -112,7 +113,6 @@ export function EquipoSheet({ open, item, onClose }: { open: boolean; item: ApiR
       description="Identificación, ubicación y estado de calibración."
       footer={
         <>
-          {error ? <p className="mr-auto text-[13px] text-danger">{error}</p> : null}
           <Button variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
@@ -122,9 +122,10 @@ export function EquipoSheet({ open, item, onClose }: { open: boolean; item: ApiR
         </>
       }
     >
+      <ValidacionAmbito v={v}>
       <form id="equipo-form" onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
         <Field label="Nombre del equipo" htmlFor="e-nombre" required>
-          <Input id="e-nombre" maxLength={150} value={form.nombre} onChange={set("nombre")} autoFocus={!editing} invalid={!!error && !form.nombre.trim()} />
+          <Input id="e-nombre" maxLength={150} value={form.nombre} onChange={set("nombre")} autoFocus={!editing} />
         </Field>
         <FormGrid>
           <Field label="Marca" htmlFor="e-marca">
@@ -193,6 +194,7 @@ export function EquipoSheet({ open, item, onClose }: { open: boolean; item: ApiR
           </FormSection>
         ) : null}
       </form>
+      </ValidacionAmbito>
     </Sheet>
   );
 }
@@ -204,8 +206,8 @@ export function MantenimientoSheet({ open, item, onClose }: { open: boolean; ite
   const [form, setForm] = useState({
     equipo: item?.id_equipo ? String(item.id_equipo) : "",
     tipo: String(item?.tipo || "preventivo"),
-    fechaProgramada: toDateOnly(item?.fecha_programada),
-    fechaRealizado: toDateOnly(item?.fecha_realizado),
+    fechaProgramada: isoDate(item?.fecha_programada),
+    fechaRealizado: isoDate(item?.fecha_realizado),
     tecnico: String(item?.tecnico_proveedor || ""),
     responsable: item?.id_responsable ? String(item.id_responsable) : "",
     estado: String(item?.estado || "programado"),
@@ -213,8 +215,17 @@ export function MantenimientoSheet({ open, item, onClose }: { open: boolean; ite
     proximaCalibracion: "",
   });
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const editing = !!item?.id;
+  const v = useValidacion({
+    titulo: editing ? "No se pudo guardar el mantenimiento" : "No se pudo programar el mantenimiento",
+    reglas: () => {
+      const out: Problema[] = [];
+      if (!Number(form.equipo || 0)) out.push({ campo: "m-equipo", mensaje: msg.elige("el equipo") });
+      if (!form.fechaProgramada) out.push({ campo: "m-fecha", mensaje: msg.indica("la fecha programada") });
+      if (form.estado === "completado" && !form.fechaRealizado) out.push({ campo: "m-realizado", mensaje: "Indica la fecha en que se realizó para marcarlo como completado" });
+      return out;
+    },
+  });
 
   useEffect(() => {
     if (!open || !token) return;
@@ -238,24 +249,12 @@ export function MantenimientoSheet({ open, item, onClose }: { open: boolean; ite
       observaciones: form.observaciones.trim() || null,
       proxima_calibracion: form.tipo === "calibracion" && form.estado === "completado" ? form.proximaCalibracion || null : null,
     };
-    if (!payload.id_equipo) {
-      setError("Selecciona un equipo");
-      return;
-    }
-    if (!payload.fecha_programada) {
-      setError("La fecha programada es obligatoria");
-      return;
-    }
-    if (payload.estado === "completado" && !payload.fecha_realizado) {
-      setError("Indica la fecha en que se realizó para marcarlo como completado");
-      return;
-    }
+    if (!v.validar()) return;
     if (!can("equipos", editing ? "E" : "C", { objeto: "mantenimiento" })) {
-      setError("No tienes permiso para esta acción");
+      v.avisar({ que: "No tienes permiso para guardar mantenimientos.", hacer: "Pide a la administración que revise tus roles y permisos." });
       return;
     }
     setSubmitting(true);
-    setError(null);
     try {
       if (editing) {
         await sendJsonAuth("PUT", `${API_BASE_URL}/inventory/mantenimientos/${item!.id}`, token, payload);
@@ -267,7 +266,7 @@ export function MantenimientoSheet({ open, item, onClose }: { open: boolean; ite
       invalidate("mantenimientos", "documentos", "dashboard", "equipos");
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo guardar el mantenimiento");
+      v.errorServidor(err);
     } finally {
       setSubmitting(false);
     }
@@ -281,7 +280,6 @@ export function MantenimientoSheet({ open, item, onClose }: { open: boolean; ite
       description="Fechas programadas de mantenimiento y calibración."
       footer={
         <>
-          {error ? <p className="mr-auto text-[13px] text-danger">{error}</p> : null}
           <Button variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
@@ -291,9 +289,10 @@ export function MantenimientoSheet({ open, item, onClose }: { open: boolean; ite
         </>
       }
     >
+      <ValidacionAmbito v={v}>
       <form id="mantenimiento-form" onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
         <Field label="Equipo" htmlFor="m-equipo" required>
-          <Select id="m-equipo" value={form.equipo} onChange={set("equipo")} autoFocus={!editing} invalid={!!error && !form.equipo}>
+          <Select id="m-equipo" value={form.equipo} onChange={set("equipo")} autoFocus={!editing}>
             <option value="">Seleccionar equipo</option>
             {equipos.map((equipo) => (
               <option key={equipo.id} value={equipo.id}>
@@ -322,10 +321,10 @@ export function MantenimientoSheet({ open, item, onClose }: { open: boolean; ite
             </Select>
           </Field>
           <Field label="Fecha programada" htmlFor="m-fecha" required>
-            <DateInput id="m-fecha" value={form.fechaProgramada} onChange={(value) => setForm((prev) => ({ ...prev, fechaProgramada: value }))} invalid={!!error && !form.fechaProgramada} />
+            <DateInput id="m-fecha" value={form.fechaProgramada} onChange={(value) => setForm((prev) => ({ ...prev, fechaProgramada: value }))} />
           </Field>
           <Field label="Fecha realizado" htmlFor="m-realizado" required={form.estado === "completado"}>
-            <DateInput id="m-realizado" value={form.fechaRealizado} onChange={(value) => setForm((prev) => ({ ...prev, fechaRealizado: value }))} invalid={!!error && form.estado === "completado" && !form.fechaRealizado} />
+            <DateInput id="m-realizado" value={form.fechaRealizado} onChange={(value) => setForm((prev) => ({ ...prev, fechaRealizado: value }))} />
           </Field>
           {form.tipo === "calibracion" && form.estado === "completado" ? (
             <Field label="Próxima calibración" htmlFor="m-proxima" hint="Se anota en la ficha del equipo." className="sm:col-span-2">
@@ -353,6 +352,7 @@ export function MantenimientoSheet({ open, item, onClose }: { open: boolean; ite
           Mientras el mantenimiento esté <span className="font-medium">programado, en proceso o vencido</span>, el equipo se muestra “En mantenimiento” en la pestaña Equipos (con el detalle del pendiente debajo). Al marcarlo <span className="font-medium">completado</span> desaparece de Mantenimiento y el equipo vuelve a “Operativo”.
         </p>
       </form>
+      </ValidacionAmbito>
     </Sheet>
   );
 }

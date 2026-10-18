@@ -1,3 +1,4 @@
+import { formatearFolio } from "../shared/folios";
 import { requireUser, type CurrentUser } from "./auth";
 import { registrarAuditoria, snapshotRow } from "./audit";
 import type { Row, Session } from "./db";
@@ -42,7 +43,7 @@ interface Supervisable {
   href: (id: number) => string;
 }
 
-export const SUPERVISABLES: Record<TablaSupervisable, Supervisable> = {
+const SUPERVISABLES: Record<TablaSupervisable, Supervisable> = {
   muestras_recepcion: { modulo: "muestras", etiqueta: "Recepción", href: (id) => `/muestras/recepcion/${id}` },
   muestras_procesamiento: { modulo: "ensayos", etiqueta: "Procesamiento", href: (id) => `/muestras/procesamiento/${id}` },
   muestras_extraccion: { modulo: "ensayos", etiqueta: "Extracción", href: (id) => `/muestras/extraccion/${id}` },
@@ -62,7 +63,7 @@ const PREFIJO_FOLIO: Partial<Record<TablaSupervisable, string>> = {
   informes: "IR",
 };
 
-export function esTablaSupervisable(tabla: string): tabla is TablaSupervisable {
+function esTablaSupervisable(tabla: string): tabla is TablaSupervisable {
   return Object.prototype.hasOwnProperty.call(SUPERVISABLES, tabla);
 }
 
@@ -97,7 +98,7 @@ export async function aplicarSupervision(s: Session, tabla: TablaSupervisable, i
   );
 }
 
-export function supervisionPendiente(row: Row | null | undefined): boolean {
+function supervisionPendiente(row: Row | null | undefined): boolean {
   return !!row && Number(row.requiere_supervision || 0) === 1 && ["pendiente", "regresado"].includes(String(row.supervision_estado || ""));
 }
 
@@ -115,7 +116,7 @@ function referenciaDe(tabla: TablaSupervisable, row: Row): string {
   const prefijo = PREFIJO_FOLIO[tabla];
   if (prefijo) {
     const base = tabla === "muestras_extraccion" ? String(row.tipo_registro || "E-A") : prefijo;
-    return `${base} ${String(row.folio_num || 0).padStart(7, "0")}`;
+    return formatearFolio(base, row.folio_num);
   }
   if (tabla === "reactivos") return String(row.producto || row.nombre || "Reactivo");
   if (tabla === "consumibles") return String(row.producto || "Consumible");
@@ -167,7 +168,7 @@ export async function contarPorSupervisar(s: Session, userId: number): Promise<R
   const out: Row[] = [];
   for (const tabla of Object.keys(SUPERVISABLES) as TablaSupervisable[]) {
     const filas = await s.query<Row>(`SELECT * FROM ${tabla} WHERE requiere_supervision = 1 AND supervision_estado = 'pendiente' AND supervisor_id = :yo ORDER BY supervision_solicitada_en ASC LIMIT 20`, { yo: userId });
-    for (const fila of filas) out.push({ tabla, id: Number(fila.id), tipo: SUPERVISABLES[tabla].etiqueta, referencia: referenciaDe(tabla, fila), href: SUPERVISABLES[tabla].href(Number(fila.id)) });
+    for (const fila of filas) out.push({ tabla, id: Number(fila.id), tipo: SUPERVISABLES[tabla].etiqueta, referencia: referenciaDe(tabla, fila), href: SUPERVISABLES[tabla].href(Number(fila.id)), solicitada_en: fila.supervision_solicitada_en ?? null, solicitada_por: fila.supervision_solicitada_por ?? null });
   }
   return out;
 }

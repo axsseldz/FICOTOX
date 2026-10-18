@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL, getJsonAuth, postJson, registrarAvisoSesion, sendJsonAuth } from "@/lib/client/api";
-import { resetSearchIndex } from "@/lib/client/search-index";
+import { adoptarTemaDeCuenta } from "@/lib/client/tema";
 import { clearSession, getStoredPermissions, getStoredToken, setSession, setStoredPermissions } from "@/lib/client/session";
 import type { ApiRecord, AuthConfig, ModuleAction, PermissionsMap, RolSesion, SessionUser } from "@/lib/client/types";
 import { ALCANCES_SOLO_CON_OBJETO, alcancePermite, type Accion, type Alcance, type ContextoAlcance, type Modulo } from "@/lib/shared/permisos";
@@ -69,6 +69,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setStoredPermissions(nextPermissions);
     setToken(nextToken);
     setUser(nextUser);
+    adoptarTemaDeCuenta(nextUser.tema);
     setPermissions(nextPermissions);
     setRoles(nextRoles);
     setStatus("authenticated");
@@ -76,7 +77,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const leave = useCallback(() => {
     clearSession();
-    resetSearchIndex();
     setToken("");
     setUser(null);
     setPermissions({});

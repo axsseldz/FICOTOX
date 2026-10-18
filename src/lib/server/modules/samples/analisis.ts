@@ -1,9 +1,10 @@
 import { requireUser, userIdFromClaims, type CurrentUser } from "../../auth";
+import { banderasPuede, conSolicitudesYPuede } from "../../puede-registro";
 import { registrarAuditoria, snapshotRow } from "../../audit";
 import { isSqlite, type Row, type Session } from "../../db";
 import { HttpError, intParam, json, readJson, type RouteContext } from "../../http";
 import { restoreInventoryUsage } from "../../inventory-usage";
-import { cargoActuante, requirePermission } from "../../rbac";
+import { cargarAutorizacion, cargoActuante, requirePermission } from "../../rbac";
 import { exigirReauth } from "../../seguridad";
 import { exigirSinSolicitudPendiente, pendientesDe, respuestaSolicitud, serializarSolicitud } from "../../solicitudes";
 import { detalleExcepcion, elaboradoresDe, excepcionesDe, exigirSegregacion } from "../../segregacion";
@@ -11,7 +12,7 @@ import { evaluarAnalisis, excepcionPara, type Violacion } from "../../../shared/
 import { aplicarSupervision, exigirSinSupervisionPendiente, filtroSupervision, marcaSupervision } from "../../supervision";
 import { recordBitacoraFolios } from "../inventory";
 
-import { advanceState, anularOSolicitar, validarRecepcionSiCompleta, applyStageInventory, assertEditableAsync, assertOrigin, conSolicitudes, deletionNotAllowed, exigirUsoDeRecursos, folioLabel, insumosDeclarados, isFolioConflict, nextFolioNum, readMotivo, restaurarOSolicitar } from "../../samples-flow";
+import { advanceState, anularOSolicitar, validarRecepcionSiCompleta, applyStageInventory, assertEditableAsync, assertOrigin, deletionNotAllowed, exigirUsoDeRecursos, folioLabel, insumosDeclarados, isFolioConflict, nextFolioNum, readMotivo, restaurarOSolicitar } from "../../samples-flow";
 import { ANALYSIS_METHODS, ANALYSIS_TYPES, CONFORMITY_OPTIONS } from "../../../shared/sgc";
 import { jsonText, safeJsonLoad, searchParam, strippedOrNull, toFloatOrNull, toIntOrNull } from "../helpers";
 
@@ -20,7 +21,7 @@ import { metodoDeTipoAnalisis, requisitosAnalisis, requisitosRevisionResultados 
 import { exigirSinSuspension, idsDeEquipos } from "../calidad/bloqueos";
 import { incidenciasPorEquiposNoAptos } from "../calidad/automaticas";
 import { exigirAsignacion, filtroAsignadas } from "../../asignaciones";
-import { firmanteElegido, guardarFirmantes, resolverFirmantes, type RolFirma } from "../../firmas";
+import { firmanteElegido, guardarFirmantes, resolverFirmantes, verificarFirmasConPassword, type RolFirma } from "../../firmas";
 import { marcarRequiereEnmienda } from "../informes";
 import { contarVigentes, heredarAdjuntos, resumenAdjuntos } from "../../adjuntos";
 import { getConfig } from "../../config";
@@ -243,7 +244,7 @@ export async function listAnalyses({ request, s }: RouteContext): Promise<Respon
     { search, search_like: `%${search}%`, estado, recepcion_id: recepcionId, extraccion_id: extraccionId, incluir_anulados: includeAnulados ? 1 : 0, ...supFiltro.params },
   );
   return json({
-    items: (await conSolicitudes(s, TABLE, rows)).map((row) => {
+    items: (await conSolicitudesYPuede(s, user, TABLE, rows)).map((row) => {
       const resultados = safeJsonLoad<ResultadoRow[]>(row.resultados_json, []);
       const item: Row = { ...row, muestras: resultados.length, no_conformes: resultados.filter((entry) => entry.cumple === "no_cumple").length };
       delete item.resultados_json;
@@ -259,6 +260,8 @@ export async function getAnalysis({ request, s, params }: RouteContext): Promise
   await requirePermission(s, user, "ensayos", "V");
   const row = await s.queryOne(`SELECT * FROM ${TABLE} WHERE id = :id`, { id });
   if (!row) return json({ message: "Registro no encontrado" }, 404);
+  // Folio de la recepcion para la cadena de la ficha (la lista lo trae con el mismo JOIN).
+  const folioRecepcion = row.recepcion_id ? await s.scalar("SELECT folio_num FROM muestras_recepcion WHERE id = :id", { id: row.recepcion_id }) : null;
   // Informes que reportan este analisis (el LIKE acota; la lista JSON decide).
   const candidatos = await s.query<Row>("SELECT id, folio_num, version, estado, analisis_ids_json FROM informes WHERE analisis_ids_json LIKE :like", { like: `%${id}%` }).catch(() => [] as Row[]);
   const informes = candidatos
@@ -274,7 +277,8 @@ export async function getAnalysis({ request, s, params }: RouteContext): Promise
   };
   // Fase 10: resumen de la evidencia instrumental (la lista completa esta en /adjuntos).
   const adjuntos = { ...(await resumenAdjuntos(s, "analisis", id)), obligatoria: getConfig().EVIDENCIA_OBLIGATORIA_ANALISIS };
-  return json({ item: { ...serializeAnalysis(row), informes, adjuntos, solicitud_pendiente: pendiente ? serializarSolicitud(pendiente) : null, segregacion: { revisar: bloqueo("revisar"), aprobar: bloqueo("aprobar") } } });
+  const puede = (await banderasPuede(s, await cargarAutorizacion(s, user), TABLE, [id], new Set(pendiente ? [id] : []), true)).get(id) || {};
+  return json({ item: { ...serializeAnalysis(row), folio_recepcion_num: folioRecepcion ?? null, informes, adjuntos, puede, solicitud_pendiente: pendiente ? serializarSolicitud(pendiente) : null, segregacion: { revisar: bloqueo("revisar"), aprobar: bloqueo("aprobar") } } });
 }
 
 export async function createAnalysis({ request, s }: RouteContext): Promise<Response> {
@@ -282,6 +286,8 @@ export async function createAnalysis({ request, s }: RouteContext): Promise<Resp
   const permiso = await requirePermission(s, user, "ensayos", "C", { objeto: "analisis", borrador: true });
   const actuo = cargoActuante(request, permiso);
   const payload = await readJson(request);
+  // Contraseñas de firmantes enviadas al guardar: se verifican antes de cualquier otra escritura.
+  await verificarFirmasConPassword(s, user, payload);
   const data = normalizePayload(payload);
   await exigirUsoDeRecursos(s, user, permiso.auth, { equipos: !!(data.equipo_id || data.equipo_nombre), insumosJson: data.uso_inventario_json });
   // Fase 4: autorizacion FX-THF-AP: analisis, metodo del tipo de analisis y equipo usado (si esta en el inventario).
@@ -364,6 +370,8 @@ export async function updateAnalysis({ request, s, params }: RouteContext): Prom
   const permiso = await exigirAnalisisEditable(s, user, antes);
   const actuo = cargoActuante(request, permiso);
   const payload = await readJson(request);
+  // Contraseñas de firmantes enviadas al guardar: se verifican antes de cualquier otra escritura.
+  await verificarFirmasConPassword(s, user, payload);
   const data = normalizePayload(payload);
   await exigirUsoDeRecursos(s, user, permiso.auth, { equipos: !!(data.equipo_id || data.equipo_nombre), insumosJson: data.uso_inventario_json });
   // Fase 4: autorizacion FX-THF-AP: analisis, metodo del tipo de analisis y equipo usado (si esta en el inventario).

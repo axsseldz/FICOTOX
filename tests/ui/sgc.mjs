@@ -1,4 +1,4 @@
-/* Ronda SGC (navegador): recepcion con aceptacion, anular/restaurar, analisis revisar/aprobar, informe autorizar+PDF+entrega, documentos SGC, auditoria, baja de inventario. */
+/* Ronda SGC (navegador): recepcion con aceptacion, anular/restaurar, analisis revisar/aprobar, informe autorizar+PDF+entrega, Documentos SGC (reemplaza a la Biblioteca), auditoria, baja de inventario. */
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
@@ -132,9 +132,16 @@ try {
   await page.fill("#r-acep-temp", "6 °C");
   // Sin la información mínima (solicitante y custodio) el formato no se guarda: avisa y abre la sección.
   await page.getByRole("button", { name: "Registrar recepción" }).click();
-  await page.getByText(/Falta información en/).first().waitFor();
-  check("no deja guardar sin la información mínima", page.url().includes("/muestras/recepcion/nueva"));
+  // Validación compartida: pop-up con la lista de faltantes, campos en rojo y foco en el primero al cerrar.
+  const popup = page.locator('[data-validacion="faltan"]');
+  await popup.waitFor();
+  check("no deja guardar sin la información mínima: pop-up con los faltantes", page.url().includes("/muestras/recepcion/nueva") && /No se pudo registrar la recepción — Faltan \d+ datos/.test(await popup.textContent()) && (await popup.textContent()).includes("Solicitante: Indica el nombre de quien entrega"));
+  await popup.getByRole("button", { name: "Entendido" }).click();
+  await page.waitForFunction(() => document.activeElement?.id === "r-sol-nombre");
+  check("al cerrar, el foco queda en el primer campo con problema", (await page.locator("#r-sol-nombre").getAttribute("aria-invalid")) === "true");
+  check("el encabezado y la guía coinciden (Falta información en: …Solicitante…)", (await page.locator("[data-aviso-faltantes]").textContent()).includes("Solicitante"));
   await page.fill("#r-sol-nombre", "Juan Pérez");
+  check("el rojo desaparece al corregir, sin volver a guardar", (await page.locator("#r-sol-nombre").getAttribute("aria-invalid")) === null);
   await sign("Firma de conformidad del solicitante");
   await page.getByLabel(/He revisado la información/).check();
   await page.getByRole("radio", { name: /^Congelador/ }).check();
@@ -163,7 +170,7 @@ try {
   await row.getByRole("button", { name: "Acciones" }).click();
   await page.getByRole("menuitem", { name: /Anular recepción/ }).click();
   await fillPrompt("Prueba UI: registro duplicado", "Anular");
-  await page.getByText(/pendiente de autorización/i).first().waitFor();
+  await page.locator("[data-solicitud-pendiente]").first().waitFor();
   check("anular una recepción aceptada queda pendiente de autorización", true);
   check("la Responsable General aprueba la anulación", (await aprobarComoRG(`R ${String(folio).padStart(7, "0")}`)) === 200);
   await page.reload();
@@ -175,7 +182,7 @@ try {
   await anulada.getByRole("button", { name: "Acciones" }).click();
   await page.getByRole("menuitem", { name: /Restaurar recepción/ }).click();
   await fillPrompt("Prueba UI: se anuló por error", "Restaurar");
-  await page.getByText(/pendiente de autorización/i).first().waitFor();
+  await page.locator("[data-solicitud-pendiente]").first().waitFor();
   check("la Responsable General aprueba la restauración", (await aprobarComoRG(`R ${String(folio).padStart(7, "0")}`)) === 200);
   await page.reload();
   await setFilterToggle("Mostrar anuladas", false);
@@ -185,8 +192,15 @@ try {
   await restaurada.getByRole("button", { name: "Acciones" }).click();
   await page.getByRole("menuitem", { name: "Editar" }).click();
   await page.getByText("Historial del registro").waitFor();
+  // La actividad del historial aparece recogida: "Actividad · N actividades" la despliega.
+  const bitacora = page.getByRole("button", { name: /^Actividad · \d+ actividad/ });
+  check("la bitácora del historial aparece recogida", (await bitacora.getAttribute("aria-expanded")) === "false");
+  check("el historial ya no tiene 'Exportar' ni 'Actualizar'", (await page.locator("#sec-historial").getByRole("button", { name: /^(Exportar|Actualizar)$/ }).count()) === 0);
+  await bitacora.click();
   await page.getByText(/restauró la recepción/).first().waitFor();
-  check("historial de auditoría en el formulario de recepción", true);
+  check("historial de auditoría en el formulario de recepción (se despliega con un clic)", (await bitacora.getAttribute("aria-expanded")) === "true");
+  await bitacora.click();
+  check("  … y se vuelve a recoger", (await bitacora.getAttribute("aria-expanded")) === "false");
 
   /* ---------- Analisis: crear, revisar, aprobar ---------- */
   // Cadena propia (recepcion aceptada -> procesamiento -> extraccion E-A) para no depender de ids previos.
@@ -236,7 +250,7 @@ try {
   // Fase 10: evidencia instrumental obligatoria; se adjunta desde la sección del formato.
   await showAll();
   await page.locator('input[aria-label="Archivo de evidencia"]').setInputFiles({ name: "cromatograma-sgc.pdf", mimeType: "application/pdf", buffer: pdfDePrueba(`Cromatograma UI SGC ${Date.now()}`) });
-  await page.locator('input[id^="evidencia-desc-"]').fill("Cromatograma de la corrida");
+  await page.locator('textarea[id^="evidencia-desc-"]').fill("Cromatograma de la corrida");
   await page.getByRole("button", { name: "Adjuntar evidencia" }).click();
   await page.locator("[data-adjunto]").first().waitFor();
   check("el analista adjunta la evidencia instrumental antes de enviar", true);
@@ -331,80 +345,64 @@ try {
   await page.getByText("Enviado").first().waitFor();
   check("envío registrado con evidencia: el informe queda enviado", (await page.locator("[data-envio]").count()) === 1);
 
-  /* ---------- Documentos SGC (Fase 7: encendido, aparece en Calidad) ---------- */
-  await page.goto(`${BASE}/documentos`);
-  await page.getByRole("button", { name: /Proponer documento/ }).first().waitFor();
-  check("documentos encendido: la página abre con 'Proponer documento'", true);
-  check("documentos encendido: aparece en el menú Calidad", (await page.locator("nav a", { hasText: /^Documentos$/ }).count()) > 0);
+  /* ---------- Documentos SGC (reemplaza a la Biblioteca; el detalle esta en ui/documentos.mjs) ---------- */
+  await page.goto(`${BASE}/calidad/biblioteca`);
+  await page.waitForURL((url) => url.pathname === "/documentos");
+  await page.getByTestId("sgc-carpetas").waitFor();
+  check("/calidad/biblioteca lleva a Documentos SGC (seis carpetas)", (await page.getByTestId("sgc-carpeta").count()) === 6);
+  check("Documentos SGC aparece en el menú lateral (y ya no «Biblioteca»)", (await page.locator("nav a", { hasText: /^Documentos SGC$/ }).count()) > 0 && (await page.locator("nav a", { hasText: /^Biblioteca$/ }).count()) === 0);
 
-  /* ---------- Auditoria (lista resumida + detalle; la integridad se verifica sola) ---------- */
+  /* ---------- Auditoria (lenguaje simple; la integridad se verifica sola y solo avisa si falla) ---------- */
   await page.goto(`${BASE}/auditoria`);
   await page.getByText("Quién hizo qué, cuándo y por qué").waitFor();
-  const timeline = page.locator("[data-audit-fila]");
+  const timeline = page.locator("[data-actividad]");
   await timeline.first().waitFor();
-  await page.locator('[data-integridad="ok"]').waitFor();
-  check("bitácora: verificación de integridad automática OK (Íntegra · N entradas)", /Íntegra ·/.test((await page.locator("[data-integridad]").textContent()) || ""));
-  // Cada entrada es una frase en español (actor + verbo), sin JSON ni nombres de columna.
+  // Cada actividad es una frase en español, sin JSON ni nombres de columna.
   const firstText = (await timeline.first().textContent()) || "";
-  check("bitácora: entradas en lenguaje llano", /(inició sesión|creó|editó|anuló|restauró|aprobó|autorizó|marcó como revisado|dio de baja|reactivó|registró la entrega|envió|liberó|descargó|cambió|acceso fallido|repuso|importó|emitió|exportó|aceptó)/i.test(firstText) && !firstText.includes("_json") && !firstText.includes("{"), firstText.slice(0, 80));
-  await timeline.filter({ hasText: /\d+ cambios?/ }).first().click();
-  await page.locator("[data-audit-detalle]").getByText("Datos técnicos").waitFor();
-  check("bitácora: detalle con cambios antes → después y datos técnicos", (await page.locator("[data-audit-detalle]").getByText(/Qué cambió|Datos principales/).count()) > 0);
-  await page.getByRole("button", { name: /^Acción/ }).click();
-  await page.getByRole("menuitemradio", { name: "Anular / rechazar" }).click();
-  await timeline.filter({ hasText: /anuló/ }).first().waitFor();
-  check("bitácora: filtro por acción (categoría)", true);
+  check("bitácora: actividades en lenguaje llano", firstText.length > 10 && !firstText.includes("_") && !firstText.includes("{") && !/#\d/.test(firstText), firstText.slice(0, 80));
+  await timeline.first().click();
+  await page.locator("[data-actividad-detalle]").getByText("Qué pasó").waitFor();
+  check("bitácora: detalle en ventana con «Qué pasó»", true);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /^Filtros/ }).click();
+  await page.getByRole("switch", { name: "Anulaciones y rechazos" }).click();
+  await page.keyboard.press("Escape");
+  await timeline.filter({ hasText: /anuló|rechazó|dio de baja/ }).first().waitFor();
+  check("bitácora: filtro por tipo de actividad", true);
 
   /* ---------- Inventario: baja logica + reactivar ---------- */
   await page.goto(`${BASE}/inventario/reactivos`);
   await page.getByPlaceholder("Buscar por nombre, lote, CAS o catálogo").fill("2-Propanol");
-  const rrow = page.locator("tbody tr").filter({ hasText: "2-Propanol" }).first();
+  const rrow = page.locator("[data-reactivo]").filter({ hasText: "2-Propanol" }).first();
   await rrow.waitFor();
-  const before = await page.locator("tbody tr").filter({ hasText: "2-Propanol" }).count();
+  const before = await page.locator("[data-reactivo]").filter({ hasText: "2-Propanol" }).count();
   await rrow.getByRole("button", { name: "Acciones" }).click();
   await page.getByRole("menuitem", { name: /Dar de baja/ }).click();
   await fillPrompt("Prueba UI: frasco roto", "Dar de baja");
   await page.getByText(/baja/i).first().waitFor();
-  await page.waitForFunction((n) => [...document.querySelectorAll("tbody tr")].filter((tr) => tr.textContent.includes("2-Propanol")).length === n - 1, before);
+  await page.waitForFunction((n) => [...document.querySelectorAll("[data-reactivo]")].filter((tr) => tr.textContent.includes("2-Propanol")).length === n - 1, before);
   check("reactivo dado de baja desaparece de la lista", true, `antes=${before}`);
   await setFilterToggle("Mostrar bajas", true);
-  const brow = page.locator("tbody tr").filter({ hasText: "2-Propanol" }).filter({ hasText: "Baja" }).first();
+  const brow = page.locator("[data-reactivo]").filter({ hasText: "2-Propanol" }).filter({ hasText: "Baja" }).first();
   await brow.waitFor();
   check("reactivo en baja se distingue con etiqueta 'Baja'", true);
   await brow.getByRole("button", { name: "Acciones" }).click();
-  await page.getByRole("menuitem", { name: /Reactivar reactivo/ }).click();
+  await page.getByRole("menuitem", { name: /^Reactivar/ }).click();
   await fillPrompt("Prueba UI: se repuso el frasco", "Reactivar");
   await setFilterToggle("Mostrar bajas", false);
-  await page.waitForFunction((n) => [...document.querySelectorAll("tbody tr")].filter((tr) => tr.textContent.includes("2-Propanol")).length === n, before);
+  await page.waitForFunction((n) => [...document.querySelectorAll("[data-reactivo]")].filter((tr) => tr.textContent.includes("2-Propanol")).length === n, before);
   check("reactivo reactivado vuelve a la lista", true);
 
-  /* ---------- Inicio: flujo en curso, avisos y buscador ---------- */
+  /* ---------- Inicio y buscador ---------- */
   await page.goto(`${BASE}/`);
+  await page.getByRole("button", { name: "Desplegar Muestras" }).click();
   await page.getByRole("link", { name: "Informes" }).first().waitFor();
-  check("navegación principal incluye Informes", true);
-  await page.getByRole("heading", { name: "En curso" }).waitFor();
-  const flowCards = page.locator("li.group\\/card");
-  await flowCards.first().waitFor();
-  check("Inicio: lista de muestras en curso con etapas", (await flowCards.count()) >= 1, `tarjetas=${await flowCards.count()}`);
-  const nextStep = flowCards.first().getByRole("link", { name: /Registrar|Revisar|Aprobar|Crear|Autorizar|Enviar|Liberar/ });
-  check("Inicio: cada tarjeta ofrece el siguiente paso", (await nextStep.count()) >= 1, await nextStep.first().textContent());
-  await page.getByRole("heading", { name: "Avisos" }).waitFor();
-  const avisoRows = page.locator("#avisos a");
-  check("Inicio: avisos con cuenta y enlace", (await avisoRows.count()) >= 1, `avisos=${await avisoRows.count()}`);
-  await avisoRows.first().hover();
-  const hoverLink = page.getByRole("link", { name: /Ver los|Abrir la lista/ });
-  await hoverLink.waitFor();
-  check("Inicio: al pasar el cursor por un aviso se ve el detalle", (await hoverLink.count()) === 1 && (await page.locator("[data-radix-popper-content-wrapper] a").count()) >= 2);
-  await page.mouse.move(700, 40);
-  check("Inicio: sin fila 'Nuevo' (las acciones viven en el buscador)", !(await page.getByText("Nuevo:", { exact: true }).count()));
+  check("navegación principal: Muestras se despliega e incluye Informes", true);
   const search = page.locator('input[aria-label="Buscar en FICOTOX"]');
   await search.click();
-  await page.getByRole("radio", { name: "Acciones" }).waitFor();
-  await page.getByText("Nueva recepción", { exact: true }).first().waitFor();
-  check("buscador: al enfocar ofrece acciones generales y no las específicas", (await page.getByText("Nueva extracción DSP", { exact: true }).count()) === 0);
   await search.fill("por revisar");
-  // Dentro de los resultados (grupo "Ver"): el Inicio puede mostrar un aviso con el mismo texto.
-  const vistas = page.getByRole("group", { name: "Ver" });
+  // Dentro de los resultados (grupo "Pantallas"): el Inicio puede mostrar un aviso con el mismo texto.
+  const vistas = page.getByRole("group", { name: "Pantallas" });
   await vistas.getByText("Informes por revisar o autorizar", { exact: true }).waitFor();
   check("buscador: vistas por estado («por revisar»)", (await vistas.getByText("Análisis por revisar o aprobar", { exact: true }).count()) === 1);
   await search.fill("ayuda");
@@ -418,7 +416,7 @@ try {
   await page.locator("[cmdk-item][data-selected=true]").filter({ hasText: /IR\s*0000001/ }).waitFor();
   check("buscador: folio corto «IR 1» selecciona IR 0000001 primero", (await page.locator("[cmdk-item]").filter({ hasText: /Nueva|Abrir/ }).count()) === 0);
   await search.fill("R 1");
-  await page.locator("[cmdk-item][data-selected=true]").filter({ hasText: /R\s*0000001/ }).waitFor();
+  await page.locator("[cmdk-item][data-selected=true]").filter({ hasText: /(^|[^A-Z])R\s*0000001/ }).waitFor();
   check("buscador: «R 1» encuentra la recepción R 0000001", true);
   await page.keyboard.press("Enter");
   await page.waitForURL((url) => /^\/muestras\/recepcion\/\d+$/.test(url.pathname));
@@ -434,7 +432,7 @@ try {
   await page.getByRole("heading", { name: "Cómo se usa FICOTOX" }).waitFor();
   check("página de ayuda accesible desde la barra lateral", true);
   await page.goto(`${BASE}/`);
-  await page.getByRole("link", { name: "Informes" }).first().waitFor();
+  await page.getByRole("link", { name: "Muestras" }).first().waitFor();
   await page.getByRole("button", { name: "Desplegar Calidad" }).click();
   await page.getByRole("link", { name: "Auditoría" }).first().waitFor();
   check("barra lateral: Calidad se despliega e incluye Auditoría", true);

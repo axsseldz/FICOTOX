@@ -155,7 +155,7 @@ export function InsumoSearch({ tipo, value, onChange, placeholder = "Buscar insu
 
   const optionAside = (o: (typeof shown)[number]) => {
     if (tipo === "reactivo") return `${formatInventoryAmount(o.cantidad_actual ?? 0)} ${o.unidad || ""}`;
-    if (tipo === "consumible") return `${formatInventoryAmount(o.piezas ?? 0)} pz`;
+    if (tipo === "consumible") return `${formatInventoryAmount(o.existencia ?? 0)} unid.`;
     const alert = equipoAlert(o);
     return alert ? alert.message : "";
   };
@@ -200,7 +200,7 @@ export function InsumoSearch({ tipo, value, onChange, placeholder = "Buscar insu
         ) : null}
       </div>
       {open ? (
-        <div ref={listRef} id={listId} role="listbox" className="scroll-thin absolute top-[calc(100%+4px)] left-0 z-30 max-h-[220px] w-full min-w-[260px] overflow-y-auto rounded-[8px] border border-line bg-surface p-1 shadow-pop">
+        <div ref={listRef} id={listId} role="listbox" className="scroll-thin absolute top-[calc(100%+4px)] left-0 z-[var(--z-popover)] max-h-[220px] w-full min-w-[260px] overflow-y-auto rounded-[8px] border border-line bg-popover p-1 shadow-pop">
           {!shown.length ? (
             <div className="px-2.5 py-2 text-[12.5px] text-ink-3">{!isInsumoCacheLoaded() ? "Cargando inventario…" : "Sin resultados"}</div>
           ) : (

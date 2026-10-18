@@ -1,18 +1,19 @@
 "use client";
 
-import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { forwardRef, useCallback, useEffect, useId, useLayoutEffect, useRef, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { CaretDown } from "@phosphor-icons/react";
 import { cn } from "./cn";
+import { useErrorDeCampo } from "./Validacion";
 
 /*
  * Controles de formulario. Etiqueta arriba, ayuda opcional, error abajo.
  * Superficie ligeramente rellena (como los campos de iOS/macOS), 40 px de
- * alto, y un anillo de foco del color de acento.
+ * alto. Al enfocar solo cambia el color del borde (sin anillo ni sombra).
  */
 
 /* Sin alto ni tamaño de letra: los fija la variante (clsx no fusiona clases de Tailwind, así que no se pueden sobrescribir después). */
 export const controlBase =
-  "w-full rounded-[10px] border border-line bg-surface-2/80 px-3 text-ink placeholder:text-ink-4 transition-[border-color,box-shadow,background-color] duration-150 ease-[var(--ease-spring)] hover:border-line-strong focus:border-brand focus:bg-surface focus:outline-none focus:shadow-[var(--shadow-focus)] disabled:cursor-not-allowed disabled:bg-surface-3/60 disabled:text-ink-3 read-only:bg-surface-3/50";
+  "w-full rounded-[10px] border border-line bg-surface-2/80 px-3 text-ink placeholder:text-ink-4 transition-[border-color,background-color] duration-150 ease-[var(--ease-spring)] hover:border-line-strong focus:border-brand/55 focus:outline-none focus-visible:shadow-[var(--shadow-focus)] aria-[invalid=true]:border-danger aria-[invalid=true]:focus:border-danger disabled:cursor-not-allowed disabled:bg-surface-3/60 disabled:text-ink-3 read-only:bg-surface-3/50";
 export const controlClass = `${controlBase} text-[14px]`;
 /* Control compacto para tablas y tarjetas por fila. */
 export const controlClassSm = `${controlBase} h-8 text-[13px]`;
@@ -28,7 +29,25 @@ export interface FieldProps {
   inline?: ReactNode;
 }
 
-export function Field({ label, hint, error, required, htmlFor, className, children, inline }: FieldProps) {
+export function Field({ label, hint, error: errorProp, required, htmlFor, className, children, inline }: FieldProps) {
+  // Error del formulario (useValidacion) para este campo: mensaje debajo y aria en el control.
+  const errorValidacion = useErrorDeCampo(htmlFor);
+  const error = errorProp || errorValidacion;
+  const errorId = htmlFor ? `${htmlFor}-error` : undefined;
+  useEffect(() => {
+    if (!htmlFor) return;
+    const el = document.getElementById(htmlFor);
+    if (!el) return;
+    if (errorValidacion) {
+      el.setAttribute("aria-invalid", "true");
+      el.setAttribute("aria-describedby", `${htmlFor}-error`);
+      el.dataset.validacion = "1";
+    } else if (el.dataset.validacion) {
+      el.removeAttribute("aria-invalid");
+      el.removeAttribute("aria-describedby");
+      delete el.dataset.validacion;
+    }
+  }, [htmlFor, errorValidacion]);
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       {label ? (
@@ -42,7 +61,7 @@ export function Field({ label, hint, error, required, htmlFor, className, childr
       ) : null}
       {children}
       {error ? (
-        <p className="text-[12.5px] text-danger" role="alert">
+        <p id={errorId} className="text-[12.5px] text-danger">
           {error}
         </p>
       ) : hint ? (
@@ -66,7 +85,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({ c
     <input
       ref={ref}
       aria-invalid={invalid || undefined}
-      className={cn(controlBase, small ? "h-8 text-[13px]" : "h-10", !small && (mono ? "text-[13px]" : "text-[14px]"), leading && "pl-9", trailing && "pr-9", mono && "font-mono", invalid && "border-danger focus:border-danger focus:shadow-[0_0_0_4px_rgba(200,67,59,0.18)]", className)}
+      className={cn(controlBase, small ? "h-8 text-[13px]" : "h-10", !small && (mono ? "text-[13px]" : "text-[14px]"), leading && "pl-9", trailing && "pr-9", mono && "font-mono", invalid && "border-danger focus:border-danger", className)}
       {...rest}
     />
   );
@@ -82,10 +101,59 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({ c
 
 export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   invalid?: boolean;
+  /* Variante compacta para filas y tarjetas por elemento (13 px, menos relleno). */
+  small?: boolean;
 }
 
-export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea({ className, invalid, rows = 3, ...rest }, ref) {
-  return <textarea ref={ref} rows={rows} aria-invalid={invalid || undefined} className={cn(controlClass, "min-h-10 resize-y py-2.5 leading-relaxed", invalid && "border-danger", className)} {...rest} />;
+/*
+ * Area de texto que crece con el contenido: `rows` es el minimo visible y el
+ * alto se ajusta al escribir, al cargar un registro y en solo lectura, asi el
+ * texto largo nunca queda oculto. Respeta los saltos de linea.
+ */
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea({ className, invalid, small, rows = 3, onInput, ...rest }, ref) {
+  const inner = useRef<HTMLTextAreaElement | null>(null);
+  const setRefs = useCallback(
+    (node: HTMLTextAreaElement | null) => {
+      inner.current = node;
+      if (typeof ref === "function") ref(node);
+      else if (ref) ref.current = node;
+    },
+    [ref],
+  );
+  const ajustar = useCallback(() => {
+    const node = inner.current;
+    if (!node) return;
+    node.style.height = "auto";
+    node.style.height = `${node.scrollHeight + (node.offsetHeight - node.clientHeight)}px`;
+  }, []);
+  useLayoutEffect(ajustar, [ajustar, rest.value, rest.defaultValue, rest.disabled]);
+  useEffect(() => {
+    const node = inner.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    // El ancho cambia (hoja lateral que se abre, ventana angosta): recalcula el alto.
+    let ancho = node.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (node.clientWidth !== ancho) {
+        ancho = node.clientWidth;
+        ajustar();
+      }
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [ajustar]);
+  return (
+    <textarea
+      ref={setRefs}
+      rows={rows}
+      aria-invalid={invalid || undefined}
+      onInput={(event) => {
+        ajustar();
+        onInput?.(event);
+      }}
+      className={cn(controlBase, small ? "min-h-8 py-1.5 text-[13px] leading-snug" : "min-h-10 py-2.5 text-[14px] leading-relaxed", "resize-none overflow-hidden whitespace-pre-wrap break-words", invalid && "border-danger focus:border-danger", className)}
+      {...rest}
+    />
+  );
 });
 
 export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
@@ -109,7 +177,7 @@ export interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement
 }
 
 export const checkboxClass =
-  "checkbox-mark h-[18px] w-[18px] shrink-0 cursor-pointer appearance-none rounded-[5px] border border-line-strong bg-surface transition-[background-color,border-color,transform] duration-150 ease-[var(--ease-spring)] checked:border-brand checked:bg-brand hover:border-ink-4 active:scale-95 focus-visible:shadow-[var(--shadow-focus)] disabled:cursor-not-allowed";
+  "checkbox-mark h-[18px] w-[18px] shrink-0 cursor-pointer appearance-none rounded-[5px] border border-line-strong bg-surface transition-[background-color,border-color,scale] duration-150 ease-[var(--ease-spring)] checked:border-brand checked:bg-brand hover:border-ink-4 active:scale-95 focus-visible:shadow-[var(--shadow-focus)] disabled:cursor-not-allowed";
 
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Checkbox({ label, description, className, id, ...rest }, ref) {
   const autoId = useId();
@@ -127,23 +195,8 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
   );
 });
 
-export interface RadioProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "type"> {
-  label?: ReactNode;
-}
-
 export const radioClass =
-  "h-[18px] w-[18px] shrink-0 cursor-pointer appearance-none rounded-full border border-line-strong bg-surface transition-[border-color,border-width,transform] duration-150 ease-[var(--ease-spring)] checked:border-[6px] checked:border-brand hover:border-ink-4 active:scale-95 focus-visible:shadow-[var(--shadow-focus)]";
-
-export const Radio = forwardRef<HTMLInputElement, RadioProps>(function Radio({ label, className, id, ...rest }, ref) {
-  const autoId = useId();
-  const inputId = id || autoId;
-  return (
-    <label htmlFor={inputId} className={cn("inline-flex cursor-pointer items-center gap-2 text-[14px] text-ink", rest.disabled && "cursor-not-allowed opacity-60", className)}>
-      <input ref={ref} id={inputId} type="radio" className={radioClass} {...rest} />
-      {label ? <span>{label}</span> : null}
-    </label>
-  );
-});
+  "h-[18px] w-[18px] shrink-0 cursor-pointer appearance-none rounded-full border border-line-strong bg-surface transition-[border-color,scale] duration-150 ease-[var(--ease-spring)] checked:border-[6px] checked:border-brand hover:border-ink-4 active:scale-95 focus-visible:shadow-[var(--shadow-focus)]";
 
 export interface SwitchProps {
   checked: boolean;

@@ -49,7 +49,7 @@ if (!confirmar) {
   console.log("\nNo se hizo ningún cambio. Para hacerlo: npm run instancia-nueva -- --confirmar");
   process.exit(2);
 }
-if (entorno.motor !== "sqlite") salir("Esta instalación usa MySQL/MariaDB: el administrador de la base crea una base vacía, después npm run migrar -- --respaldo-hecho y el primer administrador con el SQL de MANUAL_TECNICO.md §15.3 (ver docs/INSTALACION.md, «MySQL/MariaDB»).");
+if (entorno.motor !== "sqlite") salir("Esta instalación usa MySQL/MariaDB: el administrador de la base crea una base vacía, después npm run migrar -- --respaldo-hecho y el primer administrador con el SQL de README.md, «MySQL/MariaDB».");
 const vivo = servidorEncendido(entorno.instanceDir);
 if (vivo) salir(`El servidor está encendido (pid ${vivo.pid}). Detén el servicio antes de crear la instancia nueva.`);
 

@@ -13,12 +13,16 @@ import { FilterChips, FilterMenu, type FilterGroup, type FilterToggle } from "@/
 import { ActionMenu, Dropdown, type MenuItem } from "@/components/ui/Overlay";
 import { SearchInput, Toolbar } from "@/components/ui/PageHeader";
 import { EmptyState, ErrorState, Skeleton, TableSkeleton } from "@/components/ui/Primitives";
-import { CellPrimary, Table, TBody, Td, Th, THead, Tr, TableShell } from "@/components/ui/Table";
+import { FranjaPendientes } from "@/components/features/solicitudes/Solicitudes";
+import { StatusCell } from "@/components/ui/StatusFlag";
+import { CellPrimary, COL_FECHA, FILA_LISTA, Table, TBody, Td, Th, THead, Tr, TableShell } from "@/components/ui/Table";
 import { API_BASE_URL, getJsonAuth } from "@/lib/client/api";
-import { fmt, fmtDate } from "@/lib/client/format";
-import { useDebouncedValue } from "@/lib/client/hooks";
+import { cn } from "@/components/ui/cn";
+import { contar, fmtDate } from "@/lib/client/format";
+import { useDebouncedValue, useInitialParam, useParamChange } from "@/lib/client/hooks";
 import { formatExtractionFolio, normalizeSampleStatus } from "@/lib/client/samples";
 import { useResource } from "@/lib/client/store";
+import { estaHabilitada, motivoDe, seOfrece, usePuedeCrear } from "@/lib/client/puede";
 import type { ApiRecord } from "@/lib/client/types";
 import { EXTRACTION_TYPE_LIST, PLANNED_EXTRACTION_TYPES, extractionTypeMeta, normalizeExtractionType, type ExtractionType } from "@/lib/shared/extraction";
 
@@ -40,7 +44,8 @@ function ExtraccionList() {
   const { token, can } = useSession();
   const router = useRouter();
   const params = useSearchParams();
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(useInitialParam("buscar"));
+  useParamChange("buscar", setSearch);
   const [tipo, setTipo] = useState<TipoFilter>(normalizeExtractionType(params.get("tipo")) || "");
   const [etapa, setEtapa] = useState<EtapaFilter>("");
   const [molienda, setMolienda] = useState<MoliendaFilter>("");
@@ -63,9 +68,10 @@ function ExtraccionList() {
   );
   const items = resource.data;
 
-  const canCreate = can("ensayos", "C", { objeto: "extraccion", borrador: true });
+  const puedeCrear = usePuedeCrear();
+  const canCreate = puedeCrear("extraccion", can("ensayos", "C", { objeto: "extraccion", borrador: true }));
   const canEdit = (item: ApiRecord) => can("ensayos", "E", { objeto: "extraccion", borrador: String(item.estado || "registrada") === "registrada" });
-  const canAnalizar = can("ensayos", "C", { objeto: "analisis", borrador: true });
+  const canAnalizar = puedeCrear("analisis", can("ensayos", "C", { objeto: "analisis", borrador: true }));
   const canDelete = can("ensayos", "AN");
   const newItems: MenuItem[] = [
     ...EXTRACTION_TYPE_LIST.map((meta) => ({ label: meta.label, description: meta.clave, icon: <Flask size={16} weight="duotone" />, tone: "brand" as const, onSelect: () => router.push(`/muestras/extraccion/nueva?tipo=${meta.tipo}`) })),
@@ -90,7 +96,7 @@ function ExtraccionList() {
     },
     {
       key: "etapa",
-      label: "Etapa",
+      label: "Estado",
       value: etapa,
       defaultValue: "",
       onChange: (v) => setEtapa(v as EtapaFilter),
@@ -119,7 +125,7 @@ function ExtraccionList() {
   const menuFor = (item: ApiRecord): MenuItem[] => {
     const anulada = item.estado === "anulada";
     const list: MenuItem[] = [{ label: "Abrir", description: "Ver el formato completo", icon: <ArrowSquareOut size={16} weight="duotone" />, tone: "brand", onSelect: () => router.push(`/muestras/extraccion/${item.id}`) }];
-    if (canEdit(item) && !anulada) list.push({ label: "Editar", description: "Corregir pasos, pesos o equipos", icon: <PencilSimple size={16} weight="duotone" />, onSelect: () => router.push(`/muestras/extraccion/${item.id}`) });
+    if (seOfrece(item, "editar", canEdit(item)) && !anulada) list.push({ label: "Editar", description: motivoDe(item, "editar") || "Corregir pasos, pesos o equipos", disabled: !estaHabilitada(item, "editar", canEdit(item)), icon: <PencilSimple size={16} weight="duotone" />, onSelect: () => router.push(`/muestras/extraccion/${item.id}`) });
     if (canAnalizar && !anulada) list.push({ label: "Analizar", description: "Registrar el análisis de este extracto", icon: <TestTube size={16} weight="duotone" />, tone: "success", onSelect: () => router.push(`/muestras/analisis/nuevo?extraccion=${item.id}`) });
     list.push(...reportar("muestras_extraccion", item.id, formatExtractionFolio(item)));
     if (canDelete) {
@@ -133,6 +139,7 @@ function ExtraccionList() {
 
   return (
     <>
+      <FranjaPendientes entidades={["muestras_extraccion"]} grupo="extraccion" />
       <Toolbar
         end={
           canCreate ? (
@@ -153,7 +160,7 @@ function ExtraccionList() {
         <FilterChips groups={groups} toggles={toggles} />
       </Toolbar>
 
-      <TableShell footer={items ? `${fmt(visible.length)} extracciones${tipo ? ` ${extractionTypeMeta(tipo).short}` : ""}` : undefined}>
+      <TableShell footer={items ? `${contar(visible.length, "extracción", "extracciones")}${tipo ? ` ${extractionTypeMeta(tipo).short}` : ""}` : undefined}>
         {resource.error ? (
           <ErrorState message={resource.error} onRetry={resource.reload} />
         ) : !items ? (
@@ -169,11 +176,11 @@ function ExtraccionList() {
           <Table>
             <THead>
               <tr>
-                <Th>Folio</Th>
-                <Th>Formato</Th>
-                <Th>Muestra</Th>
-                <Th>Procesamiento</Th>
-                <Th>Extraída</Th>
+                <Th className="w-[136px]">Folio</Th>
+                <Th className="w-[190px]">Formato</Th>
+                <Th className="min-w-[220px]">Muestra</Th>
+                <Th className="w-[150px]">Procesamiento</Th>
+                <Th className={COL_FECHA}>Extraída</Th>
                 <Th>Estado</Th>
                 <Th align="right" sticky />
               </tr>
@@ -183,24 +190,26 @@ function ExtraccionList() {
                 const meta = extractionTypeMeta(item.tipo_registro);
                 const anulada = item.estado === "anulada";
                 return (
-                  <Tr key={item.id} interactive onClick={() => router.push(`/muestras/extraccion/${item.id}`)} className={anulada ? "opacity-60" : undefined}>
+                  <Tr key={item.id} interactive onClick={() => router.push(`/muestras/extraccion/${item.id}`)} className={cn(FILA_LISTA, anulada && "opacity-60")}>
                     <Td>
                       <FolioChip type={meta.tipo} num={item.folio_num} />
                     </Td>
                     <Td>
                       <CellPrimary title={meta.short} subtitle={item.tipo_molienda === "congelada" ? "Molienda congelada" : item.tipo_molienda === "fresca" ? "Molienda fresca" : meta.clave} />
                     </Td>
-                    <Td className="max-w-[220px]">
-                      <CellPrimary title={item.id_interno || "—"} subtitle={item.muestra_tipo === "lote" ? "Lote" : "Muestra única"} />
+                    <Td className="min-w-[220px] max-w-[360px]">
+                      <CellPrimary lineas={2} title={item.id_interno || "—"} subtitle={item.muestra_tipo === "lote" ? "Lote" : "Muestra única"} />
                     </Td>
                     <Td>{item.folio_procesamiento_num ? <FolioChip type="P" num={item.folio_procesamiento_num} /> : <span className="text-[12.5px] text-ink-3">Sin vincular</span>}</Td>
-                    <Td muted className="whitespace-nowrap">
+                    <Td muted className={COL_FECHA}>
                       {fmtDate(item.fecha_extraccion)}
                     </Td>
                     <Td>
-                      <SampleStatus status={item.estado} />
-                      <SupervisionBadge estado={item.supervision_estado} />
-                      <SolicitudBadge solicitud={item.solicitud_pendiente as ApiRecord | null} />
+                      <StatusCell>
+                        <SampleStatus status={item.estado} />
+                        <SupervisionBadge estado={item.supervision_estado} />
+                        <SolicitudBadge solicitud={item.solicitud_pendiente as ApiRecord | null} />
+                      </StatusCell>
                     </Td>
                     <Td align="right" sticky onClick={(event) => event.stopPropagation()}>
                       <ActionMenu items={menuFor(item)} header={`${formatExtractionFolio(item)} · ${meta.short}`} />

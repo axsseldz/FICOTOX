@@ -20,7 +20,6 @@ import { exigirSinRetencion } from "./modules/calidad/bloqueos";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import nodemailer from "nodemailer";
 import { requireUser, userIdFromClaims, type CurrentUser } from "./auth";
 import { registrarAuditoria, snapshotRow } from "./audit";
 import { getConfig } from "./config";
@@ -38,7 +37,7 @@ const MAX_BYTES = 15 * 1024 * 1024;
 /* ---------- Utilidades ---------- */
 
 /* h***@cofepris.gob.mx: el correo parcialmente oculto para la bitacora. */
-export function correoOculto(correo: string): string {
+function correoOculto(correo: string): string {
   const [usuario, dominio] = String(correo || "").split("@");
   if (!dominio) return "***";
   return `${usuario.slice(0, 1)}***@${dominio}`;
@@ -57,7 +56,7 @@ function informesDir(): string {
 }
 
 /* Configuracion SMTP: todas las variables o ninguna. */
-export function smtpConfig(): { host: string; port: number; user: string; pass: string; from: string } | null {
+function smtpConfig(): { host: string; port: number; user: string; pass: string; from: string } | null {
   const host = (process.env.SMTP_HOST || "").trim();
   const port = Number(process.env.SMTP_PORT || 0);
   const user = (process.env.SMTP_USER || "").trim();
@@ -67,7 +66,9 @@ export function smtpConfig(): { host: string; port: number; user: string; pass: 
   return { host, port, user, pass, from };
 }
 
-function transporte(cfg: NonNullable<ReturnType<typeof smtpConfig>>) {
+async function transporte(cfg: NonNullable<ReturnType<typeof smtpConfig>>) {
+  // nodemailer solo se carga cuando se envia un correo.
+  const { default: nodemailer } = await import("nodemailer");
   // SMTP_HOST=prueba: transporte en memoria para las pruebas (no sale a la red).
   if (cfg.host === "prueba") return nodemailer.createTransport({ streamTransport: true, buffer: true, newline: "unix" });
   return nodemailer.createTransport({ host: cfg.host, port: cfg.port, secure: cfg.port === 465, auth: { user: cfg.user, pass: cfg.pass } });
@@ -165,7 +166,7 @@ export async function enviarPorSmtp({ request, s, params }: RouteContext): Promi
   const folio = `${informeFolio(informe)} v${informe.version}`;
   let info: { messageId?: string; response?: unknown; envelope?: unknown; message?: unknown };
   try {
-    info = (await transporte(cfg).sendMail({
+    info = (await (await transporte(cfg)).sendMail({
       from: cfg.from,
       to: `"${nombre.replace(/"/g, "")}" <${correo}>`,
       subject: `Informe de resultados ${folio}`,

@@ -2,6 +2,7 @@
  * Registros ligados a una incidencia o NC (Fase 11): referencia legible de un
  * registro de otro modulo y sus incidencias.
  */
+import { numeroFolio } from "../../../shared/folios";
 import { type Row, type Session } from "../../db";
 import { HttpError } from "../../http";
 import { folioLabel, type SampleTable } from "../../samples-flow";
@@ -19,9 +20,10 @@ export const MODULO_REGISTRO: Record<string, Modulo> = {
   reactivos: "inventario",
   consumibles: "inventario",
   documentos_sgc: "documentos",
+  biblioteca_documentos: "documentos",
+  sgc_documentos: "documentos",
 };
 
-const pad = (n: unknown) => String(Number(n) || 0).padStart(7, "0");
 const MUESTRAS = new Set(["muestras_recepcion", "muestras_procesamiento", "muestras_extraccion", "muestras_analisis"]);
 
 /* Referencia legible del registro; 404 si no existe o la entidad no es relacionable. */
@@ -32,12 +34,14 @@ export async function referenciaDe(s: Session, entidad: string, id: number): Pro
   return referenciaDeFila(entidad, row);
 }
 
-export function referenciaDeFila(entidad: string, row: Row): string {
+function referenciaDeFila(entidad: string, row: Row): string {
   if (MUESTRAS.has(entidad)) return folioLabel(entidad as SampleTable, row);
-  if (entidad === "informes") return `IR ${pad(row.folio_num)}${Number(row.version || 1) > 1 ? ` v${row.version}` : ""}`;
+  if (entidad === "informes") return `IR ${numeroFolio(row.folio_num)}${Number(row.version || 1) > 1 ? ` v${row.version}` : ""}`;
   if (entidad === "equipos") return `${row.nombre || `Equipo #${row.id}`}${row.clave_bitacora ? ` (${row.clave_bitacora})` : ""}`;
   if (entidad === "reactivos") return String(row.producto || row.nombre || `Reactivo #${row.id}`);
   if (entidad === "consumibles") return String(row.producto || `Consumible #${row.id}`);
   if (entidad === "documentos_sgc") return `${row.clave || "Documento"} rev. ${row.revision ?? ""}`.trim();
+  if (entidad === "sgc_documentos") return String(row.clave || `Documento #${row.id}`);
+  if (entidad === "biblioteca_documentos") return String(row.clave || row.titulo || `Documento #${row.id}`);
   return `${entidad} #${row.id}`;
 }

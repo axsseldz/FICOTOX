@@ -5,11 +5,12 @@
  * Tecnica, muestras:A), cambiar el folio y reabrir (con motivo y contrasena;
  * sin muestras:A quedan como solicitud para la Coord. Tecnica).
  */
+import { formatearFolio } from "@/lib/shared/folios";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
-import { Field, Input, Select } from "@/components/ui/Field";
+import { Field, Select, Textarea } from "@/components/ui/Field";
 import { Dialog, usePrompt } from "@/components/ui/Overlay";
 import { Badge } from "@/components/ui/Primitives";
 import { API_BASE_URL, getJsonAuth, sendJsonAuth } from "@/lib/client/api";
@@ -17,6 +18,8 @@ import { fmtDate } from "@/lib/client/format";
 import { formatSampleFolio } from "@/lib/client/samples";
 import { invalidate } from "@/lib/client/store";
 import type { ApiRecord } from "@/lib/client/types";
+import { useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
+import { msg } from "@/lib/client/mensajes";
 
 /* Recepcion aceptada (con o sin desviacion) y vigente: se puede asignar. */
 export const recepcionAsignable = (item: ApiRecord | null | undefined): boolean =>
@@ -34,6 +37,8 @@ export function useAccionesRecepcion(onDone?: () => void) {
   const { token } = useSession();
   const prompt = usePrompt();
   const [asignando, setAsignando] = useState<ApiRecord | null>(null);
+  // Errores del servidor de estas acciones (cambio de folio, reapertura): pop-up con qué pasó y qué hacer.
+  const v = useValidacion({ titulo: "No se pudo completar la acción", reglas: () => [] });
 
   const terminar = useCallback(() => {
     invalidate("muestras", "dashboard");
@@ -52,17 +57,17 @@ export function useAccionesRecepcion(onDone?: () => void) {
     if (!folio) return;
     const numero = Number.parseInt(folio, 10);
     if (!Number.isFinite(numero) || numero < 1) {
-      toast.error("Escribe un número de folio válido");
+      v.avisar({ que: `«${folio}» no es un número de folio válido.`, hacer: "Vuelve a «Cambiar folio…» y escribe solo el número (1 o mayor)." });
       return;
     }
-    const motivo = await prompt({ critico: true, title: `Cambiar folio a R ${String(numero).padStart(7, "0")}`, description: "Motivo del cambio de folio.", confirmLabel: "Cambiar folio" });
+    const motivo = await prompt({ critico: true, title: `Cambiar folio a ${formatearFolio("R", numero)}`, description: "Motivo del cambio de folio.", confirmLabel: "Cambiar folio" });
     if (!motivo) return;
     try {
       const data = await sendJsonAuth("POST", `${API_BASE_URL}/samples/reception/${item.id}/folio`, token, { folio_num: numero, motivo });
       avisarSolicitud(data, "Folio cambiado");
       terminar();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo cambiar el folio");
+      v.errorServidor(err);
     }
   };
 
@@ -79,11 +84,16 @@ export function useAccionesRecepcion(onDone?: () => void) {
       avisarSolicitud(data, "Recepción reabierta");
       terminar();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo reabrir");
+      v.errorServidor(err);
     }
   };
 
-  const dialogo: ReactNode = asignando ? <AsignarDialog recepcion={asignando} onClose={() => setAsignando(null)} onChange={terminar} /> : null;
+  const dialogo: ReactNode = (
+    <>
+      {asignando ? <AsignarDialog recepcion={asignando} onClose={() => setAsignando(null)} onChange={terminar} /> : null}
+      <ValidacionAmbito v={v}>{null}</ValidacionAmbito>
+    </>
+  );
 
   return { asignar: (item: ApiRecord) => setAsignando(item), cambiarFolio, reabrir, dialogo, avisarSolicitud };
 }
@@ -104,6 +114,10 @@ function AsignarDialog({ recepcion, onClose, onChange }: { recepcion: ApiRecord;
   const [motivo, setMotivo] = useState("");
   const [aviso, setAviso] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const v = useValidacion({
+    titulo: "No se pudo asignar la muestra",
+    reglas: () => (usuario ? [] : [{ campo: "asignar-usuario", mensaje: msg.elige("a la persona que trabajará la muestra") }]),
+  });
 
   useEffect(() => {
     getJsonAuth(`${API_BASE_URL}/samples/reception/${recepcion.id}/asignaciones`, token)
@@ -121,7 +135,7 @@ function AsignarDialog({ recepcion, onClose, onChange }: { recepcion: ApiRecord;
   const yaAsignado = new Set(vigentes.map((a) => Number(a.usuario_id)));
 
   const asignar = async () => {
-    if (!usuario) return;
+    if (!v.validar()) return;
     setEnviando(true);
     try {
       const data = await sendJsonAuth("POST", `${API_BASE_URL}/samples/reception/${recepcion.id}/asignaciones`, token, { usuario_id: Number(usuario), motivo: motivo.trim() || null });
@@ -133,7 +147,7 @@ function AsignarDialog({ recepcion, onClose, onChange }: { recepcion: ApiRecord;
       setMotivo("");
       onChange();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo asignar");
+      v.errorServidor(err, { motivo: "asignar-motivo" });
     } finally {
       setEnviando(false);
     }
@@ -148,7 +162,7 @@ function AsignarDialog({ recepcion, onClose, onChange }: { recepcion: ApiRecord;
       setAsignados((data.items || []) as ApiRecord[]);
       onChange();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo revocar");
+      v.errorServidor(err);
     }
   };
 
@@ -165,12 +179,13 @@ function AsignarDialog({ recepcion, onClose, onChange }: { recepcion: ApiRecord;
           <Button variant="secondary" onClick={onClose}>
             Cerrar
           </Button>
-          <Button onClick={asignar} disabled={!usuario || enviando} loading={enviando}>
+          <Button onClick={asignar} disabled={enviando} loading={enviando}>
             Asignar
           </Button>
         </>
       }
     >
+      <ValidacionAmbito v={v}>
       <div data-asignaciones className="mb-4 flex flex-col gap-2">
         <p className="text-[13px] font-medium text-ink-2">Asignada a</p>
         {asignados === null ? (
@@ -208,13 +223,14 @@ function AsignarDialog({ recepcion, onClose, onChange }: { recepcion: ApiRecord;
         </Select>
       </Field>
       <Field label="Motivo (opcional)" htmlFor="asignar-motivo" className="mt-3">
-        <Input id="asignar-motivo" value={motivo} maxLength={300} onChange={(event) => setMotivo(event.target.value)} />
+        <Textarea id="asignar-motivo" rows={2} value={motivo} maxLength={300} onChange={(event) => setMotivo(event.target.value)} />
       </Field>
       {aviso ? (
         <p role="alert" data-aviso-asignacion className="mt-3 rounded-[10px] border border-warning/40 bg-warning-soft px-3 py-2 text-[12.5px] text-ink-2">
           {aviso}
         </p>
       ) : null}
+      </ValidacionAmbito>
     </Dialog>
   );
 }

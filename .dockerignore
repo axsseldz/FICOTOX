@@ -1,0 +1,38 @@
+# Nada de datos, secretos ni artefactos entra a la imagen.
+node_modules
+.next
+.git
+.gitignore
+.dockerignore
+.claude
+.venv
+
+# Datos y respaldos
+instance
+instance-restaurada
+backups
+archivo-pre-pruebas-*
+*.sqlite3
+*.sqlite3-*
+*.sqlite
+*.db
+*.xlsx
+*.tar.gz
+*.zip
+auditoria.key
+*.pem
+*.key
+
+# Secretos y semillas
+.env
+.env.*
+!.env.example
+scripts/seed-usuarios.local.json
+
+# Pruebas y artefactos
+tests
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+npm-debug.log*
+__pycache__

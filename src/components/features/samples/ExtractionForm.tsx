@@ -1,5 +1,6 @@
 "use client";
 
+import { formatearFolio } from "@/lib/shared/folios";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -8,11 +9,11 @@ import { AvisoSuspension } from "@/components/features/calidad/AvisoSuspension";
 import { IncidenciasFormCard } from "@/components/features/calidad/IncidenciasDelRegistro";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
-import { Field, FormGrid, Input, Select } from "@/components/ui/Field";
+import { Field, FormGrid, Input, Select, Textarea } from "@/components/ui/Field";
 import { DateInput } from "@/components/ui/DateInput";
 import { useConfirm } from "@/components/ui/Overlay";
 import { cn } from "@/components/ui/cn";
-import { controlClass, controlClassSm } from "@/components/ui/Field";
+import { controlClassSm } from "@/components/ui/Field";
 import { API_BASE_URL, getJsonAuth, sendJsonAuth } from "@/lib/client/api";
 import { isoDate, parseFloatOrNull, parseIntOrNull, todayIso } from "@/lib/client/format";
 import { equipoAlert, filterManualInventario, findInsumoByAutoQuery, findInsumoOption, findReactivoByRef, findUniqueOperativeEquipo, formatInventoryAmount, loadInsumoOptions, nextBitacoraFolio, resolveFixedInventoryAmount } from "@/lib/client/insumos";
@@ -20,9 +21,12 @@ import { formatExtractionFolio, getExtractionRowsFromProcessing, isSampleReadOnl
 import { RecordHistory } from "@/components/features/audit/RecordHistory";
 import { formatActiveUserSignature } from "@/lib/client/session";
 import { invalidate } from "@/lib/client/store";
+import { seOfrece, usePuedeCrear } from "@/lib/client/puede";
 import type { ApiRecord } from "@/lib/client/types";
 import { EXTRACTION_TYPES, type ExtractionType } from "@/lib/shared/extraction";
-import { Callout, ChoiceCard, ChoiceGrid, FieldGroup, FormCard, FormPage, PersonCard, StepRow, missingMessage, missingSections, openFormSection, type FormSectionDef } from "./FormLayout";
+import { Callout, ChoiceCard, ChoiceGrid, FieldGroup, FormCard, FormPage, PersonCard, StepRow, personaId, type FormSectionDef } from "./FormLayout";
+import { CampoValidado, useValidacion } from "@/components/ui/Validacion";
+import { msg, type Problema } from "@/lib/client/mensajes";
 import { InsumoSearch, InventarioRows, collectInventarioRows, newInventarioRow } from "./InsumoSearch";
 import { ASP_PROTOCOL } from "./extraction/asp";
 import { DSP_PROTOCOL } from "./extraction/dsp";
@@ -291,24 +295,24 @@ const buildProtocolInventario = (current: ExtractionState, protocol: ExtractionP
   return result;
 };
 
-/* Consumibles fijos cuyo stock no alcanza: se avisa (no se bloquea) porque el conteo de piezas del catalogo no siempre esta al dia. */
+/* Consumibles fijos cuyo stock no alcanza: se avisa (no se bloquea) porque el conteo de unidades del catalogo no siempre esta al dia. */
 const lowConsumibles = (current: ExtractionState, protocol: ExtractionProtocol, tubes: number): string[] => {
   // El mismo consumible puede usarse en varios pasos (p. ej. viales): se suma lo requerido por referencia.
-  const required = new Map<string, { label: string; piezas: number; total: number }>();
+  const required = new Map<string, { label: string; existencia: number; total: number }>();
   for (const field of protocol.fixedFields) {
     if (field.tipo !== "consumible" || !fixedEnabled(field, current)) continue;
     const ref = String(current.fields[field.key] || "").trim();
     if (!ref) continue;
     const option = findInsumoOption("consumible", ref);
     const { total } = fixedAmount(field, current, tubes);
-    if (!option || option.piezas === null || option.piezas === undefined || total <= 0) continue;
-    const entry = required.get(option.ref) || { label: option.label, piezas: Number(option.piezas), total: 0 };
+    if (!option || option.existencia === null || option.existencia === undefined || total <= 0) continue;
+    const entry = required.get(option.ref) || { label: option.label, existencia: Number(option.existencia), total: 0 };
     entry.total += total;
     required.set(option.ref, entry);
   }
   return Array.from(required.values())
-    .filter((entry) => entry.piezas < entry.total)
-    .map((entry) => `${entry.label}: ${formatInventoryAmount(entry.piezas)} piezas disponibles, se descontarán ${formatInventoryAmount(entry.total)}`);
+    .filter((entry) => entry.existencia < entry.total)
+    .map((entry) => `${entry.label}: ${formatInventoryAmount(entry.existencia)} unidades disponibles, se descontarán ${formatInventoryAmount(entry.total)}`);
 };
 
 /* Insumos fijos activos que no se encontraron en inventario: se guardan sin descuento, previa confirmacion. */
@@ -446,30 +450,49 @@ export function ExtractionForm({ item, tipo, prefillProcessingId }: { item: ApiR
   const router = useRouter();
   const confirm = useConfirm();
   const { token, can } = useSession();
+  const puedeCrear = usePuedeCrear();
   const protocol = PROTOCOLS[(item?.tipo_registro as ExtractionType) || tipo || "E-A"] || ASP_PROTOCOL;
   const meta = EXTRACTION_TYPES[protocol.tipo];
   const [form, setForm] = useState<ExtractionState>(() => (item ? formFromItem(item, protocol) : defaultForm(protocol)));
   // Fase 5: firmas ligadas a cuentas (extrajo, limpió, supervisó).
   const [firmantes, setFirmantes] = useState<Record<string, FirmanteState>>(() => ({ extrajo: firmanteDe(item, "extrajo"), limpio: firmanteDe(item, "limpio"), superviso: firmanteDe(item, "superviso") }));
-  const firmante = (rol: string) => ({ firmante: firmantes[rol], onFirmante: (v: FirmanteState) => setFirmantes((prev) => ({ ...prev, [rol]: v })) });
+  const firmante = (rol: string) => ({ nuevo: !item?.id, firmante: firmantes[rol], onFirmante: (v: FirmanteState) => setFirmantes((prev) => ({ ...prev, [rol]: v })) });
   const [processings, setProcessings] = useState<ApiRecord[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const detailCache = useRef(new Map<number, ApiRecord>());
   const editing = !!item?.id;
-  const canEdit = editing ? can("ensayos", "E", { objeto: "extraccion", borrador: String(item?.estado || "registrada") === "registrada" }) : can("ensayos", "C", { objeto: "extraccion", borrador: true });
+  const canEdit = editing ? seOfrece(item, "editar", can("ensayos", "E", { objeto: "extraccion", borrador: String(item?.estado || "registrada") === "registrada" })) : puedeCrear("extraccion", can("ensayos", "C", { objeto: "extraccion", borrador: true }));
   // Con una solicitud de autorizacion pendiente (Fase 3) el registro no se edita.
   const readOnly = editing && (isSampleReadOnly(item?.estado) || !canEdit || !!item?.solicitud_pendiente);
   const patch = (changes: Partial<ExtractionState>) => setForm((prev) => ({ ...prev, ...changes }));
   const setField = (key: string, value: string) => setForm((prev) => ({ ...prev, fields: { ...prev.fields, [key]: value } }));
   const setSteps = (changes: Record<string, boolean>) => setForm((prev) => ({ ...prev, steps: { ...prev.steps, ...changes } }));
   const tubes = tubeCountOf(form);
-  const completeness: Record<string, boolean> = {
-    "sec-datos": !!form.folio && !!form.fecha,
-    "sec-muestra": !!form.processingId && !!form.molienda,
-    "sec-resguardo": form.resExtracto.some(Boolean),
-    "sec-personal": !!form.quienExtrajo.trim() && !!form.quienSuperviso.trim() && (!protocol.hasLimpiezaPerson || form.fields.limpieza !== "si" || !!form.quienLimpieza.trim()),
+  const extrajoId = personaId("Quien extrajo");
+  const limpioId = personaId("Quien realizó la limpieza");
+  const supervisoId = personaId("Quien supervisó");
+  const conLimpieza = protocol.hasLimpiezaPerson && form.fields.limpieza === "si";
+  /* Reglas del formato, en orden (las del protocolo van entre "Muestra" y "Resguardo"): completitud, aviso del encabezado y pop-up. */
+  const reglas = (): Problema[] => {
+    const out: Problema[] = [];
+    const en = (seccion: string, grupo: string) => (campo: string, mensaje: string) => out.push({ campo, mensaje, seccion, grupo });
+    const datos = en("sec-datos", "Datos generales");
+    if (!form.folio) datos("e-folio", msg.indica("el folio de extracción"));
+    if (!form.fecha) datos("e-fecha", msg.indica("la fecha de extracción"));
+    const mu = en("sec-muestra", "Muestra y molienda");
+    if (!form.processingId) mu("e-proc", msg.elige("el procesamiento de origen"));
+    if (!form.molienda) mu("e-molienda", msg.elige("el tipo de molienda"));
+    out.push(...protocol.reglas(form));
+    if (!form.resExtracto.some(Boolean)) en("sec-resguardo", "Resguardo")("e-res-extracto", msg.elige("dónde queda el extracto"));
+    const per = en("sec-personal", "Personal");
+    if (!form.quienExtrajo.trim()) per(extrajoId, msg.elige("a quien extrajo"));
+    if (conLimpieza && !form.quienLimpieza.trim()) per(limpioId, msg.elige("a quien realizó la limpieza"));
+    if (!form.quienSuperviso.trim()) per(supervisoId, msg.elige("a quien supervisó"));
+    return out;
   };
+  const v = useValidacion({ titulo: editing ? "No se pudo guardar la extracción" : `No se pudo registrar la extracción ${meta.short}`, reglas: readOnly ? () => [] : reglas });
+  const camposServidor = { folio: "e-folio", id_interno: "e-id", "firma:extrajo": extrajoId, "firma:limpio": limpioId, "firma:superviso": supervisoId };
+  const ubicacionServidor = { folio: { seccion: "sec-datos", grupo: "Datos generales" }, id_interno: { seccion: "sec-muestra", grupo: "Muestra y molienda" }, "firma:extrajo": { seccion: "sec-personal", grupo: "Personal" }, "firma:limpio": { seccion: "sec-personal", grupo: "Personal" }, "firma:superviso": { seccion: "sec-personal", grupo: "Personal" } };
   // Opcionales: verde solo si se llenaron (folios de bitácora capturados / insumos con referencia).
   const optionalDone: Record<string, boolean | undefined> = {
     "sec-equipos": Object.values(form.bitacoras).some((entry) => !!entry.folio?.trim()) || form.equiposExtra.some((row) => !!row.ref) ? true : undefined,
@@ -478,7 +501,7 @@ export function ExtractionForm({ item, tipo, prefillProcessingId }: { item: ApiR
   const protocolIds = new Set(protocol.sections.map((section) => section.id));
   const sections: FormSectionDef[] = [...SECTIONS_BEFORE, ...protocol.sections, ...SECTIONS_AFTER, ...(editing ? [{ id: "sec-historial", label: "Historial", optional: true }] : [])].map((section) => ({
     ...section,
-    complete: readOnly ? undefined : protocolIds.has(section.id) ? protocol.sectionComplete(section.id, form) : section.optional ? optionalDone[section.id] : completeness[section.id],
+    complete: readOnly ? undefined : section.optional ? (protocolIds.has(section.id) ? protocol.sectionComplete(section.id, form) : optionalDone[section.id]) : v.seccionCompleta(section.id),
   }));
 
   const processingDetail = async (id: number): Promise<ApiRecord | null> => {
@@ -498,7 +521,7 @@ export function ExtractionForm({ item, tipo, prefillProcessingId }: { item: ApiR
       const muestraTipo: "unica" | "lote" = processing.muestra_tipo === "lote" || (!processing.muestra_tipo && rows.length > 1) ? "lote" : "unica";
       const resguardo = processing.resguardo || {};
       const frozen = !!resguardo.congelador_co1 || !!resguardo.congelador_co2 || !!resguardo.congelador_co3;
-      const folio = processing.folio_num ? `P ${String(processing.folio_num).padStart(7, "0")}` : "Procesamiento";
+      const folio = processing.folio_num ? formatearFolio("P", processing.folio_num) : "Procesamiento";
       return {
         ...prev,
         idInterno: ids || processing.id_interno || "",
@@ -574,29 +597,27 @@ export function ExtractionForm({ item, tipo, prefillProcessingId }: { item: ApiR
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, item, prefillProcessingId]);
 
-  const fail = (message: string, section: string) => {
-    setError(message);
-    toast.error(message);
-    openFormSection(section);
-  };
-
   const handleSave = async () => {
+    if (!v.validar()) return;
+    if (!canEdit) return v.avisar({ que: "No tienes permiso para guardar esta extracción.", hacer: "Pide a la administración que revise tus roles y permisos." });
     await loadInsumoOptions();
     const current = autoResolve(form, protocol, !editing);
     setForm(current);
     const currentTubes = tubeCountOf(current);
     const payload = { ...buildPayload(current, protocol, processings, currentTubes), firmantes: firmantesPayload(protocol.hasLimpiezaPerson ? firmantes : { ...firmantes, limpio: undefined }) };
-    const incompletas = missingSections(sections);
-    if (incompletas.length) return fail(missingMessage(incompletas), incompletas[0].id);
-    if (!payload.folio_num) return fail("El folio de extracción es obligatorio", "sec-datos");
-    if (payload.procesamiento_id && !payload.id_interno) return fail("El procesamiento seleccionado no tiene muestras para extracción", "sec-muestra");
+    if (payload.procesamiento_id && !payload.id_interno) {
+      return v.avisar({ que: "El procesamiento elegido no tiene muestras para extracción.", hacer: "Elige otro procesamiento o revisa sus muestras.", problemas: [{ campo: "e-proc", mensaje: "No tiene muestras para extracción", seccion: "sec-muestra", grupo: "Muestra y molienda" }] });
+    }
     const stockErrors = validateStock(current, protocol, currentTubes);
     if (stockErrors.length) {
       // La sección donde vive el reactivo se localiza por el campo, para abrirla aunque esté plegada.
-      const section = document.querySelector(`[data-fixed-key="${stockErrors[0].key}"]`)?.closest("section")?.id || "sec-extraccion";
-      return fail(`Stock insuficiente: ${stockErrors.map((e) => e.message).join("; ")}`, section);
+      const seccionDe = (key: string) => document.getElementById(`e-insumo-${key}`)?.closest("section")?.id || "sec-extraccion";
+      return v.avisar({
+        que: "No hay existencia suficiente de algunos reactivos del protocolo.",
+        hacer: "Elige otro lote con existencia, repón el inventario o ajusta la cantidad.",
+        problemas: stockErrors.map((e) => ({ campo: `e-insumo-${e.key}`, mensaje: e.message, seccion: seccionDe(e.key), grupo: "Stock insuficiente" })),
+      });
     }
-    if (!canEdit) return fail("No tienes permiso para esta acción", "sec-datos");
 
     // Equipos no aptos o insumos sin descuento: se avisa y se pide confirmacion explicita
     // (el catalogo de equipos aun no esta validado y las soluciones preparadas pueden no estar en inventario).
@@ -649,7 +670,6 @@ export function ExtractionForm({ item, tipo, prefillProcessingId }: { item: ApiR
     }
 
     setSubmitting(true);
-    setError(null);
     try {
       if (editing) {
         await sendJsonAuth("PUT", `${API_BASE_URL}/samples/extraction/${item!.id}`, token, payload);
@@ -661,9 +681,7 @@ export function ExtractionForm({ item, tipo, prefillProcessingId }: { item: ApiR
       invalidate("muestras", "movimientos", "reactivos", "consumibles", "dashboard");
       router.push(`/muestras/extraccion?tipo=${protocol.tipo}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudo guardar la extracción";
-      setError(message);
-      toast.error(message);
+      v.errorServidor(err, camposServidor, ubicacionServidor);
       setSubmitting(false);
     }
   };
@@ -675,9 +693,11 @@ export function ExtractionForm({ item, tipo, prefillProcessingId }: { item: ApiR
     setSteps,
     tubeCount: tubes,
     step: (key, number, label, children) => (
-      <StepRow number={number} label={label} checked={!!form.steps[key]} onCheckedChange={(checked) => setSteps({ [key]: checked })}>
-        {children}
-      </StepRow>
+      <CampoValidado key={key} id={`e-paso-${key}`}>
+        <StepRow number={number} label={label} checked={!!form.steps[key]} onCheckedChange={(checked) => setSteps({ [key]: checked })}>
+          {children}
+        </StepRow>
+      </CampoValidado>
     ),
     equipo: (key, placeholder) => <InsumoSearch tipo="equipo" value={form.fields[key] || ""} onChange={(ref) => setField(key, ref)} placeholder={placeholder} size="sm" />,
     fixed: (key) => {
@@ -693,9 +713,9 @@ export function ExtractionForm({ item, tipo, prefillProcessingId }: { item: ApiR
           return { ...prev, fields: next };
         });
       return (
-        <div data-fixed-key={field.key} className="contents">
+        <CampoValidado id={`e-insumo-${field.key}`} className="min-w-0">
           <InsumoSearch tipo={field.tipo} value={form.fields[field.key] || ""} onChange={chooseFixed} placeholder={field.placeholder} cantidadFija={total || null} cantidadUnidad={field.cantidadUnidad} cantidadNota={nota} stepEnabled={fixedEnabled(field, form)} showStockBadge size="sm" />
-        </div>
+        </CampoValidado>
       );
     },
     text: (key, placeholder, options) => (
@@ -715,7 +735,11 @@ export function ExtractionForm({ item, tipo, prefillProcessingId }: { item: ApiR
         aria-label={options?.ariaLabel || placeholder}
       />
     ),
-    weightTable: (columns, options) => <WeightTable rows={form.sampleRows} columns={columns} compact={options?.compact} linked={!!form.processingId} onChange={(rows) => patch({ sampleRows: rows })} />,
+    weightTable: (columns, options) => (
+      <CampoValidado id={`e-pesos-${columns[0]?.muestra || "tabla"}`}>
+        <WeightTable rows={form.sampleRows} columns={columns} compact={options?.compact} linked={!!form.processingId} onChange={(rows) => patch({ sampleRows: rows })} />
+      </CampoValidado>
+    ),
   };
 
   const rows = equipoRows(form, protocol);
@@ -730,7 +754,7 @@ export function ExtractionForm({ item, tipo, prefillProcessingId }: { item: ApiR
       status={sampleStatusLabel(form.estado)}
       statusTone={readOnly ? "danger" : "brand"}
       sections={sections}
-      error={error}
+      validacion={v}
       readOnly={readOnly}
       after={
         editing ? (
@@ -768,7 +792,7 @@ export function ExtractionForm({ item, tipo, prefillProcessingId }: { item: ApiR
       <FormCard id="sec-datos" title="Datos generales" description={`${meta.label}. ${meta.descripcion}`}>
         <FormGrid cols={4}>
           <Field label={`Folio ${meta.tipo}`} htmlFor="e-folio" required hint={`Serie propia del formato ${meta.clave}.`}>
-            <Input id="e-folio" type="number" min="1" inputMode="numeric" value={form.folio} onChange={(event) => patch({ folio: event.target.value })} mono invalid={!!error && !form.folio} />
+            <Input id="e-folio" type="number" min="1" inputMode="numeric" value={form.folio} onChange={(event) => patch({ folio: event.target.value })} mono />
           </Field>
           <Field label="Fecha" htmlFor="e-fecha" required>
             <DateInput id="e-fecha" value={form.fecha} onChange={(value) => patch({ fecha: value })} />
@@ -788,7 +812,7 @@ export function ExtractionForm({ item, tipo, prefillProcessingId }: { item: ApiR
               <option value="">Sin vincular</option>
               {processings.map((option) => (
                 <option key={option.id} value={option.id}>
-                  P {String(option.folio_num || "").padStart(7, "0")} · {option.id_interno || "Sin ID interno"}
+                  {formatearFolio("P", option.folio_num)} · {option.id_interno || "Sin ID interno"}
                 </option>
               ))}
             </Select>
@@ -808,10 +832,12 @@ export function ExtractionForm({ item, tipo, prefillProcessingId }: { item: ApiR
             <Input id="e-id" maxLength={200} value={form.idInterno} onChange={(event) => patch({ idInterno: event.target.value })} mono placeholder="Se completa desde el procesamiento" />
           </Field>
           <FieldGroup label="Tipo de molienda">
-            <ChoiceGrid cols={2}>
-              <ChoiceCard type="radio" name="e-molienda" checked={form.molienda === "fresca"} onChange={() => patch({ molienda: "fresca" })} label="Fresca" description="Pasa directo al submuestreo." />
-              <ChoiceCard type="radio" name="e-molienda" checked={form.molienda === "congelada"} onChange={() => patch({ molienda: "congelada" })} label="Congelada" description="Requiere descongelar y homogeneizar." />
-            </ChoiceGrid>
+            <CampoValidado id="e-molienda">
+              <ChoiceGrid cols={2}>
+                <ChoiceCard type="radio" name="e-molienda" checked={form.molienda === "fresca"} onChange={() => patch({ molienda: "fresca" })} label="Fresca" description="Pasa directo al submuestreo." />
+                <ChoiceCard type="radio" name="e-molienda" checked={form.molienda === "congelada"} onChange={() => patch({ molienda: "congelada" })} label="Congelada" description="Requiere descongelar y homogeneizar." />
+              </ChoiceGrid>
+            </CampoValidado>
           </FieldGroup>
         </div>
       </FormCard>
@@ -821,22 +847,24 @@ export function ExtractionForm({ item, tipo, prefillProcessingId }: { item: ApiR
       <FormCard id="sec-resguardo" title="Resguardo" description="Dónde queda el extracto y la molienda restante.">
         <div className="flex flex-col gap-5">
           <FieldGroup label="Extracto">
-            <ChoiceGrid cols={5}>
-              {RES_EXTRACTO.map((label, index) => (
-                <ChoiceCard key={label} checked={!!form.resExtracto[index]} onChange={(checked) => patch({ resExtracto: form.resExtracto.map((v, i) => (i === index ? checked : v)) })} label={label} />
-              ))}
-            </ChoiceGrid>
+            <CampoValidado id="e-res-extracto">
+              <ChoiceGrid cols={5}>
+                {RES_EXTRACTO.map((label, index) => (
+                  <ChoiceCard key={label} checked={!!form.resExtracto[index]} onChange={(checked) => patch({ resExtracto: form.resExtracto.map((x, i) => (i === index ? checked : x)) })} label={label} />
+                ))}
+              </ChoiceGrid>
+            </CampoValidado>
           </FieldGroup>
           <FieldGroup label="Molienda restante">
             <ChoiceGrid cols={5}>
               {RES_MOLIDA.map((label, index) => (
-                <ChoiceCard key={label} checked={!!form.resMolida[index]} onChange={(checked) => patch({ resMolida: form.resMolida.map((v, i) => (i === index ? checked : v)) })} label={label} />
+                <ChoiceCard key={label} checked={!!form.resMolida[index]} onChange={(checked) => patch({ resMolida: form.resMolida.map((x, i) => (i === index ? checked : x)) })} label={label} />
               ))}
             </ChoiceGrid>
           </FieldGroup>
         </div>
         <Field label="Observaciones generales" htmlFor="e-obs" className="mt-5">
-          <textarea id="e-obs" rows={3} className={cn(controlClass, "py-2")} value={form.observaciones} onChange={(event) => patch({ observaciones: event.target.value })} />
+          <Textarea id="e-obs" rows={3} value={form.observaciones} onChange={(event) => patch({ observaciones: event.target.value })} />
         </Field>
       </FormCard>
 

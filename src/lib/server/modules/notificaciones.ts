@@ -1,110 +1,94 @@
 /*
- * Notificaciones dentro de la app (Fase 9): campana de la barra lateral.
- * Se calculan al vuelo desde lo que ya existe (sin tabla nueva) y solo
- * muestran lo que aplica a la persona segun sus permisos y asignaciones.
- * Reutiliza las consultas de los avisos del Inicio.
+ * Notificaciones (campana de la barra lateral).
+ *
+ * Salen de la MISMA fuente que "Para ti" del Inicio (src/lib/server/pendientes.ts):
+ * un evento por pendiente con su clave estable. Lo nuevo es el estado de
+ * lectura por persona (tabla notificaciones_leidas, migracion 15): al pulsar
+ * una notificacion, al marcarla o con "Marcar todas como leídas" se guarda su
+ * clave; las leidas no se cuentan ni se muestran (salvo en "Ver anteriores",
+ * las leidas de los ultimos 7 dias). Marcar como leida NO resuelve nada: el
+ * pendiente sigue en el Inicio y en su bandeja; la notificacion desaparece
+ * sola cuando el pendiente se resuelve. Leer no pasa por la bitacora.
  */
-import { avisosCalidad } from "./calidad/tablero";
 import { requireUser } from "../auth";
 import { type Row, type Session } from "../db";
-import { json, type RouteContext } from "../http";
-import { cargarAutorizacion, permisoDe, type Autorizacion } from "../rbac";
-import { contarPorSupervisar } from "../supervision";
-import { porAutorizarDe } from "../solicitudes";
-import { autorizacionesPorVencer } from "../autorizaciones";
+import { HttpError, json, readJson, type RouteContext } from "../http";
+import { pendientesDe, type Evento } from "../pendientes";
+import { cargarAutorizacion, type Autorizacion } from "../rbac";
 
-import { ACCIONES_CRITICAS } from "../../shared/acciones-criticas";
-import { FEATURES } from "../../shared/features";
-import { formatearFecha, hoyLocal, sumarDias } from "../../shared/fechas";
-import { vencimientosProximos } from "./admin";
-import { documentosPorLeer } from "./documentos-flujo";
-
-import { avisosRespaldo, recibeAvisosRespaldo } from "./respaldos";
-
-export interface Notificacion {
+interface Notificacion extends Evento {
+  grupo: string;
+  /* Tipo y titulo completos (compatibilidad con los clientes anteriores). */
   tipo: string;
   titulo: string;
-  detalle: string;
-  href: string;
-  tono: "danger" | "warning" | "info";
+  leida_en: string | null;
 }
 
-const pad = (n: unknown) => String(n || 0).padStart(7, "0");
-const LIMITE = 15;
+const TIPO_GRUPO: Record<string, string> = {
+  muestras_asignadas: "muestra_asignada",
+  analisis_pendientes: "analisis",
+  informes_revision: "informe",
+  informes_entrega: "informe",
+  informes_enmienda: "informe_enmienda",
+  por_autorizar: "solicitud",
+  por_supervisar: "supervision",
+  mant_vencidos: "mantenimiento",
+  mant_proximos: "mantenimiento",
+  equipos_cal: "calibracion",
+  reactivos_bajos: "stock_bajo",
+  consumibles_bajos: "stock_bajo",
+  reactivos_caducan: "caducidad",
+  accesos_vencen: "acceso",
+  autorizaciones_vencen: "autorizacion",
+  bitacora_alterada: "bitacora_alterada",
+  respaldo_viejo: "respaldo",
+  prueba_vieja: "respaldo",
+  documentos_sgc: "documento",
+  documentos_solicitudes: "documento",
+};
 
-export async function notificacionesDe(s: Session, auth: Autorizacion): Promise<Notificacion[]> {
-  const out: Notificacion[] = [];
-  const yo = auth.userId;
-  const puede = (modulo: Parameters<typeof permisoDe>[1], accion: Parameters<typeof permisoDe>[2]) => !!permisoDe(auth, modulo, accion);
+const DIA = 86_400_000;
+const haceDias = (n: number) => new Date(Date.now() - n * DIA).toISOString();
 
-  // Muestras asignadas a la persona en los ultimos 7 dias.
-  const desde = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const asignadas = await s.query<Row>(
-    `SELECT a.recepcion_id, a.asignado_en, r.folio_num, r.solicitante FROM asignaciones_muestra a LEFT JOIN muestras_recepcion r ON r.id = a.recepcion_id
-     WHERE a.usuario_id = :yo AND a.revocado_en IS NULL AND a.asignado_en >= :desde ORDER BY a.asignado_en DESC LIMIT ${LIMITE}`,
-    { yo, desde },
-  );
-  for (const a of asignadas) out.push({ tipo: "muestra_asignada", titulo: `Muestra asignada R ${pad(a.folio_num)}`, detalle: `${a.solicitante || ""} · ${formatearFecha(a.asignado_en)}`.replace(/^ · /, ""), href: `/muestras/recepcion/${a.recepcion_id}`, tono: "info" });
+async function notificacionesDe(s: Session, auth: Autorizacion): Promise<{ items: Notificacion[]; anteriores: Notificacion[] }> {
+  const grupos = await pendientesDe(s, auth);
+  const eventos = grupos.flatMap((g) => g.eventos.map((e) => ({ ...e, grupo: g.key, tipo: e.tipo || TIPO_GRUPO[g.key] || g.key, titulo: `${e.frase}: ${e.registro}` })));
+  const leidas = await s.query<Row>("SELECT id, clave, leida_en FROM notificaciones_leidas WHERE usuario_id = :yo", { yo: auth.userId });
+  const leidaEn = new Map(leidas.map((l) => [String(l.clave), String(l.leida_en)]));
 
-  // Analisis que puede revisar o aprobar (no los que elaboro).
-  const estadosAnalisis = [puede("ensayos", "R") ? "en_revision" : null, puede("ensayos", "A") ? "revisado" : null].filter(Boolean) as string[];
-  if (estadosAnalisis.length) {
-    const filas = await s.query<Row>(`SELECT id, folio_num, version, estado FROM muestras_analisis WHERE estado IN (${estadosAnalisis.map((e) => `'${e}'`).join(", ")}) AND COALESCE(creado_por, 0) <> :yo ORDER BY id LIMIT ${LIMITE}`, { yo });
-    for (const f of filas) out.push({ tipo: "analisis", titulo: `${String(f.estado) === "revisado" ? "Aprobar" : "Revisar"} análisis A ${pad(f.folio_num)}${Number(f.version || 1) > 1 ? ` v${f.version}` : ""}`, detalle: String(f.estado) === "revisado" ? "Revisado, falta aprobar" : "Enviado a revisión", href: `/muestras/analisis/${f.id}`, tono: "warning" });
+  // Depuracion: lecturas de mas de 90 dias y claves de eventos que ya no existen (con un dia de margen).
+  const vigentes = new Set(eventos.map((e) => e.clave));
+  const viejas = leidas.filter((l) => String(l.leida_en) < haceDias(90) || (!vigentes.has(String(l.clave)) && String(l.leida_en) < haceDias(1))).map((l) => Number(l.id));
+  if (viejas.length) {
+    await s.execute(`DELETE FROM notificaciones_leidas WHERE id IN (${viejas.join(", ")})`);
+    await s.commit();
   }
 
-  // Informes que puede revisar, autorizar o liberar (no los que elaboro).
-  const estadosInforme = [puede("informes", "R") ? "borrador" : null, ...(puede("informes", "A") ? ["en_revision", "autorizado"] : [])].filter(Boolean) as string[];
-  if (estadosInforme.length) {
-    const filas = await s.query<Row>(`SELECT id, folio_num, version, estado FROM informes WHERE estado IN (${estadosInforme.map((e) => `'${e}'`).join(", ")}) AND COALESCE(creado_por, 0) <> :yo AND COALESCE(requiere_enmienda, 0) = 0 ORDER BY id LIMIT ${LIMITE}`, { yo });
-    const verbo: Record<string, string> = { borrador: "Revisar", en_revision: "Autorizar", autorizado: "Liberar" };
-    for (const f of filas) out.push({ tipo: "informe", titulo: `${verbo[String(f.estado)]} informe IR ${pad(f.folio_num)}${Number(f.version || 1) > 1 ? ` v${f.version}` : ""}`, detalle: String(f.estado) === "autorizado" ? "Autorizado, falta liberar" : String(f.estado) === "en_revision" ? "Revisado, falta autorizar" : "Borrador, falta revisar", href: `/informes/${f.id}`, tono: "warning" });
-  }
-
-  // Solicitudes "Por autorizar" y registros "Por supervisar".
-  for (const sol of await porAutorizarDe(s, auth)) out.push({ tipo: "solicitud", titulo: `Por autorizar: ${ACCIONES_CRITICAS[sol.tipo]?.etiqueta || sol.tipo}`, detalle: `${sol.referencia || ""} · solicitud #${sol.id}`.replace(/^ · /, ""), href: "/solicitudes", tono: "warning" });
-  for (const r of await contarPorSupervisar(s, yo)) out.push({ tipo: "supervision", titulo: `Por supervisar: ${r.tipo} ${r.referencia}`, detalle: "Pendiente de tu visto bueno", href: String(r.href), tono: "warning" });
-
-  // Documentos por leer y por revisar, aprobar o publicar.
-  if (FEATURES.documentos && puede("documentos", "V")) {
-    for (const d of await documentosPorLeer(s, yo)) out.push({ tipo: "documento_leer", titulo: `Por leer: ${d.clave} rev. ${d.revision}`, detalle: String(d.titulo || ""), href: `/documentos?documento=${d.id}`, tono: "info" });
-    const estadosDoc = [...(puede("documentos", "G") ? ["revision_calidad", "aprobado"] : []), puede("documentos", "R") ? "revision_tecnica" : null, puede("documentos", "A") ? "por_aprobar" : null].filter(Boolean) as string[];
-    if (estadosDoc.length) {
-      const filas = await s.query<Row>(`SELECT id, clave, revision, estado FROM documentos_sgc WHERE estado IN (${estadosDoc.map((e) => `'${e}'`).join(", ")}) AND COALESCE(creado_por, 0) <> :yo AND COALESCE(asignado_a, 0) <> :yo ORDER BY id LIMIT ${LIMITE}`, { yo });
-      const que: Record<string, string> = { revision_calidad: "Revisión de calidad", revision_tecnica: "Revisión técnica", por_aprobar: "Aprobar", aprobado: "Publicar" };
-      for (const f of filas) out.push({ tipo: "documento", titulo: `${que[String(f.estado)]}: ${f.clave} rev. ${f.revision}`, detalle: "Documento del SGC", href: `/documentos?documento=${f.id}`, tono: "warning" });
-    }
-  }
-
-  // Mantenimientos vencidos o proximos (si ve equipos).
-  if (puede("equipos", "V")) {
-    const hoy = hoyLocal();
-    const filas = await s.query<Row>(
-      `SELECT mt.id, mt.tipo, mt.fecha_programada, mt.estado, e.nombre AS equipo FROM mantenimientos mt LEFT JOIN equipos e ON e.id = mt.id_equipo
-       WHERE mt.estado = 'vencido' OR (mt.estado IN ('programado', 'en_proceso') AND mt.fecha_programada <= :limite) ORDER BY mt.fecha_programada LIMIT ${LIMITE}`,
-      { limite: sumarDias(hoy, 30) },
-    );
-    for (const m of filas) {
-      const vencido = String(m.estado) === "vencido" || String(m.fecha_programada || "") < hoy;
-      out.push({ tipo: "mantenimiento", titulo: `${vencido ? "Mantenimiento vencido" : "Mantenimiento próximo"}: ${m.equipo || "Equipo"}`, detalle: formatearFecha(m.fecha_programada), href: "/inventario/mantenimiento", tono: vencido ? "danger" : "info" });
-    }
-  }
-
-  // Cuentas, roles y autorizaciones que vencen pronto (las propias; las de otros si administra).
-  const administra = !!permisoDe(auth, "usuarios", "G");
-  const vencen = administra ? await vencimientosProximos(s, 7) : (await vencimientosProximos(s, 7)).filter((v) => Number(v.usuario_id ?? v.id) === yo);
-  for (const v of vencen.slice(0, LIMITE)) out.push({ tipo: "acceso", titulo: `${v.rol ? `Rol ${v.rol}` : "Cuenta"} vence el ${formatearFecha(v.vigente_hasta)}`, detalle: String(v.nombre || v.email || ""), href: administra ? "/administracion/accesos" : "/#mis-autorizaciones", tono: "warning" });
-  for (const a of (await autorizacionesPorVencer(s, auth, 30)).slice(0, LIMITE)) out.push({ tipo: "autorizacion", titulo: `Autorización por vencer: ${a.etiqueta}`, detalle: `${a.propia ? "Tuya" : a.persona} · vence el ${formatearFecha(a.vigente_hasta)}`, href: a.propia ? "/#mis-autorizaciones" : "/administracion/usuarios", tono: "warning" });
-  // Fase 10: respaldos (quien respalda y quien revisa): sin respaldo reciente o sin prueba de restauracion.
-  if (recibeAvisosRespaldo(auth)) for (const a of avisosRespaldo()) out.push({ tipo: a.tipo === "sin_respaldo" ? "respaldo" : "prueba_restauracion", titulo: a.titulo, detalle: a.detalle, href: "/administracion/respaldos", tono: "warning" });
-  // Fase 11: incidencias por evaluar, mis acciones (proximas y vencidas), verificaciones, informes retenidos y suspensiones.
-  for (const a of await avisosCalidad(s, auth)) out.push(a);
-  return out;
+  const recientes = (a: Notificacion, b: Notificacion) => String(b.cuando || "").localeCompare(String(a.cuando || ""));
+  const todas: Notificacion[] = eventos.map((e) => ({ ...e, leida_en: leidaEn.get(e.clave) ?? null }));
+  return {
+    items: todas.filter((n) => !n.leida_en).sort(recientes),
+    anteriores: todas.filter((n) => n.leida_en && n.leida_en >= haceDias(7)).sort((a, b) => String(b.leida_en).localeCompare(String(a.leida_en))),
+  };
 }
 
-/* GET /api/notificaciones */
+/* GET /api/notificaciones: las no leidas (items, total = contador) y las leidas de los ultimos 7 dias (anteriores). */
 export async function listarNotificaciones({ request, s }: RouteContext): Promise<Response> {
   const user = await requireUser(request);
-  const items = await notificacionesDe(s, await cargarAutorizacion(s, user));
-  return json({ items, total: items.length });
+  const { items, anteriores } = await notificacionesDe(s, await cargarAutorizacion(s, user));
+  return json({ items, anteriores, total: items.length });
+}
+
+/* POST /api/notificaciones/leidas { claves: string[] }: marca como leidas (sin bitacora). */
+export async function marcarLeidas({ request, s }: RouteContext): Promise<Response> {
+  const user = await requireUser(request);
+  const auth = await cargarAutorizacion(s, user);
+  const payload = await readJson(request);
+  const claves = [...new Set((Array.isArray(payload.claves) ? payload.claves : []).map((c) => String(c)).filter((c) => c && c.length <= 190))].slice(0, 500);
+  if (!claves.length) throw new HttpError(400, { message: "Indica qué notificaciones marcar" });
+  const ya = new Set((await s.query<Row>("SELECT clave FROM notificaciones_leidas WHERE usuario_id = :yo", { yo: auth.userId })).map((r) => String(r.clave)));
+  const ahora = new Date().toISOString();
+  for (const clave of claves.filter((c) => !ya.has(c))) await s.execute("INSERT INTO notificaciones_leidas (usuario_id, clave, leida_en) VALUES (:yo, :clave, :ahora)", { yo: auth.userId, clave, ahora });
+  await s.commit();
+  return json({ message: "Marcadas como leídas", leida_en: ahora });
 }

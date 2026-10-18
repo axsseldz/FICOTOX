@@ -133,8 +133,8 @@ function PantallaBloqueo() {
   };
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="bloqueo-titulo" className="fixed inset-0 z-[100] flex items-center justify-center bg-[rgba(16,32,43,0.55)] px-4 backdrop-blur-md">
-      <div className="w-full max-w-[380px] rounded-[18px] bg-surface p-6 shadow-[var(--shadow-lg,0_24px_60px_-20px_rgba(16,32,43,0.45))] ring-1 ring-line">
+    <div role="dialog" aria-modal="true" aria-labelledby="bloqueo-titulo" className="fixed inset-0 z-[var(--z-bloqueo)] flex items-center justify-center bg-[rgba(16,32,43,0.55)] px-4 backdrop-blur-md">
+      <div className="w-full max-w-[380px] rounded-[18px] bg-surface p-6 shadow-panel ring-1 ring-line">
         <div className="flex flex-col items-center text-center">
           <BrandMark size={44} />
           <h2 id="bloqueo-titulo" className="mt-4 text-[18px] font-semibold text-ink">

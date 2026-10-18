@@ -10,7 +10,6 @@ import { liberar, registrarEnvio } from "./lib/envio.mjs";
 import { hoyLocal } from "../src/lib/shared/fechas.ts";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { createRequire } from "node:module";
 import zlib from "node:zlib";
 
 const BASE = process.env.BASE || "http://localhost:3100/api";
@@ -100,19 +99,6 @@ const bitacora = (await api("GET", `/audit?entidad=muestras_recepcion&entidad_id
 const crear = bitacora.find((e) => e.accion === "crear");
 const entrada = (await api("GET", `/audit/${crear?.id}`, undefined, QA)).data?.item;
 check("bitacora: los datos guardados conservan 2026-09-07", entrada?.datos_nuevos?.fecha_recepcion === RECIBIDA, `${entrada?.datos_nuevos?.fecha_recepcion}`);
-const csv = await (await fetch(`${BASE}/admin/accesos?formato=csv&seccion=cuentas`, { headers: { Authorization: `Bearer ${QA}` } })).text();
-const dbHasta = (() => {
-  const Database = createRequire(import.meta.url)(process.env.BETTER_SQLITE3 || "better-sqlite3");
-  const d = new Database(process.env.TEST_DB_PATH);
-  try {
-    return d.prepare("SELECT vigente_hasta FROM usuarios WHERE email = 'diego.salinas@ficotox.local'").get()?.vigente_hasta;
-  } finally {
-    d.close();
-  }
-})();
-const esperadoCsv = dbHasta ? `${dbHasta.slice(8, 10)}/${dbHasta.slice(5, 7)}/${dbHasta.slice(0, 4)}` : "";
-check("CSV de revision de accesos: la vigencia sale dd/mm/aaaa, el mismo dia que en la base", !!esperadoCsv && csv.split("\n").some((l) => l.includes("diego.salinas") && l.includes(esperadoCsv)), `${dbHasta} ${csv.split("\n").find((l) => l.includes("diego.salinas"))?.slice(0, 160)}`);
-
 const fallidas = results.filter((r) => !r.ok);
 console.log(`\n${results.length - fallidas.length}/${results.length} pruebas de fechas (servidor) pasaron`);
 process.exit(fallidas.length ? 1 : 0);

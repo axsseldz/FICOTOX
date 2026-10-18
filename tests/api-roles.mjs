@@ -58,50 +58,54 @@ for (let i = 0; i < 60; i += 1) {
 
 /* ---------- Matriz esperada (seccion 4 del prompt de la Fase 1) ---------- */
 
-const MODULOS = ["usuarios", "documentos", "muestras", "ensayos", "informes", "equipos", "inventario", "calidad", "compras"];
+const MODULOS = ["usuarios", "documentos", "muestras", "ensayos", "informes", "equipos", "inventario", "calidad", "respaldos", "compras"];
 const ACCIONES = ["V", "C", "E", "R", "A", "AN", "G"];
 /* Fase 2: "supervisado" ya se aplica (queda pendiente del visto bueno), no es diferido. Fase 11: "incidencias" tampoco. */
 const DIFERIDOS = new Set(["asignado", "proyecto", "tecnico", "investigacion", "autorizados", "administrativo", "limitado", "auditoria"]);
 const f = (modulo, acciones, alcance = "total") => acciones.split(" ").map((accion) => ({ modulo, accion, alcance }));
+/* Documentos SGC (migracion 22): acciones documentales, sin alcance. */
+const PERSONAL_DOC = "documento_consultar_vigente documento_proponer documento_elaborar documento_enviar_revision documento_acusar_lectura";
+const TODAS_DOC = "documento_consultar_vigente documento_proponer documento_crear_ficha documento_elaborar documento_enviar_revision documento_revisar documento_autorizar documento_publicar documento_obsoletar documento_consultar_historico documento_acusar_lectura documento_administrar_lecturas documento_externo_gestionar lista_maestra_exportar";
 
 const MATRIZ = {
-  "Administrador técnico del sistema": { email: "jorge.ramirez@ficotox.local", filas: [...f("usuarios", "G"), ...f("documentos", "V", "tecnico"), ...f("muestras", "V", "estado"), ...f("equipos", "V"), ...f("calidad", "V", "bitacora")] },
+  "Administrador técnico del sistema": { email: "jorge.ramirez@ficotox.local", filas: [...f("usuarios", "G"), ...f("muestras", "V", "estado"), ...f("equipos", "V"), ...f("calidad", "V", "bitacora"), ...f("respaldos", "V G")] },
   "Responsable General": {
     email: "patricia.luna@ficotox.local",
     // Fase 3: el Responsable General aprueba los cambios de acceso (usuarios = V A).
-    filas: [...f("usuarios", "V A"), ...f("documentos", "V R A AN"), ...f("muestras", "V AN"), ...f("ensayos", "V R AN"), ...f("informes", "V R A AN"), ...f("equipos", "V AN"), ...f("inventario", "V AN"), ...f("calidad", "V R A AN"), ...f("compras", "V A")],
+    filas: [...f("usuarios", "V A"), ...f("documentos", "documento_consultar_vigente documento_proponer documento_autorizar documento_consultar_historico documento_acusar_lectura lista_maestra_exportar"), ...f("muestras", "V AN"), ...f("ensayos", "V R AN"), ...f("informes", "V R A AN"), ...f("equipos", "V AN"), ...f("inventario", "V AN"), ...f("calidad", "V R A AN"), ...f("respaldos", "V"), ...f("compras", "V A")],
   },
   "Coordinador/a de Mejora Continua": {
     email: "ana.torres@ficotox.local",
-    filas: [...f("usuarios", "V"), ...f("documentos", "G R A AN"), ...f("muestras", "V"), ...f("ensayos", "V"), ...f("informes", "V"), ...f("equipos", "V"), ...f("inventario", "V"), ...f("calidad", "G R A AN"), ...f("compras", "V")],
+    filas: [...f("usuarios", "V A"), ...f("documentos", TODAS_DOC), ...f("muestras", "V"), ...f("ensayos", "V"), ...f("informes", "V"), ...f("equipos", "V"), ...f("inventario", "V"), ...f("calidad", "G R A AN"), ...f("respaldos", "V"), ...f("compras", "V")],
   },
   "Coordinador/a del Área Técnica": {
     email: "ricardo.medina@ficotox.local",
-    filas: [...f("usuarios", "V"), ...f("documentos", "C E R", "tecnico"), ...f("muestras", "C E R A AN"), ...f("ensayos", "C E R A AN"), ...f("informes", "C R A AN"), ...f("equipos", "G R AN"), ...f("inventario", "G R AN"), ...f("calidad", "C R"), ...f("compras", "V")],
+    // Migracion 21: tambien aprueba cambios de acceso (usuarios:A).
+    filas: [...f("usuarios", "V A"), ...f("documentos", "documento_consultar_vigente documento_proponer documento_elaborar documento_enviar_revision documento_revisar documento_autorizar documento_consultar_historico documento_acusar_lectura"), ...f("muestras", "C E R A AN"), ...f("ensayos", "C E R A AN"), ...f("informes", "C R A AN"), ...f("equipos", "G R AN"), ...f("inventario", "G R AN"), ...f("calidad", "C R"), ...f("compras", "V")],
   },
   "Coordinador/a de Investigación y Desarrollo": {
     email: "gabriela.ortiz@ficotox.local",
-    filas: [...f("usuarios", "V"), ...f("documentos", "C E R", "investigacion"), ...f("muestras", "C E", "proyecto"), ...f("ensayos", "C E R", "proyecto"), ...f("informes", "C R", "proyecto"), ...f("equipos", "C E R"), ...f("inventario", "C E"), ...f("calidad", "C E"), ...f("compras", "V")],
+    filas: [...f("usuarios", "V"), ...f("documentos", "documento_consultar_vigente documento_proponer documento_elaborar documento_enviar_revision documento_revisar documento_consultar_historico documento_acusar_lectura"), ...f("muestras", "C E", "proyecto"), ...f("ensayos", "C E R", "proyecto"), ...f("informes", "C R", "proyecto"), ...f("equipos", "C E R"), ...f("inventario", "C E"), ...f("calidad", "C E"), ...f("compras", "V")],
   },
   "Técnico Analista": {
     email: "luis.castro@ficotox.local",
-    filas: [...f("usuarios", "V", "propio"), ...f("documentos", "V"), ...f("documentos", "C", "borrador"), ...f("muestras", "V E", "asignado"), ...f("ensayos", "C E"), ...f("informes", "C", "borrador"), ...f("equipos", "C E", "uso"), ...f("inventario", "C E", "movimientos"), ...f("calidad", "C", "incidencias")],
+    filas: [...f("usuarios", "V", "propio"), ...f("documentos", PERSONAL_DOC), ...f("muestras", "V E", "asignado"), ...f("ensayos", "C E"), ...f("informes", "C", "borrador"), ...f("equipos", "C E", "uso"), ...f("inventario", "C E", "movimientos"), ...f("calidad", "C", "incidencias")],
   },
   "Técnico Auxiliar": {
     email: "mariana.delgado@ficotox.local",
-    filas: [...f("usuarios", "V", "propio"), ...f("documentos", "V"), ...f("muestras", "C E", "recepcion"), ...f("ensayos", "C E", "preparacion"), ...f("equipos", "C E", "uso"), ...f("inventario", "C E", "movimientos"), ...f("calidad", "C", "incidencias")],
+    filas: [...f("usuarios", "V", "propio"), ...f("documentos", PERSONAL_DOC), ...f("muestras", "C E", "recepcion"), ...f("ensayos", "C E", "preparacion"), ...f("equipos", "C E", "uso"), ...f("inventario", "C E", "movimientos"), ...f("calidad", "C", "incidencias")],
   },
   "Administrador/a Auxiliar": {
     email: "carmen.aguilar@ficotox.local",
-    filas: [...f("usuarios", "V", "limitado"), ...f("documentos", "V C", "administrativo"), ...f("muestras", "V", "estado"), ...f("equipos", "C E", "mantenimiento"), ...f("inventario", "C E", "administrativo"), ...f("calidad", "C", "incidencias"), ...f("compras", "G")],
+    filas: [...f("usuarios", "V", "limitado"), ...f("documentos", PERSONAL_DOC), ...f("muestras", "V", "estado"), ...f("equipos", "C E", "mantenimiento"), ...f("inventario", "C E", "administrativo"), ...f("calidad", "C", "incidencias"), ...f("compras", "G")],
   },
   "Auditor Interno": {
     email: "hector.navarro@ficotox.local",
-    filas: [...MODULOS.flatMap((m) => f(m, "V")), ...f("calidad", "C E", "auditoria")],
+    filas: [...MODULOS.filter((m) => m !== "documentos").flatMap((m) => f(m, "V")), ...f("documentos", "documento_consultar_vigente documento_consultar_historico lista_maestra_exportar"), ...f("calidad", "C E", "auditoria")],
   },
   "Estudiante / personal en formación": {
     email: "diego.salinas@ficotox.local",
-    filas: [...f("usuarios", "V", "propio"), ...f("documentos", "V", "autorizados"), ...f("muestras", "C E", "asignado"), ...f("ensayos", "C E", "borrador"), ...f("equipos", "C E", "supervisado"), ...f("inventario", "C E", "supervisado"), ...f("calidad", "C", "incidencias")],
+    filas: [...f("usuarios", "V", "propio"), ...f("documentos", "documento_consultar_vigente documento_acusar_lectura"), ...f("muestras", "C E", "asignado"), ...f("ensayos", "C E", "borrador"), ...f("equipos", "C E", "supervisado"), ...f("inventario", "C E", "supervisado"), ...f("calidad", "C", "incidencias")],
   },
 };
 
@@ -116,6 +120,12 @@ function expandir(filas) {
   const out = {};
   const add = (m, a, al) => ((out[m] ||= {})[a] ||= new Set()).add(al);
   for (const { modulo, accion, alcance } of filas) {
+    // Documentos SGC: cada accion documental tal cual y, con cualquiera, V (acceso al modulo).
+    if (modulo === "documentos") {
+      add(modulo, accion, "total");
+      add(modulo, "V", "total");
+      continue;
+    }
     if (modulo === "usuarios" && DIFERIDOS.has(alcance)) {
       add(modulo, "V", "propio");
       continue;
@@ -166,7 +176,7 @@ check("login QA (rol de prueba con G en todos los modulos)", qaLogin.status === 
 
 const catalogo = (await api("GET", "/admin/permissions", undefined, QA)).data || {};
 const modulosApi = (catalogo.modulos || []).map((m) => m.clave);
-check("catalogo de modulos: exactamente los 9 de la Fase 1 (sin 'aprobaciones')", modulosApi.join(",") === MODULOS.join(",") && !modulosApi.includes("aprobaciones"), modulosApi.join(","));
+check("catalogo de modulos: los 9 de la Fase 1 más respaldos (sin 'aprobaciones')", modulosApi.join(",") === MODULOS.join(",") && !modulosApi.includes("aprobaciones"), modulosApi.join(","));
 check("catalogo de acciones V C E R A AN G", (catalogo.acciones || []).map((a) => a.clave).join(" ") === ACCIONES.join(" "));
 
 const roles = (await api("GET", "/admin/roles", undefined, QA)).data?.items || [];
@@ -241,8 +251,8 @@ if (!TRAS_REINICIO) {
     // Con alcance "propio" la lista se permite pero solo trae la propia cuenta (se prueba aparte).
     { modulo: "usuarios", accion: "V", ctx: { propio: true }, m: "GET", p: () => "/admin/usuarios" },
     { modulo: "usuarios", accion: "G", m: "POST", p: () => "/admin/roles", b: () => ({ nombre: `Rol sonda ${unico()}`, motivo: "Prueba de permisos", permisos: [] }) },
-    { modulo: "documentos", accion: "V", m: "GET", p: () => "/documentos-sgc" },
-    { modulo: "documentos", accion: "A", m: "POST", p: () => "/documentos-sgc/999999/aprobar", b: () => ({}) },
+    // Documentos SGC: crear fichas solo con documento_crear_ficha (sin archivo: 400, no 403).
+    { modulo: "documentos", accion: "documento_crear_ficha", m: "POST", p: () => "/sgc/documentos", b: () => ({}) },
     { modulo: "muestras", accion: "V", m: "GET", p: () => "/samples/reception?search=" },
     { modulo: "muestras", accion: "C", ctx: { objeto: "recepcion", borrador: true }, m: "POST", p: () => "/samples/reception", b: () => recepcionBase(`SONDA-${unico()}`) },
     { modulo: "muestras", accion: "E", ctx: { objeto: "recepcion", borrador: true }, m: "PUT", p: () => "/samples/reception/999999", b: () => ({ ...recepcionBase("X"), folio_num: 999999 }) },
@@ -416,12 +426,12 @@ if (!TRAS_REINICIO) {
       db.prepare("UPDATE usuario_roles SET vigente_desde = '2020-01-01', vigente_hasta = '2020-12-31' WHERE id = ?").run(vencido.data?.id);
       db.close();
     }
-    // El Responsable General daria muestras:AN y Mejora Continua documentos:A; ninguno de los otros dos roles los tiene.
+    // El Responsable General daria muestras:AN y Mejora Continua documento_crear_ficha; ninguno de los otros dos roles los tiene.
     const anular = await api("POST", "/samples/reception/999999/anular", { motivo: "Sonda de vigencia" }, multi.token);
     const futuro = await asignar(multi.id, "Coordinador/a de Mejora Continua", { vigente_desde: "2099-01-01" });
-    const aprobarDoc = await api("POST", "/documentos-sgc/999999/aprobar", {}, multi.token);
+    const aprobarDoc = await api("POST", "/sgc/documentos", {}, multi.token);
     const me2 = (await api("GET", "/auth/me", undefined, multi.token)).data;
-    check("un rol vencido o que aun no empieza no cuenta", vencido.status === 201 && futuro.status === 201 && anular.status === 403 && aprobarDoc.status === 403 && (me2?.roles || []).length === 2 && !me2?.permissions?.muestras?.AN && !me2?.permissions?.documentos?.A, `vencido ${vencido.status} futuro ${futuro.status} anular ${anular.status} aprobar ${aprobarDoc.status} roles=${(me2?.roles || []).length}`);
+    check("un rol vencido o que aun no empieza no cuenta", vencido.status === 201 && futuro.status === 201 && anular.status === 403 && aprobarDoc.status === 403 && (me2?.roles || []).length === 2 && !me2?.permissions?.muestras?.AN && !me2?.permissions?.documentos?.documento_crear_ficha, `vencido ${vencido.status} futuro ${futuro.status} anular ${anular.status} aprobar ${aprobarDoc.status} roles=${(me2?.roles || []).length}`);
 
     const asig = await asignacionDe(multi.id, "Coordinador/a de Investigación y Desarrollo");
     const sinMotivo = await api("POST", `/admin/usuarios/${multi.id}/roles/${asig?.id}/revocar`, { motivo: "no" }, J);

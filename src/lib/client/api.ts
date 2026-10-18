@@ -5,6 +5,25 @@ import type { ApiRecord } from "./types";
 export const API_BASE_URL = "/api";
 
 /*
+ * Error de la API con su estado HTTP y los datos del servidor (codigo, rol,
+ * faltan...). Sigue siendo un Error con el mensaje del servidor, asi que los
+ * `catch` existentes no cambian; el catalogo de mensajes (mensajes.ts) lo usa
+ * para explicar que paso y que hacer, y para ubicar el campo con el problema.
+ */
+export class ApiError extends Error {
+  status: number;
+  codigo: string;
+  data: ApiRecord;
+  constructor(status: number, data: ApiRecord, fallback: string) {
+    super(String(data?.message || fallback));
+    this.name = "ApiError";
+    this.status = status;
+    this.codigo = String(data?.codigo || "");
+    this.data = data || {};
+  }
+}
+
+/*
  * "Actuar como" (Fase 1): si una accion la permiten varios roles vigentes de la
  * persona, el servidor responde 409 con codigo ELEGIR_CARGO y las opciones; el
  * cliente pide elegir (ActuarComoProvider) y repite la peticion con el
@@ -55,7 +74,7 @@ async function conCargo(send: (extra: Record<string, string>) => Promise<Respons
 export interface CredencialReauth {
   password?: string;
 }
-type PedirReauth = (accion: string, mensaje: string) => Promise<CredencialReauth | null>;
+type PedirReauth = (accion: string, mensaje: string, error?: string) => Promise<CredencialReauth | null>;
 let pedirReauth: PedirReauth | null = null;
 let armada: { credencial: CredencialReauth; hasta: number } | null = null;
 
@@ -77,7 +96,7 @@ async function tokenReauth(token: string, accion: string, credencial: Credencial
   const data = await parseJson(response);
   if (!response.ok || !data.token) {
     avisarSesion(response.status, data);
-    throw new Error(data.message || "No se pudo confirmar tu identidad");
+    throw new ApiError(response.status, data, "No se pudo confirmar tu identidad");
   }
   return String(data.token);
 }
@@ -98,7 +117,20 @@ async function conReauth(token: string, send: (extra: Record<string, string>) =>
     credencial = await pedirReauth(accion, String(data.message || ""));
     if (!credencial) throw new Error("Acción cancelada: no se confirmó tu identidad");
   }
-  const reauth = await tokenReauth(token, accion, credencial);
+  // Contraseña incorrecta: se vuelve a pedir con el campo marcado (sin perder lo capturado).
+  let reauth = "";
+  for (;;) {
+    try {
+      reauth = await tokenReauth(token, accion, credencial);
+      break;
+    } catch (err) {
+      const status = err instanceof ApiError ? err.status : 0;
+      if (status !== 401 || !pedirReauth || (err instanceof ApiError && err.codigo === "cuenta_bloqueada")) throw err;
+      const otra = await pedirReauth(accion, String(data?.message || ""), err instanceof Error ? err.message : "La contraseña no es correcta");
+      if (!otra) throw new Error("Acción cancelada: no se confirmó tu identidad");
+      credencial = otra;
+    }
+  }
   // Se repite con el mismo cargo (si se eligio) y el token de reautenticacion.
   return (await conCargo((extra) => send({ ...extra, "X-Reauth": reauth }), cargo)).response;
 }
@@ -137,19 +169,20 @@ export const postJson = async (url: string, body: unknown): Promise<ApiRecord> =
   });
   const data = await parseJson(response);
   if (!response.ok) {
-    throw new Error(data.message || "No se pudo completar la solicitud");
+    throw new ApiError(response.status, data, "No se pudo completar la solicitud");
   }
   return data;
 };
 
-export const getJsonAuth = async (url: string, token: string): Promise<ApiRecord> => {
+export const getJsonAuth = async (url: string, token: string, signal?: AbortSignal): Promise<ApiRecord> => {
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
+    signal,
   });
   const data = await parseJson(response);
   if (!response.ok) {
     avisarSesion(response.status, data);
-    throw new Error(data.message || "No autorizado");
+    throw new ApiError(response.status, data, "No autorizado");
   }
   return data;
 };
@@ -169,7 +202,7 @@ export const sendJsonAuth = async (method: string, url: string, token: string, b
   const data = await parseJson(response);
   if (!response.ok) {
     avisarSesion(response.status, data);
-    throw new Error(data.message || "No se pudo completar la solicitud");
+    throw new ApiError(response.status, data, "No se pudo completar la solicitud");
   }
   return data;
 };
@@ -188,7 +221,7 @@ export const sendFormAuth = async (url: string, token: string, formData: FormDat
   const data = await parseJson(response);
   if (!response.ok) {
     avisarSesion(response.status, data);
-    throw new Error(data.message || "No se pudo completar la carga");
+    throw new ApiError(response.status, data, "No se pudo completar la carga");
   }
   return data;
 };
@@ -216,7 +249,7 @@ export const sendFormAuthProgress = async (url: string, token: string, formData:
   const data = await parseJson(response);
   if (!response.ok) {
     avisarSesion(response.status, data);
-    throw new Error(data.message || "No se pudo completar la carga");
+    throw new ApiError(response.status, data, "No se pudo completar la carga");
   }
   return data;
 };

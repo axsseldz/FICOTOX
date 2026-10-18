@@ -1,7 +1,7 @@
 import { requireUser } from "../../auth";
 import { isSqlite } from "../../db";
 import { json, type RouteContext } from "../../http";
-import { cargarAutorizacion, permisoDe, recortarPorModulo, requirePermission, soloEstado } from "../../rbac";
+import { cargarAutorizacion, permisoDe, requirePermission, soloEstado } from "../../rbac";
 
 /* Portado de modules/samples/endpoints.py del backend Flask original. */
 
@@ -11,34 +11,6 @@ function folioExpression(fallbackPrefix: string): string {
   return isSqlite()
     ? `COALESCE(NULLIF(tipo_registro, ''), '${fallbackPrefix}') || '-' || printf('%07d', folio_num)`
     : `CONCAT(COALESCE(NULLIF(tipo_registro, ''), '${fallbackPrefix}'), '-', LPAD(folio_num, 7, '0'))`;
-}
-
-export async function samplesSummary(ctx: RouteContext): Promise<Response> {
-  const user = await requireUser(ctx.request);
-  const auth = await cargarAutorizacion(ctx.s, user);
-
-  const summary = await ctx.s.queryOne(
-    `
-    SELECT
-      (
-        (SELECT COUNT(*) FROM muestras_recepcion) +
-        (SELECT COUNT(*) FROM muestras_procesamiento) +
-        (SELECT COUNT(*) FROM muestras_extraccion)
-      ) AS total_muestras,
-      0 AS pendientes,
-      (
-        (SELECT COUNT(*) FROM muestras_recepcion WHERE estado IN ('en_procesamiento', 'en_extraccion', 'en_analisis', 'en_revision_tecnica')) +
-        (SELECT COUNT(*) FROM muestras_procesamiento WHERE estado = 'en_proceso') +
-        (SELECT COUNT(*) FROM muestras_extraccion WHERE estado = 'en_proceso')
-      ) AS en_proceso,
-      (
-        (SELECT COUNT(*) FROM muestras_recepcion WHERE estado IN ('validada', 'informe_elaborado', 'liberada', 'cerrada')) +
-        (SELECT COUNT(*) FROM muestras_procesamiento WHERE estado = 'completada') +
-        (SELECT COUNT(*) FROM muestras_extraccion WHERE estado = 'completada')
-      ) AS completadas
-    `,
-  );
-  return json(recortarPorModulo(auth, summary || {}, { total_muestras: "muestras", pendientes: "muestras", en_proceso: "muestras", completadas: "muestras" }));
 }
 
 export async function listSamples(ctx: RouteContext): Promise<Response> {
@@ -76,32 +48,4 @@ export async function listSamples(ctx: RouteContext): Promise<Response> {
     .filter((row) => (row.tipo === "Recepcion" ? !!muestras : !!ensayos))
     .map((row) => (row.tipo === "Recepcion" && muestras && soloEstado(muestras) ? { ...row, analista: null } : row));
   return json({ items, total: items.length });
-}
-
-export async function listPendingSamples(ctx: RouteContext): Promise<Response> {
-  const user = await requireUser(ctx.request);
-  await requirePermission(ctx.s, user, "ensayos", "V");
-
-  const rows = await ctx.s.query(
-    `
-    SELECT id, codigo, cliente, tipo, prioridad, estado, fecha_ingreso
-    FROM (
-      SELECT id, ${folioExpression("R")} AS codigo, solicitante AS cliente,
-             'Recepcion' AS tipo, '-' AS prioridad, estado, fecha_recepcion AS fecha_ingreso
-      FROM muestras_recepcion
-      UNION ALL
-      SELECT id, ${folioExpression("P")} AS codigo, id_interno AS cliente,
-             'Procesamiento' AS tipo, '-' AS prioridad, estado, fecha_procesamiento AS fecha_ingreso
-      FROM muestras_procesamiento
-      UNION ALL
-      SELECT id, ${folioExpression("E-A")} AS codigo, id_interno AS cliente,
-             'Extraccion' AS tipo, '-' AS prioridad, estado, fecha_extraccion AS fecha_ingreso
-      FROM muestras_extraccion
-    ) m
-    WHERE estado IN ('pendiente', 'en_proceso', 'registrada')
-    ORDER BY fecha_ingreso ASC
-    LIMIT 100
-    `,
-  );
-  return json({ items: rows, total: rows.length });
 }

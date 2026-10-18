@@ -162,7 +162,7 @@ export async function renderNcPdf(s: Session, nc: Row): Promise<Buffer> {
     const h = humanizeAuditEntry({ ...e, cambios });
     const cargo = ((cambios._detalle as Record<string, unknown> | undefined)?.actuo_como as { cargo?: string } | undefined)?.cargo;
     ensure(24);
-    text(`${formatearFechaHora(e.fecha_hora)} · ${h.actor}${cargo ? ` (${cargo})` : ""}: ${h.action}`, { size: 8.5 });
+    text(`${formatearFechaHora(e.fecha_hora)} · ${h.frase}${cargo ? ` (como ${cargo})` : ""}`, { size: 8.5 });
     if (e.motivo) text(`Motivo: ${String(e.motivo)}`, { size: 8, color: MUTED });
     doc.y += 2;
   }

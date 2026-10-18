@@ -1,9 +1,9 @@
 import type { PermissionsMap, SessionUser } from "./types";
 
 /* Mismas claves de localStorage que usaba el app.js de la interfaz original. */
-export const SESSION_TOKEN_KEY = "ficotox_access_token";
-export const SESSION_USER_KEY = "ficotox_user";
-export const SESSION_PERMISSIONS_KEY = "ficotox_permissions";
+const SESSION_TOKEN_KEY = "ficotox_access_token";
+const SESSION_USER_KEY = "ficotox_user";
+const SESSION_PERMISSIONS_KEY = "ficotox_permissions";
 
 function storage(): Storage | null {
   try {
@@ -18,7 +18,7 @@ export const getStoredToken = (): string | null => {
   return saved && saved.trim() ? saved.trim() : null;
 };
 
-export const getStoredUser = (): SessionUser | null => {
+const getStoredUser = (): SessionUser | null => {
   const raw = storage()?.getItem(SESSION_USER_KEY);
   if (!raw) return null;
   try {

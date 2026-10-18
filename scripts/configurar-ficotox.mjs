@@ -29,7 +29,7 @@ import { argumento, root } from "./lib/operacion.mjs";
 const args = process.argv.slice(2);
 const interactivo = !args.includes("--no-interactivo") && process.stdin.isTTY;
 // Sin terminal (p. ej. con una tuberia) no se pueden hacer preguntas: se avisa, en vez de ignorar la entrada en silencio.
-if (!args.includes("--no-interactivo") && !process.stdin.isTTY) console.log("ℹ️  Sin terminal interactiva: no se hacen preguntas; se usan las opciones dadas (--host, --puerto, …), los valores actuales del .env o los propuestos. Ver docs/INSTALACION.md, paso 4.\n");
+if (!args.includes("--no-interactivo") && !process.stdin.isTTY) console.log("ℹ️  Sin terminal interactiva: no se hacen preguntas; se usan las opciones dadas (--host, --puerto, …), los valores actuales del .env o los propuestos. Ver README.md, paso 4.\n");
 const archivoEnv = path.resolve(root, argumento(args, "--env") || process.env.FICOTOX_ENV_FILE || ".env");
 
 /* ---------- .env: leer y escribir conservando lo demas ---------- */
@@ -133,7 +133,7 @@ if (llaveEnv && llaveEnv !== SECRET_KEY_DESARROLLO) {
   huella = huellaLlave(fs.readFileSync(archivoLlave, "utf8").trim());
   console.log(`✅ Llave de la bitácora: la instancia ya sella con ${path.relative(root, archivoLlave)} (huella ${huella.slice(0, 16)}…); no se agrega SECRET_KEY porque cambiar la llave rompería la verificación de lo ya sellado.`);
 } else if ((baseSqlite && fs.existsSync(baseSqlite)) || fs.existsSync(path.join(instancia, "ficotox.sqlite3"))) {
-  console.log("⚠️  SECRET_KEY: vacía y la instancia ya tiene una base sin auditoria.key. No se genera una llave nueva (la bitácora existente dejaría de verificarse). Consulta MANUAL_TECNICO.md, «Llave de la bitácora».");
+  console.log("⚠️  SECRET_KEY: vacía y la instancia ya tiene una base sin auditoria.key. No se genera una llave nueva (la bitácora existente dejaría de verificarse). Consulta README.md, «Llave de la bitácora».");
 } else {
   const nueva = randomBytes(32).toString("hex");
   escribir("SECRET_KEY", nueva);
@@ -158,7 +158,7 @@ try {
   /* sistema sin permisos POSIX */
 }
 // Windows: el servicio corre como SYSTEM (npm run instalar-servicio) y necesita leer .env.
-if (process.platform === "win32") console.log('ℹ️  En Windows restringe .env a tu usuario y al servicio: en PowerShell, icacls .env /inheritance:r /grant:r "${env:USERNAME}:F" /grant:r "SYSTEM:R" /grant:r "Administradores:F" (en Windows en inglés: Administrators; ver docs/INSTALACION.md, paso 4).');
+if (process.platform === "win32") console.log('ℹ️  En Windows restringe .env a tu usuario y al servicio: en PowerShell, icacls .env /inheritance:r /grant:r "${env:USERNAME}:F" /grant:r "SYSTEM:R" /grant:r "Administradores:F" (en Windows en inglés: Administrators; ver README.md, paso 4).');
 console.log(`\n${cambios.length ? `Se actualizaron: ${[...new Set(cambios)].join(", ")}` : "Sin cambios: la configuración ya estaba completa."}`);
 console.log(`Instancia: ${instancia}`);
-console.log("Siguientes pasos (docs/INSTALACION.md): guarda una copia de SECRET_KEY fuera de esta computadora (paso 5), npm run build (paso 6) y, solo en una instalación nueva, npm run instancia-nueva -- --confirmar (paso 7). En una instalación existente: npm run verificar-instalacion.");
+console.log("Siguientes pasos (README.md): guarda una copia de SECRET_KEY fuera de esta computadora (paso 5), npm run build (paso 6) y, solo en una instalación nueva, npm run instancia-nueva -- --confirmar (paso 7). En una instalación existente: npm run verificar-instalacion.");

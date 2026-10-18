@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Certificate, ChartLine, ChartLineUp, DownloadSimple, Eye, File, FileText, Image as ImageIcon, Paperclip, Prohibit, Table, UploadSimple, Warning } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
-import { Field, FormGrid, Input, Select, Switch } from "@/components/ui/Field";
+import { Field, FormGrid, Select, Switch, Textarea } from "@/components/ui/Field";
 import { Sheet, Tooltip, usePrompt } from "@/components/ui/Overlay";
 import { Badge, EmptyState } from "@/components/ui/Primitives";
 import { API_BASE_URL, getJsonAuth, sendFormAuthProgress, sendJsonAuth } from "@/lib/client/api";
@@ -14,6 +14,8 @@ import type { ApiRecord } from "@/lib/client/types";
 import { DESCRIPCION_MIN, EXTENSIONES_EVIDENCIA, TIPOS_EVIDENCIA, TIPO_EVIDENCIA_LABEL, VISTA_PREVIA, extensionDe, fmtBytes, huellaCorta } from "@/lib/shared/adjuntos";
 import { formatearFechaHora } from "@/lib/shared/fechas";
 import { Callout } from "./FormLayout";
+import { CampoValidado, useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
+import { msg, type Problema } from "@/lib/client/mensajes";
 
 /*
  * Evidencia instrumental de un analisis (Fase 10): cromatogramas, reportes del
@@ -113,12 +115,26 @@ export function AdjuntosPanel({ registroId, base, token, onResumen, clave = "mue
 
   useEffect(() => () => (vista ? URL.revokeObjectURL(vista.url) : undefined), [vista]);
 
+  const zonaId = `evidencia-zona-${analisisId}`;
+  const descId = `evidencia-desc-${analisisId}`;
+  const v = useValidacion({
+    titulo: "No se pudo adjuntar la evidencia",
+    reglas: () => {
+      const out: Problema[] = [];
+      if (!archivo) out.push({ campo: zonaId, mensaje: msg.elige("el archivo de la evidencia"), grupo: "Evidencia" });
+      if (descripcion.trim().length < DESCRIPCION_MIN) out.push({ campo: descId, mensaje: msg.minimo("La descripción", DESCRIPCION_MIN), grupo: "Evidencia" });
+      return out;
+    },
+  });
+  /* Un archivo que no se puede usar se explica en el pop-up, marcando la zona de carga. */
+  const rechazarArchivo = (que: string, hacer: string) => v.avisar({ que, hacer, problemas: [{ campo: zonaId, mensaje: que, grupo: "Evidencia" }] });
+
   const elegir = (file: globalThis.File | null) => {
     if (!file) return;
     const ext = extensionDe(file.name);
-    if (!(EXTENSIONES_EVIDENCIA as readonly string[]).includes(ext)) return toast.error(`Formato no permitido (.${ext || "sin extensión"}). Se aceptan: ${EXTENSIONES_EVIDENCIA.join(", ")}`);
-    if (!file.size) return toast.error("El archivo está vacío");
-    if (file.size > maxMb * 1024 * 1024) return toast.error(`El archivo pesa más de ${maxMb} MB`);
+    if (!(EXTENSIONES_EVIDENCIA as readonly string[]).includes(ext)) return rechazarArchivo(`El formato .${ext || "sin extensión"} no está permitido.`, `Elige un archivo ${EXTENSIONES_EVIDENCIA.join(", ")}.`);
+    if (!file.size) return rechazarArchivo("El archivo está vacío.", "Elige otro archivo.");
+    if (file.size > maxMb * 1024 * 1024) return rechazarArchivo(`El archivo pesa más de ${maxMb} MB.`, "Elige un archivo más pequeño o comprímelo.");
     setArchivo(file);
     if (!descripcion.trim()) setDescripcion(file.name.replace(/\.[^.]+$/, "").slice(0, 120));
   };
@@ -130,8 +146,7 @@ export function AdjuntosPanel({ registroId, base, token, onResumen, clave = "mue
   };
 
   const subir = async () => {
-    if (!archivo) return toast.error("Elige el archivo de la evidencia");
-    if (descripcion.trim().length < DESCRIPCION_MIN) return toast.error(`Describe la evidencia (al menos ${DESCRIPCION_MIN} caracteres)`);
+    if (!v.validar() || !archivo) return;
     const form = new FormData();
     form.append("archivo", archivo);
     form.append("tipo_evidencia", tipo);
@@ -146,7 +161,7 @@ export function AdjuntosPanel({ registroId, base, token, onResumen, clave = "mue
       invalidate(clave);
       cargar();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo adjuntar la evidencia");
+      v.errorServidor(err, { motivo: descId }, { motivo: { grupo: "Evidencia" } });
     } finally {
       setProgreso(null);
     }
@@ -211,6 +226,7 @@ export function AdjuntosPanel({ registroId, base, token, onResumen, clave = "mue
   const problemas = items.filter((a) => a.integridad && a.integridad !== "ok");
 
   return (
+    <ValidacionAmbito v={v}>
     <div className="flex flex-col gap-4" data-evidencia>
       {problemas.length ? (
         <Callout tone="danger" title="Alerta de integridad">
@@ -225,6 +241,7 @@ export function AdjuntosPanel({ registroId, base, token, onResumen, clave = "mue
 
       {edicion.permitido ? (
         <div className="flex flex-col gap-3">
+          <CampoValidado id={zonaId}>
           <label
             htmlFor={`evidencia-archivo-${analisisId}`}
             onDragOver={(event) => {
@@ -241,6 +258,7 @@ export function AdjuntosPanel({ registroId, base, token, onResumen, clave = "mue
             <span className="text-[12.5px] text-ink-3">{archivo ? fmtBytes(archivo.size) : `PDF, imagen (PNG, JPG, TIF), CSV, TXT, Excel, ZIP o CDF · hasta ${maxMb} MB`}</span>
             <input ref={inputRef} id={`evidencia-archivo-${analisisId}`} type="file" accept={ACCEPT} className="sr-only" onChange={(event) => elegir(event.target.files?.[0] || null)} aria-label="Archivo de evidencia" />
           </label>
+          </CampoValidado>
           <FormGrid cols={3}>
             <Field label="Tipo de evidencia" htmlFor={`evidencia-tipo-${analisisId}`} required>
               <Select id={`evidencia-tipo-${analisisId}`} value={tipo} onChange={(event) => setTipo(event.target.value)}>
@@ -251,26 +269,26 @@ export function AdjuntosPanel({ registroId, base, token, onResumen, clave = "mue
                 ))}
               </Select>
             </Field>
-            <Field label="Descripción" htmlFor={`evidencia-desc-${analisisId}`} required className="sm:col-span-2" hint="Qué muestra el archivo (p. ej. “Cromatograma lote D45, corrida 2”).">
-              <Input id={`evidencia-desc-${analisisId}`} maxLength={300} value={descripcion} onChange={(event) => setDescripcion(event.target.value)} />
+            <Field label="Descripción" htmlFor={descId} required className="sm:col-span-2" hint="Qué muestra el archivo (p. ej. “Cromatograma lote D45, corrida 2”).">
+              <Textarea id={descId} rows={2} maxLength={300} value={descripcion} onChange={(event) => setDescripcion(event.target.value)} />
             </Field>
           </FormGrid>
           <div className="flex items-center justify-end gap-3">
             {progreso !== null ? (
               <div className="flex min-w-0 flex-1 items-center gap-3" aria-live="polite">
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progreso * 100)} aria-label="Avance de la carga">
-                  <div className="h-full rounded-full bg-brand transition-[width]" style={{ width: `${Math.round(progreso * 100)}%` }} />
+                  <div className="h-full w-full rounded-full bg-brand transition-[translate]" style={{ translate: `${Math.round(progreso * 100) - 100}% 0` }} />
                 </div>
                 <span className="tnum text-[12.5px] text-ink-3">{Math.round(progreso * 100)}%</span>
               </div>
             ) : null}
-            <Button icon={<Paperclip size={16} />} onClick={subir} loading={progreso !== null} disabled={!archivo}>
+            <Button icon={<Paperclip size={16} />} onClick={subir} loading={progreso !== null}>
               {textos.boton}
             </Button>
           </div>
         </div>
       ) : edicion.motivo && !cargando ? (
-        <p className="text-[13px] text-ink-3">{edicion.motivo}</p>
+        <p className="whitespace-pre-line text-[13px] text-ink-3">{edicion.motivo}</p>
       ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -295,7 +313,7 @@ export function AdjuntosPanel({ registroId, base, token, onResumen, clave = "mue
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-[14px] font-medium text-ink">{String(a.descripcion)}</span>
+                    <span className="min-w-0 whitespace-pre-line break-words text-[14px] font-medium text-ink">{String(a.descripcion)}</span>
                     <Badge tone="neutral">{TIPO_EVIDENCIA_LABEL[String(a.tipo_evidencia)] || String(a.tipo_evidencia)}</Badge>
                     {a.heredado_de ? <Badge tone="brand">Heredado de v{String(a.heredado_de_version || 1)}</Badge> : null}
                     {a.vigente ? null : <Badge tone="danger">Anulado</Badge>}
@@ -313,7 +331,7 @@ export function AdjuntosPanel({ registroId, base, token, onResumen, clave = "mue
                       </span>
                     </Tooltip>
                   </span>
-                  {!a.vigente && a.motivo_anulacion ? <span className="text-[12.5px] text-danger">Anulado por {String(a.anulado_por_nombre || "—")}: {String(a.motivo_anulacion)}</span> : null}
+                  {!a.vigente && a.motivo_anulacion ? <span className="whitespace-pre-line text-[12.5px] text-danger">Anulado por {String(a.anulado_por_nombre || "—")}: {String(a.motivo_anulacion)}</span> : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {VISTA_PREVIA.has(String(a.extension)) ? (
@@ -347,5 +365,6 @@ export function AdjuntosPanel({ registroId, base, token, onResumen, clave = "mue
         ) : null}
       </Sheet>
     </div>
+    </ValidacionAmbito>
   );
 }

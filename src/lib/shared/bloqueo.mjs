@@ -13,7 +13,7 @@ import os from "node:os";
 /* Hora de arranque del sistema (ms), con 2 min de margen por la precision de uptime. */
 export const arranqueDelSistema = () => Date.now() - os.uptime() * 1000 - 120_000;
 
-export function leerBloqueo(archivo) {
+function leerBloqueo(archivo) {
   try {
     const datos = JSON.parse(fs.readFileSync(archivo, "utf8"));
     return datos && Number(datos.pid) ? { pid: Number(datos.pid), puerto: datos.puerto ?? null, iniciado_en: datos.iniciado_en ?? null } : null;

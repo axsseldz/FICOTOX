@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { invalidarIndice } from "./busqueda/version";
 import { esConflictoDeFolio, withSession, type Session } from "./db";
 
 /*
@@ -74,7 +75,7 @@ type RouteHandler = (ctx: RouteContext) => Promise<Response>;
  */
 const INTENTOS = 3;
 
-export function esConflictoReintentable(error: unknown): boolean {
+function esConflictoReintentable(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const code = String((error as { code?: unknown }).code || "");
   // SQLITE_BUSY*: otro proceso escribio la base (p. ej. SQLITE_BUSY_SNAPSHOT al pasar de lectura a escritura en WAL).
@@ -103,7 +104,7 @@ export function apiRoute(handler: RouteHandler) {
         // duplicaria efectos: ese conflicto no se reintenta (409 limpio).
         let confirmoAntes = false;
         try {
-          return await withSession(async (s) => {
+          const resultado = await withSession(async (s) => {
             try {
               return await handler({ request: actual, params, s });
             } catch (error) {
@@ -115,6 +116,9 @@ export function apiRoute(handler: RouteHandler) {
               throw error;
             }
           });
+          // Una escritura exitosa deja sin efecto los índices de la búsqueda en memoria (guardar recientes no cuenta).
+          if (request.method !== "GET" && request.method !== "HEAD" && resultado.ok && !new URL(request.url).pathname.startsWith("/api/busqueda")) invalidarIndice();
+          return resultado;
         } catch (error) {
           if (!esConflictoReintentable(error)) throw error;
           if (intento >= INTENTOS || confirmoAntes) {

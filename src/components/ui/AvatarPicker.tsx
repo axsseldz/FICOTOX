@@ -23,7 +23,7 @@ export function AvatarPicker({ value, seed, onChange, size = 56, className }: { 
           >
             <AvatarArt avatar={entry.key} seed={seed} size={size} />
             {selected ? (
-              <span className="absolute -right-0.5 -bottom-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-brand text-white shadow-[0_0_0_2px_var(--color-surface)]">
+              <span className="absolute -right-0.5 -bottom-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-brand text-on-accent shadow-[0_0_0_2px_var(--color-surface)]">
                 <Check size={11} weight="bold" />
               </span>
             ) : null}

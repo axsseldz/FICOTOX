@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { ArrowSquareOut, FilePdf, FileText, Plus } from "@phosphor-icons/react";
+import { ArrowSquareOut, BookOpenText, FilePdf, FileText, Plus } from "@phosphor-icons/react";
 import { useMenuReportar } from "@/components/features/calidad/ReportarIncidencia";
 import { FolioChip, StateBadge, SolicitudBadge, SupervisionBadge } from "@/components/features/samples/status";
 import { PageBody } from "@/components/shell/AppShell";
@@ -14,11 +14,14 @@ import { FilterChips, FilterMenu, type FilterGroup, type FilterToggle } from "@/
 import { ActionMenu, type MenuItem } from "@/components/ui/Overlay";
 import { PageHeader, SearchInput, Toolbar } from "@/components/ui/PageHeader";
 import { Badge, EmptyState, ErrorState, Skeleton, TableSkeleton } from "@/components/ui/Primitives";
-import { CellPrimary, Table, TBody, Td, Th, THead, Tr, TableShell } from "@/components/ui/Table";
+import { FranjaPendientes } from "@/components/features/solicitudes/Solicitudes";
+import { StatusCell, StatusFlag } from "@/components/ui/StatusFlag";
+import { CellPrimary, COL_FECHA, FILA_LISTA, SOLO_ANCHO, Table, TBody, Td, Th, THead, Tr, TableShell } from "@/components/ui/Table";
 import { API_BASE_URL, getJsonAuth } from "@/lib/client/api";
-import { openProtectedFile } from "@/lib/client/files";
-import { fmt, fmtDate } from "@/lib/client/format";
-import { useDebouncedValue, useParamChange } from "@/lib/client/hooks";
+import { descargarPdfInforme } from "@/lib/client/informes-pdf";
+import { cn } from "@/components/ui/cn";
+import { contar, fmt, fmtDate } from "@/lib/client/format";
+import { useDebouncedValue, useParamChange, useInitialParam } from "@/lib/client/hooks";
 import { useResource } from "@/lib/client/store";
 import type { ApiRecord } from "@/lib/client/types";
 
@@ -43,7 +46,8 @@ function InformesContent() {
   const router = useRouter();
   const params = useSearchParams();
   const recepcionId = params.get("recepcion") || "";
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(useInitialParam("buscar"));
+  useParamChange("buscar", setSearch);
   const initialFilter = params.get("filtro") || "";
   const [estado, setEstado] = useState<EstadoFilter>(ESTADOS.includes(initialFilter) ? (initialFilter as EstadoFilter) : "");
   const [showAnulados, setShowAnulados] = useState(false);
@@ -91,16 +95,18 @@ function InformesContent() {
   const reportar = useMenuReportar();
   const menuFor = (item: ApiRecord): MenuItem[] => [
     { label: "Abrir", description: "Ver el informe y su historial", icon: <ArrowSquareOut size={16} weight="duotone" />, tone: "brand", onSelect: () => router.push(`/informes/${item.id}`) },
-    { label: "Ver PDF", description: ["liberado", "enviado", "sustituido", "anulado"].includes(String(item.estado)) ? "Documento liberado con SHA-256" : "Vista previa (sin validez)", icon: <FilePdf size={16} weight="duotone" />, onSelect: () => openProtectedFile(`${API_BASE_URL}/informes/${item.id}/pdf`, token, `${String(item.folio || "informe").replace(/\s+/g, "-")}.pdf`) },
+    { label: item.archivo_pdf ? "Ver informe" : "Ver PDF", description: item.archivo_pdf ? "Leer el PDF final en la plataforma" : "Vista previa (sin validez) en la plataforma", icon: <BookOpenText size={16} weight="duotone" />, onSelect: () => router.push(`/informes/${item.id}/ver`) },
+    ...(item.archivo_pdf ? [{ label: "Descargar PDF", description: "Documento liberado con SHA-256", icon: <FilePdf size={16} weight="duotone" />, onSelect: () => void descargarPdfInforme(item, token) } as MenuItem] : []),
     ...reportar("informes", item.id, String(item.folio || "Informe")),
   ];
 
   return (
     <>
+      <FranjaPendientes entidades={["informes"]} grupo="informes" />
       <Toolbar
         end={
           canCreate ? (
-            <Link href="/informes/nuevo" className="press inline-flex h-9 items-center gap-2 rounded-[9px] bg-brand px-3.5 text-[13.5px] font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] hover:bg-brand-strong">
+            <Link href="/informes/nuevo" className="press inline-flex h-9 items-center gap-2 rounded-[9px] bg-brand px-3.5 text-[13.5px] font-medium text-on-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] hover:bg-brand-strong">
               <Plus size={16} weight="bold" /> Nuevo informe
             </Link>
           ) : null
@@ -112,7 +118,7 @@ function InformesContent() {
         {recepcionId ? <Badge tone="brand">Recepción #{recepcionId}</Badge> : null}
       </Toolbar>
 
-      <TableShell footer={items ? `${fmt(items.length)} informes` : undefined}>
+      <TableShell footer={items ? contar(items.length, "informe", "informes") : undefined}>
         {resource.error ? (
           <ErrorState message={resource.error} onRetry={resource.reload} />
         ) : !items ? (
@@ -123,47 +129,43 @@ function InformesContent() {
           <Table>
             <THead>
               <tr>
-                <Th>Folio</Th>
-                <Th>Cliente</Th>
-                <Th>Recepción</Th>
-                <Th>Análisis</Th>
-                <Th>Emisión</Th>
-                <Th>Autorizó</Th>
+                <Th className="w-[148px]">Folio</Th>
+                <Th className="min-w-[260px]">Cliente</Th>
+                <Th className="w-[150px]">Recepción</Th>
+                <Th align="center" className="w-[90px]">Análisis</Th>
+                <Th className={COL_FECHA}>Emisión</Th>
+                <Th className={cn("w-[150px]", SOLO_ANCHO)}>Autorizó</Th>
                 <Th>Estado</Th>
                 <Th align="right" sticky />
               </tr>
             </THead>
             <TBody>
               {items.map((item) => (
-                <Tr key={item.id} interactive onClick={() => router.push(`/informes/${item.id}`)} className={["anulado", "sustituido"].includes(String(item.estado)) ? "opacity-60" : undefined}>
+                <Tr key={item.id} interactive onClick={() => router.push(`/informes/${item.id}`)} className={cn(FILA_LISTA, ["anulado", "sustituido"].includes(String(item.estado)) && "opacity-60")}>
                   <Td>
                     <span className="flex items-center gap-2">
                       <FolioChip type="IR" num={item.folio_num} />
                       {Number(item.version) > 1 ? <Badge tone="warning">v{String(item.version)}</Badge> : null}
                     </span>
                   </Td>
-                  <Td className="max-w-[260px]">
-                    <CellPrimary title={(item.cliente as ApiRecord)?.nombre || item.solicitante || "-"} subtitle={item.recepcion_id_interno || undefined} />
+                  <Td className="min-w-[260px] max-w-[400px]">
+                    <CellPrimary lineas={2} title={(item.cliente as ApiRecord)?.nombre || item.solicitante || "-"} subtitle={item.recepcion_id_interno || undefined} />
                   </Td>
                   <Td>{item.folio_recepcion_num ? <FolioChip type="R" num={item.folio_recepcion_num} /> : "-"}</Td>
-                  <Td className="tnum">{fmt(item.analisis)}</Td>
-                  <Td muted>{fmtDate(item.fecha_emision)}</Td>
-                  <Td muted>{item.autorizado_nombre || "-"}</Td>
+                  <Td align="center" className="tnum">{fmt(item.analisis)}</Td>
+                  <Td muted className={COL_FECHA}>{fmtDate(item.fecha_emision)}</Td>
+                  <Td muted className={cn("max-w-[160px]", SOLO_ANCHO)}>
+                    <span className="line-clamp-2 break-words" title={item.autorizado_nombre || undefined}>{item.autorizado_nombre || "-"}</span>
+                  </Td>
                   <Td>
-                    <StateBadge kind="informe" status={item.estado} />
-                    <SupervisionBadge estado={item.supervision_estado} />
-                    <SolicitudBadge solicitud={item.solicitud_pendiente as ApiRecord | null} />
-                    {Number(item.retenido || 0) ? (
-                      <span className="ml-1" data-retenido>
-                        <Badge tone="danger">Retenido</Badge>
-                      </span>
-                    ) : null}
-                    {Number(item.requiere_enmienda || 0) ? (
-                      <span className="ml-1" title={String(item.requiere_enmienda_motivo || "")} data-requiere-enmienda>
-                        <Badge tone="danger">Requiere enmienda</Badge>
-                      </span>
-                    ) : null}
-                    {item.liberado_en ? <p className="mt-0.5 text-[11.5px] text-ink-3">Liberado {fmtDate(item.liberado_en)}</p> : null}
+                    <StatusCell>
+                      <StateBadge kind="informe" status={item.estado} />
+                      <SupervisionBadge estado={item.supervision_estado} />
+                      <SolicitudBadge solicitud={item.solicitud_pendiente as ApiRecord | null} />
+                      {Number(item.retenido || 0) ? <StatusFlag kind="bloqueo" label="Retenido por una no conformidad" detail="No se libera ni se envía hasta liberar la retención." data-retenido /> : null}
+                      {Number(item.requiere_enmienda || 0) ? <StatusFlag kind="aviso" label="Requiere enmienda" detail={item.requiere_enmienda_motivo ? String(item.requiere_enmienda_motivo) : undefined} data-requiere-enmienda /> : null}
+                    </StatusCell>
+                    {item.liberado_en ? <p className="mt-1 text-[11.5px] leading-tight text-ink-3">Liberado {fmtDate(item.liberado_en)}</p> : null}
                   </Td>
                   <Td align="right" sticky onClick={(event) => event.stopPropagation()}>
                     <ActionMenu items={menuFor(item)} header={String(item.folio || "")} />

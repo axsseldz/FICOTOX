@@ -1,6 +1,9 @@
 /* Utilidades de formato identicas a las de el app.js de la interfaz original. */
 import { fechaSola, formatearFecha, formatearFechaHora, hoyLocal, tonoVencimiento } from "../shared/fechas";
 
+/* "1 recepción" / "2 recepciones". */
+export const contar = (n: number, uno: string, varios: string): string => `${fmt(n)} ${n === 1 ? uno : varios}`;
+
 export const fmt = (value: unknown): string => {
   const numeric = Number(value || 0);
   return Number.isFinite(numeric) ? numeric.toLocaleString("es-MX") : "0";
@@ -40,28 +43,10 @@ export const parseFloatOrNull = (value: unknown): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-export const clampPercent = (value: number): number => Math.max(0, Math.min(100, Math.round(value)));
-
 /* "AAAA-MM-DD" de cualquier valor (fecha sola tal cual; instante -> dia local del laboratorio). */
-export const toDateOnly = (value: unknown): string => fechaSola(value);
-
 export const isoDate = (value: unknown): string => fechaSola(value);
 
 export const normalizeText = (value: unknown): string => String(value || "").toLowerCase();
-
-export const getUserInitials = (name = "", email = ""): string => {
-  const source = (name || email || "U").trim();
-  const parts = source.includes("@") ? [source[0]] : source.split(/\s+/).filter(Boolean);
-  return parts.slice(0, 2).map((part) => part[0] || "").join("").toUpperCase() || "U";
-};
-
-export const escapeHtml = (value: unknown): string =>
-  String(value || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 
 /* Hoy (AAAA-MM-DD) en la zona del laboratorio. */
 export const todayIso = (): string => hoyLocal();

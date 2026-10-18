@@ -8,7 +8,7 @@
  *
  * SECRET_KEY firma la bitacora de auditoria: aqui solo se ADVIERTE (nunca se
  * bloquea ni se cambia), porque cambiar la llave rompe la verificacion de lo ya
- * sellado. Ver MANUAL_TECNICO.md, "Llave de la bitacora".
+ * sellado. Ver README.md, "Llave de la bitacora".
  */
 
 export const JWT_SECRET_INSEGUROS = new Set(["ficotox-jwt-secret", "change-me-too", "change-me", "secret", "changeme"]);
@@ -37,7 +37,7 @@ export function advertenciasLlaveBitacora(env, existeArchivoLlave) {
     ];
   }
   if (secret.length < SECRET_MIN) {
-    return [`SECRET_KEY mide ${secret.length} caracteres (se recomiendan ${SECRET_MIN} o mas). No la cambies sin migrar la llave de la bitacora (MANUAL_TECNICO.md).`];
+    return [`SECRET_KEY mide ${secret.length} caracteres (se recomiendan ${SECRET_MIN} o mas). No la cambies sin migrar la llave de la bitacora (README.md).`];
   }
   return [];
 }

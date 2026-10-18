@@ -3,6 +3,7 @@
 import { Field, FormGrid, Textarea } from "@/components/ui/Field";
 import { Callout, ChoiceCard, ChoiceGrid, FormCard } from "../FormLayout";
 import type { ExtractionProtocol, ProtocolContext } from "./types";
+import { msg, type Problema } from "@/lib/client/mensajes";
 
 /*
  * Formato de extraccion ASP (FX-TCF-GME-A): acido domoico.
@@ -43,13 +44,18 @@ export const ASP_PROTOCOL: ExtractionProtocol = {
     { id: "sec-filtrado", label: "Filtrado final" },
     { id: "sec-limpieza", label: "Limpieza del extracto", optional: true },
   ],
-  sectionComplete: (id, form) => {
+  reglas: (form) => {
     const any = (keys: string[]) => keys.some((key) => !!form.steps[key]);
     const pesos = (form.sampleRows || []).some((row) => !row.esBlanco && !!row.id.trim() && !!String(row.values.peso_muestra || "").trim());
-    if (id === "sec-extraccion") return any(["extrStep3", "extrStep4", "extrStep5", "extrStep6", "extrStep7"]);
-    if (id === "sec-pesos") return pesos;
-    if (id === "sec-filtrado") return !!form.steps.extrStep10;
-    // Limpieza: sin decidir = sin evaluar; "no requirió" completa; "sí" completa con algún paso marcado.
+    const out: Problema[] = [];
+    if (!any(["extrStep3", "extrStep4", "extrStep5", "extrStep6", "extrStep7"])) out.push({ campo: "e-paso-extrStep3", mensaje: msg.marca("al menos un paso de la extracción (3 a 8)"), seccion: "sec-extraccion", grupo: "Extracción" });
+    if (!pesos) out.push({ campo: "e-pesos-peso_muestra", mensaje: msg.indica("el ID y el peso de al menos una submuestra"), seccion: "sec-pesos", grupo: "Registro de pesos" });
+    if (!form.steps.extrStep10) out.push({ campo: "e-paso-extrStep10", mensaje: msg.marca("el paso 10 (filtrado y transferencia al vial)"), seccion: "sec-filtrado", grupo: "Filtrado final" });
+    return out;
+  },
+  sectionComplete: (id, form) => {
+    const any = (keys: string[]) => keys.some((key) => !!form.steps[key]);
+    // Limpieza (opcional): sin decidir = sin evaluar; "no requirió" completa; "sí" completa con algún paso marcado.
     if (id === "sec-limpieza") return form.fields.limpieza === "no" ? true : form.fields.limpieza === "si" ? any(["extrStep8", "extrLimpStep2", "limp3", "extrStep9", "extrLimpStep5", "limp6", "extrLimpStep7", "limp8", "limp9", "limp10"]) : undefined;
     return undefined;
   },

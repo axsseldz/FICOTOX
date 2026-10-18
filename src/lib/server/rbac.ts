@@ -5,7 +5,7 @@ import { HttpError } from "./http";
 import type { CurrentUser } from "./auth";
 import { registrarAuditoria } from "./audit";
 import { evaluarCombinacion, type RolEvaluado, type Violacion } from "../shared/combinaciones-roles";
-import { esTotal, expandirPermisos, isAccion, isAlcance, isModulo, mapaPermisos, alcancePermite, permite, type Accion, type Alcance, type ContextoAlcance, type Modulo, type PermisoFila, type PermisosEfectivos, type PermisosMapa } from "../shared/permisos";
+import { accionDeModulo, esTotal, expandirPermisos, isAlcance, isModulo, MODULO_DOCUMENTAL, alcancePermite, permite, type Accion, type Alcance, type ContextoAlcance, type Modulo, type PermisoFila, type PermisosEfectivos } from "../shared/permisos";
 
 /*
  * Control de acceso por rol (Fase 1; FX-MO-2-1).
@@ -71,8 +71,9 @@ export function normalizarFilas(value: unknown): PermisoFila[] {
   for (const item of Array.isArray(value) ? value : []) {
     if (!item || typeof item !== "object") continue;
     const { modulo, accion, alcance } = item as Record<string, unknown>;
-    if (!isModulo(modulo) || !isAccion(accion)) continue;
-    const fila = { modulo, accion, alcance: isAlcance(alcance) ? alcance : "total" };
+    if (!isModulo(modulo) || !accionDeModulo(modulo, accion)) continue;
+    // Las acciones documentales no tienen alcance (siempre "total").
+    const fila = { modulo, accion: accion as Accion, alcance: modulo === MODULO_DOCUMENTAL ? "total" : isAlcance(alcance) ? alcance : "total" };
     const clave = `${fila.modulo}:${fila.accion}:${fila.alcance}`;
     if (vistas.has(clave)) continue;
     vistas.add(clave);
@@ -124,7 +125,7 @@ export interface Autorizacion {
 }
 
 /* Datos de la cuenta que importan en cada peticion (Fase 2). */
-export interface CuentaSesion {
+interface CuentaSesion {
   email: string;
   nombre: string;
   tipo_cuenta: string;
@@ -220,12 +221,6 @@ export async function requirePermission(s: Session, user: CurrentUser | null, mo
   return permiso;
 }
 
-/* Como requirePermission pero sin lanzar: para decidir que mostrar. */
-export async function tienePermiso(s: Session, user: CurrentUser | null, modulo: Modulo, accion: Accion, ctx?: ContextoAlcance): Promise<boolean> {
-  const auth = await cargarAutorizacion(s, user);
-  return !!permisoDe(auth, modulo, accion, ctx);
-}
-
 /*
  * ¿La operacion solo esta cubierta por el alcance "supervisado"? Entonces lo
  * que se crea o edita queda pendiente del visto bueno del supervisor (Fase 2).
@@ -274,12 +269,6 @@ export function recortarPorModulo<T extends Record<string, unknown>>(auth: Autor
   const out: Record<string, unknown> = { ...datos };
   for (const [campo, modulo] of Object.entries(campos)) if (!permisoDe(auth, modulo, "V")) out[campo] = null;
   return out as T;
-}
-
-export async function getPermissionsForUser(s: Session, user: CurrentUser | null): Promise<PermisosMapa> {
-  if (!user) return {};
-  const auth = await cargarAutorizacion(s, user);
-  return mapaPermisos(auth.efectivos);
 }
 
 /* ---------- Guarda: siempre queda un administrador ---------- */

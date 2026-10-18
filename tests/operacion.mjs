@@ -22,6 +22,7 @@ import { createRequire } from "node:module";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { VERSION_ACTUAL } from "../src/lib/server/migraciones/motor.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
@@ -155,8 +156,8 @@ const nuevaInst = instalacion("instancia", `SECRET_KEY=${"b".repeat(64)}\nJWT_SE
   const usuarios = db.prepare("SELECT email, debe_cambiar_password AS d FROM usuarios ORDER BY id").all();
   const roles = db.prepare("SELECT u.email, r.nombre FROM usuario_roles ur JOIN usuarios u ON u.id = ur.usuario_id JOIN roles r ON r.id = ur.rol_id").all();
   const version = db.prepare("SELECT MAX(version) AS v FROM schema_migraciones").get().v;
-  check("  … base nueva con las migraciones (versión 12) y el catálogo de roles; solo las dos cuentas, con cambio de contraseña obligatorio", version === 12 && db.prepare("SELECT COUNT(*) AS n FROM roles").get().n === 10 && usuarios.length === 2 && usuarios.every((u) => u.d === 1) && roles.some((x) => x.email === "ana@cicese.mx" && x.nombre === "Administrador técnico del sistema") && roles.some((x) => x.email === "rosa@cicese.mx" && x.nombre === "Responsable General"), JSON.stringify(roles));
-  const vacias = ["autorizaciones_personal", "reactivos", "consumibles", "recepciones", "documentos_sgc"].filter((t) => db.prepare(`SELECT name FROM sqlite_master WHERE name = ?`).get(t)).map((t) => [t, db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n]);
+  check("  … base nueva con las migraciones (versión actual) y el catálogo de roles; solo las dos cuentas, con cambio de contraseña obligatorio", version === VERSION_ACTUAL && db.prepare("SELECT COUNT(*) AS n FROM roles").get().n === 10 && usuarios.length === 2 && usuarios.every((u) => u.d === 1) && roles.some((x) => x.email === "ana@cicese.mx" && x.nombre === "Administrador técnico del sistema") && roles.some((x) => x.email === "rosa@cicese.mx" && x.nombre === "Responsable General"), JSON.stringify(roles));
+  const vacias = ["autorizaciones_personal", "reactivos", "consumibles", "recepciones", "documentos_sgc", "biblioteca_documentos"].filter((t) => db.prepare(`SELECT name FROM sqlite_master WHERE name = ?`).get(t)).map((t) => [t, db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n]);
   check("  … sin datos de demostración ni autorizaciones de ejemplo", vacias.every(([, n]) => n === 0), JSON.stringify(vacias));
   const filas = db.prepare("SELECT * FROM auditoria ORDER BY id").all();
   const seq = db.prepare("SELECT seq FROM sqlite_sequence WHERE name = 'auditoria'").get();
@@ -173,7 +174,7 @@ const nuevaInst = instalacion("instancia", `SECRET_KEY=${"b".repeat(64)}\nJWT_SE
 {
   const r = nodo("scripts/sqlite-a-mysql.mjs", ["--simular"], { FICOTOX_ENV_FILE: nuevaInst.env });
   const sinDestino = nodo("scripts/sqlite-a-mysql.mjs", [], { FICOTOX_ENV_FILE: nuevaInst.env });
-  check("sqlite-a-mysql --simular: revisa versión, conteos y bitácora sin cambiar nada; sin --destino/--confirmar no hace nada", r.codigo === 0 && /versión 12;.*íntegra/.test(r.salida) && /No se cambió nada/.test(r.salida) && sinDestino.codigo === 2, r.salida.split("\n")[0]);
+  check("sqlite-a-mysql --simular: revisa versión, conteos y bitácora sin cambiar nada; sin --destino/--confirmar no hace nada", r.codigo === 0 && /versión \d+;.*íntegra/.test(r.salida) && /No se cambió nada/.test(r.salida) && sinDestino.codigo === 2, r.salida.split("\n")[0]);
 }
 
 /* ---------- actualizar con una migracion que falla despues de otra que si se aplica ---------- */
@@ -224,6 +225,14 @@ const nuevaInst = instalacion("instancia", `SECRET_KEY=${"b".repeat(64)}\nJWT_SE
   for (let i = 0; i < 1300; i++) reg.escribir(grande);
   const nombres = fs.readdirSync(dir);
   check("registros: rotan al pasar LOG_MAX_MB y se quitan los de más de LOG_RETENCION_DIAS", !nombres.includes("ficotox-2020-01-01.log") && nombres.some((n) => /\.log\.1$/.test(n)), nombres.join(", "));
+}
+
+/* ---------- datos de demostración: las cuentas se encuentran por una palabra del nombre ---------- */
+{
+  // Con el archivo de ejemplo ("Ana Sofía Torres Vega"...) el script debe resolver las cinco cuentas y solo
+  // fallar despues, al conectarse (aqui a un puerto sin servidor), no con "Falta la cuenta de sofía".
+  const r = nodo("scripts/sembrar-demo-documentos.mjs", ["--url", "http://127.0.0.1:9", "--usuarios", "scripts/seed-usuarios.example.json"]);
+  check("demo de documentos: encuentra las cuentas por una palabra del nombre y sin acentos (archivo de ejemplo)", r.codigo !== 0 && !/Falta la cuenta/.test(r.salida), r.salida.split("\n").filter(Boolean).slice(-2).join(" | "));
 }
 
 /* ---------- con servidor (build standalone) ---------- */
@@ -335,7 +344,7 @@ try {
       const version = new Sqlite(nuevaInst.base, { readonly: true }).prepare("SELECT MAX(version) AS v FROM schema_migraciones").get().v;
       check(
         "actualizar con build fallido: exit 1, build anterior devuelto, base sin tocar y el servidor arrancado como estaba",
-        a.codigo === 1 && fs.readFileSync(path.join(build, ".next/standalone/server.js"), "utf8") === "// build anterior\n" && !fs.existsSync(path.join(build, ".next/parcial")) && !fs.existsSync(path.join(build, ".next-anterior")) && version === 12 && salud2.ok && pidDespues && pidDespues !== pidAntes && /respaldo/i.test(a.salida),
+        a.codigo === 1 && fs.readFileSync(path.join(build, ".next/standalone/server.js"), "utf8") === "// build anterior\n" && !fs.existsSync(path.join(build, ".next/parcial")) && !fs.existsSync(path.join(build, ".next-anterior")) && version === VERSION_ACTUAL && salud2.ok && pidDespues && pidDespues !== pidAntes && /respaldo/i.test(a.salida),
         `exit ${a.codigo} pid ${pidAntes}→${pidDespues} salud ${salud2.ok}`,
       );
 

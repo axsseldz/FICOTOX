@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * Sistema de diseño FICOTOX (ver docs/DISENO_UI.md).
+ * Sistema de diseño FICOTOX (ver README.md).
  *
  * Una sola familia tipográfica (la del sistema: SF Pro en Apple, Inter como
  * respaldo), un solo acento "océano" y superficies translúcidas para la
@@ -14,6 +14,10 @@
   --color-surface: #ffffff;
   --color-surface-2: #f5f7f9;
   --color-surface-3: #e9edf1;
+  /* Ventanas, hojas laterales y diálogos (un escalón sobre la superficie; en claro es blanco) */
+  --color-surface-elevated: #ffffff;
+  /* Elementos flotantes (menús, selects, calendario, campana, búsqueda, tooltips): siempre opacos */
+  --color-popover: #ffffff;
   --color-line: #e3e8ed;
   --color-line-strong: #cdd5dd;
 
@@ -28,7 +32,6 @@
   --color-brand-strong: #0b5f75;
   --color-brand-soft: #dcedf3;
   --color-brand-faint: #eef6f9;
-  --color-brand-bright: #34a7c4;
 
   /* Semánticos discretos */
   --color-success: #2f8a5b;
@@ -45,6 +48,21 @@
   --color-bloom: #d0672f;
   --color-bloom-soft: #fbe9dd;
 
+  /* Superficies especiales: barra lateral y lienzo claro del acceso */
+  --color-sidebar: #f7f8fa;
+  /* Texto sobre un relleno de color (botón primario, insignia roja, renglón resaltado) */
+  --color-on-accent: #ffffff;
+  /* Pasos de hover de los botones */
+  --color-brand-soft-hover: #cfe5ec;
+  --color-danger-strong: #b03931;
+  /* Tonos de apoyo (E-A, salidas) */
+  --color-violet-soft: #e9e4f8;
+  --color-violet-text: #5b3fa6;
+  --color-bloom-text: #9a4a1f;
+  /* Papel y tinta: NO cambian con el tema (firmas, hojas de etiquetas, páginas de PDF) */
+  --color-papel: #ffffff;
+  --color-tinta: #0b1f2a;
+
   /* Fondos profundos (login, tooltips) */
   --color-deep: #081a24;
   --color-deep-2: #0c3a4a;
@@ -55,7 +73,6 @@
   --radius-control: 8px;
   --radius-card: 14px;
   --radius-panel: 18px;
-  --radius-hero: 24px;
 
   --shadow-card: 0 0 0 1px rgba(16, 32, 43, 0.04), 0 1px 2px rgba(16, 32, 43, 0.04);
   --shadow-raised: 0 0 0 1px rgba(16, 32, 43, 0.05), 0 2px 6px rgba(16, 32, 43, 0.05), 0 12px 32px -16px rgba(16, 32, 43, 0.18);
@@ -67,7 +84,6 @@
   --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring-in: cubic-bezier(0.64, 0, 0.78, 0);
   --ease-fluid: cubic-bezier(0.32, 0.72, 0, 1);
-  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 
   --animate-fade-in: fade-in 200ms var(--ease-spring) both;
   --animate-fade-out: fade-out 160ms var(--ease-spring-in) both;
@@ -81,8 +97,6 @@
   --animate-menu-in: menu-in 180ms var(--ease-spring) both;
   --animate-materialize: materialize 300ms var(--ease-spring) both;
   --animate-dematerialize: dematerialize 180ms var(--ease-spring-in) both;
-  --animate-drift: drift 40s ease-in-out infinite alternate;
-  --animate-drift-2: drift-2 52s ease-in-out infinite alternate;
 
   @keyframes fade-in {
     from { opacity: 0; }
@@ -133,19 +147,106 @@
     from { opacity: 1; transform: scale(1) translateY(0); }
     to { opacity: 0; transform: scale(0.97) translateY(-4px); }
   }
-  @keyframes drift {
-    from { transform: translate3d(-4%, -3%, 0) scale(1); }
-    to { transform: translate3d(6%, 8%, 0) scale(1.15); }
-  }
-  @keyframes drift-2 {
-    from { transform: translate3d(8%, 10%, 0) scale(1.08); }
-    to { transform: translate3d(-6%, -5%, 0) scale(0.94); }
-  }
 }
 
 @layer base {
+  /* Escala única de capas: contenido < barra lateral < ventanas y hojas < menús y popovers < toasts.
+     Los menús van sobre las ventanas porque los selects, el calendario y los menús ⋯ también se abren dentro de ellas. */
+  :root {
+    --z-contenido: 0;
+    --z-barra: 20;
+    --z-ventana: 50;
+    --z-popover: 60;
+    --z-toast: 80;
+    --z-bloqueo: 100;
+  }
+
   :root {
     color-scheme: light;
+  }
+
+  /*
+   * Tema oscuro: los MISMOS tokens con otros valores (ver README.md).
+   * Lienzo gris muy oscuro con tinte azulado (sin negro puro), superficies un
+   * poco más claras, bordes suaves y sombras cambiadas por bordes tonales.
+   * Acento y estados aclarados para contraste AA sobre las superficies; los
+   * rellenos de color llevan texto oscuro (--color-on-accent). Solo en
+   * pantalla: al imprimir rige siempre el tema claro.
+   */
+  @media screen {
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+
+      /* Elevación tonal (mismo matiz azulado): lienzo → superficie → superficie 2/3 → ventana */
+      --color-canvas: #0c1319;
+      --color-sidebar: #0f171e;
+      --color-surface: #141d25;
+      --color-surface-2: #19232c;
+      --color-surface-3: #212d37;
+      --color-surface-elevated: #1a252f;
+      --color-popover: #1f2c37;
+      --color-line: #243039;
+      --color-line-strong: #33424d;
+
+      --color-ink: #e4ebf0;
+      --color-ink-2: #b8c6cf;
+      --color-ink-3: #92a3ae;
+      --color-ink-4: #74858f;
+
+      /* Océano para oscuro: el mismo matiz de #0F7A95, más luminoso y menos saturado */
+      --color-brand: #42abc6;
+      --color-brand-strong: #74c5da;
+      --color-brand-soft: #16303d;
+      --color-brand-faint: #112832;
+      --color-brand-soft-hover: #1a4253;
+      --color-on-accent: #04161d;
+
+      /* Estados y categorías con la misma intensidad: fondo tenue del tono y texto más claro */
+      /* Poco saturados: fondo con baja opacidad del tono sobre la superficie y texto del mismo tono, más claro y apagado. */
+      --color-success: #58a888;
+      --color-success-soft: #172821;
+      --color-success-text: #8ccbad;
+      --color-warning: #cfa456;
+      --color-warning-soft: #2a2417;
+      --color-warning-text: #dcbc86;
+      --color-danger: #d9807a;
+      --color-danger-soft: #2f2020;
+      --color-danger-text: #eaa6a0;
+      --color-danger-strong: #e8928b;
+      --color-bloom: #d58f6a;
+      --color-bloom-soft: #2d2319;
+      --color-bloom-text: #e4b090;
+      --color-violet-soft: #251f36;
+      --color-violet-text: #bfb4e4;
+
+      /* deep sigue oscuro (fondos de capas); deep-2 se usa como tono de texto e icono */
+      --color-deep: #02080c;
+      --color-deep-2: #88c7d7;
+
+      /* Sombras cambiadas por bordes tonales (las sombras negras casi no se ven) */
+      --shadow-card: 0 0 0 1px rgba(255, 255, 255, 0.045);
+      --shadow-raised: 0 0 0 1px rgba(255, 255, 255, 0.075), 0 10px 28px -16px rgba(0, 0, 0, 0.6);
+      --shadow-panel: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 24px 64px -24px rgba(0, 0, 0, 0.7);
+      --shadow-pop: 0 0 0 1px rgba(255, 255, 255, 0.085), 0 16px 40px -18px rgba(0, 0, 0, 0.65);
+      --shadow-focus: 0 0 0 4px rgba(66, 171, 198, 0.28);
+    }
+  }
+
+  /* Al cambiar de tema: todos los colores a la vez en ~200 ms (sin animación con movimiento reducido). */
+  @media (prefers-reduced-motion: no-preference) {
+    :root.tema-transicion,
+    :root.tema-transicion *,
+    :root.tema-transicion *::before,
+    :root.tema-transicion *::after {
+      transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease, fill 200ms ease, stroke 200ms ease, box-shadow 200ms ease !important;
+    }
+  }
+
+  /* Impresión: siempre en claro. */
+  @media print {
+    :root {
+      color-scheme: light;
+    }
   }
 
   html {
@@ -194,6 +295,34 @@
     outline: 2px solid var(--color-brand);
     outline-offset: 2px;
   }
+  /* Elementos con el estilo de selección (barra lateral, resultados): nunca un contorno brillante; solo con teclado, un borde interior sutil. */
+  .seleccion:focus {
+    outline: none;
+  }
+  .seleccion:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-brand) 45%, transparent);
+  }
+  /* Dentro de menús y popovers: la opción enfocada usa el fondo tenue; el foco de teclado es un borde interior sutil, nunca un contorno azul. */
+  [data-radix-popper-content-wrapper] :focus {
+    outline: none;
+  }
+  [data-radix-popper-content-wrapper] :focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-brand) 45%, transparent);
+  }
+
+  /* Campos de texto: al enfocar solo cambia el color del borde (lo pone cada
+     control); sin contorno, anillo ni resplandor. El indicador de foco con
+     contorno queda para botones y controles que no son de texto, y solo con
+     teclado (:focus-visible). */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):is(:focus, :focus-visible),
+  textarea:is(:focus, :focus-visible),
+  select:is(:focus, :focus-visible),
+  [contenteditable]:is(:focus, :focus-visible) {
+    outline: none;
+    box-shadow: none;
+  }
 
   ::selection {
     background: var(--color-brand-soft);
@@ -204,17 +333,155 @@
     display: none !important;
   }
 
+  /*
+   * Movimiento reducido: las animaciones terminan al instante (siguen disparando
+   * animationend, del que dependen las ventanas de Radix para desmontarse) y las
+   * transiciones no se crean (con 0.01 ms cada elemento, cuyo transition-property
+   * por omision es "all", generaba una transicion por cada propiedad que cambiara).
+   */
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
+      animation-delay: 0s !important;
       animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
+      transition-duration: 0s !important;
+      transition-delay: 0s !important;
       scroll-behavior: auto !important;
     }
   }
 }
 
 @layer components {
+  /*
+   * Figuras de perfil (AvatarArt): flotan suave (subir 1.5 px y girar 2°) en un
+   * ciclo lento. `avatar-vivo` siempre; `avatar-al-pasar` solo cuando el
+   * cursor esta sobre su renglon (.group). Con prefers-reduced-motion, quietas.
+   */
+  @keyframes avatar-flota {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-1.5px) rotate(-2deg); }
+  }
+  .avatar-arte {
+    transform-box: fill-box;
+    transform-origin: 50% 60%;
+  }
+  .avatar-vivo .avatar-arte,
+  .group:hover .avatar-al-pasar .avatar-arte {
+    animation: avatar-flota 3.6s var(--ease-fluid) infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .avatar-vivo .avatar-arte,
+    .group:hover .avatar-al-pasar .avatar-arte {
+      animation: none;
+    }
+  }
+
+  /* Entrada escalonada de listas: cada elemento con --i (0, 1, 2…), maximo ~12 pasos. */
+  .entrada-escalonada {
+    animation: var(--animate-rise-in);
+    animation-delay: calc(min(var(--i, 0), 12) * 28ms);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .entrada-escalonada {
+      animation: none;
+    }
+  }
+
+  /* Trazo que se dibuja solo (marca de "Todo al día"): --largo es la longitud del trazo, --retraso su espera. */
+  @keyframes trazo {
+    from { stroke-dashoffset: var(--largo, 48); }
+    to { stroke-dashoffset: 0; }
+  }
+  .trazo-dibujado {
+    stroke-dasharray: var(--largo, 48);
+    animation: trazo 760ms var(--ease-spring) both;
+    animation-delay: var(--retraso, 0ms);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .trazo-dibujado {
+      animation: none;
+    }
+  }
+
+  /* Foto de perfil: aparece suave (sin movimiento con movimiento reducido). */
+  @keyframes foto-aparece {
+    from { opacity: 0; transform: scale(0.94); }
+    to { opacity: 1; transform: none; }
+  }
+  .foto-perfil {
+    animation: foto-aparece 320ms var(--ease-spring) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .foto-perfil {
+      animation: none;
+    }
+  }
+
+  /* Documentos SGC: al cambiar de estado, la etiqueta entra con una microanimacion (opacidad y escala, 200 ms). */
+  @keyframes estado-entra {
+    from { opacity: 0; transform: scale(0.92); }
+    to { opacity: 1; transform: none; }
+  }
+  .transicion-estado {
+    animation: estado-entra 200ms var(--ease-spring) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .transicion-estado {
+      animation: none;
+    }
+  }
+
+  /* Documentos SGC: "Más opciones" se despliega con un leve descenso; la carpeta entra suave desde el inicio (200-240 ms, solo opacidad y transform). */
+  @keyframes sgc-entra {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: none; }
+  }
+  .mas-opciones-entra {
+    animation: sgc-entra 200ms var(--ease-fluid) both;
+  }
+  @keyframes carpeta-entra {
+    from { opacity: 0; transform: translateY(8px) scale(0.99); }
+    to { opacity: 1; transform: none; }
+  }
+  .transicion-carpeta {
+    animation: carpeta-entra 240ms var(--ease-fluid) both;
+  }
+  /* Confirmacion breve (publicar, autorizar, confirmar lectura): aparece y se va sola. */
+  @keyframes confirmacion-entra {
+    0% { opacity: 0; transform: scale(0.9); }
+    18% { opacity: 1; transform: scale(1); }
+    82% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(0.98); }
+  }
+  .confirmacion-check {
+    animation: confirmacion-entra 1400ms var(--ease-fluid) both;
+  }
+  /* Avance de lecturas: la barra crece con transform (sin animar el ancho). */
+  .avance-barra {
+    transform-origin: left center;
+    transition: transform 300ms var(--ease-fluid);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mas-opciones-entra,
+    .transicion-carpeta,
+    .confirmacion-check {
+      animation: none;
+    }
+    .avance-barra {
+      transition: none;
+    }
+  }
+
+  /* Documentos SGC: la miniatura del PDF aparece suave sobre el icono del tipo (sin movimiento con movimiento reducido). */
+  .miniatura-entrada {
+    animation: fade-in 220ms var(--ease-fluid) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .miniatura-entrada {
+      animation: none;
+    }
+  }
+
   .tnum {
     font-variant-numeric: tabular-nums;
   }
@@ -248,11 +515,6 @@
     font-weight: 600;
     letter-spacing: -0.012em;
     line-height: 1.3;
-  }
-  .caption {
-    font-size: 12px;
-    letter-spacing: 0.005em;
-    line-height: 1.35;
   }
   .eyebrow {
     font-size: 11.5px;
@@ -303,6 +565,34 @@
     scrollbar-color: var(--color-line-strong) transparent;
   }
 
+  /*
+   * Estilo de selección compartido (resultados de la búsqueda y barra lateral):
+   * solo el fondo tenue de la superficie elevada; el texto conserva su color. Se
+   * activa con data-selected="true" (cmdk), data-activo="true" o aria-current="page".
+   * El hover es una versión aún más tenue. El foco con teclado lo sigue marcando
+   * :focus-visible.
+   */
+  .seleccion {
+    transition: background-color 200ms var(--ease-spring), color 200ms var(--ease-spring);
+  }
+  .seleccion:hover {
+    background-color: color-mix(in srgb, var(--color-surface-3) 50%, transparent);
+  }
+  .seleccion[data-selected="true"],
+  .seleccion[data-activo="true"],
+  .seleccion[aria-current="page"] {
+    background-color: var(--color-surface-3);
+  }
+  /* En oscuro, surface-3 casi iguala al fondo del popover y de la ventana ⌘K: el resultado elegido se aclara sobre lo que tenga debajo. */
+  :root[data-theme="dark"] .seleccion[data-selected="true"] {
+    background-color: color-mix(in srgb, var(--color-ink) 10%, transparent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .seleccion {
+      transition: none;
+    }
+  }
+
   /* Respuesta al presionar: instantánea, con curva de resorte al soltar. */
   .press {
     transition: transform 160ms var(--ease-spring), background-color 160ms var(--ease-spring), border-color 160ms var(--ease-spring), color 160ms var(--ease-spring), box-shadow 160ms var(--ease-spring), opacity 160ms var(--ease-spring);
@@ -312,80 +602,23 @@
     transition-duration: 60ms;
   }
 
-  /* Materiales translúcidos: estructura (más denso) y flotante (más ligero). */
+  /* Material translúcido (barras, ventanas y paneles flotantes). */
   .material {
     background: rgba(255, 255, 255, 0.72);
     -webkit-backdrop-filter: blur(24px) saturate(180%);
     backdrop-filter: blur(24px) saturate(180%);
   }
-  .material-thick {
-    background: rgba(245, 247, 249, 0.82);
-    -webkit-backdrop-filter: blur(28px) saturate(160%);
-    backdrop-filter: blur(28px) saturate(160%);
-  }
-  .material-dark {
-    background: rgba(16, 32, 43, 0.82);
-    -webkit-backdrop-filter: blur(24px) saturate(160%);
-    backdrop-filter: blur(24px) saturate(160%);
+  @media screen {
+    :root[data-theme="dark"] .material {
+      background: rgba(26, 37, 47, 0.82);
+    }
   }
   @media (prefers-reduced-transparency: reduce) {
-    .material, .material-thick {
+    .material {
       background: var(--color-surface);
       -webkit-backdrop-filter: none;
       backdrop-filter: none;
     }
-    .material-dark {
-      background: var(--color-ink);
-      -webkit-backdrop-filter: none;
-      backdrop-filter: none;
-    }
-  }
-
-  /* Borde superior claro: la luz cae sobre el material. */
-  .edge-light {
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), var(--shadow-card);
-  }
-
-  /* Borde de scroll: en lugar de una línea dura, un degradado donde el contenido pasa por debajo. */
-  .scroll-edge-b {
-    position: relative;
-  }
-  .scroll-edge-b::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -14px;
-    height: 14px;
-    pointer-events: none;
-    background: linear-gradient(to bottom, rgba(242, 244, 247, 0.9), rgba(242, 244, 247, 0));
-  }
-
-  .fade-edge-b {
-    mask-image: linear-gradient(to bottom, black calc(100% - 28px), transparent);
-  }
-
-  /* Entrada escalonada de listas: cada hijo llega 30 ms después del anterior. */
-  .stagger > * {
-    animation: rise-in 420ms var(--ease-spring) both;
-  }
-  .stagger > *:nth-child(1) { animation-delay: 0ms; }
-  .stagger > *:nth-child(2) { animation-delay: 30ms; }
-  .stagger > *:nth-child(3) { animation-delay: 60ms; }
-  .stagger > *:nth-child(4) { animation-delay: 90ms; }
-  .stagger > *:nth-child(5) { animation-delay: 120ms; }
-  .stagger > *:nth-child(6) { animation-delay: 150ms; }
-  .stagger > *:nth-child(7) { animation-delay: 180ms; }
-  .stagger > *:nth-child(8) { animation-delay: 210ms; }
-  .stagger > *:nth-child(n + 9) { animation-delay: 240ms; }
-
-  .grain {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0.07;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    mix-blend-mode: soft-light;
   }
 
   /* Marca animada (acceso): la célula gira despacio, las hijas flotan y el mar avanza. */
@@ -415,40 +648,104 @@
     }
   }
 
-  /* Fondo del acceso en tonos blancos: dos luces océano muy tenues a la deriva. */
-  .light-field {
-    position: absolute;
-    inset: -30%;
-    pointer-events: none;
-    filter: blur(80px);
-    will-change: transform;
+  /*
+   * Pantalla de acceso (PantallaAcceso): panel océano con degradado de la
+   * paleta, olas y microalgas con movimiento propio; la tarjeta del formulario con la
+   * superficie de la app. Entrada escalonada: fondo, logo, título y campos.
+   */
+  .acceso-panel {
+    background:
+      radial-gradient(120% 80% at 20% 10%, rgba(52, 167, 196, 0.55), transparent 60%),
+      linear-gradient(160deg, #1689a6 0%, #0f7a95 38%, #0b5f75 72%, #08475a 100%);
+    animation: fade-in 500ms var(--ease-spring) both;
   }
-  .light-field::before,
-  .light-field::after {
-    content: "";
-    position: absolute;
-    border-radius: 9999px;
-    will-change: transform;
+  @media screen {
+    :root[data-theme="dark"] .acceso-panel {
+      background:
+        radial-gradient(120% 80% at 20% 10%, rgba(52, 167, 196, 0.22), transparent 60%),
+        linear-gradient(160deg, #0d4a5c 0%, #0a3747 45%, #072733 78%, #051a23 100%);
+    }
   }
-  .light-field::before {
-    width: 55%;
-    height: 55%;
-    left: 10%;
-    top: 5%;
-    background: radial-gradient(circle at 40% 40%, rgba(46, 164, 194, 0.16), rgba(46, 164, 194, 0.04) 55%, transparent 70%);
-    animation: var(--animate-drift);
+  @keyframes acceso-logo-entra {
+    from { opacity: 0; transform: translateY(14px) scale(0.86); }
+    to { opacity: 1; transform: none; }
   }
-  .light-field::after {
-    width: 50%;
-    height: 50%;
-    right: 5%;
-    bottom: 5%;
-    background: radial-gradient(circle at 60% 60%, rgba(10, 84, 104, 0.12), rgba(10, 84, 104, 0.03) 55%, transparent 70%);
-    animation: var(--animate-drift-2);
+  @keyframes acceso-flota {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+  }
+  .acceso-logo {
+    animation: acceso-logo-entra 700ms var(--ease-spring) 120ms both, acceso-flota 7s var(--ease-fluid) 900ms infinite;
+  }
+  .acceso-entra {
+    animation: rise-in 520ms var(--ease-spring) both;
+    animation-delay: calc(120ms + var(--i, 0) * 90ms);
+  }
+  .acceso-fondo-entra {
+    animation: fade-in 1200ms var(--ease-spring) 200ms both;
+  }
+  @keyframes acceso-ola {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  .acceso-ola {
+    animation: acceso-ola var(--dur, 20s) linear infinite;
+  }
+  .acceso-tarjeta {
+    animation: rise-in 520ms var(--ease-spring) 260ms both;
+  }
+  @keyframes acceso-niega {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-7px); }
+    40% { transform: translateX(6px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(2px); }
+  }
+  .acceso-tarjeta.acceso-niega {
+    animation: acceso-niega 420ms var(--ease-spring) both;
+  }
+  /* Al entrar: la tarjeta se desvanece y el panel se expande hacia la aplicación (< 600 ms). */
+  .acceso-tarjeta-sale {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+    transition: opacity 320ms var(--ease-spring), transform 320ms var(--ease-spring);
+  }
+  .acceso-panel-sale .acceso-logo {
+    animation: none;
+    opacity: 0;
+    transform: scale(1.18);
+    transition: opacity 420ms var(--ease-spring), transform 420ms var(--ease-spring);
+  }
+  @keyframes acceso-ojo {
+    from { opacity: 0; transform: scale(0.6) rotate(-20deg); }
+    to { opacity: 1; transform: none; }
+  }
+  .acceso-ojo {
+    animation: acceso-ojo 220ms var(--ease-spring) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .acceso-panel, .acceso-logo, .acceso-entra, .acceso-fondo-entra, .acceso-ola, .acceso-tarjeta, .acceso-tarjeta.acceso-niega, .acceso-ojo {
+      animation: none;
+    }
+    .acceso-tarjeta-sale, .acceso-panel-sale .acceso-logo {
+      transition: none;
+    }
   }
 
-  /* Lista agrupada tipo ajustes: filas separadas por líneas internas, sin bordes por fila. */
-  .inset-group > * + * {
-    border-top: 1px solid var(--color-line);
-  }
+}
+
+/* Avisos (sonner) con los tokens del tema. */
+html [data-sonner-toaster][data-sonner-theme] {
+  --normal-bg: var(--color-surface);
+  --normal-border: var(--color-line);
+  --normal-text: var(--color-ink);
+}
+html [data-sonner-toaster][data-sonner-theme] [data-description] {
+  color: var(--color-ink-3);
+}
+
+/* Documentos SGC: el icono conserva el HEX exacto del area; en modo oscuro va sobre un recuadro claro para mantener contraste >= 3:1. */
+:root[data-theme="dark"] .icono-area,
+:root[data-theme="dark"] .icono-area .insignia-area {
+  background-color: #ffffff;
 }

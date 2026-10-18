@@ -103,11 +103,16 @@ try {
       const campo = dialogo.getByLabel("Tu contraseña");
       check("el dialogo de anular pide motivo y contrasena juntos", (await campo.count()) === 1);
       await dialogo.getByRole("button", { name: "Anular", exact: true }).click();
-      check("sin contrasena no se confirma (el dialogo sigue abierto)", await dialogo.isVisible());
+      // Con el pop-up de validación encima, el diálogo de motivo sigue abierto (queda oculto a la accesibilidad mientras tanto).
+      check("sin contrasena no se confirma (el dialogo sigue abierto)", await page.locator("#prompt-motivo").isVisible());
+      // Pop-up de validación ("Escribe tu contraseña para confirmar"): "Entendido" deja el foco en el campo.
+      await page.getByRole("alertdialog").getByText(/Escribe tu contraseña/).waitFor();
+      await page.getByRole("button", { name: "Entendido" }).click();
+      check("  … el campo contraseña queda marcado (aria-invalid)", (await campo.getAttribute("aria-invalid")) === "true");
       await campo.fill(QA_PWD);
       await dialogo.getByRole("button", { name: "Anular", exact: true }).click();
       // Fase 3: la recepcion esta aceptada, asi que la anulacion queda solicitada (segundo usuario).
-      await page.getByText(/pendiente de autorización/i).first().waitFor();
+      await page.locator("[data-solicitud-pendiente]").first().waitFor();
       const ficha = (await api("GET", `/samples/reception/${R1}`, undefined, QA)).data?.item;
       check("con la contrasena en el mismo dialogo la solicitud se crea (sin otro dialogo)", ficha?.estado === "aceptada" && !!ficha?.solicitud_pendiente && (await page.getByText("Confirma tu identidad").count()) === 0, ficha?.estado);
 
@@ -127,11 +132,12 @@ try {
       check("accion critica sin contrasena: aparece 'Confirma tu identidad' en la misma pagina", page.url().endsWith(`/muestras/recepcion/${R2}`));
       await page.fill("#reauth-password", "incorrecta-000");
       await confirma.getByRole("button", { name: "Confirmar" }).click();
+      // Contraseña incorrecta: "Confirma tu identidad" vuelve a pedirla con el campo marcado, sin perder lo capturado.
       await page.getByText(/contraseña no es correcta/i).first().waitFor();
+      await confirma.waitFor();
+      check("contrasena incorrecta: el dialogo la vuelve a pedir con el campo en rojo", (await page.locator("#reauth-password").getAttribute("aria-invalid")) === "true");
       const sigue = (await api("GET", `/samples/reception/${R2}`, undefined, QA)).data?.item?.estado;
       check("contrasena incorrecta: la accion no se realiza", sigue !== "cerrada", sigue);
-      await page.getByRole("button", { name: "Registrar disposición y cerrar la muestra" }).click();
-      await confirma.waitFor();
       await page.fill("#reauth-password", QA_PWD);
       await confirma.getByRole("button", { name: "Confirmar" }).click();
       await page.getByText(/queda cerrada|disposici[oó]n final registrada/i).first().waitFor();
@@ -217,6 +223,8 @@ try {
       await page.fill("#pwd-confirmar", "Corta-1");
       await page.getByRole("button", { name: "Guardar y continuar" }).click();
       await page.getByText(/al menos 10 caracteres/).first().waitFor();
+      // Pop-up de validación: "Entendido" lo cierra y deja el foco en el campo marcado.
+      await page.getByRole("button", { name: "Entendido" }).click();
       await page.fill("#pwd-nueva", "Nueva-Clave-UI-2026");
       await page.fill("#pwd-confirmar", "Nueva-Clave-UI-2026");
       await page.getByRole("button", { name: "Guardar y continuar" }).click();

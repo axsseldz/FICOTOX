@@ -8,7 +8,7 @@
  * simula N usuarios concurrentes durante unos minutos con acciones reales de la
  * API: listas, Inicio y campana; recepcion, procesamiento, extraccion (con
  * consumo de inventario), analisis con evidencia, revision, aprobacion, informe
- * (revisar, autorizar, liberar) y envio; incidencias; y un respaldo a mitad.
+ * (revisar, autorizar, liberar) y envio; incidencias;.
  *
  * Mide latencias (p50/p95/p99 por accion), errores (ningun 500 permitido) y
  * conflictos. Al final verifica: folios unicos y consecutivos por serie,
@@ -187,17 +187,9 @@ const LECTURAS = [
 ];
 
 const fin = Date.now() + SEGUNDOS * 1000;
-let respaldo = null;
-const respaldoEn = Date.now() + (SEGUNDOS * 1000) / 2;
 async function usuario(vu) {
   while (Date.now() < fin) {
     const r = Math.random();
-    if (vu === 0 && !respaldo && Date.now() >= respaldoEn) {
-      const t0 = Date.now();
-      const res = await api("crear respaldo (mitad de la carga)", "POST", "/respaldos", {}, T.jorge);
-      respaldo = { status: res.status, ms: Date.now() - t0, id: res.data?.id || res.data?.respaldo?.id || null };
-      continue;
-    }
     if (r < 0.5) {
       const [etiqueta, ruta] = LECTURAS[Math.floor(Math.random() * LECTURAS.length)];
       await api(etiqueta, "GET", ruta, undefined, vu % 2 ? T.luis : T.qa);
@@ -254,7 +246,7 @@ const todas = [...medidas.values()].flat();
 const foliosOk = folios.every((f) => !f.repetidos && !f.huecos);
 // Todas las series deben ejercitarse (con al menos 30 s de carga): una serie vacia no prueba nada.
 const seriesVacias = SEGUNDOS >= 30 ? folios.filter((f) => !f.total).map((f) => f.serie) : [];
-const ok = !errores.length && foliosOk && !seriesVacias.length && inventarioOk && verificacion?.ok === true && (!respaldo || respaldo.status === 201 || respaldo.status === 200);
+const ok = !errores.length && foliosOk && !seriesVacias.length && inventarioOk && verificacion?.ok === true;
 const resultado = {
   fecha: new Date().toISOString(),
   usuarios: USUARIOS,
@@ -265,7 +257,6 @@ const resultado = {
   errores_500: errores.length,
   errores: errores.slice(0, 20),
   conflictos_reintentados_409: conflictos,
-  respaldo,
   folios,
   inventario: { inicial: INICIAL, extracciones_con_consumo: extraccionesConConsumo, extracciones_confirmadas: extraccionesOk, esperada, existencia, movimientos, ok: inventarioOk },
   bitacora: verificacion,
@@ -281,7 +272,6 @@ const md = [
   `- Latencia global: p50 ${f(resultado.global.p50)} · p95 ${f(resultado.global.p95)} · p99 ${f(resultado.global.p99)} · máx ${f(resultado.global.max)}`,
   `- Errores 500: **${errores.length}** · conflictos de concurrencia (409 tras reintentos): ${conflictos}`,
   ...(seriesVacias.length ? [`- Series sin registros (no se ejercitaron): **${seriesVacias.join(", ")}**`] : []),
-  `- Respaldo a mitad de la carga: ${respaldo ? `HTTP ${respaldo.status} en ${f(respaldo.ms)}` : "no se alcanzó"}`,
   `- Bitácora: ${verificacion?.ok ? `íntegra (${verificacion.total} entradas)` : `NO íntegra ${JSON.stringify(verificacion)}`}`,
   `- Inventario: existencia ${existencia} = inicial ${INICIAL} − ${extraccionesConConsumo} × ${CONSUMO} → ${inventarioOk ? "coherente" : `INCOHERENTE (esperada ${esperada})`}`,
   "",

@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input, Select } from "@/components/ui/Field";
 import { Dialog } from "@/components/ui/Overlay";
 import { registrarReautenticador, type CredencialReauth } from "@/lib/client/api";
+import { msg } from "@/lib/client/mensajes";
+import { useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
 
 /*
  * Confirmar identidad (Fase 2). Las acciones criticas piden de nuevo la
@@ -27,9 +29,14 @@ const ETIQUETA_ACCION: Record<string, string> = {
   baja: "dar de baja una cuenta",
   reactivar: "reactivar una cuenta",
   permisos: "cambiar los permisos de un rol",
+  crear: "crear un respaldo",
+  probar: "probar la restauración de un respaldo",
+  publicar: "registrar o publicar una revisión vigente de un documento",
+  autorizar: "autorizar la emisión o la renovación de un documento",
+  obsoletar: "solicitar que un documento quede obsoleto",
 };
 
-export function describirAccion(accion: string): string {
+function describirAccion(accion: string): string {
   const [, clave] = accion.split(":");
   return ETIQUETA_ACCION[clave] || "realizar esta acción";
 }
@@ -76,17 +83,19 @@ export function useConfirmaConPassword(): boolean {
 }
 
 export function ReautenticarProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<{ accion: string; mensaje: string } | null>(null);
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<{ accion: string; mensaje: string; error?: string; seq: number } | null>(null);
   const resolver = useRef<((value: CredencialReauth | null) => void) | null>(null);
+  const seq = useRef(0);
 
-  const pedir = useCallback((accion: string, mensaje: string) => {
+  /*
+   * `error` (opcional): la contrasena anterior no fue correcta; se vuelve a
+   * pedir con el campo ya marcado en rojo y el mensaje del servidor.
+   */
+  const pedir = useCallback((accion: string, mensaje: string, error?: string) => {
     return new Promise<CredencialReauth | null>((resolve) => {
       resolver.current = resolve;
-      setPassword("");
-      setError(null);
-      setState({ accion, mensaje });
+      seq.current += 1;
+      setState({ accion, mensaje, error, seq: seq.current });
     });
   }, []);
 
@@ -101,45 +110,68 @@ export function ReautenticarProvider({ children }: { children: ReactNode }) {
     setState(null);
   };
 
-  const confirmar = () => {
-    if (!password) {
-      setError("Escribe tu contraseña");
-      return;
-    }
-    cerrar({ password });
-  };
-
   return (
     <>
       {children}
-      <Dialog
-        open={!!state}
-        onOpenChange={(open) => {
-          if (!open) cerrar(null);
-        }}
-        title="Confirma tu identidad"
-        description={`Para ${describirAccion(state?.accion || "")} vuelve a escribir tu contraseña. Lo que capturaste no se pierde.`}
-        size="sm"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => cerrar(null)}>
-              Cancelar
-            </Button>
-            <Button onClick={confirmar}>Confirmar</Button>
-          </>
-        }
-      >
+      {state ? <DialogoReautenticar key={state.seq} accion={state.accion} errorPrevio={state.error} onCerrar={cerrar} /> : null}
+    </>
+  );
+}
+
+function DialogoReautenticar({ accion, errorPrevio, onCerrar }: { accion: string; errorPrevio?: string; onCerrar: (value: CredencialReauth | null) => void }) {
+  const [password, setPassword] = useState("");
+  // Contrasena rechazada por el servidor: el campo aparece marcado hasta que se escribe otra.
+  const [rechazada, setRechazada] = useState(!!errorPrevio);
+  const v = useValidacion({
+    titulo: "No se pudo confirmar tu identidad",
+    reglas: () => (password ? [] : [{ campo: "reauth-password", mensaje: msg.password }]),
+  });
+  const confirmar = () => {
+    if (!v.validar()) return;
+    onCerrar({ password });
+  };
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onCerrar(null);
+      }}
+      title="Confirma tu identidad"
+      description={`Para ${describirAccion(accion)} vuelve a escribir tu contraseña. Lo que capturaste no se pierde.`}
+      size="sm"
+      footer={
+        <>
+          <Button variant="secondary" onClick={() => onCerrar(null)}>
+            Cancelar
+          </Button>
+          <Button onClick={confirmar}>Confirmar</Button>
+        </>
+      }
+    >
+      <ValidacionAmbito v={v}>
         <form
           onSubmit={(event) => {
             event.preventDefault();
             confirmar();
           }}
         >
-          <Field label="Tu contraseña" htmlFor="reauth-password" required error={error || undefined}>
-            <Input id="reauth-password" type="password" autoComplete="current-password" autoFocus value={password} onChange={(event) => setPassword(event.target.value)} leading={<LockKey size={16} />} />
+          <Field label="Tu contraseña" htmlFor="reauth-password" required error={rechazada && !password ? errorPrevio || "La contraseña no es correcta" : undefined}>
+            <Input
+              id="reauth-password"
+              type="password"
+              autoComplete="current-password"
+              autoFocus
+              value={password}
+              invalid={rechazada && !password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setRechazada(false);
+              }}
+              leading={<LockKey size={16} />}
+            />
           </Field>
         </form>
-      </Dialog>
-    </>
+      </ValidacionAmbito>
+    </Dialog>
   );
 }

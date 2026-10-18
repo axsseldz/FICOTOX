@@ -1,5 +1,6 @@
 import { HttpError } from "./http";
 import { type Session } from "./db";
+import { hoyLocal } from "../shared/fechas";
 
 /* Portado de utils/inventory_usage.py del backend Flask original. */
 
@@ -99,7 +100,7 @@ export async function restoreInventoryUsage(s: Session, referencePrefix: string)
       await s.execute(
         `
         UPDATE consumibles
-        SET piezas = COALESCE(piezas, 0) + :cantidad
+        SET existencia = COALESCE(existencia, 0) + :cantidad
         WHERE id = :id
         `,
         { id: row.id_item, cantidad: amount },
@@ -125,6 +126,9 @@ interface ConsumeOptions {
   referencia: string;
   /* El insumo ya estaba declarado en el registro: se permite aunque este dado de baja. */
   permitirInactivo?: boolean;
+  /* Etapa de muestras que origina el consumo (el formato ya valido el acceso del usuario a ese folio). */
+  vinculoTipo?: string | null;
+  vinculoId?: number | null;
 }
 
 /*
@@ -165,7 +169,7 @@ export async function consumeConsumible(s: Session, referenceValue: unknown, can
   await s.execute(
     `
     UPDATE consumibles
-    SET piezas = COALESCE(piezas, 0) - :cantidad
+    SET existencia = COALESCE(existencia, 0) - :cantidad
     WHERE id = :id
     `,
     { id: itemId, cantidad: amount },
@@ -175,13 +179,14 @@ export async function consumeConsumible(s: Session, referenceValue: unknown, can
 }
 
 async function insertMovement(s: Session, tableName: string, itemId: number, cantidad: number, options: ConsumeOptions): Promise<void> {
+  const unidad = tableName === "reactivos" ? (await s.scalar("SELECT unidad FROM reactivos WHERE id = :id", { id: itemId })) || null : "unidades";
   await s.execute(
     `
     INSERT INTO movimientos (
-        tipo, tabla_origen, id_item, cantidad, motivo, referencia, id_usuario
+        tipo, tabla_origen, id_item, cantidad, motivo, referencia, id_usuario, unidad, vinculo_tipo, vinculo_id, fecha_movimiento
     )
     VALUES (
-        'salida', :tabla_origen, :id_item, :cantidad, :motivo, :referencia, :id_usuario
+        'salida', :tabla_origen, :id_item, :cantidad, :motivo, :referencia, :id_usuario, :unidad, :vinculo_tipo, :vinculo_id, :fecha_movimiento
     )
     `,
     {
@@ -191,6 +196,10 @@ async function insertMovement(s: Session, tableName: string, itemId: number, can
       motivo: options.motivo,
       referencia: options.referencia,
       id_usuario: options.userId,
+      unidad,
+      vinculo_tipo: options.vinculoTipo ?? null,
+      vinculo_id: options.vinculoId ?? null,
+      fecha_movimiento: hoyLocal(),
     },
   );
 }

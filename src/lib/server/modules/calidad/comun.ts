@@ -90,7 +90,7 @@ export async function exigirCalidad(s: Session, user: CurrentUser, accion: Accio
 }
 
 /* ¿Ve esta incidencia? Total, o la reporto la persona. */
-export function veIncidencia(acc: AccesoCalidad, row: Row): boolean {
+function veIncidencia(acc: AccesoCalidad, row: Row): boolean {
   return acc.total || Number(row.reportada_por) === acc.yo;
 }
 

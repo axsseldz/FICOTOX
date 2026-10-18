@@ -23,22 +23,26 @@ import { DESCRIPCION_MIN, EXTENSIONES_EVIDENCIA, TIPOS_EVIDENCIA, extensionDe, p
 
 const TABLE = "adjuntos";
 const TIPOS = new Set<string>(TIPOS_EVIDENCIA.map((t) => t.value));
-const EXTENSIONES = new Set<string>(EXTENSIONES_EVIDENCIA);
 
 /* Carpeta raiz de las evidencias (dentro de la instancia). */
-export function evidenciasDir(): string {
+function evidenciasDir(): string {
   return path.join(/*turbopackIgnore: true*/ getConfig().INSTANCE_DIR, "evidencias");
 }
 
-/* Ruta absoluta de un adjunto; el nombre almacenado nunca sale de la carpeta de evidencias. */
-export function rutaAdjunto(row: Row): string {
-  const raiz = path.resolve(/*turbopackIgnore: true*/ evidenciasDir());
-  const ruta = path.resolve(/*turbopackIgnore: true*/ raiz, String(row.nombre_almacenado || ""));
-  if (!ruta.startsWith(raiz + path.sep)) throw new HttpError(400, { message: "Ruta de adjunto no válida" });
+/* Ruta absoluta de un archivo almacenado; nunca sale de su carpeta raiz (evidencias, biblioteca). */
+export function rutaEn(raizDir: string, nombreAlmacenado: unknown): string {
+  const raiz = path.resolve(/*turbopackIgnore: true*/ raizDir);
+  const ruta = path.resolve(/*turbopackIgnore: true*/ raiz, String(nombreAlmacenado || ""));
+  if (!ruta.startsWith(raiz + path.sep)) throw new HttpError(400, { message: "Ruta de archivo no válida" });
   return ruta;
 }
 
-export const maxBytes = () => getConfig().EVIDENCIA_MAX_MB * 1024 * 1024;
+/* Ruta absoluta de un adjunto; el nombre almacenado nunca sale de la carpeta de evidencias. */
+function rutaAdjunto(row: Row): string {
+  return rutaEn(evidenciasDir(), row.nombre_almacenado);
+}
+
+const maxBytes = () => getConfig().EVIDENCIA_MAX_MB * 1024 * 1024;
 
 export function serializarAdjunto(row: Row, extra: Record<string, unknown> = {}): Row {
   const { nombre_almacenado: _almacenado, ...resto } = row;
@@ -48,7 +52,11 @@ export function serializarAdjunto(row: Row, extra: Record<string, unknown> = {})
 
 /* Integridad del archivo en disco contra el SHA-256 registrado. */
 export async function integridadAdjunto(row: Row): Promise<{ estado: "ok" | "alterado" | "faltante"; sha256: string | null; bytes: Buffer | null }> {
-  const ruta = rutaAdjunto(row);
+  return integridadArchivo(rutaAdjunto(row), row.sha256);
+}
+
+/* Integridad de un archivo cualquiera (adjunto, biblioteca) contra su SHA-256: ok | alterado | faltante. */
+export async function integridadArchivo(ruta: string, shaEsperado: unknown): Promise<{ estado: "ok" | "alterado" | "faltante"; sha256: string | null; bytes: Buffer | null }> {
   let bytes: Buffer;
   try {
     bytes = await fs.promises.readFile(ruta);
@@ -56,7 +64,7 @@ export async function integridadAdjunto(row: Row): Promise<{ estado: "ok" | "alt
     return { estado: "faltante", sha256: null, bytes: null };
   }
   const sha256 = createHash("sha256").update(bytes).digest("hex");
-  return { estado: sha256 === String(row.sha256) ? "ok" : "alterado", sha256, bytes };
+  return { estado: sha256 === String(shaEsperado) ? "ok" : "alterado", sha256, bytes };
 }
 
 export async function listarAdjuntos(s: Session, entidad: EntidadAdjunto, entidadId: number): Promise<Row[]> {
@@ -126,15 +134,25 @@ export async function leerArchivo(request: Request): Promise<ArchivoRecibido> {
   if (!(archivo instanceof File) || !archivo.name) throw new HttpError(400, { message: "Adjunta un archivo" });
   if (!TIPOS.has(tipo)) throw new HttpError(400, { message: "Elige el tipo de evidencia" });
   if (descripcion.length < DESCRIPCION_MIN) throw new HttpError(400, { message: `Describe la evidencia (al menos ${DESCRIPCION_MIN} caracteres)` });
-  if (archivo.size > limite) throw new HttpError(413, { message: `El archivo pesa más de ${getConfig().EVIDENCIA_MAX_MB} MB`, codigo: "archivo_grande" });
+  const valido = await validarArchivoSubido(archivo, { limiteBytes: limite, limiteMb: getConfig().EVIDENCIA_MAX_MB, extensiones: EXTENSIONES_EVIDENCIA });
+  return { tipo_evidencia: tipo, descripcion: descripcion.slice(0, 2000), ...valido };
+}
+
+/*
+ * Validacion comun de un archivo subido (adjuntos y biblioteca): tamano (413),
+ * extension permitida, firma de bytes, contenido activo aunque venga
+ * renombrado (ejecutables, scripts, HTML, SVG) y archivo vacio (400).
+ */
+export async function validarArchivoSubido(archivo: File, reglas: { limiteBytes: number; limiteMb: number; extensiones: readonly string[] }): Promise<{ nombre_original: string; extension: string; bytes: Buffer }> {
+  if (archivo.size > reglas.limiteBytes) throw new HttpError(413, { message: `El archivo pesa más de ${reglas.limiteMb} MB`, codigo: "archivo_grande" });
   const nombre = sanearNombre(archivo.name);
   const extension = extensionDe(nombre);
-  if (!EXTENSIONES.has(extension)) throw new HttpError(400, { message: `Formato no permitido (.${extension || "sin extensión"}). Se aceptan: ${EXTENSIONES_EVIDENCIA.join(", ")}`, codigo: "formato_no_permitido" });
+  if (!reglas.extensiones.includes(extension)) throw new HttpError(400, { message: `Formato no permitido (.${extension || "sin extensión"}). Se aceptan: ${reglas.extensiones.join(", ")}`, codigo: "formato_no_permitido" });
   const bytes = Buffer.from(await archivo.arrayBuffer());
-  if (bytes.length > limite) throw new HttpError(413, { message: `El archivo pesa más de ${getConfig().EVIDENCIA_MAX_MB} MB`, codigo: "archivo_grande" });
+  if (bytes.length > reglas.limiteBytes) throw new HttpError(413, { message: `El archivo pesa más de ${reglas.limiteMb} MB`, codigo: "archivo_grande" });
   const problema = problemaDeContenido(extension, bytes);
   if (problema) throw new HttpError(400, { message: problema, codigo: bytes.length ? "contenido_no_valido" : "archivo_vacio" });
-  return { tipo_evidencia: tipo, descripcion: descripcion.slice(0, 2000), nombre_original: nombre, extension, bytes };
+  return { nombre_original: nombre, extension, bytes };
 }
 
 export interface ArchivoGuardado {
@@ -150,8 +168,12 @@ export interface ArchivoGuardado {
  * queda nada en disco y no se crea el registro.
  */
 export async function guardarArchivo(entidad: EntidadAdjunto, entidadId: number, extension: string, bytes: Buffer): Promise<ArchivoGuardado> {
-  const relativo = path.join(/*turbopackIgnore: true*/ entidad, String(entidadId));
-  const carpeta = path.join(/*turbopackIgnore: true*/ evidenciasDir(), relativo);
+  return guardarArchivoEn(evidenciasDir(), path.join(/*turbopackIgnore: true*/ entidad, String(entidadId)), extension, bytes);
+}
+
+/* Igual que guardarArchivo, en cualquier carpeta raiz (biblioteca: <instancia>/biblioteca/<documento_id>/). */
+export async function guardarArchivoEn(raizDir: string, relativo: string, extension: string, bytes: Buffer): Promise<ArchivoGuardado> {
+  const carpeta = path.join(/*turbopackIgnore: true*/ raizDir, relativo);
   await fs.promises.mkdir(carpeta, { recursive: true });
   const nombre = `${randomUUID()}.${extension}`;
   const destino = path.join(/*turbopackIgnore: true*/ carpeta, nombre);

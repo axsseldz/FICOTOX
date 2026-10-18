@@ -41,7 +41,7 @@ export function LinkTabs({ items, className }: { items: TabItem[]; className?: s
             aria-current={active ? "page" : undefined}
             className={cn(
               "press flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-[8px] px-3.5 text-[13px] font-medium transition-colors",
-              active ? "bg-surface text-ink shadow-[0_1px_2px_rgba(16,32,43,0.10),0_0_0_1px_rgba(16,32,43,0.04)]" : "text-ink-3 hover:text-ink",
+              active ? "bg-surface text-ink shadow-card" : "text-ink-3 hover:text-ink",
             )}
           >
             {item.label}
@@ -100,7 +100,7 @@ export function SegmentedTabs<T extends string>({ value, onChange, options, clas
               "press flex items-center gap-1.5 whitespace-nowrap rounded-[8px] font-medium transition-colors",
               stretch ? "flex-1 justify-center" : "shrink-0",
               size === "sm" ? "h-7 px-2.5 text-[12.5px]" : "h-8 px-3.5 text-[13px]",
-              active ? "bg-surface text-ink shadow-[0_1px_2px_rgba(16,32,43,0.10),0_0_0_1px_rgba(16,32,43,0.04)]" : "text-ink-3 hover:text-ink",
+              active ? "bg-surface text-ink shadow-card" : "text-ink-3 hover:text-ink",
             )}
           >
             {option.label}
@@ -124,7 +124,7 @@ export function SearchInput({ value, onChange, placeholder, className, autoFocus
       trailing={
         value ? (
           <button type="button" aria-label="Limpiar búsqueda" onClick={() => onChange("")} className="press flex h-6 w-6 items-center justify-center rounded-full text-ink-3 hover:bg-surface-3 hover:text-ink">
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-ink-4 text-white">
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-ink-4 text-on-accent">
               <X size={10} weight="bold" />
             </span>
           </button>

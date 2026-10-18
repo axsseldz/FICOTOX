@@ -100,11 +100,11 @@ try {
       await page.locator("#prompt-motivo").fill("Resultado capturado en la muestra equivocada");
       await page.locator("#prompt-password").fill(QA_PWD);
       await page.getByRole("dialog").getByRole("button", { name: "Anular", exact: true }).click();
-      await page.getByText(/pendiente de autorización/i).first().waitFor();
+      await page.locator("[data-solicitud-pendiente]").first().waitFor();
       const estado = (await api("GET", `/samples/analysis/${A2}`, undefined, QA)).data?.item;
       solicitudId = estado?.solicitud_pendiente?.id || null;
       check("la anulacion queda solicitada y NO se ejecuta", estado?.estado === "aprobado" && !!solicitudId, `${estado?.estado} ${solicitudId}`);
-      check("la lista muestra la insignia 'Anulación solicitada · pendiente de autorización'", (await page.getByText("Anulación solicitada · pendiente de autorización").count()) > 0);
+      check("la lista muestra el indicador compacto 'Anulación solicitada · pendiente de autorización' (tooltip, se puede pulsar)", (await page.locator('[data-solicitud-pendiente][aria-label^="Anulación solicitada · pendiente de autorización"]').count()) > 0);
     } catch (error) {
       check("recorrido QA", false, error.message);
       await captura(page);
@@ -122,9 +122,11 @@ try {
       check("el Inicio muestra el aviso 'Por autorizar'", true);
       await page.goto(`${BASE}/solicitudes`);
       await page.getByRole("heading", { name: "Pendientes de tu autorización" }).waitFor();
-      const fila = page.locator("tbody tr").filter({ hasText: `#${solicitudId} ·` }).first();
+      // Lista -> ventana: el renglón abre la ventana de la solicitud con Aprobar / Rechazar.
+      const fila = page.locator(`[data-solicitud="${solicitudId}"]`).first();
       await fila.waitFor();
-      await fila.getByRole("button", { name: "Aprobar", exact: true }).click();
+      await fila.locator("button[aria-haspopup=dialog]").click();
+      await page.locator(`[data-solicitud-ventana="${solicitudId}"]`).getByRole("button", { name: "Aprobar", exact: true }).click();
       await page.locator("#ap-motivo").fill("Confirmado con el analista");
       await page.locator("#ap-password").fill(credenciales[PATRICIA]);
       await page.getByRole("dialog").getByRole("button", { name: "Aprobar y ejecutar" }).click();
@@ -132,9 +134,8 @@ try {
       const despues = (await api("GET", `/samples/analysis/${A2}`, undefined, QA)).data?.item;
       check("al aprobarla otra persona, el analisis queda anulado", despues?.estado === "anulado", despues?.estado);
       await page.goto(`${BASE}/muestras/analisis/${A2}`);
-      await page.getByRole("radio", { name: "Solicitudes" }).click();
       await page.getByLabel("Solicitudes de autorización").getByText(/Aprobada/).first().waitFor();
-      check("el historial del registro muestra la solicitud aprobada (pestaña Solicitudes)", true);
+      check("el historial del registro muestra la solicitud aprobada (apartado Solicitudes, arriba de la bitácora)", true);
     } catch (error) {
       check("recorrido Responsable General", false, error.message);
       await captura(page);

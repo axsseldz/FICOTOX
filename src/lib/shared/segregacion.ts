@@ -11,33 +11,7 @@
  * un registro concreto; queda registrada en el registro y en la bitacora.
  */
 
-export const VERSION_SEGREGACION = "2026-09-29.1";
-
-export type AccionSegregada = "revisar" | "aprobar" | "autorizar" | "supervisar" | "aprobar_solicitud" | "evaluar" | "verificar" | "cerrar" | "reanudar";
-
-export interface Regla {
-  numero: number;
-  clave: string;
-  titulo: string;
-  /* Que se evalua, en palabras, para la documentacion y la interfaz. */
-  descripcion: string;
-}
-
-export const REGLAS_SEGREGACION: Regla[] = [
-  { numero: 1, clave: "analisis", titulo: "Analisis: quien lo elaboro no lo revisa ni lo aprueba", descripcion: "Revisor y aprobador pueden ser la misma persona, pero ninguno de los dos elaboro el analisis." },
-  { numero: 2, clave: "informe", titulo: "Informe: quien lo elaboro, o elaboro un analisis incluido, no lo revisa ni lo autoriza", descripcion: "El Analista no valida ni libera su propio resultado." },
-  { numero: 3, clave: "supervision_captura", titulo: "Procesamiento y extraccion: quien firma como supervisor no proceso, extrajo ni hizo la limpieza", descripcion: "Se comparan los nombres firmados en el formato." },
-  { numero: 4, clave: "visto_bueno", titulo: "Supervision: el supervisor no da visto bueno a lo que el mismo capturo", descripcion: "Aplica al alcance supervisado y a las cuentas temporales." },
-  { numero: 5, clave: "documentos", titulo: "Documentos SGC: quien elaboro no revisa ni aprueba; revisor y aprobador no son la misma persona", descripcion: "Revisor de calidad, revisor tecnico y aprobador no pueden ser todos la misma persona." },
-  { numero: 6, clave: "segundo_usuario", titulo: "Segundo usuario: quien solicita una accion critica no la aprueba", descripcion: "La aprobacion de una solicitud la da otra persona con el permiso que exige la accion." },
-  // Fase 11: incidencias, no conformidades y acciones correctivas (ISO/IEC 17025 7.10 y 8.7).
-  { numero: 7, clave: "evaluar_incidencia", titulo: "Incidencias: quien reporto una incidencia no la evalua", descripcion: "Cerrarla sin NC o escalarla la decide otra persona con calidad:R." },
-  { numero: 8, clave: "verificar_eficacia", titulo: "Acciones correctivas: el responsable de una accion no verifica su eficacia", descripcion: "La verificacion de eficacia de la NC la hace alguien que no es ni fue responsable de ninguna de sus acciones ni las implemento." },
-  { numero: 9, clave: "cerrar_nc", titulo: "No conformidades: el responsable de la NC no la cierra", descripcion: "La cierra otra persona con calidad:A (tampoco quien fue responsable antes de una reasignacion)." },
-  { numero: 10, clave: "reanudar_trabajo", titulo: "Suspensiones: quien suspendio un metodo o equipo no lo reanuda", descripcion: "Reanudar el trabajo (7.10.1 f) lo autoriza otra persona con calidad:A." },
-];
-
-export const reglaPorClave = (clave: string): Regla | undefined => REGLAS_SEGREGACION.find((r) => r.clave === clave);
+export const VERSION_SEGREGACION = "2026-10-14.1";
 
 export interface Violacion {
   regla: number;
@@ -76,7 +50,7 @@ export function evaluarInforme(usuarioId: number, elaboradoresInforme: Iterable<
 }
 
 /* Nombre normalizado para comparar personas firmadas en un formato. */
-export const nombreNormalizado = (value: unknown): string =>
+const nombreNormalizado = (value: unknown): string =>
   String(value || "")
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
@@ -105,13 +79,7 @@ export function evaluarVistoBueno(usuarioId: number, capturadoPor: number | null
   return { regla: 4, clave: "visto_bueno", mensaje: "Capturaste o editaste este registro; el visto bueno lo debe dar otra persona" };
 }
 
-/* Regla 5: documentos SGC. */
-export function evaluarDocumento(usuarioId: number, elaboradores: Iterable<number>, revisorId: number | null | undefined, accion: "revisar" | "aprobar"): Violacion | null {
-  const yo = Number(usuarioId);
-  if ([...elaboradores].some((id) => Number(id) === yo)) return { regla: 5, clave: "documentos", mensaje: `Elaboraste este documento; lo debe ${lo(accion)} otra persona` };
-  if (accion === "aprobar" && revisorId !== null && revisorId !== undefined && Number(revisorId) === yo) return { regla: 5, clave: "documentos", mensaje: "Revisaste este documento; lo debe aprobar otra persona" };
-  return null;
-}
+/* Regla 5 (documentos SGC): retirada; ver REGLAS_SEGREGACION. */
 
 /* Regla 6: segundo usuario. */
 export function evaluarSegundoUsuario(usuarioId: number, solicitadoPor: number | null | undefined): Violacion | null {
@@ -145,4 +113,22 @@ export function evaluarCierreNc(usuarioId: number, responsablesNc: Iterable<numb
 export function evaluarReanudacion(usuarioId: number, suspendidaPor: number | null | undefined): Violacion | null {
   if (suspendidaPor === null || suspendidaPor === undefined || Number(suspendidaPor) !== Number(usuarioId)) return null;
   return { regla: 10, clave: "reanudar_trabajo", mensaje: "Suspendiste este trabajo; lo debe reanudar otra persona" };
+}
+
+/*
+ * Regla 11 (Documentos SGC): elaborador, revisor y autorizador de una revision
+ * son tres personas distintas, y nadie actua en un papel que no le fue asignado.
+ */
+export type PapelDocumento = "elaborador" | "revisor" | "autorizador";
+const PAPEL_ARTICULO: Record<PapelDocumento, string> = { elaborador: "el elaborador", revisor: "el revisor", autorizador: "el autorizador" };
+
+export function evaluarTresPersonas(ids: { elaborador_id?: number | null; revisor_id?: number | null; autorizador_id?: number | null }): Violacion | null {
+  const lista = [ids.elaborador_id, ids.revisor_id, ids.autorizador_id].filter((x): x is number => x !== null && x !== undefined && Number(x) > 0).map(Number);
+  if (new Set(lista).size === lista.length) return null;
+  return { regla: 11, clave: "documento_tres_personas", mensaje: "Elaborador, revisor y autorizador deben ser tres personas distintas: nadie revisa ni autoriza lo que elaboró, ni autoriza lo que revisó" };
+}
+
+export function evaluarPapelDocumento(usuarioId: number, asignado: number | null | undefined, papel: PapelDocumento): Violacion | null {
+  if (asignado !== null && asignado !== undefined && Number(asignado) === Number(usuarioId)) return null;
+  return { regla: 11, clave: "documento_papel_asignado", mensaje: `No eres ${PAPEL_ARTICULO[papel]} asignado de esta revisión; solo actúa quien fue asignado por Mejora Continua` };
 }

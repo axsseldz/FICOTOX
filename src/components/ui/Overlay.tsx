@@ -1,10 +1,13 @@
 "use client";
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
-import { Dialog as RadixDialog, DropdownMenu as RadixDropdown, HoverCard as RadixHoverCard, Tooltip as RadixTooltip } from "radix-ui";
+import { Dialog as RadixDialog, DropdownMenu as RadixDropdown, Tooltip as RadixTooltip } from "radix-ui";
 import { DotsThreeCircle, X } from "@phosphor-icons/react";
 import { Button, IconButton } from "./Button";
 import { cn } from "./cn";
+import { Field, Textarea } from "./Field";
+import { useValidacion, ValidacionAmbito } from "./Validacion";
+import { msg, type Problema } from "@/lib/client/mensajes";
 import { CampoIdentidad, useConfirmaConPassword } from "@/components/session/Reautenticar";
 import { armarCargo, armarReauth } from "@/lib/client/api";
 
@@ -15,7 +18,7 @@ import { armarCargo, armarReauth } from "@/lib/client/api";
  */
 
 /* Velo: oscurece y empuja el fondo hacia atras para enfocar la tarea. */
-const OVERLAY_CLASS = "fixed inset-0 z-40 bg-deep/35 backdrop-blur-[3px] data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out";
+const OVERLAY_CLASS = "fixed inset-0 z-[var(--z-ventana)] bg-deep/35 backdrop-blur-[3px] data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out";
 
 export interface SheetProps {
   open: boolean;
@@ -36,7 +39,7 @@ export function Sheet({ open, onOpenChange, title, description, children, footer
         <RadixDialog.Overlay className={OVERLAY_CLASS} />
         <RadixDialog.Content
           className={cn(
-            "fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-surface shadow-panel outline-none sm:inset-y-3 sm:right-3 sm:rounded-panel",
+            "fixed inset-y-0 right-0 z-[var(--z-ventana)] flex w-full flex-col bg-surface-elevated shadow-panel outline-none sm:inset-y-3 sm:right-3 sm:rounded-panel",
             "data-[state=open]:animate-sheet-in data-[state=closed]:animate-sheet-out",
             width,
           )}
@@ -79,10 +82,10 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
         <RadixDialog.Overlay className={OVERLAY_CLASS} />
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-6">
+        <div className="fixed inset-0 z-[var(--z-ventana)] flex items-end justify-center p-3 sm:items-center sm:p-6">
           <RadixDialog.Content
             className={cn(
-              "flex max-h-full w-full flex-col overflow-hidden rounded-panel bg-surface shadow-panel outline-none",
+              "flex max-h-full w-full flex-col overflow-hidden rounded-panel bg-surface-elevated shadow-panel outline-none",
               "data-[state=open]:animate-pop-in data-[state=closed]:animate-pop-out",
               width,
             )}
@@ -197,22 +200,15 @@ type PromptFn = (options: PromptOptions) => Promise<string | null>;
 const PromptContext = createContext<PromptFn | null>(null);
 
 export function PromptProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<(PromptOptions & { open: boolean }) | null>(null);
-  const [value, setValue] = useState("");
-  const [touched, setTouched] = useState(false);
-  const [password, setPassword] = useState("");
-  const [cargo, setCargo] = useState("");
-  const conPassword = useConfirmaConPassword();
+  const [state, setState] = useState<(PromptOptions & { open: boolean; seq: number }) | null>(null);
   const resolver = useRef<((value: string | null) => void) | null>(null);
+  const seq = useRef(0);
 
   const prompt = useCallback<PromptFn>((options) => {
     return new Promise<string | null>((resolve) => {
       resolver.current = resolve;
-      setValue(options.defaultValue || "");
-      setPassword("");
-      setCargo("");
-      setTouched(false);
-      setState({ ...options, open: true });
+      seq.current += 1;
+      setState({ ...options, open: true, seq: seq.current });
     });
   }, []);
 
@@ -222,73 +218,75 @@ export function PromptProvider({ children }: { children: ReactNode }) {
     setState((prev) => (prev ? { ...prev, open: false } : prev));
   }, []);
 
-  const minLength = state?.minLength ?? 5;
-  const pideClave = !!state?.critico && conPassword;
-  const valid = value.trim().length >= minLength && (!pideClave || password.length > 0);
-  const fieldId = "prompt-motivo";
-
   return (
     <PromptContext.Provider value={prompt}>
       {children}
-      <Dialog
-        open={!!state?.open}
-        onOpenChange={(open) => {
-          if (!open) settle(null);
-        }}
-        title={state?.title || ""}
-        description={state?.description}
-        size="sm"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => settle(null)}>
-              {state?.cancelLabel || "Cancelar"}
-            </Button>
-            <Button
-              variant={state?.tone === "danger" ? "danger" : "primary"}
-              onClick={() => {
-                setTouched(true);
-                if (!valid) return;
-                if (state?.critico) {
-                  armarReauth(pideClave ? { password } : null);
-                  armarCargo(cargo ? Number(cargo) : null);
-                }
-                settle(value.trim());
-              }}
-            >
-              {state?.confirmLabel || "Confirmar"}
-            </Button>
-          </>
-        }
-      >
-        <label htmlFor={fieldId} className="mb-1.5 block text-[13px] font-medium text-ink-2">
-          {state?.label || "Motivo"}
-          <span className="ml-0.5 text-brand" aria-hidden="true">
-            *
-          </span>
-        </label>
-        <textarea
-          id={fieldId}
-          rows={3}
-          autoFocus
-          className={cn("w-full rounded-[10px] border bg-surface-2/80 px-3 py-2.5 text-[14px] text-ink placeholder:text-ink-4 focus:border-brand focus:bg-surface focus:outline-none focus:shadow-[var(--shadow-focus)]", touched && !valid ? "border-danger" : "border-line")}
-          placeholder={state?.placeholder || "Describe el motivo; quedará registrado en la bitácora de auditoría"}
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-        />
-        {touched && !valid ? (
-          <p className="mt-1.5 text-[12.5px] text-danger" role="alert">
-            {value.trim().length < minLength ? `Escribe al menos ${minLength} caracteres.` : "Escribe tu contraseña para confirmar."}
-          </p>
-        ) : (
-          <p className="mt-1.5 text-[12.5px] text-ink-3">Queda registrado con tu usuario, fecha y hora.</p>
-        )}
-        {state?.critico ? (
+      {/* Cada captura monta su propio formulario (sin arrastrar lo escrito ni los errores de la anterior). */}
+      {state ? <PromptDialogo key={state.seq} state={state} onSettle={settle} /> : null}
+    </PromptContext.Provider>
+  );
+}
+
+function PromptDialogo({ state, onSettle }: { state: PromptOptions & { open: boolean }; onSettle: (result: string | null) => void }) {
+  const [value, setValue] = useState(state.defaultValue || "");
+  const [password, setPassword] = useState("");
+  const [cargo, setCargo] = useState("");
+  const conPassword = useConfirmaConPassword();
+  const minLength = state.minLength ?? 5;
+  const pideClave = !!state.critico && conPassword;
+  const fieldId = "prompt-motivo";
+  const etiqueta = typeof state.label === "string" ? state.label : "Motivo";
+  const v = useValidacion({
+    titulo: "Falta información para continuar",
+    reglas: () => {
+      const out: Problema[] = [];
+      const largo = value.trim().length;
+      if (minLength > 0 && largo === 0) out.push({ campo: fieldId, mensaje: `Escribe ${etiqueta.toLowerCase() === "motivo" ? "el motivo" : `«${etiqueta}»`}` });
+      else if (largo < minLength) out.push({ campo: fieldId, mensaje: msg.minimo(etiqueta, minLength) });
+      if (pideClave && !password) out.push({ campo: "prompt-password", mensaje: msg.password });
+      return out;
+    },
+  });
+  const confirmar = () => {
+    if (!v.validar()) return;
+    if (state.critico) {
+      armarReauth(pideClave ? { password } : null);
+      armarCargo(cargo ? Number(cargo) : null);
+    }
+    onSettle(value.trim());
+  };
+
+  return (
+    <Dialog
+      open={state.open}
+      onOpenChange={(open) => {
+        if (!open) onSettle(null);
+      }}
+      title={state.title || ""}
+      description={state.description}
+      size="sm"
+      footer={
+        <>
+          <Button variant="secondary" onClick={() => onSettle(null)}>
+            {state.cancelLabel || "Cancelar"}
+          </Button>
+          <Button variant={state.tone === "danger" ? "danger" : "primary"} onClick={confirmar}>
+            {state.confirmLabel || "Confirmar"}
+          </Button>
+        </>
+      }
+    >
+      <ValidacionAmbito v={v}>
+        <Field label={state.label || "Motivo"} htmlFor={fieldId} required={minLength > 0} hint="Queda registrado con tu usuario, fecha y hora.">
+          <Textarea id={fieldId} rows={3} autoFocus placeholder={state.placeholder || "Describe el motivo; quedará registrado en la bitácora de auditoría"} value={value} onChange={(event) => setValue(event.target.value)} />
+        </Field>
+        {state.critico ? (
           <div className="mt-4">
             <CampoIdentidad value={password} onChange={setPassword} id="prompt-password" cargo={cargo} onCargo={setCargo} />
           </div>
         ) : null}
-      </Dialog>
-    </PromptContext.Provider>
+      </ValidacionAmbito>
+    </Dialog>
   );
 }
 
@@ -309,6 +307,8 @@ export interface MenuItem {
   tone?: "neutral" | "brand" | "success" | "warning" | "danger";
   disabled?: boolean;
   separatorBefore?: boolean;
+  /* Identificador para pruebas (data-testid del renglon). */
+  testid?: string;
 }
 
 const ITEM_ICON_TONE: Record<NonNullable<MenuItem["tone"]>, string> = {
@@ -334,9 +334,11 @@ export function Dropdown({ trigger, items, align = "end", label, header }: { tri
         <RadixDropdown.Content
           align={align}
           sideOffset={6}
-          className="material z-50 min-w-[220px] origin-[var(--radix-dropdown-menu-content-transform-origin)] rounded-[14px] p-1.5 shadow-pop data-[state=open]:animate-materialize"
+          collisionPadding={12}
+          className="scroll-thin max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto bg-popover border border-line z-[var(--z-popover)] min-w-[220px] origin-[var(--radix-dropdown-menu-content-transform-origin)] rounded-[14px] p-1.5 shadow-pop data-[state=open]:animate-materialize"
         >
-          {header ? <div className="px-2.5 pt-1.5 pb-2 text-[12px] text-ink-3">{header}</div> : null}
+          {/* El encabezado (nombre del registro) pasa de linea en vez de ensanchar el menu. */}
+          {header ? <div className="max-w-[320px] px-2.5 pt-1.5 pb-2 text-[12px] break-words text-ink-3">{header}</div> : null}
           {items.map((item, index) => {
             const tone = item.tone || "neutral";
             return (
@@ -345,15 +347,17 @@ export function Dropdown({ trigger, items, align = "end", label, header }: { tri
                 <RadixDropdown.Item
                   disabled={item.disabled}
                   onSelect={() => item.onSelect?.()}
+                  data-testid={item.testid}
                   className={cn(
                     "group flex cursor-pointer select-none items-center gap-3 rounded-[9px] px-2 py-1.5 text-[13.5px] outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45",
-                    tone === "danger" ? "text-danger data-[highlighted]:bg-danger data-[highlighted]:text-white" : "text-ink data-[highlighted]:bg-brand data-[highlighted]:text-white",
+                    tone === "danger" ? "text-danger data-[highlighted]:bg-danger-soft" : "text-ink data-[highlighted]:bg-surface-3",
                   )}
                 >
-                  {item.icon ? <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] transition-colors group-data-[highlighted]:bg-white/20 group-data-[highlighted]:text-white", ITEM_ICON_TONE[tone])}>{item.icon}</span> : null}
+                  {item.icon ? <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] transition-colors", ITEM_ICON_TONE[tone])}>{item.icon}</span> : null}
                   <span className="flex min-w-0 flex-col leading-tight">
                     <span className="truncate font-medium">{item.label}</span>
-                    {item.description ? <span className="truncate text-[11.5px] text-ink-3 group-data-[highlighted]:text-white/80">{item.description}</span> : null}
+                    {/* Deshabilitada: la linea secundaria es el motivo y se lee completa. */}
+                    {item.description ? <span className={cn("text-[11.5px] text-ink-3", item.disabled ? "max-w-[280px] whitespace-normal" : "truncate")}>{item.description}</span> : null}
                   </span>
                 </RadixDropdown.Item>
               </div>
@@ -369,6 +373,8 @@ export function Dropdown({ trigger, items, align = "end", label, header }: { tri
 
 /* Un solo boton "⋯" por fila que agrupa todas las acciones (abrir, editar, avanzar de etapa, anular...). */
 export function ActionMenu({ items, header, label = "Acciones" }: { items: MenuItem[]; header?: ReactNode; label?: string }) {
+  // Sin acciones (p. ej. un rol de solo lectura) no se muestra un menu vacio.
+  if (!items.length) return null;
   return (
     <Dropdown
       label={label}
@@ -394,7 +400,7 @@ export function Tooltip({ content, children, side = "top" }: { content: ReactNod
     <RadixTooltip.Root>
       <RadixTooltip.Trigger asChild>{children}</RadixTooltip.Trigger>
       <RadixTooltip.Portal>
-        <RadixTooltip.Content side={side} sideOffset={6} className="material-dark z-50 max-w-xs rounded-[8px] px-2.5 py-1.5 text-[12.5px] text-white shadow-pop data-[state=delayed-open]:animate-menu-in">
+        <RadixTooltip.Content side={side} sideOffset={6} className="bg-popover border border-line z-[var(--z-popover)] max-w-xs rounded-[8px] px-2.5 py-1.5 text-[12.5px] text-ink shadow-pop data-[state=delayed-open]:animate-menu-in">
           {content}
         </RadixTooltip.Content>
       </RadixTooltip.Portal>
@@ -403,22 +409,3 @@ export function Tooltip({ content, children, side = "top" }: { content: ReactNod
 }
 
 /* ---------- HoverCard ---------- */
-
-/*
- * Tarjeta al pasar el cursor (y al enfocar con teclado): detalle de un
- * elemento sin abrirlo. Sale del propio disparador (transform-origin) y se
- * materializa como una capa translúcida; en pantallas táctiles no aparece,
- * el enlace del disparador basta.
- */
-export function HoverCard({ content, children, side = "left", align = "center", width = 320, openDelay = 220 }: { content: ReactNode; children: ReactNode; side?: "top" | "bottom" | "left" | "right"; align?: "start" | "center" | "end"; width?: number; openDelay?: number }) {
-  return (
-    <RadixHoverCard.Root openDelay={openDelay} closeDelay={120}>
-      <RadixHoverCard.Trigger asChild>{children}</RadixHoverCard.Trigger>
-      <RadixHoverCard.Portal>
-        <RadixHoverCard.Content side={side} align={align} sideOffset={10} collisionPadding={12} style={{ width }} className="material z-50 origin-[var(--radix-hover-card-content-transform-origin)] rounded-[16px] p-1 shadow-panel outline-none data-[state=open]:animate-materialize data-[state=closed]:animate-dematerialize">
-          {content}
-        </RadixHoverCard.Content>
-      </RadixHoverCard.Portal>
-    </RadixHoverCard.Root>
-  );
-}

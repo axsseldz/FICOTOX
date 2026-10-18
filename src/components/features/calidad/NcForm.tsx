@@ -1,7 +1,8 @@
 "use client";
 
+import { formatearFolio } from "@/lib/shared/folios";
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { ArrowRight, CheckCircle, FilePdf, FileText, FloppyDisk, LinkSimple, Lock, Paperclip, Pause, Play, Plus, Prohibit, SealCheck, Warning } from "@phosphor-icons/react";
 import { RecordHistory } from "@/components/features/audit/RecordHistory";
 import { Callout, ChoiceCard, ChoiceGrid, FlowSteps, FormCard, FormPage, Panel, ReadValue, SignoffCard, type FormSectionDef } from "@/components/features/samples/FormLayout";
@@ -15,7 +16,7 @@ import { Checkbox, controlClassSm, Field, FormGrid, Input, Select, Switch, Texta
 import { ActionMenu, Sheet, type MenuItem } from "@/components/ui/Overlay";
 import { Badge, DetailRow } from "@/components/ui/Primitives";
 import { API_BASE_URL, getJsonAuth } from "@/lib/client/api";
-import { openProtectedFile } from "@/lib/client/files";
+import { verPdf } from "@/lib/client/files";
 import { fmtDate, fmtDateTime } from "@/lib/client/format";
 import { useDebouncedValue } from "@/lib/client/hooks";
 import { usePersonal } from "@/lib/client/personal";
@@ -24,6 +25,8 @@ import type { ApiRecord } from "@/lib/client/types";
 import { CLASIFICACIONES_NC, ESTADOS_NC, ETAPAS_NC, MEDIOS_COMUNICACION, MEDIO_COMUNICACION_LABEL, METODOS_CAUSA, METODOS_SUSPENDIBLES, ORIGEN_NC_LABEL, TIPO_INCIDENCIA_LABEL } from "@/lib/shared/calidad";
 import { hoyLocal } from "@/lib/shared/fechas";
 import { useAccionCalidad } from "./acciones";
+import { CampoValidado, useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
+import { msg, type Problema } from "@/lib/client/mensajes";
 import { ClasificacionNc, EstadoAccion } from "./comun";
 
 /*
@@ -51,7 +54,7 @@ const SIGUIENTE: Record<string, { a: string; label: string }> = {
 };
 
 export function NcForm({ item }: { item: ApiRecord }) {
-  const { token, prompt, enviar, solicitarExcepcion } = useAccionCalidad();
+  const { prompt, enviar, solicitarExcepcion } = useAccionCalidad();
   const personal = usePersonal();
   const puede = (item.puede || {}) as ApiRecord;
   const segregacion = (item.segregacion || {}) as Record<string, string | null>;
@@ -74,7 +77,71 @@ export function NcForm({ item }: { item: ApiRecord }) {
   const afectados = (item.afectados || []) as ApiRecord[];
   const incidencias = (item.incidencias || []) as ApiRecord[];
 
+  /*
+   * Reglas de la NC, en el orden del formato. `requisitosEtapa` es lo que el
+   * servidor exige para pasar a la siguiente etapa; `reglasGuardar`, lo que se
+   * exige para guardar cambios. La guía usa todas (nunca contradice al aviso
+   * del encabezado, que muestra solo las del intento).
+   */
+  const G = { origen: ["sec-origen", "Origen"], desc: ["sec-descripcion", "Descripción y requisito"], impacto: ["sec-impacto", "Evaluación de impacto"], causa: ["sec-causa", "Análisis de causa"], acciones: ["sec-acciones", "Acciones correctivas"], verif: ["sec-verificacion", "Verificación de eficacia"] } as const;
+  const pb = (g: readonly [string, string], campo: string, mensaje: string): Problema => ({ campo, mensaje, seccion: g[0], grupo: g[1] });
+  const reglasGuardar = (): Problema[] => {
+    const out: Problema[] = [];
+    if (editar && d.descripcion.trim().length < 20) out.push(pb(G.desc, "nc-descripcion", d.descripcion.trim() ? msg.minimo("La descripción", 20) : msg.escribe("la descripción de la no conformidad")));
+    if (editar && d.requiere_accion_correctiva === "no" && !d.justificacion_sin_accion.trim()) out.push(pb(G.causa, "nc-justificacion", msg.escribe("por qué no requiere acción correctiva (¿puede repetirse?)")));
+    return out;
+  };
+  const impactoFaltante = (): Problema[] =>
+    (
+      [
+        ["afecta_resultados_emitidos", "si afecta resultados emitidos"],
+        ["trabajo_detenido", "si se detiene el trabajo"],
+        ["notificar_cliente", "si se notifica al cliente"],
+      ] as Array<[Campo, string]>
+    )
+      .filter(([c]) => !d[c])
+      .map(([c, t]) => pb(G.impacto, `nc-${c}`, `Indica ${t}`));
+  const requisitosEtapa = (): Problema[] => {
+    const out: Problema[] = [];
+    if (estado === "abierta") {
+      if (!d.responsable_id) out.push(pb(G.origen, "nc-responsable", "Nombra al responsable de la NC"));
+      out.push(...impactoFaltante());
+    } else if (estado === "en_analisis") {
+      if (!d.metodo_causa) out.push(pb(G.causa, "nc-metodo", msg.elige("el método de análisis de causa")));
+      if (d.causa_raiz.trim().length < 10) out.push(pb(G.causa, "nc-causa", d.causa_raiz.trim() ? msg.minimo("La causa raíz", 10) : msg.escribe("la causa raíz")));
+      if (!d.requiere_accion_correctiva) out.push(pb(G.causa, "nc-requiere", "Decide si requiere acción correctiva"));
+      else if (d.requiere_accion_correctiva === "no") out.push(pb(G.causa, "nc-requiere", "Con «No» la NC no pasa a acciones: se cierra tras la evaluación de impacto"));
+      if (!vigentes.length) out.push(pb(G.acciones, "nc-acciones-lista", "Agrega al menos una acción correctiva"));
+    } else if (estado === "acciones_en_curso") {
+      if (vigentes.some((a) => ["pendiente", "en_proceso"].includes(String(a.estado)))) out.push(pb(G.acciones, "nc-acciones-lista", "Hay acciones pendientes o en proceso: márcalas como implementadas o cancélalas"));
+      else if (!vigentes.some((a) => a.estado === "implementada")) out.push(pb(G.acciones, "nc-acciones-lista", "No hay acciones implementadas que verificar"));
+    }
+    return out;
+  };
+  const reglasCompletas = (): Problema[] => {
+    const out: Problema[] = [];
+    if (!d.clasificacion) out.push(pb(G.origen, "nc-clasificacion", msg.elige("la clasificación")));
+    if (!d.responsable_id) out.push(pb(G.origen, "nc-responsable", "Nombra al responsable de la NC"));
+    if (d.descripcion.trim().length < 20) out.push(pb(G.desc, "nc-descripcion", msg.minimo("La descripción", 20)));
+    if (!d.requisito_incumplido.trim()) out.push(pb(G.desc, "nc-requisito", msg.indica("el requisito incumplido")));
+    out.push(...impactoFaltante());
+    if (!d.metodo_causa) out.push(pb(G.causa, "nc-metodo", msg.elige("el método de análisis de causa")));
+    if (d.causa_raiz.trim().length < 10) out.push(pb(G.causa, "nc-causa", msg.minimo("La causa raíz", 10)));
+    if (!d.requiere_accion_correctiva) out.push(pb(G.causa, "nc-requiere", "Decide si requiere acción correctiva"));
+    if (d.requiere_accion_correctiva === "si" && !(vigentes.length > 0 && vigentes.every((a) => a.estado === "implementada"))) out.push(pb(G.acciones, "nc-acciones-lista", "Faltan acciones implementadas"));
+    if (d.requiere_accion_correctiva !== "no" && verificaciones.at(-1)?.resultado !== "eficaz") out.push(pb(G.verif, "nc-verificacion", "Falta la verificación eficaz"));
+    return out;
+  };
+  const [objetivo, setObjetivo] = useState<"guardar" | "avanzar">("guardar");
+  const vGuardar = useValidacion({ titulo: "No se pudieron guardar los cambios de la NC", reglas: reglasGuardar });
+  const vAvanzar = useValidacion({ titulo: SIGUIENTE[estado] ? `No se puede «${SIGUIENTE[estado].label}»` : "No se puede avanzar", reglas: requisitosEtapa });
+  const v = objetivo === "avanzar" ? vAvanzar : vGuardar;
+  const completas = reglasCompletas();
+  const completa = (id: string) => !completas.some((p) => p.seccion === id);
+
   const guardar = async () => {
+    setObjetivo("guardar");
+    if (!vGuardar.validar()) return;
     const payload: ApiRecord = {};
     for (const c of cambios) {
       if (c === "requiere_actualizar_riesgos" || c === "requiere_cambio_documental") payload[c] = d[c] === "1";
@@ -86,27 +153,31 @@ export function NcForm({ item }: { item: ApiRecord }) {
       payload.motivo = motivo;
     }
     setGuardando(true);
-    await enviar("PUT", `/calidad/nc/${item.id}`, payload, "Cambios guardados");
+    await enviar("PUT", `/calidad/nc/${item.id}`, payload, "Cambios guardados", (err) => vGuardar.errorServidor(err, { motivo: "nc-descripcion" }));
     setGuardando(false);
   };
 
   const siguiente = SIGUIENTE[estado];
-  const avanzar = () => enviar("POST", `/calidad/nc/${item.id}/avanzar`, { a: siguiente.a });
+  const avanzar = () => {
+    setObjetivo("avanzar");
+    if (!vAvanzar.validar()) return;
+    return enviar("POST", `/calidad/nc/${item.id}/avanzar`, { a: siguiente.a }, undefined, (err) => vAvanzar.errorServidor(err));
+  };
 
   const anular = async () => {
-    const motivo = await prompt({ critico: true, tone: "danger", title: `Anular ${item.folio}`, description: "La NC deja de contar, pero se conserva. La anulación la autoriza un segundo usuario con calidad:AN.", confirmLabel: "Solicitar anulación" });
+    const motivo = await prompt({ critico: true, tone: "danger", title: `Anular ${item.folio}`, description: "La NC deja de contar, pero se conserva. La anulación la autoriza otra persona con permiso para anular en calidad.", confirmLabel: "Solicitar anulación" });
     if (motivo) await enviar("POST", `/calidad/nc/${item.id}/anular`, { motivo });
   };
-  const pdf = (actual: boolean) => openProtectedFile(`${API_BASE_URL}/calidad/nc/${item.id}/pdf${actual ? "?actual=1" : ""}`, token, `${String(item.folio).replace(" ", "-")}.pdf`);
+  const pdf = (actual: boolean) => verPdf(`${API_BASE_URL}/calidad/nc/${item.id}/pdf${actual ? "?actual=1" : ""}`, `${String(item.folio).replace(" ", "-")}.pdf`, String(item.folio));
 
-  // Completitud por seccion (la guia la pinta en verde; no bloquea nada).
+  // Completitud por seccion con las mismas reglas que el guardado y el avance de etapa.
   const sections: FormSectionDef[] = [
-    { id: "sec-origen", label: "Origen", complete: !!d.clasificacion && !!d.responsable_id },
-    { id: "sec-descripcion", label: "Descripción y requisito", complete: d.descripcion.trim().length >= 20 && !!d.requisito_incumplido.trim() },
-    { id: "sec-impacto", label: "Evaluación de impacto", complete: !!d.afecta_resultados_emitidos && !!d.trabajo_detenido && !!d.notificar_cliente },
-    { id: "sec-causa", label: "Análisis de causa", complete: !!d.metodo_causa && d.causa_raiz.trim().length >= 10 && !!d.requiere_accion_correctiva },
-    { id: "sec-acciones", label: "Acciones correctivas", complete: d.requiere_accion_correctiva === "no" || (vigentes.length > 0 && vigentes.every((a) => a.estado === "implementada")), optional: d.requiere_accion_correctiva === "no" },
-    { id: "sec-verificacion", label: "Verificación de eficacia", complete: verificaciones.at(-1)?.resultado === "eficaz", optional: d.requiere_accion_correctiva === "no" },
+    { id: "sec-origen", label: "Origen", complete: completa("sec-origen") },
+    { id: "sec-descripcion", label: "Descripción y requisito", complete: completa("sec-descripcion") },
+    { id: "sec-impacto", label: "Evaluación de impacto", complete: completa("sec-impacto") },
+    { id: "sec-causa", label: "Análisis de causa", complete: completa("sec-causa") },
+    { id: "sec-acciones", label: "Acciones correctivas", complete: completa("sec-acciones"), optional: d.requiere_accion_correctiva === "no" },
+    { id: "sec-verificacion", label: "Verificación de eficacia", complete: completa("sec-verificacion"), optional: d.requiere_accion_correctiva === "no" },
     { id: "sec-sgc", label: "Efectos en el SGC", optional: true },
     { id: "sec-cierre", label: "Cierre", complete: estado === "cerrada" },
     { id: "sec-historial", label: "Historial", optional: true },
@@ -121,13 +192,14 @@ export function NcForm({ item }: { item: ApiRecord }) {
 
   return (
     <FormPage
-      backHref="/calidad/incidencias?tab=nc"
+      backHref="/calidad/incidencias?tipos=nc"
       backLabel="Incidencias y NC"
       code="Registro de no conformidad"
       title={String(item.folio)}
       status={estadoMeta?.label || estado}
       statusTone={estadoMeta?.tone === "ink" ? "neutral" : estadoMeta?.tone || "neutral"}
       sections={sections}
+      validacion={v}
       /* Sin fieldset desactivado: cada campo decide si se edita (descargas y evidencia siguen activas al cerrar). */
       readOnly={false}
       actions={
@@ -159,7 +231,7 @@ export function NcForm({ item }: { item: ApiRecord }) {
       <div className="flex flex-col gap-3 rounded-card bg-surface p-4 shadow-card" data-etapa={estado}>
         <FlowSteps steps={ETAPAS_NC.map((e) => ({ key: e, label: ESTADOS_NC[e].label }))} current={estado === "anulada" ? "" : estado} failed={estado === "anulada" ? "Anulada" : Number(item.reaperturas) ? `${item.reaperturas} reapertura${Number(item.reaperturas) > 1 ? "s" : ""}` : undefined} />
         {sinGuardar ? <p className="text-[12.5px] text-warning-text">Tienes cambios sin guardar ({cambios.length}). Guárdalos antes de avanzar de etapa.</p> : null}
-        {!editar && !cerrada ? <p className="text-[12.5px] text-ink-3">Editan la NC quien administra calidad (calidad:G) y su responsable.</p> : null}
+        {!editar && !cerrada ? <p className="text-[12.5px] text-ink-3">Editan la NC quien administra calidad y su responsable.</p> : null}
       </div>
       <SolicitudCallout item={item} />
       {estado === "anulada" ? (
@@ -212,7 +284,7 @@ export function NcForm({ item }: { item: ApiRecord }) {
               </div>
             )}
           </Field>
-          <Field label="Responsable de la NC" htmlFor="nc-responsable" hint={administrar ? "Lo nombra o cambia quien administra calidad; el cambio pide motivo." : "Lo nombra quien administra calidad (calidad:G)."}>
+          <Field label="Responsable de la NC" htmlFor="nc-responsable" hint={administrar ? "Lo nombra o cambia quien administra calidad; el cambio pide motivo." : "Lo nombra quien administra calidad."}>
             {administrar && !cerrada ? (
               <Select id="nc-responsable" value={d.responsable_id} onChange={(event) => set("responsable_id")(event.target.value)}>
                 <option value="">Sin nombrar</option>
@@ -225,7 +297,7 @@ export function NcForm({ item }: { item: ApiRecord }) {
               </Select>
             ) : (
               <div className="flex h-10 items-center gap-2 text-[14px]">
-                {(item.responsable as ApiRecord)?.nombre || <span className="text-ink-4">Sin nombrar</span>}
+                {(item.responsable as ApiRecord)?.nombre || <span className="text-ink-3">Sin nombrar</span>}
               </div>
             )}
           </Field>
@@ -243,7 +315,7 @@ export function NcForm({ item }: { item: ApiRecord }) {
           {editar ? <Textarea id="nc-descripcion" rows={4} value={d.descripcion} onChange={(event) => set("descripcion")(event.target.value)} /> : <ReadValue value={item.descripcion} />}
         </Field>
         <Field label="Requisito incumplido" htmlFor="nc-requisito" hint="Cláusula ISO, procedimiento o formato.">
-          {editar ? <Input id="nc-requisito" value={d.requisito_incumplido} onChange={(event) => set("requisito_incumplido")(event.target.value)} /> : <ReadValue value={item.requisito_incumplido} />}
+          {editar ? <Textarea id="nc-requisito" rows={2} value={d.requisito_incumplido} onChange={(event) => set("requisito_incumplido")(event.target.value)} /> : <ReadValue value={item.requisito_incumplido} />}
         </Field>
       </FormCard>
 
@@ -307,10 +379,12 @@ export function NcForm({ item }: { item: ApiRecord }) {
         </Field>
         <Field label="¿Requiere acción correctiva?">
           {editar ? (
+            <CampoValidado id="nc-requiere">
             <ChoiceGrid cols={2}>
               <ChoiceCard type="radio" name="nc-requiere" checked={d.requiere_accion_correctiva === "si"} onChange={() => set("requiere_accion_correctiva")("si")} label="Sí" description="Se definen acciones y se verifica su eficacia." />
               <ChoiceCard type="radio" name="nc-requiere" checked={d.requiere_accion_correctiva === "no"} onChange={() => set("requiere_accion_correctiva")("no")} label="No" description="Se cierra tras la evaluación de impacto, con justificación." />
             </ChoiceGrid>
+            </CampoValidado>
           ) : (
             <ReadValue value={item.requiere_accion_correctiva === "si" ? "Sí" : item.requiere_accion_correctiva === "no" ? "No" : ""} />
           )}
@@ -324,11 +398,13 @@ export function NcForm({ item }: { item: ApiRecord }) {
 
       {/* 5. Acciones correctivas */}
       <FormCard id="sec-acciones" title="5. Acciones correctivas (8.7.1 c)" description="Responsable, fecha compromiso, estado y evidencia de cada acción.">
-        <AccionesTabla item={item} acciones={acciones} editar={editar && ["en_analisis", "acciones_en_curso"].includes(estado)} editorNc={editar} />
+        <CampoValidado id="nc-acciones-lista">
+          <AccionesTabla item={item} acciones={acciones} editar={editar && ["en_analisis", "acciones_en_curso"].includes(estado)} editorNc={editar} />
+        </CampoValidado>
       </FormCard>
 
       {/* 6. Verificacion */}
-      <FormCard id="sec-verificacion" title="6. Verificación de eficacia (8.7.1 d)" description="Por NC: se verifica que el conjunto de acciones eliminó la causa. La verifica calidad:R, nunca el responsable de una acción.">
+      <FormCard id="sec-verificacion" title="6. Verificación de eficacia (8.7.1 d)" description="Por NC: se verifica que el conjunto de acciones eliminó la causa. La verifica quien revisa en calidad, nunca el responsable de una acción.">
         <Field label="Verificación programada" htmlFor="nc-verif-prog">
           {editar ? <DateInput id="nc-verif-prog" value={d.verificacion_programada} onChange={set("verificacion_programada")} min={hoyLocal()} /> : <ReadValue value={fmtDate(item.verificacion_programada)} />}
         </Field>
@@ -339,7 +415,9 @@ export function NcForm({ item }: { item: ApiRecord }) {
             ))}
           </div>
         ) : null}
-        <Verificar item={item} bloqueo={segregacion.verificar} onExcepcion={() => solicitarExcepcion("no_conformidades", item.id, "verificar", String(segregacion.verificar), String(item.folio))} />
+        <CampoValidado id="nc-verificacion">
+          <Verificar item={item} bloqueo={segregacion.verificar} onExcepcion={() => solicitarExcepcion("no_conformidades", item.id, "verificar", String(segregacion.verificar), String(item.folio))} />
+        </CampoValidado>
       </FormCard>
 
       {/* 7. Efectos en el SGC */}
@@ -350,11 +428,12 @@ export function NcForm({ item }: { item: ApiRecord }) {
             {editar ? <Textarea id="nc-nota-riesgos" rows={2} value={d.nota_riesgos} onChange={(event) => set("nota_riesgos")(event.target.value)} /> : <ReadValue value={item.nota_riesgos} />}
           </Field>
         ) : null}
-        <PropuestaDocumental item={item} editar={editar && !cerrada} />
+        <Switch checked={d.requiere_cambio_documental === "1"} onCheckedChange={(v) => set("requiere_cambio_documental")(v ? "1" : "0")} disabled={!editar} label="Requiere cambio documental" description="Se registra la bandera. El cambio se propone en Calidad › Documentos SGC («Nueva solicitud») y sigue su flujo de revisión y autorización." />
+        <PropuestaAnterior item={item} />
       </FormCard>
 
       {/* 8. Cierre */}
-      <FormCard id="sec-cierre" title="8. Cierre" description="Lo cierra quien tiene calidad:A (con tu contraseña), nunca el responsable de la NC.">
+      <FormCard id="sec-cierre" title="8. Cierre" description="Lo cierra quien aprueba en calidad (con su contraseña), nunca el responsable de la NC.">
         <Cierre item={item} bloqueo={segregacion.cerrar} onExcepcion={() => solicitarExcepcion("no_conformidades", item.id, "cerrar", String(segregacion.cerrar), String(item.folio))} onPdf={() => pdf(false)} />
       </FormCard>
     </FormPage>
@@ -461,7 +540,7 @@ function InformesAfectados({ item, afectados, retenciones, editar }: { item: Api
         </p>
       ) : null}
       {/* Quien edita la NC marca el informe como afectado; quien solo puede retener (calidad:R) lo retiene directo (retener tambien lo marca). */}
-      {editar || puede.retener ? <InformePicker excluir={afectados.map((a) => Number(a.entidad_id))} onElegir={(i) => (editar ? enviar("POST", `/calidad/nc/${item.id}/afectados`, { informe_id: i.id }) : retener(i.id, String(i.folio || `IR ${String(i.folio_num).padStart(7, "0")}`)))} /> : null}
+      {editar || puede.retener ? <InformePicker excluir={afectados.map((a) => Number(a.entidad_id))} onElegir={(i) => (editar ? enviar("POST", `/calidad/nc/${item.id}/afectados`, { informe_id: i.id }) : retener(i.id, String(i.folio || formatearFolio("IR", i.folio_num))))} /> : null}
     </Panel>
   );
 }
@@ -475,18 +554,20 @@ function Suspensiones({ item, suspensiones }: { item: ApiRecord; suspensiones: A
   const [tipo, setTipo] = useState<"metodo" | "equipo">("metodo");
   const [clave, setClave] = useState("");
   const equipos = useResource<ApiRecord>("equipos", () => getJsonAuth(`${API_BASE_URL}/inventory/equipos`, token), { enabled: !!token && !!puede.suspender && tipo === "equipo", deps: [tipo] });
+  const vSusp = useValidacion({ titulo: "No se pudo suspender", reglas: () => (clave ? [] : [{ campo: "nc-susp-clave", mensaje: tipo === "metodo" ? msg.elige("el método a suspender") : msg.elige("el equipo a suspender"), grupo: "Suspensión" }]) });
   const suspender = async () => {
+    if (!vSusp.validar()) return;
     const etiqueta = tipo === "metodo" ? `el método ${clave}` : `el equipo ${((equipos.data?.items || []) as ApiRecord[]).find((e) => String(e.id) === clave)?.nombre || ""}`;
     const motivo = await prompt({ title: `Suspender ${etiqueta}`, description: tipo === "metodo" ? "No se podrán crear ni editar extracciones ni análisis de este método hasta reanudarlo (los aprobados no se tocan)." : "El equipo queda fuera de servicio; no se podrá usar en los formatos hasta reanudarlo.", label: "Motivo de la suspensión" });
     if (!motivo) return;
-    if (await enviar("POST", `/calidad/nc/${item.id}/suspensiones`, { tipo, clave, motivo })) setClave("");
+    if (await enviar("POST", `/calidad/nc/${item.id}/suspensiones`, { tipo, clave, motivo }, undefined, (err) => vSusp.errorServidor(err))) setClave("");
   };
   const reanudar = async (su: ApiRecord) => {
     const motivo = await prompt({ critico: true, title: `Reanudar ${su.tipo === "metodo" ? `el método ${su.clave}` : su.equipo_nombre || "el equipo"}`, description: "Si otra NC abierta también lo suspende, sigue suspendido hasta que se reanuden todas.", label: "Motivo de la reanudación", confirmLabel: "Reanudar" });
     if (motivo) await enviar("POST", `/calidad/suspensiones/${su.id}/reanudar`, { motivo });
   };
   return (
-    <Panel title="Suspensión del trabajo (7.10.1 f)" description="Métodos o equipos detenidos por esta NC. Reanuda quien tiene calidad:A, nunca quien suspendió.">
+    <Panel title="Suspensión del trabajo (7.10.1 f)" description="Métodos o equipos detenidos por esta NC. Reanuda quien aprueba en calidad, nunca quien suspendió.">
       {suspensiones.length ? (
         <ul className="flex flex-col gap-2">
           {suspensiones.map((su) => {
@@ -527,6 +608,7 @@ function Suspensiones({ item, suspensiones }: { item: ApiRecord; suspensiones: A
         <p className="text-[13px] text-ink-3">Sin suspensiones.</p>
       )}
       {puede.suspender ? (
+        <ValidacionAmbito v={vSusp}>
         <div className="flex flex-wrap items-end gap-2">
           <Field label="Suspender" htmlFor="nc-susp-tipo" className="w-[140px]">
             <Select id="nc-susp-tipo" value={tipo} onChange={(event) => (setTipo(event.target.value as "metodo" | "equipo"), setClave(""))}>
@@ -551,10 +633,11 @@ function Suspensiones({ item, suspensiones }: { item: ApiRecord; suspensiones: A
                   ))}
             </Select>
           </Field>
-          <Button variant="secondary" icon={<Pause size={16} />} onClick={suspender} disabled={!clave}>
+          <Button variant="secondary" icon={<Pause size={16} />} onClick={suspender}>
             Suspender…
           </Button>
         </div>
+        </ValidacionAmbito>
       ) : null}
     </Panel>
   );
@@ -570,8 +653,19 @@ function Comunicaciones({ item, comunicaciones, afectados, editar, requerida }: 
   const [contacto, setContacto] = useState("");
   const [resumen, setResumen] = useState("");
   const [informes, setInformes] = useState<number[]>([]);
+  const vCom = useValidacion({
+    titulo: "No se pudo registrar la comunicación",
+    reglas: () => {
+      const out: Problema[] = [];
+      if (!fecha) out.push({ campo: "com-fecha", mensaje: msg.indica("la fecha de la comunicación"), grupo: "Comunicación" });
+      if (contacto.trim().length < 3) out.push({ campo: "com-contacto", mensaje: msg.indica("el contacto (nombre y cargo de la persona del cliente)"), grupo: "Comunicación" });
+      if (resumen.trim().length < 10) out.push({ campo: "com-resumen", mensaje: resumen.trim() ? msg.minimo("El resumen", 10) : msg.escribe("qué se comunicó y qué respondió"), grupo: "Comunicación" });
+      return out;
+    },
+  });
   const registrar = async () => {
-    if (await enviar("POST", `/calidad/nc/${item.id}/comunicaciones`, { fecha, medio, contacto, resumen, informe_ids: informes })) {
+    if (!vCom.validar()) return;
+    if (await enviar("POST", `/calidad/nc/${item.id}/comunicaciones`, { fecha, medio, contacto, resumen, informe_ids: informes }, undefined, (err) => vCom.errorServidor(err))) {
       setAbierto(false);
       setContacto("");
       setResumen("");
@@ -587,7 +681,7 @@ function Comunicaciones({ item, comunicaciones, afectados, editar, requerida }: 
               <p className="font-medium text-ink">
                 {fmtDate(c.fecha)} · {MEDIO_COMUNICACION_LABEL[String(c.medio)] || String(c.medio)} · {String(c.contacto)}
               </p>
-              <p className="text-ink-2">{String(c.resumen)}</p>
+              <p className="whitespace-pre-line text-ink-2">{String(c.resumen)}</p>
               <p className="text-[12px] text-ink-3">Registró {String(c.registrado_nombre || "—")}</p>
             </li>
           ))}
@@ -611,12 +705,11 @@ function Comunicaciones({ item, comunicaciones, afectados, editar, requerida }: 
             <Button variant="secondary" onClick={() => setAbierto(false)}>
               Cancelar
             </Button>
-            <Button onClick={registrar} disabled={contacto.trim().length < 3 || resumen.trim().length < 10}>
-              Registrar
-            </Button>
+            <Button onClick={registrar}>Registrar</Button>
           </>
         }
       >
+        <ValidacionAmbito v={vCom}>
         <div className="flex flex-col gap-5">
           <FormGrid>
             <Field label="Fecha" htmlFor="com-fecha" required>
@@ -648,6 +741,7 @@ function Comunicaciones({ item, comunicaciones, afectados, editar, requerida }: 
             </Field>
           ) : null}
         </div>
+        </ValidacionAmbito>
       </Sheet>
     </Panel>
   );
@@ -663,8 +757,19 @@ function AccionesTabla({ item, acciones, editar, editorNc }: { item: ApiRecord; 
   const [nueva, setNueva] = useState({ descripcion: "", responsable_id: "", fecha_compromiso: "" });
   const [evidencia, setEvidencia] = useState<number | null>(null);
   const cerradaNc = ["cerrada", "anulada"].includes(String(item.estado));
+  const vAcc = useValidacion({
+    titulo: "No se pudo agregar la acción",
+    reglas: () => {
+      const out: Problema[] = [];
+      if (nueva.descripcion.trim().length < 10) out.push({ campo: "acc-desc", mensaje: nueva.descripcion.trim() ? msg.minimo("La descripción", 10) : msg.escribe("la acción correctiva"), grupo: "Acción" });
+      if (!nueva.responsable_id) out.push({ campo: "acc-resp", mensaje: msg.elige("al responsable de la acción"), grupo: "Acción" });
+      if (!nueva.fecha_compromiso) out.push({ campo: "acc-fecha", mensaje: msg.indica("la fecha compromiso"), grupo: "Acción" });
+      return out;
+    },
+  });
   const agregar = async () => {
-    if (await enviar("POST", `/calidad/nc/${item.id}/acciones`, { ...nueva, responsable_id: Number(nueva.responsable_id) }, "Acción agregada")) setNueva({ descripcion: "", responsable_id: "", fecha_compromiso: "" });
+    if (!vAcc.validar()) return;
+    if (await enviar("POST", `/calidad/nc/${item.id}/acciones`, { ...nueva, responsable_id: Number(nueva.responsable_id) }, "Acción agregada", (err) => vAcc.errorServidor(err))) setNueva({ descripcion: "", responsable_id: "", fecha_compromiso: "" });
   };
   const implementar = async (a: ApiRecord) => {
     const descripcion = await prompt({ title: "Marcar como implementada", description: String(a.descripcion), label: "Cómo se implementó", minLength: 10, confirmLabel: "Implementada" });
@@ -689,15 +794,15 @@ function AccionesTabla({ item, acciones, editar, editorNc }: { item: ApiRecord; 
               <li key={String(a.id)} className="on-panel flex flex-col gap-2 rounded-[12px] bg-surface-2 p-3 ring-1 ring-line" data-accion-fila={String(a.id)}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <p className="text-[14px] font-medium text-ink">{String(a.descripcion)}</p>
+                    <p className="whitespace-pre-line text-[14px] font-medium text-ink">{String(a.descripcion)}</p>
                     <p className="text-[12.5px] text-ink-3">
                       {String(a.responsable_nombre || "—")}
                       {!a.responsable_vigente && abierta ? " (sin cuenta vigente: reasígnala)" : ""} · compromiso{" "}
                       <span className={a.vencida ? "font-medium text-danger" : undefined}>{fmtDate(a.fecha_compromiso)}</span>
                     </p>
-                    {a.descripcion_implementacion ? <p className="text-[12.5px] text-ink-2">Implementación: {String(a.descripcion_implementacion)}</p> : null}
-                    {a.motivo_cancelacion ? <p className="text-[12.5px] text-danger">Cancelada: {String(a.motivo_cancelacion)}</p> : null}
-                    {a.motivo_reasignacion ? <p className="text-[12px] text-ink-3">Reasignada: {String(a.motivo_reasignacion)}</p> : null}
+                    {a.descripcion_implementacion ? <p className="whitespace-pre-line text-[12.5px] text-ink-2">Implementación: {String(a.descripcion_implementacion)}</p> : null}
+                    {a.motivo_cancelacion ? <p className="whitespace-pre-line text-[12.5px] text-danger">Cancelada: {String(a.motivo_cancelacion)}</p> : null}
+                    {a.motivo_reasignacion ? <p className="whitespace-pre-line text-[12px] text-ink-3">Reasignada: {String(a.motivo_reasignacion)}</p> : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <EstadoAccion estado={a.estado} />
@@ -752,6 +857,7 @@ function AccionesTabla({ item, acciones, editar, editorNc }: { item: ApiRecord; 
         <p className="text-[13px] text-ink-3">Sin acciones todavía.</p>
       )}
       {editar ? (
+        <ValidacionAmbito v={vAcc}>
         <Panel title="Agregar acción">
           <Field label="Descripción" htmlFor="acc-desc" required>
             <Textarea id="acc-desc" rows={2} value={nueva.descripcion} onChange={(event) => setNueva((p) => ({ ...p, descripcion: event.target.value }))} />
@@ -772,10 +878,11 @@ function AccionesTabla({ item, acciones, editar, editorNc }: { item: ApiRecord; 
               <DateInput id="acc-fecha" value={nueva.fecha_compromiso} onChange={(v) => setNueva((p) => ({ ...p, fecha_compromiso: v }))} />
             </Field>
           </FormGrid>
-          <Button icon={<Plus size={16} />} onClick={agregar} disabled={nueva.descripcion.trim().length < 10 || !nueva.responsable_id || !nueva.fecha_compromiso} className="self-start" data-agregar-accion>
+          <Button icon={<Plus size={16} />} onClick={agregar} className="self-start" data-agregar-accion>
             Agregar acción
           </Button>
         </Panel>
+        </ValidacionAmbito>
       ) : null}
     </div>
   );
@@ -788,99 +895,62 @@ function Verificar({ item, bloqueo, onExcepcion }: { item: ApiRecord; bloqueo: s
   const puede = item.puede as ApiRecord;
   const [resultado, setResultado] = useState<"eficaz" | "no_eficaz" | "">("");
   const [comentarios, setComentarios] = useState("");
+  const vVer = useValidacion({
+    titulo: "No se pudo registrar la verificación",
+    reglas: () => {
+      const out: Problema[] = [];
+      if (!resultado) out.push({ campo: "verif-resultado", mensaje: msg.elige("si fue eficaz o no eficaz"), grupo: "Verificación" });
+      if (comentarios.trim().length < 10) out.push({ campo: "verif-com", mensaje: comentarios.trim() ? msg.minimo("La descripción de cómo se verificó", 10) : msg.escribe("cómo se verificó"), grupo: "Verificación" });
+      return out;
+    },
+  });
+  const verificar = () => {
+    if (!vVer.validar()) return;
+    void enviar("POST", `/calidad/nc/${item.id}/verificar`, { resultado, comentarios }, undefined, (err) => vVer.errorServidor(err));
+  };
   if (!puede.verificar) {
-    return item.estado === "en_verificacion" ? <p className="text-[13px] text-ink-3">Pendiente: la verifica quien tiene calidad:R.</p> : null;
+    return item.estado === "en_verificacion" ? <p className="text-[13px] text-ink-3">Pendiente: la verifica quien revisa en calidad.</p> : null;
   }
   if (bloqueo) return <SegregacionCallout bloqueo={bloqueo} accion="verificar" onSolicitar={onExcepcion} />;
   return (
+    <ValidacionAmbito v={vVer}>
     <Panel title="Verificar eficacia">
+      <CampoValidado id="verif-resultado">
       <ChoiceGrid cols={2}>
         <ChoiceCard type="radio" name="verif" checked={resultado === "eficaz"} onChange={() => setResultado("eficaz")} label="Eficaz" description="La causa se eliminó; la NC puede cerrarse." />
         <ChoiceCard type="radio" name="verif" checked={resultado === "no_eficaz"} onChange={() => setResultado("no_eficaz")} label="No eficaz" description="La NC regresa a análisis (reapertura); nada se borra." />
       </ChoiceGrid>
+      </CampoValidado>
       <Field label="Cómo se verificó" htmlFor="verif-com" required hint="Al menos 10 caracteres.">
         <Textarea id="verif-com" rows={2} value={comentarios} onChange={(event) => setComentarios(event.target.value)} />
       </Field>
-      <Button icon={<SealCheck size={16} />} onClick={() => enviar("POST", `/calidad/nc/${item.id}/verificar`, { resultado, comentarios })} disabled={!resultado || comentarios.trim().length < 10} className="self-start" data-verificar>
+      <Button icon={<SealCheck size={16} />} onClick={verificar} className="self-start" data-verificar>
         Registrar verificación
       </Button>
     </Panel>
+    </ValidacionAmbito>
   );
 }
 
-/* ---------- 7. Propuesta documental ---------- */
+/* ---------- 7. Propuesta documental anterior (solo lectura) ---------- */
 
-function PropuestaDocumental({ item, editar }: { item: ApiRecord; editar: boolean }) {
-  const { token, enviar } = useAccionCalidad();
+/*
+ * Desde la NC ya no se crean
+ * propuestas de cambio documental: "requiere cambio documental" es solo una
+ * bandera. Si la NC ya apuntaba a una propuesta del flujo anterior, se muestra
+ * en solo lectura (titulo y estado), sin enlace a la pantalla retirada.
+ */
+function PropuestaAnterior({ item }: { item: ApiRecord }) {
   const propuesta = item.propuesta as ApiRecord | null;
-  const [abierto, setAbierto] = useState(false);
-  const [tipo, setTipo] = useState<"cambio" | "nuevo">("cambio");
-  const [documento, setDocumento] = useState("");
-  const [titulo, setTitulo] = useState("");
-  const [motivo, setMotivo] = useState("");
-  const docs = useResource<ApiRecord>("documentos", () => getJsonAuth(`${API_BASE_URL}/documentos-sgc?estado=vigente`, token), { enabled: !!token && abierto && tipo === "cambio", deps: [abierto, tipo] });
-  const crear = async () => {
-    if (await enviar("POST", `/calidad/nc/${item.id}/propuesta-documental`, { tipo, documento_id: documento ? Number(documento) : null, titulo, motivo })) setAbierto(false);
-  };
-  let contenido: ReactNode;
-  if (propuesta) {
-    contenido = (
-      <Link href="/documentos?propuestas=1" className="press flex items-center gap-2 rounded-[10px] bg-surface px-3 py-2 text-[13.5px] ring-1 ring-line hover:bg-surface-2">
-        <FileText size={16} className="text-ink-3" /> Propuesta #{String(propuesta.id)}: {String(propuesta.titulo)} <Badge className="ml-auto">{String(propuesta.estado)}</Badge>
-      </Link>
-    );
-  } else if (editar) {
-    contenido = (
-      <Button variant="secondary" icon={<FileText size={16} />} onClick={() => setAbierto(true)} className="self-start">
-        Proponer cambio documental…
-      </Button>
-    );
-  } else contenido = <p className="text-[13px] text-ink-3">{item.requiere_cambio_documental ? "Requiere cambio documental (sin propuesta registrada)." : "Sin cambio documental."}</p>;
+  if (!propuesta) return null;
   return (
-    <Panel title="Cambio documental" description="Crea en un clic una propuesta (Fase 7) ligada a esta NC; el flujo de documentos la revisa y aprueba.">
-      {contenido}
-      <Sheet
-        open={abierto}
-        onOpenChange={setAbierto}
-        title="Proponer cambio documental"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setAbierto(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={crear} disabled={motivo.trim().length < 5 || (tipo === "cambio" ? !documento : !titulo.trim())}>
-              Crear propuesta
-            </Button>
-          </>
-        }
-      >
-        <div className="flex flex-col gap-5">
-          <ChoiceGrid cols={2}>
-            <ChoiceCard type="radio" name="prop-tipo" checked={tipo === "cambio"} onChange={() => setTipo("cambio")} label="Cambiar un documento vigente" />
-            <ChoiceCard type="radio" name="prop-tipo" checked={tipo === "nuevo"} onChange={() => setTipo("nuevo")} label="Documento nuevo" />
-          </ChoiceGrid>
-          {tipo === "cambio" ? (
-            <Field label="Documento" htmlFor="prop-doc" required>
-              <Select id="prop-doc" value={documento} onChange={(event) => setDocumento(event.target.value)}>
-                <option value="">Elegir…</option>
-                {((docs.data?.items || []) as ApiRecord[]).map((doc) => (
-                  <option key={String(doc.id)} value={String(doc.id)}>
-                    {String(doc.clave)} · {String(doc.titulo)}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          ) : (
-            <Field label="Título" htmlFor="prop-titulo" required>
-              <Input id="prop-titulo" value={titulo} onChange={(event) => setTitulo(event.target.value)} />
-            </Field>
-          )}
-          <Field label="Qué se debe cambiar" htmlFor="prop-motivo" required>
-            <Textarea id="prop-motivo" rows={3} value={motivo} onChange={(event) => setMotivo(event.target.value)} />
-          </Field>
-        </div>
-      </Sheet>
-    </Panel>
+    <p className="flex items-center gap-2 rounded-[10px] bg-surface-2 px-3 py-2 text-[13px] text-ink-2 ring-1 ring-line" data-propuesta-anterior>
+      <FileText size={16} className="shrink-0 text-ink-3" />
+      <span className="min-w-0 flex-1">
+        Propuesta documental anterior #{String(propuesta.id)}: {String(propuesta.titulo)} <span className="text-ink-3">(flujo retirado; solo consulta)</span>
+      </span>
+      <Badge>{String(propuesta.estado)}</Badge>
+    </p>
   );
 }
 
@@ -905,7 +975,7 @@ function Cierre({ item, bloqueo, onExcepcion, onPdf }: { item: ApiRecord; bloque
     );
   }
   if (item.estado === "anulada") return <p className="text-[13px] text-ink-3">La NC está anulada.</p>;
-  if (!puede.cerrar) return <p className="text-[13px] text-ink-3">La cierra quien tiene calidad:A (Responsable General o Mejora Continua) cuando se cumplan las condiciones.</p>;
+  if (!puede.cerrar) return <p className="text-[13px] text-ink-3">La cierra quien aprueba en calidad (Responsable General o Mejora Continua) cuando se cumplan las condiciones.</p>;
   if (bloqueo) return <SegregacionCallout bloqueo={bloqueo} accion="cerrar" onSolicitar={onExcepcion} />;
   const cerrar = async () => {
     const conclusion = await prompt({ critico: true, title: `Cerrar ${item.folio}`, description: "Se genera el PDF «Registro de no conformidad» con su huella SHA-256. Después ya no se edita.", label: "Conclusión del cierre", minLength: 10, confirmLabel: "Cerrar NC" });

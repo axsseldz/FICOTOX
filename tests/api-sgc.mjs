@@ -1,12 +1,13 @@
 /*
  * Prueba de extremo a extremo del flujo completo (recepcion -> procesamiento ->
- * extraccion -> analisis -> informe -> disposicion), anulaciones, documentos
- * SGC, bajas de inventario y bitacora de auditoria. Corre contra el dev
+ * extraccion -> analisis -> informe -> disposicion), anulaciones, Documentos SGC
+ * (y el retiro de Documentos SGC), bajas de inventario y bitacora de auditoria. Corre contra el dev
  * server apuntando a la COPIA de prueba de la base.
  */
 import "./lib/reauth-auto.mjs";
 import { readFileSync } from "node:fs";
 import { autorizarTodo } from "./lib/autorizar.mjs";
+import { pdfConTexto } from "./lib/archivos.mjs";
 import { liberar, registrarEnvio } from "./lib/envio.mjs";
 const BASE = process.env.BASE || "http://localhost:3100/api";
 let token = "";
@@ -62,7 +63,7 @@ for (let i = 0; i < 60; i += 1) {
   const r2 = await api("POST", "/auth/login", { email: "revisora@cicese.mx", password: "RevisoraQA2026!" });
   token2 = r2.data?.token || "";
   check("login revisora", r2.status === 200 && !!token2, `status ${r2.status}`);
-  // Tercera persona (Mejora Continua, documentos:G): aprueba documentos que no elaboro ni reviso.
+  // Tercera persona (Mejora Continua).
   const cred = JSON.parse(readFileSync(process.env.CREDENCIALES_ROLES, "utf8"));
   const r3 = await api("POST", "/auth/login", { email: "ana.torres@ficotox.local", password: cred["ana.torres@ficotox.local"] });
   token3 = r3.data?.token || "";
@@ -353,67 +354,24 @@ let informeId = null;
   check("anular procesamiento con extraccion vigente -> 409", anProc.status === 409, `status ${anProc.status}`);
 }
 
-// ---------- Documentos SGC ----------
-let docId = null;
+// ---------- Documentos SGC (reemplaza a la Biblioteca; el detalle esta en api-documentos.mjs) ----------
 {
-  const badKey = await api("POST", "/documentos-sgc", { clave: "PROC-1", titulo: "x", tipo: "P", area: "GC" });
-  check("clave invalida -> 400", badKey.status === 400, `status ${badKey.status} ${badKey.data?.message}`);
   const form = new FormData();
-  form.set("clave", "FX-GCP-CD");
   form.set("titulo", "Procedimiento de gestión de calidad para control de documentos");
-  form.set("fecha_emision", "2026-09-01");
-  form.set("elaboro", JSON.stringify({ nombre: "Marcela O.", cargo: "Coordinadora de Mejora Continua" }));
-  form.set("archivo", new File([Buffer.from("%PDF-1.4\n%prueba\n")], "FX-GCP-CD.pdf", { type: "application/pdf" }));
-  const cr = await api("POST", "/documentos-sgc", form, { form: true });
-  docId = cr.data?.id;
-  check("documento creado (multipart) con tipo y area derivados", cr.status === 201 && cr.data?.revision === 1, JSON.stringify(cr.data));
-  const item = (await api("GET", `/documentos-sgc/${docId}`)).data?.item;
-  check("tipo P y area GC derivados de la clave; proxima revision +3 anos", item?.tipo === "P" && item?.area === "GC" && item?.fecha_proxima_revision === "2029-09-01" && !!item?.archivo_sha256, JSON.stringify({ tipo: item?.tipo, area: item?.area, prox: item?.fecha_proxima_revision }));
-  const aprBorrador = await api("POST", `/documentos-sgc/${docId}/aprobar`, {}, { token: token2 });
-  check("aprobar un borrador (sin enviar a revision) -> 409", aprBorrador.status === 409, `status ${aprBorrador.status} ${aprBorrador.data?.message}`);
-  const claveTipo = await api("POST", "/documentos-sgc", { clave: "FX-GCX-CD", titulo: "Clave con tipo desconocido", tipo: "P", area: "GC" });
-  check("clave con tipo invalido no se salva con el tipo del cuerpo -> 400", claveTipo.status === 400, `status ${claveTipo.status} ${claveTipo.data?.message}`);
-  const revArbitraria = await api("POST", "/documentos-sgc", { clave: "FX-GCP-CD", titulo: "Otra revision a mano", revision: 7 });
-  check("segunda alta de una clave con revision en curso -> 409", revArbitraria.status === 409, `status ${revArbitraria.status} ${revArbitraria.data?.message}`);
-  // Fase 7 (regla 5): quien elaboro envia a revision pero no la hace; quien reviso calidad no aprueba.
-  const rev = await api("POST", `/documentos-sgc/${docId}/enviar-revision`, {});
-  check("enviar a revision (revision de calidad)", rev.status === 200 && rev.data?.item?.estado === "revision_calidad", `status ${rev.status} ${rev.data?.message}`);
-  const revPropia = await api("POST", `/documentos-sgc/${docId}/revisar-calidad`, {});
-  check("revisar documento propio -> 409 segregacion", revPropia.status === 409 && revPropia.data?.codigo === "segregacion", `status ${revPropia.status} ${revPropia.data?.message}`);
-  await api("POST", `/documentos-sgc/${docId}/revisar-calidad`, {}, { token: token3 });
-  const aprRevisor = await api("POST", `/documentos-sgc/${docId}/aprobar`, {}, { token: token3 });
-  check("aprobar el documento que revisaste -> 409 segregacion", aprRevisor.status === 409 && aprRevisor.data?.codigo === "segregacion", `status ${aprRevisor.status} ${aprRevisor.data?.message}`);
-  const apr = await api("POST", `/documentos-sgc/${docId}/aprobar`, {}, { token: token2 });
-  const pub = await api("POST", `/documentos-sgc/${docId}/publicar`, { fecha_vigencia: "2026-09-15" }, { token: token3 });
-  check("aprobar -> aprobado y publicar -> vigente", apr.status === 200 && apr.data?.item?.estado === "aprobado" && pub.status === 200 && pub.data?.item?.estado === "vigente", `status ${apr.status} ${pub.status} ${pub.data?.message}`);
-  const editVig = await api("PUT", `/documentos-sgc/${docId}`, { titulo: "otro" });
-  check("editar vigente -> 409", editVig.status === 409, `status ${editVig.status}`);
-  const cancelado = await api("POST", "/documentos-sgc", { clave: "FX-ADP-QA1", titulo: "Borrador que se cancela" });
-  await api("POST", `/documentos-sgc/${cancelado.data?.id}/cancelar`, { motivo: "Prueba: borrador descartado" });
-  const revCancelada = await api("POST", `/documentos-sgc/${cancelado.data?.id}/nueva-revision`, { cambios: "Intento sobre un cancelado" });
-  check("nueva revision de un documento cancelado -> 409", revCancelada.status === 409, `status ${revCancelada.status} ${revCancelada.data?.message}`);
-  const nueva = await api("POST", `/documentos-sgc/${docId}/nueva-revision`, { cambios: "Se agrega el control de registros electrónicos" });
-  const nuevaId = nueva.data?.id;
-  check("nueva revision 2 en borrador", nueva.status === 201 && nueva.data?.revision === 2, JSON.stringify(nueva.data));
-  const dup = await api("POST", `/documentos-sgc/${docId}/nueva-revision`, { cambios: "otra" });
-  check("segunda revision en curso -> 409", dup.status === 409, `status ${dup.status}`);
-  const form2 = new FormData();
-  form2.set("titulo", "Procedimiento de gestión de calidad para control de documentos");
-  form2.set("archivo", new File([Buffer.from("%PDF-1.4\n%rev2\n")], "FX-GCP-CD-2.pdf", { type: "application/pdf" }));
-  const upd = await api("PUT", `/documentos-sgc/${nuevaId}`, form2, { form: true });
-  check("adjuntar archivo a la revision 2", upd.status === 200, `status ${upd.status} ${upd.data?.message}`);
-  await api("POST", `/documentos-sgc/${nuevaId}/enviar-revision`, {});
-  await api("POST", `/documentos-sgc/${nuevaId}/revisar-calidad`, {}, { token: token3 });
-  await api("POST", `/documentos-sgc/${nuevaId}/aprobar`, {}, { token: token2 });
-  const apr2 = await api("POST", `/documentos-sgc/${nuevaId}/publicar`, {}, { token: token3 });
-  const v1 = (await api("GET", `/documentos-sgc/${docId}`)).data?.item;
-  check("publicar revision 2 deja obsoleta la revision 1", apr2.status === 200 && v1?.estado === "obsoleto", `status ${apr2.status} v1=${v1?.estado}`);
-  const maestra = (await api("GET", "/documentos-sgc/lista-maestra")).data?.items || [];
-  check("lista maestra muestra solo la revision vigente (2)", maestra.filter((d) => d.clave === "FX-GCP-CD").length === 1 && maestra.find((d) => d.clave === "FX-GCP-CD")?.revision === 2, JSON.stringify(maestra.map((d) => `${d.clave}-${d.revision}`)));
-  const archivo = await api("GET", `/documentos-sgc/${docId}/archivo`);
-  check("descarga de archivo obsoleto marcada", archivo.status === 200 && archivo.type.includes("pdf"), `status ${archivo.status} ${archivo.type}`);
-  const del = await api("DELETE", `/documentos-sgc/${docId}`);
-  check("DELETE documento -> 405", del.status === 405, `status ${del.status}`);
+  form.set("clave", "FX-GCP-CD");
+  form.set("area_codigo", "GC");
+  form.set("tipo_codigo", "P");
+  form.set("archivo_pdf", new File([await pdfConTexto(1, "Control de documentos")], "FX-GCP-CD.pdf", { type: "application/pdf" }));
+  const cr = await api("POST", "/sgc/documentos", form, { form: true });
+  const ficha = (await api("GET", `/sgc/documentos/${cr.data?.id}`)).data;
+  const pdf = ficha?.revisiones?.[0]?.archivos?.find((a) => a.tipo === "pdf");
+  check("documentos SGC: nueva ficha con su PDF (201), revisión en borrador y SHA-256", cr.status === 201 && ficha?.revisiones?.[0]?.estado === "borrador" && !!pdf?.sha256, `status ${cr.status} ${cr.data?.message || ""}`);
+  const descarga = await api("GET", `/sgc/archivos/${pdf?.id}?modo=descargar`);
+  check("documentos SGC: descargar el archivo (queda en la bitácora)", descarga.status === 200 && descarga.type.includes("pdf"), `status ${descarga.status} ${descarga.type}`);
+  const viejo = await api("POST", "/documentos-sgc", { clave: "FX-GCP-QA9", titulo: "Flujo retirado" });
+  check("flujo anterior de documentos retirado: crear responde 410", viejo.status === 410 && viejo.data?.codigo === "retirado", `status ${viejo.status}`);
+  const biblioteca = await api("GET", "/biblioteca");
+  check("la Biblioteca ya no responde (404)", biblioteca.status === 404, `status ${biblioteca.status}`);
 }
 
 // ---------- Bajas logicas de inventario y usuarios ----------
@@ -442,7 +400,7 @@ let docId = null;
   const acciones = new Set(all.map((a) => a.accion));
   const entidades = new Set(all.map((a) => a.entidad));
   check("bitacora registra login, login_fallido, crear, editar, aceptar, revisar, aprobar, autorizar, liberar, enviar, cerrar, anular, restaurar, baja, reactivar, descargar", ["login", "login_fallido", "crear", "editar", "aceptar", "revisar", "aprobar", "autorizar", "liberar", "enviar", "cerrar", "anular", "restaurar", "baja", "reactivar", "descargar"].every((a) => acciones.has(a)), `faltan: ${["login", "login_fallido", "crear", "editar", "aceptar", "revisar", "aprobar", "autorizar", "liberar", "enviar", "cerrar", "anular", "restaurar", "baja", "reactivar", "descargar"].filter((a) => !acciones.has(a)).join(",")}`);
-  check("bitacora cubre recepcion, procesamiento, extraccion, analisis, informes, documentos, equipos, usuarios, sesion", ["muestras_recepcion", "muestras_procesamiento", "muestras_extraccion", "muestras_analisis", "informes", "documentos_sgc", "equipos", "usuarios", "sesion"].every((e) => entidades.has(e)), `faltan: ${["muestras_recepcion", "muestras_procesamiento", "muestras_extraccion", "muestras_analisis", "informes", "documentos_sgc", "equipos", "usuarios", "sesion"].filter((e) => !entidades.has(e)).join(",")}`);
+  check("bitacora cubre recepcion, procesamiento, extraccion, analisis, informes, documentos, equipos, usuarios, sesion", ["muestras_recepcion", "muestras_procesamiento", "muestras_extraccion", "muestras_analisis", "informes", "sgc_documentos", "equipos", "usuarios", "sesion"].every((e) => entidades.has(e)), `faltan: ${["muestras_recepcion", "muestras_procesamiento", "muestras_extraccion", "muestras_analisis", "informes", "sgc_documentos", "equipos", "usuarios", "sesion"].filter((e) => !entidades.has(e)).join(",")}`);
   const edit = all.find((a) => a.accion === "editar" && a.entidad === "muestras_recepcion");
   check("entrada de edicion guarda antes/despues por campo", !!edit && Object.keys(edit.cambios || {}).length > 0 && "decision_aceptacion" in (edit.cambios || {}), JSON.stringify(edit?.cambios ? Object.keys(edit.cambios) : null));
   const detalle = (await api("GET", `/audit/${edit?.id}`)).data?.item;
@@ -473,23 +431,24 @@ let docId = null;
   check("programar preventivo pone el equipo en mantenimiento", (await estadoDe()) === "mantenimiento");
   await api("DELETE", `/inventory/mantenimientos/${m2}`, { motivo: "Prueba de sincronizacion" });
   check("cancelar el pendiente regresa el equipo a operativo", (await estadoDe()) === "operativo");
-  // Existencias: el consumible respeta el stock de referencia y el reactivo la cantidad explícita.
-  const cid = (await api("POST", "/consumables", { producto: "Consumible prueba stock", piezas: 10, stock_maximo: 100 })).data?.id;
+  // Existencias (migraciones 19 y 20): el consumible lleva su existencia en UNIDADES (piezas x cantidad por pieza)
+  // y el reactivo la inicia con capacidad x piezas; despues solo cambian con movimientos.
+  const cid = (await api("POST", "/consumables", { producto: "Consumible prueba stock", piezas: 10, cantidad_por_pieza: 10 })).data?.id;
   const crow = (await api("GET", "/consumables?search=Consumible prueba stock")).data?.items?.find((c) => c.id === cid);
-  check("consumible guarda piezas y stock maximo por separado", Number(crow?.piezas) === 10 && Number(crow?.stock_maximo) === 100, JSON.stringify([crow?.piezas, crow?.stock_maximo]));
-  const rid = (await api("POST", "/inventory/reactivos", { tipo_reactivo: "alcoholes_solventes", producto: "Reactivo prueba stock", cantidad_actual: 3, unidad: "L", stock_maximo: 8, stock_minimo: 2, restante_190126: 7 })).data?.id;
+  check("consumible: existencia en unidades = piezas × cantidad por pieza (y es su stock de referencia)", Number(crow?.existencia) === 100 && Number(crow?.piezas) === 10 && Number(crow?.stock_maximo) === 100, JSON.stringify([crow?.existencia, crow?.piezas, crow?.stock_maximo]));
+  const rid = (await api("POST", "/inventory/reactivos", { tipo_reactivo: "alcoholes_solventes", producto: "Reactivo prueba stock", capacidad: 1, unidad_capacidad: "L", piezas: 3, stock_minimo: 2, restante_190126: 7 })).data?.id;
   const rrow = (await api("GET", "/inventory/reactivos?search=Reactivo prueba stock")).data?.items?.find((r) => r.id === rid);
-  check("reactivo: la cantidad explicita manda sobre las columnas heredadas", Number(rrow?.cantidad_actual) === 3 && Number(rrow?.stock_maximo) === 8 && Number(rrow?.stock_minimo) === 2, JSON.stringify([rrow?.cantidad_actual, rrow?.stock_maximo, rrow?.stock_minimo]));
-  // Editar desde otra categoría conserva las columnas heredadas y el relleno parte de cantidad_actual.
-  await api("PUT", `/inventory/reactivos/${rid}`, { tipo_reactivo: "acidos", producto: "Reactivo prueba stock", cantidad_actual: 3, unidad: "L", stock_maximo: 8, stock_minimo: 2 });
+  check("reactivo: la existencia inicial es capacidad × piezas (las columnas heredadas no cuentan)", Number(rrow?.cantidad_actual) === 3 && Number(rrow?.stock_maximo) === 3 && Number(rrow?.stock_minimo) === 2, JSON.stringify([rrow?.cantidad_actual, rrow?.stock_maximo, rrow?.stock_minimo]));
+  // Editar desde otra categoría conserva la existencia y las columnas heredadas; el relleno parte de cantidad_actual.
+  await api("PUT", `/inventory/reactivos/${rid}`, { tipo_reactivo: "acidos", producto: "Reactivo prueba stock", capacidad: 1, unidad_capacidad: "L", piezas: 3, stock_minimo: 2 });
   const editado = (await api("GET", `/inventory/reactivos/${rid}`)).data?.item;
-  check("editar reactivo conserva columnas que la hoja no manda", Number(editado?.restante_190126) === 7 && Number(editado?.cantidad_actual) === 3 && editado?.tipo_reactivo === "acidos", JSON.stringify([editado?.restante_190126, editado?.cantidad_actual]));
+  check("editar reactivo conserva la existencia y las columnas que la hoja no manda", Number(editado?.restante_190126) === 7 && Number(editado?.cantidad_actual) === 3 && editado?.tipo_reactivo === "acidos", JSON.stringify([editado?.restante_190126, editado?.cantidad_actual, editado?.tipo_reactivo]));
   await api("POST", `/inventory/reactivos/${rid}/refill`, { cantidad: 6, motivo: "Prueba relleno" });
   const relleno = (await api("GET", `/inventory/reactivos/${rid}`)).data?.item;
   check("relleno suma a cantidad_actual y el maximo nunca queda por debajo", Number(relleno?.cantidad_actual) === 9 && Number(relleno?.stock_maximo) === 9 && Number(relleno?.restante_190126) === 7, JSON.stringify([relleno?.cantidad_actual, relleno?.stock_maximo, relleno?.restante_190126]));
   await api("POST", `/consumables/${cid}/refill`, { cantidad: 5, motivo: "Prueba relleno" });
   const crow2 = (await api("GET", "/consumables?search=Consumible prueba stock")).data?.items?.find((c) => c.id === cid);
-  check("relleno de consumible no infla el stock maximo", Number(crow2?.piezas) === 15 && Number(crow2?.stock_maximo) === 100, JSON.stringify([crow2?.piezas, crow2?.stock_maximo]));
+  check("relleno de consumible suma unidades a la existencia; las piezas (empaque) no cambian", Number(crow2?.existencia) === 105 && Number(crow2?.piezas) === 10 && Number(crow2?.stock_maximo) === 105, JSON.stringify([crow2?.existencia, crow2?.piezas, crow2?.stock_maximo]));
   // El estado manual del equipo no contradice a Mantenimiento.
   const m3 = (await api("POST", "/inventory/mantenimientos", { id_equipo: eq, tipo: "correctivo", fecha_programada: "2026-09-25", estado: "programado" })).data?.id;
   await api("PUT", `/inventory/equipos/${eq}`, { nombre: "Equipo prueba sync", clave_bitacora: "FX-TCB-ZZ1", estado: "operativo" });

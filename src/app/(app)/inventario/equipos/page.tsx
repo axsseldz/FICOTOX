@@ -3,26 +3,36 @@
 import { useRouter } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowCounterClockwise, Cube, IdentificationCard, PencilSimple, Plus, Trash, Wrench } from "@phosphor-icons/react";
-import { IncidenciasDelRegistro } from "@/components/features/calidad/IncidenciasDelRegistro";
+import { ArrowCounterClockwise, Cube, PencilSimple, Plus, Trash, Wrench } from "@phosphor-icons/react";
 import { useMenuReportar } from "@/components/features/calidad/ReportarIncidencia";
-import { DetailSheet } from "@/components/features/inventory/DetailSheet";
+import { Caducidad, IconoEquipo } from "@/components/features/inventory/ventanas/comun";
+import { EquipoVentana } from "@/components/features/inventory/ventanas/EquipoVentana";
 import { EquipoSheet } from "@/components/features/inventory/EquipoSheets";
 import { EQUIPO_ESTADOS, MANTENIMIENTO_TIPOS, metaFor } from "@/components/features/inventory/meta";
 import { RequireModule } from "@/components/session/RequireModule";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
-import { cn } from "@/components/ui/cn";
-import { FilterChips, FilterMenu, type FilterGroup, type FilterToggle } from "@/components/ui/FilterMenu";
+import { FilterMenu, type FilterGroup, type FilterToggle } from "@/components/ui/FilterMenu";
+import { FiguraPersona } from "@/components/ui/FiguraPersona";
+import { ListaCuadricula, type ColumnaLista } from "@/components/ui/ListaCuadricula";
 import { ActionMenu, usePrompt, type MenuItem } from "@/components/ui/Overlay";
 import { SearchInput, Toolbar } from "@/components/ui/PageHeader";
-import { Badge, EmptyState, ErrorState, TableSkeleton, type Tone } from "@/components/ui/Primitives";
-import { CellPrimary, Table, TBody, Td, Th, THead, Tr, TableShell } from "@/components/ui/Table";
+import { Badge, TableSkeleton, type Tone } from "@/components/ui/Primitives";
 import { API_BASE_URL, getJsonAuth, resolveApiEntity, sendJsonAuth } from "@/lib/client/api";
-import { deadlineTone, fmt, fmtDate, fmtDateTime } from "@/lib/client/format";
-import { useDebouncedValue, useInitialParam, useOpenState, useParamChange, useUrlTrigger } from "@/lib/client/hooks";
+import { deadlineTone, fmt, fmtDate } from "@/lib/client/format";
+import { formatearFechaCorta } from "@/lib/shared/fechas";
+import { useDebouncedValue, useInitialParam, useOpenState, useParamChange, useUrlTrigger, useAbrirDesdeUrl } from "@/lib/client/hooks";
 import { invalidate, useResource } from "@/lib/client/store";
 import type { ApiRecord } from "@/lib/client/types";
+
+/* Columnas fijas de la lista de equipos. */
+const COLUMNAS: ColumnaLista[] = [
+  { clave: "equipo", titulo: "Equipo", ancho: "minmax(240px,1.5fr)" },
+  { clave: "estado", titulo: "Estado", ancho: "minmax(150px,0.9fr)" },
+  { clave: "calibracion", titulo: "Próxima calibración", ancho: "160px" },
+  { clave: "mantenimiento", titulo: "Próximo mantenimiento", ancho: "170px" },
+  { clave: "responsable", titulo: "Responsable", ancho: "minmax(160px,1fr)" },
+];
 
 export default function EquiposPage() {
   return (
@@ -36,6 +46,7 @@ export default function EquiposPage() {
 
 /* Los segmentos son los estados del equipo; "calibracion" agrupa calibración pendiente y fuera de servicio. */
 type Filter = "todos" | "operativo" | "mantenimiento" | "calibracion";
+type Orden = "nombre" | "calibracion" | "mantenimiento";
 
 const calibrationTone = (value: unknown) => deadlineTone(value);
 
@@ -49,7 +60,8 @@ function EquiposContent() {
   const debounced = useDebouncedValue(search);
   const [showBajas, setShowBajas] = useState(initialFilter === "bajas");
   const modal = useOpenState<ApiRecord>();
-  const detail = useOpenState<ApiRecord>();
+  const [abierta, setAbierta] = useState<number | null>(null);
+  const [orden, setOrden] = useState<Orden>("nombre");
 
   useParamChange("buscar", (value) => setSearch(value));
   useParamChange("filtro", (value) => {
@@ -89,28 +101,20 @@ function EquiposContent() {
     return { label: meta.label, tone: meta.tone, detail: pendiente, detailTone: item.mantenimiento_estado === "vencido" ? "danger" : pendiente ? "warning" : null };
   };
 
-  const counts = useMemo(() => {
-    const list = items || [];
-    return {
-      total: list.length,
-      operativos: list.filter((item) => item.estado === "operativo").length,
-      mantenimiento: list.filter((item) => item.estado === "mantenimiento").length,
-      alertas: list.filter(isAlert).length,
-    };
-  }, [items]);
-
   const visible = useMemo(() => {
-    const list = items || [];
-    if (filter === "operativo") return list.filter((item) => item.estado === "operativo");
-    if (filter === "mantenimiento") return list.filter((item) => item.estado === "mantenimiento");
-    if (filter === "calibracion") return list.filter(isAlert);
-    return list;
-  }, [items, filter]);
+    let list = items || [];
+    if (filter === "operativo") list = list.filter((item) => item.estado === "operativo");
+    if (filter === "mantenimiento") list = list.filter((item) => item.estado === "mantenimiento");
+    if (filter === "calibracion") list = list.filter(isAlert);
+    if (orden === "calibracion") return [...list].sort((a, b) => String(a.fecha_prox_calibracion || "9999").localeCompare(String(b.fecha_prox_calibracion || "9999")));
+    if (orden === "mantenimiento") return [...list].sort((a, b) => String(a.mantenimiento_fecha || "9999").localeCompare(String(b.mantenimiento_fecha || "9999")));
+    return [...list].sort((a, b) => String(a.nombre || "").localeCompare(String(b.nombre || ""), "es"));
+  }, [items, filter, orden]);
+  useAbrirDesdeUrl(items ? visible : null, setAbierta);
 
   const editEquipo = async (id: number) => {
     try {
       const data = await getJsonAuth(`${API_BASE_URL}/inventory/equipos/${id}`, token);
-      detail.close();
       modal.open(resolveApiEntity(data));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo cargar el equipo");
@@ -124,7 +128,6 @@ function EquiposContent() {
     try {
       await sendJsonAuth("DELETE", `${API_BASE_URL}/inventory/equipos/${item.id}`, token, { motivo });
       toast.success("Equipo dado de baja");
-      detail.close();
       invalidate("equipos", "mantenimientos", "dashboard");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo dar de baja");
@@ -137,7 +140,6 @@ function EquiposContent() {
     try {
       await sendJsonAuth("POST", `${API_BASE_URL}/inventory/equipos/${item.id}/reactivar`, token, { motivo });
       toast.success("Equipo reactivado");
-      detail.close();
       invalidate("equipos", "mantenimientos", "dashboard");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo reactivar");
@@ -149,10 +151,6 @@ function EquiposContent() {
   const canBaja = can("equipos", "AN");
   const canReactivar = can("equipos", "G");
 
-  const selected = detail.payload;
-  const selectedInactive = selected ? Number(selected.activo ?? 1) === 0 : false;
-  const selectedMeta = selected ? displayState(selected) : null;
-
   const groups: FilterGroup[] = [
     {
       key: "estado",
@@ -161,27 +159,80 @@ function EquiposContent() {
       defaultValue: "todos",
       onChange: (v) => setFilter(v as Filter),
       options: [
-        { value: "todos", label: "Todos", count: items ? counts.total : null },
-        { value: "operativo", label: "Operativos", count: items ? counts.operativos : null },
-        { value: "mantenimiento", label: "En mantenimiento", count: items ? counts.mantenimiento : null, tone: counts.mantenimiento ? "warning" : "neutral" },
-        { value: "calibracion", label: "Con alerta de calibración", count: items ? counts.alertas : null, tone: counts.alertas ? "danger" : "neutral" },
+        { value: "todos", label: "Todos" },
+        { value: "operativo", label: "Operativos" },
+        { value: "mantenimiento", label: "En mantenimiento" },
+        { value: "calibracion", label: "Con alerta de calibración" },
       ],
     },
   ];
-  const toggles: FilterToggle[] = [{ key: "bajas", label: "Mostrar bajas", description: "Incluye equipos dados de baja.", checked: showBajas, onChange: setShowBajas }];
+  const toggles: FilterToggle[] = [{ key: "bajas", label: "Mostrar bajas", group: "Vista", checked: showBajas, onChange: setShowBajas }];
+  const ordenar: FilterGroup[] = [
+    {
+      key: "orden",
+      label: "Ordenar por",
+      value: orden,
+      defaultValue: "nombre",
+      showDefault: true,
+      onChange: (v) => setOrden(v as Orden),
+      options: [
+        { value: "nombre", label: "Nombre A–Z" },
+        { value: "calibracion", label: "Calibración más próxima" },
+        { value: "mantenimiento", label: "Mantenimiento más próximo" },
+      ],
+    },
+  ];
 
   const reportar = useMenuReportar();
+  const canProgramar = can("equipos", "C", { objeto: "mantenimiento" });
+  const programar = (item: ApiRecord) => router.push(`/inventario/mantenimiento?nuevo=1&equipo=${item.id}`);
   const menuFor = (item: ApiRecord): MenuItem[] => {
     const inactive = Number(item.activo ?? 1) === 0;
-    const list: MenuItem[] = [{ label: "Ver ficha", description: "Bitácora, serie, ubicación y calibración", icon: <IdentificationCard size={16} weight="duotone" />, tone: "brand", onSelect: () => detail.open(item) }];
-    if (can("equipos", "C", { objeto: "mantenimiento" }) && !inactive) list.push({ label: "Programar mantenimiento", description: "Preventivo, correctivo o calibración", icon: <Wrench size={16} weight="duotone" />, tone: "success", onSelect: () => router.push(`/inventario/mantenimiento?nuevo=1&equipo=${item.id}`) });
+    const list: MenuItem[] = [];
+    if (canProgramar && !inactive) list.push({ label: "Programar mantenimiento", description: "Preventivo, correctivo o calibración", icon: <Wrench size={16} weight="duotone" />, tone: "success", onSelect: () => programar(item) });
     if (canEditar) list.push({ label: "Editar", description: "Cambiar datos del equipo", icon: <PencilSimple size={16} weight="duotone" />, onSelect: () => editEquipo(Number(item.id)) });
     list.push(...reportar("equipos", item.id, String(item.nombre || "Equipo")));
     if (inactive ? canReactivar : canBaja) {
-      if (inactive) list.push({ label: "Reactivar equipo…", description: "Vuelve al inventario con motivo", icon: <ArrowCounterClockwise size={16} weight="duotone" />, tone: "warning", separatorBefore: true, onSelect: () => reactivarEquipo(item) });
+      if (inactive) list.push({ label: "Reactivar…", description: "Vuelve al inventario con motivo", icon: <ArrowCounterClockwise size={16} weight="duotone" />, tone: "warning", separatorBefore: true, onSelect: () => reactivarEquipo(item) });
       else list.push({ label: "Dar de baja…", description: "Deja de ofrecerse; conserva su historial", icon: <Trash size={16} weight="duotone" />, tone: "danger", separatorBefore: true, onSelect: () => deleteEquipo(item) });
     }
     return list;
+  };
+
+  /* Celdas: equipo y clave de bitacora; estado en color; proxima calibracion; proximo mantenimiento; responsable. */
+  const celdas = (item: ApiRecord) => {
+    const state = displayState(item);
+    const inactive = Number(item.activo ?? 1) === 0;
+    return [
+      <span key="e" className={inactive ? "flex min-w-0 items-center gap-3 opacity-60" : "flex min-w-0 items-center gap-3"}>
+        <IconoEquipo nombre={item.nombre} />
+        <span className="flex min-w-0 flex-col">
+          <span className="text-[14.5px] leading-tight font-semibold text-ink">
+            {String(item.nombre || "—")}
+            {inactive ? <Badge tone="danger" className="ml-2 align-middle">Baja</Badge> : null}
+          </span>
+          <span className="text-[12.5px] text-ink-3">{item.clave_bitacora ? `Bitácora ${String(item.clave_bitacora)}` : [item.marca, item.modelo].filter(Boolean).join(" · ") || "Sin clave de bitácora"}</span>
+        </span>
+      </span>,
+      <span key="s" className="flex flex-col items-start gap-1">
+        <Badge tone={state.tone} dot>
+          {state.label}
+        </Badge>
+      </span>,
+      <Caducidad key="c" value={item.fecha_prox_calibracion} />,
+      item.mantenimiento_fecha ? (
+        <span key="m" className="flex flex-col">
+          <span className={item.mantenimiento_estado === "vencido" ? "text-[13.5px] font-medium text-danger" : "text-[13.5px] text-ink-2"}>{formatearFechaCorta(item.mantenimiento_fecha)}</span>
+          <span className="text-[12px] text-ink-3">
+            {metaFor(MANTENIMIENTO_TIPOS, item.mantenimiento_tipo).label}
+            {item.mantenimiento_estado === "vencido" ? " · vencido" : item.mantenimiento_estado === "en_proceso" ? " · en proceso" : ""}
+          </span>
+        </span>
+      ) : (
+        <span key="m" className="text-[13px] text-ink-4">—</span>
+      ),
+      item.responsable || item.id_responsable ? <FiguraPersona key="r" id={item.id_responsable} nombre={item.responsable} conNombre /> : <span key="r" className="text-[13px] text-ink-4">—</span>,
+    ];
   };
 
   return (
@@ -196,138 +247,43 @@ function EquiposContent() {
         }
       >
         <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre, marca o modelo" className="w-full md:w-[340px]" />
-        <FilterMenu groups={groups} toggles={toggles} />
-        <FilterChips groups={groups} toggles={toggles} />
+        <FilterMenu groups={groups} toggles={toggles} gruposFinales={ordenar} vistaAlFinal />
       </Toolbar>
 
-      <TableShell footer={items ? `${fmt(visible.length)} equipos${filter !== "todos" ? " en este filtro" : ""}` : undefined}>
-        {resource.error ? (
-          <ErrorState message={resource.error} onRetry={resource.reload} />
-        ) : !items ? (
-          <TableSkeleton cols={5} />
-        ) : !visible.length ? (
-          <EmptyState icon={<Cube size={20} />} title={search || filter !== "todos" ? "Sin coincidencias" : "Aún no hay equipos"} description={search || filter !== "todos" ? "Ajusta la búsqueda o el filtro." : "Registra los equipos del laboratorio para programar su mantenimiento."} action={canCreate && !search && filter === "todos" ? <Button onClick={() => modal.open(null)}>Nuevo equipo</Button> : undefined} />
-        ) : (
-          <Table>
-            <THead>
-              <tr>
-                <Th>Equipo</Th>
-                <Th>Bitácora</Th>
-                <Th>Ubicación</Th>
-                <Th>Próxima calibración</Th>
-                <Th>Estado</Th>
-                <Th align="right" sticky />
-              </tr>
-            </THead>
-            <TBody>
-              {visible.map((item) => {
-                const state = displayState(item);
-                const inactive = Number(item.activo ?? 1) === 0;
-                const calTone = calibrationTone(item.fecha_prox_calibracion);
-                return (
-                  <Tr key={item.id} interactive onClick={() => detail.open(item)} className={inactive ? "opacity-60" : undefined}>
-                    <Td className="max-w-[360px]">
-                      <div className="flex items-center gap-2">
-                        {inactive ? <Badge tone="danger">Baja</Badge> : null}
-                        <CellPrimary title={item.nombre || "-"} subtitle={[item.marca, item.modelo, item.numero_serie ? `Serie ${item.numero_serie}` : null].filter(Boolean).join(" · ")} />
-                      </div>
-                    </Td>
-                    <Td mono>{item.clave_bitacora || <span className="text-ink-4">—</span>}</Td>
-                    <Td muted>{item.ubicacion || "—"}</Td>
-                    <Td className="whitespace-nowrap">
-                      {item.fecha_prox_calibracion ? <span className={calTone === "danger" ? "font-medium text-danger" : calTone === "warning" ? "font-medium text-warning-text" : "text-ink-2"}>{fmtDate(item.fecha_prox_calibracion)}</span> : <span className="text-ink-4">—</span>}
-                    </Td>
-                    <Td>
-                      <div className="flex flex-col items-start gap-1">
-                        <Badge tone={state.tone} dot>
-                          {state.label}
-                        </Badge>
-                        {state.detail ? <span className={cn("text-[12px]", state.detailTone === "danger" ? "text-danger" : "text-ink-3")}>{state.detail}</span> : null}
-                      </div>
-                    </Td>
-                    <Td align="right" sticky onClick={(event) => event.stopPropagation()}>
-                      <ActionMenu items={menuFor(item)} header={String(item.nombre || "")} />
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </TBody>
-          </Table>
+      <ListaCuadricula
+        etiqueta="Equipos"
+        columnas={COLUMNAS}
+        filas={items ? visible : null}
+        error={resource.error}
+        onReintentar={resource.reload}
+        clave={(item) => String(item.id)}
+        onAbrir={(_, i) => setAbierta(i)}
+        activa={(_, i) => abierta === i}
+        celdas={celdas}
+        extremo={(item) => (
+          <span className="w-9">
+            <ActionMenu items={menuFor(item)} header={String(item.nombre || "")} />
+          </span>
         )}
-      </TableShell>
+        anchoExtremo="52px"
+        propsFila={(item) => ({ "data-equipo": String(item.id) })}
+        vacio={{
+          icono: <Cube size={20} />,
+          titulo: search || filter !== "todos" ? "Sin coincidencias" : "Aún no hay equipos",
+          descripcion: search || filter !== "todos" ? "Ajusta la búsqueda o el filtro." : "Registra los equipos del laboratorio para programar su mantenimiento.",
+          accion: canCreate && !search && filter === "todos" ? <Button onClick={() => modal.open(null)}>Nuevo equipo</Button> : undefined,
+        }}
+      />
+      {items && visible.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-3">{visible.length === 1 ? "1 equipo" : `${fmt(visible.length)} equipos`}</p> : null}
 
-      {selected && selectedMeta ? (
-        <DetailSheet
-          extra={
-            <section className="flex flex-col gap-1.5">
-              <h3 className="eyebrow px-1 text-ink-3">Incidencias</h3>
-              <IncidenciasDelRegistro entidad="equipos" id={selected.id} etiqueta={String(selected.nombre || "Equipo")} />
-            </section>
-          }
-          open={detail.isOpen}
-          onOpenChange={(open) => {
-            if (!open) detail.close();
-          }}
-          title={String(selected.nombre || "Equipo")}
-          subtitle={[selected.marca, selected.modelo].filter(Boolean).join(" · ") || undefined}
-          badges={
-            <span className="flex items-center gap-1.5">
-              {selectedInactive ? <Badge tone="danger">Baja</Badge> : null}
-              <Badge tone={selectedMeta.tone} dot>
-                {selectedMeta.label}
-              </Badge>
-            </span>
-          }
-          groups={[
-            {
-              title: "Identificación",
-              rows: [
-                { label: "Clave de bitácora", value: selected.clave_bitacora, mono: true },
-                { label: "Número de serie", value: selected.numero_serie, mono: true },
-                { label: "Marca", value: selected.marca },
-                { label: "Modelo", value: selected.modelo },
-              ],
-            },
-            {
-              title: "Operación",
-              rows: [
-                { label: "Ubicación", value: selected.ubicacion },
-                { label: "Responsable", value: selected.responsable },
-                { label: "Próxima calibración", value: selected.fecha_prox_calibracion ? fmtDate(selected.fecha_prox_calibracion) : null },
-                { label: "Mantenimiento pendiente", value: selectedMeta?.detail || null },
-                { label: "Registrado", value: selected.creado_en ? fmtDateTime(selected.creado_en) : null },
-              ],
-            },
-            {
-              title: "Baja",
-              rows: [
-                { label: "Motivo", value: selectedInactive ? selected.baja_motivo : null },
-                { label: "Fecha", value: selectedInactive && selected.baja_en ? fmtDateTime(selected.baja_en) : null },
-              ],
-            },
-          ]}
-          actions={
-            <>
-              {(selectedInactive ? canReactivar : canBaja) ? (
-                selectedInactive ? (
-                  <Button variant="secondary" icon={<ArrowCounterClockwise size={16} />} onClick={() => reactivarEquipo(selected)}>
-                    Reactivar
-                  </Button>
-                ) : (
-                  <Button variant="ghost" className="mr-auto text-danger hover:bg-danger-soft hover:text-danger" icon={<Trash size={16} />} onClick={() => deleteEquipo(selected)}>
-                    Dar de baja
-                  </Button>
-                )
-              ) : null}
-              {canEditar ? (
-                <Button icon={<PencilSimple size={16} />} onClick={() => editEquipo(Number(selected.id))}>
-                  Editar
-                </Button>
-              ) : null}
-            </>
-          }
-        />
-      ) : null}
+      <EquipoVentana
+        items={visible}
+        indice={abierta !== null && abierta < visible.length ? abierta : null}
+        onIndice={setAbierta}
+        onCerrar={() => setAbierta(null)}
+        estadoDe={displayState}
+        acciones={{ puedeProgramar: canProgramar, puedeEditar: canEditar, puedeBaja: canBaja, puedeReactivar: canReactivar, programar, editar: (item) => editEquipo(Number(item.id)), darDeBaja: deleteEquipo, reactivar: reactivarEquipo }}
+      />
 
       {modal.key ? <EquipoSheet key={`modal-${modal.key}`} open={modal.isOpen} item={modal.payload} onClose={modal.close} /> : null}
     </>

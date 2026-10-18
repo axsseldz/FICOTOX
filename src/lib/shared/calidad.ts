@@ -1,3 +1,4 @@
+import { formatearFolio } from "./folios";
 /*
  * Calidad (Fase 11; FX-MO-2-1 secciones 4 y 5, ISO/IEC 17025 7.10 y 8.7):
  * incidencias, no conformidades (NC), acciones correctivas, comunicaciones con
@@ -32,7 +33,7 @@ export const ESTADOS_INCIDENCIA: Record<string, { label: string; tone: "neutral"
   reportada: { label: "Reportada", tone: "brand" },
   en_evaluacion: { label: "En evaluación", tone: "warning" },
   cerrada_sin_nc: { label: "Cerrada sin NC", tone: "success" },
-  escalada_a_nc: { label: "Escalada a NC", tone: "ink" },
+  escalada_a_nc: { label: "Escalada a NC", tone: "brand" },
   anulada: { label: "Anulada", tone: "danger" },
 };
 
@@ -43,7 +44,7 @@ export const IMPACTOS: Opcion[] = [
 ];
 export const IMPACTO_LABEL = etiquetas(IMPACTOS);
 
-export const ORIGENES_AUTOMATICOS: Opcion[] = [
+const ORIGENES_AUTOMATICOS: Opcion[] = [
   { value: "desviacion_recepcion", label: "Recepción aceptada con desviación" },
   { value: "rechazo_recepcion", label: "Recepción rechazada" },
   { value: "equipo_no_apto", label: "Uso de un equipo no apto o con calibración vencida" },
@@ -63,7 +64,11 @@ export const ENTIDADES_RELACIONABLES: Record<string, { label: string; ruta: (id:
   equipos: { label: "Equipo", ruta: () => "/inventario/equipos" },
   reactivos: { label: "Reactivo", ruta: () => "/inventario/reactivos" },
   consumibles: { label: "Consumible", ruta: () => "/inventario/consumibles" },
-  documentos_sgc: { label: "Documento", ruta: (id) => `/documentos?documento=${id}` },
+  // Documentos SGC (migracion 22).
+  sgc_documentos: { label: "Documento SGC", ruta: (id) => `/documentos/${id}` },
+  // Retirados (flujo anterior y Biblioteca): sus registros ligados se conservan; ya no tienen pantalla.
+  documentos_sgc: { label: "Documento (anterior)", ruta: () => "/documentos" },
+  biblioteca_documentos: { label: "Documento de la biblioteca (retirada)", ruta: () => "/documentos" },
 };
 
 /* ---------- No conformidades ---------- */
@@ -111,11 +116,6 @@ export const ESTADOS_ACCION: Record<string, { label: string; tone: "neutral" | "
   cancelada: { label: "Cancelada", tone: "danger" },
 };
 
-export const RESULTADOS_VERIFICACION: Opcion[] = [
-  { value: "eficaz", label: "Eficaz" },
-  { value: "no_eficaz", label: "No eficaz" },
-];
-
 export const MEDIOS_COMUNICACION: Opcion[] = [
   { value: "correo", label: "Correo electrónico" },
   { value: "telefono", label: "Teléfono" },
@@ -126,20 +126,12 @@ export const MEDIOS_COMUNICACION: Opcion[] = [
 export const MEDIO_COMUNICACION_LABEL = etiquetas(MEDIOS_COMUNICACION);
 
 /* ---------- Suspensiones ---------- */
-
-export const TIPOS_SUSPENSION: Opcion[] = [
-  { value: "metodo", label: "Método" },
-  { value: "equipo", label: "Equipo" },
-];
 /* Metodos que se pueden suspender (los del catalogo FX-THF-AP). */
 export const METODOS_SUSPENDIBLES = ["ASP", "DSP", "PSP", "pigmentos", "plancton", "otro"] as const;
 
 /* Folios: "INC 0000001", "NC 0000001". */
-export const folioIncidencia = (n: unknown) => `INC ${String(Number(n) || 0).padStart(7, "0")}`;
-export const folioNc = (n: unknown) => `NC ${String(Number(n) || 0).padStart(7, "0")}`;
-
-/* Objetos de alcance: con alcance "incidencias" solo se opera sobre estos. */
-export const OBJETOS_CALIDAD = ["incidencia", "nc", "accion_correctiva"] as const;
+export const folioIncidencia = (n: unknown) => formatearFolio("INC", n);
+export const folioNc = (n: unknown) => formatearFolio("NC", n);
 
 /* Clave del formato "Registro de no conformidad" (por confirmar con Mejora Continua; configurable con NC_FORMATO_CLAVE). */
 export const NC_FORMATO_CLAVE_DEFAULT = "FX-MC-NC (por confirmar)";

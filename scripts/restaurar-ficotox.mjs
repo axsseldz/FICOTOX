@@ -22,7 +22,9 @@
  *   4. llave: su huella coincide con la del manifest
  *   5. cadena de la bitacora integra con esa llave (alteraciones, huecos, triggers)
  *   6. conteos por tabla iguales al manifest
- *   7. archivos contra la base: PDF de informes, evidencias de envio, adjuntos y documentos SGC
+ *   7. archivos contra la base: PDF de informes, evidencias de envio, adjuntos,
+ *      documentos SGC (flujo anterior), versiones de la biblioteca, PDF de NC
+ *      y reportes PDF de mantenimiento
  *   8. tiempo total
  * Resultado: backups/pruebas-restauracion/<fecha>.md y .json. Codigo de salida
  * distinto de 0 si algo falla (1 verificacion fallida; 2 uso incorrecto o modo real rechazado).
@@ -36,7 +38,7 @@ import { fileURLToPath } from "node:url";
 import { COLUMNAS_AUDITORIA, construirRegistro, evaluarCadena, leerClaveSello, sellar } from "../src/lib/shared/audit-chain.mjs";
 import { adaptadorSqlite, aplicarMigraciones, estadoMigraciones } from "../src/lib/server/migraciones/motor.mjs";
 import { bloqueoVivo as bloqueoCompartido } from "../src/lib/shared/bloqueo.mjs";
-import { ARCHIVO_LLAVE, CARPETA_ACTAS, CARPETAS_ARCHIVOS, ESQUEMA_VERSION, RUTA_BASE, crearRespaldo, hacerPrivado, huellaLlave, huellaManifest, inspeccionarBase, leerManifest, resolverEntorno, rutaArchivoValida, sellarManifest, sha256Archivo, versionApp } from "../src/lib/shared/respaldo.mjs";
+import { ARCHIVO_LLAVE, CARPETA_ACTAS, CARPETAS_ARCHIVOS, ESQUEMA_VERSION, RUTA_BASE, carpetaRestauradas, crearRespaldo, hacerPrivado, huellaLlave, huellaManifest, inspeccionarBase, leerManifest, resolverEntorno, rutaArchivoValida, sellarManifest, sha256Archivo, versionApp } from "../src/lib/shared/respaldo.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -103,7 +105,7 @@ const bloqueoVivo = (instanceDir) => bloqueoCompartido(path.join(instanceDir, "s
 
 if (modoReal) {
   if (!confirmar) salir("Modo real rechazado: restaurar sobre la instancia real exige --destino instance --confirmar.");
-  if (entorno.motor !== "sqlite") salir("Modo real rechazado: esta instalación usa MySQL/MariaDB (restaura con mysql < respaldo.sql; ver docs/RESPALDO_Y_RECUPERACION.md).");
+  if (entorno.motor !== "sqlite") salir("Modo real rechazado: esta instalación usa MySQL/MariaDB (restaura con mysql < respaldo.sql; ver README.md).");
   const vivo = bloqueoVivo(entorno.instanceDir);
   if (vivo) salir(`Modo real rechazado: el servidor está encendido (archivo de bloqueo ${path.join(entorno.instanceDir, "servidor.lock")}, pid ${vivo.pid}). Detenlo y vuelve a intentarlo.`);
   if (await puertoOcupado(entorno.puerto)) {
@@ -134,8 +136,8 @@ try {
 }
 
 // Destino (en modo real se restaura primero a una carpeta de preparacion y se verifica ahi).
-// instance-restaurada/ va junto a la carpeta de la instancia (en una instalacion normal, en la raiz del proyecto).
-const restauradas = path.join(path.dirname(entorno.instanceDir), "instance-restaurada");
+// instance-restaurada/ va junto a la carpeta de la instancia (la misma regla con que el servidor la borra).
+const restauradas = carpetaRestauradas(entorno.instanceDir);
 const preparacion = modoReal ? path.join(restauradas, `${sello}-real`) : destinoArg ? path.resolve(destinoArg) : path.join(restauradas, sello);
 let llave = null;
 let restauradaDb = null;
@@ -278,8 +280,14 @@ if (restauradaDb) {
     { etiqueta: "PDF de informes", tabla: "informes", archivo: "archivo_pdf", sha: "pdf_sha256", carpeta: "informes" },
     { etiqueta: "evidencias de envío", tabla: "envios_informe", archivo: "evidencia_archivo", sha: "evidencia_sha256", carpeta: path.join("informes", "envios") },
     { etiqueta: "adjuntos (evidencia instrumental)", tabla: "adjuntos", archivo: "nombre_almacenado", sha: "sha256", carpeta: "evidencias" },
-    { etiqueta: "documentos SGC", tabla: "documentos_sgc", archivo: "archivo_nombre", sha: "archivo_sha256", carpeta: "documentos_sgc" },
+    { etiqueta: "documentos SGC del flujo anterior (heredados)", tabla: "documentos_sgc", archivo: "archivo_nombre", sha: "archivo_sha256", carpeta: "documentos_sgc" },
+    // Biblioteca: nombre_almacenado es relativo a <instancia>/biblioteca ("<documento>/<uuid>.<ext>").
+    { etiqueta: "versiones de la Biblioteca retirada (heredadas)", tabla: "biblioteca_versiones", archivo: "nombre_almacenado", sha: "sha256", carpeta: "biblioteca" },
+    // Documentos SGC: nombre_almacenado es relativo a <instancia>/sgc ("<documento>/<revision>/<uuid>.<ext>").
+    { etiqueta: "archivos de Documentos SGC", tabla: "sgc_archivos", archivo: "nombre_almacenado", sha: "sha256", carpeta: "sgc" },
     { etiqueta: "PDF de no conformidades", tabla: "no_conformidades", archivo: "archivo_pdf", sha: "pdf_sha256", carpeta: path.join("calidad", "nc") },
+    // Reportes de mantenimiento: nombre_almacenado es relativo a <instancia>/maintenance_reports ("<mantenimiento>/<uuid>.pdf").
+    { etiqueta: "reportes PDF de mantenimiento", tabla: "reportes_mantenimiento", archivo: "nombre_almacenado", sha: "sha256", carpeta: "maintenance_reports" },
   ];
   const resumen = [];
   const problemas7 = [];

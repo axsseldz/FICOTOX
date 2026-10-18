@@ -8,6 +8,8 @@ import { useFormReadOnly } from "./FormLayout";
 /*
  * Lienzo de firma: subir una imagen o dibujar con el puntero.
  * El valor es un data URL PNG; vacio significa sin firma.
+ * El lienzo y la vista de la firma van sobre papel claro (bg-papel) y la tinta
+ * es siempre oscura, en cualquier tema: la imagen guardada no cambia (PDF).
  */
 
 const drawPlaceholder = (canvas: HTMLCanvasElement) => {
@@ -111,7 +113,7 @@ export function SignaturePad({ value, onChange, label, disabled: disabledProp = 
   if (readOnly) {
     return value ? (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={value} alt={label || "Firma"} className={cn("w-full rounded-[10px] bg-surface object-contain ring-1 ring-line", compact ? "h-[96px] max-w-[300px]" : "h-[120px] max-w-[360px]")} />
+      <img src={value} alt={label || "Firma"} className={cn("w-full rounded-[10px] bg-papel object-contain p-1 ring-1 ring-line", compact ? "h-[96px] max-w-[300px]" : "h-[120px] max-w-[360px]")} />
     ) : (
       <p className="flex h-9 items-center rounded-[10px] bg-surface-2 px-3 text-[13.5px] text-ink-4">Sin firma</p>
     );
@@ -120,7 +122,7 @@ export function SignaturePad({ value, onChange, label, disabled: disabledProp = 
   // El lienzo mantiene 3:1; en modo compacto cabe junto a los campos de nombre y cargo.
   return (
     <div className={cn("flex flex-col gap-1.5", !compact && "max-w-[420px]")}>
-      <div className={cn("relative overflow-hidden rounded-[10px] border bg-surface transition-colors", isEmpty ? "border-dashed border-line-strong" : "border-line")}>
+      <div className={cn("relative overflow-hidden rounded-[10px] border bg-papel transition-colors", isEmpty ? "border-dashed border-line-strong" : "border-line")}>
         <canvas ref={canvasRef} width={480} height={160} aria-label={label || "Lienzo de firma"} className={`block aspect-[3/1] w-full touch-none ${disabled ? "cursor-default" : "cursor-crosshair"}`} onPointerDown={disabled ? undefined : start} onPointerMove={disabled ? undefined : move} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop} />
       </div>
       <div className="flex items-center gap-1">

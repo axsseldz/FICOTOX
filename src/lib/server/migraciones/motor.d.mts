@@ -3,7 +3,7 @@ export interface Migracion {
   version: number;
   nombre: string;
   pasos: unknown[];
-  up(db: Adaptador, motor: "sqlite" | "mysql"): Promise<void>;
+  up(db: Adaptador, motor: "sqlite" | "mysql", ctx?: { instanceDir?: string | null }): Promise<void>;
 }
 export interface Adaptador {
   motor: "sqlite" | "mysql";
@@ -47,7 +47,7 @@ export function esquemaEsperado(Sqlite: SqliteCtor, version: number, motor?: "sq
 export function estadoMigraciones(db: Adaptador, opciones: { Sqlite: SqliteCtor }): Promise<EstadoMigraciones>;
 export function aplicarMigraciones(
   db: Adaptador,
-  opciones: { Sqlite: SqliteCtor; clave?: string | null; appCommit?: string | null; respaldo?: (() => Promise<string | null>) | null; simular?: boolean; avisar?: (mensaje: string) => void; esperaMs?: number },
+  opciones: { Sqlite: SqliteCtor; instanceDir?: string | null; clave?: string | null; appCommit?: string | null; respaldo?: (() => Promise<string | null>) | null; simular?: boolean; avisar?: (mensaje: string) => void; esperaMs?: number },
 ): Promise<ResultadoMigracion>;
 export function versionDe(db: Adaptador): Promise<number | null>;
 export function crearControl(db: Adaptador): Promise<void>;

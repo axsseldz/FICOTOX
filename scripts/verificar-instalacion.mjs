@@ -99,7 +99,7 @@ const llave = leerClaveSello(entorno.secretKey, entorno.instanceDir);
     const huella = huellaLlave(llave.clave);
     if (!registrada) marcar(AVISO, "Llave de la bitácora", `${llave.origen}, huella ${huella.slice(0, 16)}… — sin huella registrada (corre npm run configurar para registrarla)`);
     else if (registrada !== huella) marcar(MAL, "Llave de la bitácora", `la llave actual (huella ${huella.slice(0, 16)}…) NO es la registrada (${registrada.slice(0, 16)}…): ¿se cambió SECRET_KEY? La bitácora no se podrá verificar`);
-    else marcar(OK, "Llave de la bitácora", `${llave.origen}, huella ${huella.slice(0, 16)}… coincide con la registrada. Recuerda: una copia de la llave debe estar guardada fuera de esta computadora (docs/INSTALACION.md, paso 5)`);
+    else marcar(OK, "Llave de la bitácora", `${llave.origen}, huella ${huella.slice(0, 16)}… coincide con la registrada. Recuerda: una copia de la llave debe estar guardada fuera de esta computadora (README.md, paso 5)`);
   }
 }
 
@@ -199,13 +199,13 @@ if (base) {
 
 /* 8-10. Respaldos */
 {
-  if (entorno.motor !== "sqlite") marcar(AVISO, "Respaldos", "MySQL/MariaDB: los respaldos se hacen con mysqldump (docs/INSTALACION.md); no se pueden revisar desde aquí");
+  if (entorno.motor !== "sqlite") marcar(AVISO, "Respaldos", "MySQL/MariaDB: los respaldos se hacen con mysqldump (README.md); no se pueden revisar desde aquí");
   else {
     // 8. Tarea programada de respaldo
     let tarea = null;
     if (plataforma() === "win32") tarea = corre("schtasks", ["/Query", "/TN", "FICOTOX respaldo base de datos"]) !== null;
     else if (plataforma() === "linux" || plataforma() === "darwin") tarea = /respaldar-ficotox|backup-ficotox|npm run respaldar/.test(corre("crontab", ["-l"]) || "") || fs.existsSync("/Library/LaunchDaemons/mx.cicese.ficotox.respaldo.plist");
-    marcar(tarea ? OK : AVISO, "Tarea de respaldo programada", tarea ? "instalada" : plataforma() === "win32" ? "no existe la tarea «FICOTOX respaldo base de datos» (scripts\\install-ficotox-backup-tasks.cmd daily)" : "no se encontró en crontab (ver docs/INSTALACION.md, «Respaldos»)");
+    marcar(tarea ? OK : AVISO, "Tarea de respaldo programada", tarea ? "instalada" : plataforma() === "win32" ? "no existe la tarea «FICOTOX respaldo base de datos» (scripts\\install-ficotox-backup-tasks.cmd daily)" : "no se encontró en crontab (ver README.md, «Respaldos»)");
 
     // 9. Respaldo de las ultimas 24 h
     const deEstaInstancia = (fecha) => !instanciaCreada || new Date(fecha).getTime() >= new Date(instanciaCreada).getTime();
@@ -258,7 +258,7 @@ if (base) {
     }
     const diasCert = vence ? (new Date(vence).getTime() - Date.now()) / 86_400_000 : null;
     marcar(!leibles ? MAL : diasCert !== null && diasCert < 30 ? AVISO : OK, "HTTPS", !leibles ? "TLS_CERT o TLS_KEY no se pueden leer" : `activo${vence ? `; el certificado vence ${marcaLocal(new Date(vence)).slice(0, 10)}${diasCert < 30 ? " (renuévalo pronto)" : ""}` : ""}`);
-  } else marcar(AVISO, "HTTPS", "HTTP sin cifrar: aceptable solo en la red interna del laboratorio; para cifrar define TLS_CERT y TLS_KEY (docs/INSTALACION.md, «HTTPS»)");
+  } else marcar(AVISO, "HTTPS", "HTTP sin cifrar: aceptable solo en la red interna del laboratorio; para cifrar define TLS_CERT y TLS_KEY (README.md, «HTTPS»)");
 }
 
 /* 14. Arranque automatico */

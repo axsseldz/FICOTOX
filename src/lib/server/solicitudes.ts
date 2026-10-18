@@ -7,8 +7,16 @@ import { HttpError, json, readJson, type RouteContext } from "./http";
 import { cargarAutorizacion, cargoActuante, permisoDe, requirePermission, type Autorizacion } from "./rbac";
 
 import { exigirReauth } from "./seguridad";
-import { ACCIONES_CRITICAS, permisoParaAprobar, TIPOS_SOLICITUD, type EstadoSolicitud, type TipoSolicitud } from "../shared/acciones-criticas";
+import { ACCIONES_CRITICAS, esTipoActivo, etiquetasDeSolicitud, permisoParaAprobar, TIPOS_SOLICITUD, type EstadoSolicitud, type TipoSolicitud } from "../shared/acciones-criticas";
 import { evaluarSegundoUsuario } from "../shared/segregacion";
+import { documentosOcultos } from "./modules/sgc/acceso";
+
+/* Documentos SGC confidenciales que la persona no ve: sus solicitudes no se le muestran (ni clave ni motivo). */
+async function sinDocumentosOcultos(s: Session, auth: Autorizacion, filas: Solicitud[]): Promise<Solicitud[]> {
+  if (!filas.some((f) => f.entidad === "sgc_documentos")) return filas;
+  const ocultos = new Set(await documentosOcultos(s, auth));
+  return filas.filter((f) => f.entidad !== "sgc_documentos" || !ocultos.has(String(f.entidad_id)));
+}
 
 /*
  * Solicitudes de autorizacion de un segundo usuario (Fase 3; seccion 10 de
@@ -83,7 +91,7 @@ export async function crearSolicitud(s: Session, user: CurrentUser, nueva: Nueva
    * vez su rol inicial, otro rol y una ampliacion de vigencia.
    */
   const existente = nueva.entidad === "usuarios" ? await pendienteDeCuenta(s, nueva) : nueva.tipo === "excepcion_segregacion" ? await excepcionPendiente(s, nueva, userIdFromClaims(user) as number) : await solicitudPendiente(s, nueva.entidad, nueva.entidadId);
-  if (existente) throw new HttpError(409, { message: `${nueva.referencia} ya tiene una solicitud pendiente de autorización (${ACCIONES_CRITICAS[existente.tipo]?.etiqueta || existente.tipo} #${existente.id})`, codigo: "solicitud_pendiente", solicitud: existente });
+  if (existente) throw new HttpError(409, { message: `${nueva.referencia} ya tiene una solicitud pendiente de autorización (${etiquetasDeSolicitud(existente.tipo).etiqueta} #${existente.id})`, codigo: "solicitud_pendiente", solicitud: existente });
   const permiso = permisoParaAprobar(nueva.tipo, nueva.entidad);
   const vence = new Date(Date.now() + getConfig().SOLICITUD_VENCE_DIAS * 86_400_000).toISOString();
   const result = await s.execute(
@@ -123,7 +131,9 @@ export function respuestaSolicitud(solicitud: Solicitud, que: string): Response 
 }
 
 export function serializarSolicitud(solicitud: Solicitud): Record<string, unknown> {
-  return { ...solicitud, datos: datosDe(solicitud), etiqueta: ACCIONES_CRITICAS[solicitud.tipo]?.etiqueta || solicitud.tipo, pendiente_etiqueta: ACCIONES_CRITICAS[solicitud.tipo]?.pendiente || "Solicitud pendiente" };
+  // Una solicitud de una accion retirada (p. ej. obsoletar_documento) se muestra como "Acción retirada", sin aprobar.
+  const etiquetas = etiquetasDeSolicitud(solicitud.tipo);
+  return { ...solicitud, datos: datosDe(solicitud), etiqueta: etiquetas.etiqueta, pendiente_etiqueta: etiquetas.pendiente, retirada: !esTipoActivo(solicitud.tipo) };
 }
 
 async function pendienteDeCuenta(s: Session, nueva: NuevaSolicitud): Promise<Solicitud | null> {
@@ -145,7 +155,7 @@ async function excepcionPendiente(s: Session, nueva: NuevaSolicitud, solicitante
  * ignora aqui; la marca el barrido (vencerSolicitudes) o cargarPendiente, fuera
  * de la transaccion de la accion.
  */
-export async function solicitudPendiente(s: Session, entidad: string, entidadId: number | string): Promise<Solicitud | null> {
+async function solicitudPendiente(s: Session, entidad: string, entidadId: number | string): Promise<Solicitud | null> {
   const fila = await s.queryOne<Solicitud>("SELECT * FROM solicitudes_autorizacion WHERE entidad = :entidad AND entidad_id = :id AND estado = 'pendiente' AND tipo <> 'excepcion_segregacion' AND vence_en > :ahora ORDER BY id DESC LIMIT 1", { entidad, id: String(entidadId), ahora: ahoraIso() });
   return fila || null;
 }
@@ -165,7 +175,7 @@ export async function pendientesDe(s: Session, entidad: string, ids: Array<numbe
 export async function exigirSinSolicitudPendiente(s: Session, entidad: string, entidadId: number | string, referencia: string, que: string): Promise<void> {
   const pendiente = await solicitudPendiente(s, entidad, entidadId);
   if (!pendiente) return;
-  const def = ACCIONES_CRITICAS[pendiente.tipo];
+  const def = etiquetasDeSolicitud(pendiente.tipo);
   throw new HttpError(409, { message: `${referencia} tiene una ${def.pendiente.toLowerCase()} pendiente de autorización (solicitud #${pendiente.id}); no se puede ${que} hasta que se resuelva`, codigo: "solicitud_pendiente", solicitud: serializarSolicitud(pendiente) });
 }
 
@@ -192,14 +202,17 @@ export interface ContextoEjecucion {
   datos: Record<string, unknown>;
   motivo: string;
 }
-export type Ejecutor = (ctx: ContextoEjecucion) => Promise<Record<string, unknown>>;
+type Ejecutor = (ctx: ContextoEjecucion) => Promise<Record<string, unknown>>;
 export type Ejecutores = Partial<Record<TipoSolicitud, Ejecutor>>;
 
 /* ---------- Bandeja ---------- */
 
 function puedeAprobar(auth: Autorizacion, solicitud: Solicitud): boolean {
+  if (!esTipoActivo(solicitud.tipo)) return false;
   const permiso = permisoParaAprobar(solicitud.tipo, solicitud.entidad);
-  return !!permisoDe(auth, permiso.modulo, permiso.accion) && Number(solicitud.solicitado_por) !== auth.userId;
+  // Regla 6: ni quien pidio la accion ni la persona afectada (cambios de acceso sobre su propia cuenta) la aprueban.
+  const sobreMiCuenta = solicitud.entidad === "usuarios" && String(solicitud.entidad_id) === String(auth.userId);
+  return !!permisoDe(auth, permiso.modulo, permiso.accion) && Number(solicitud.solicitado_por) !== auth.userId && !sobreMiCuenta;
 }
 
 /*
@@ -236,7 +249,7 @@ export async function listarSolicitudes({ request, s }: RouteContext): Promise<R
     return json({ items: filas.map(decorar), total: filas.length });
   }
   const filas = await s.query<Solicitud>(estado === "todas" ? "SELECT * FROM solicitudes_autorizacion ORDER BY id DESC LIMIT 500" : "SELECT * FROM solicitudes_autorizacion WHERE estado = :estado ORDER BY id DESC LIMIT 500", { estado });
-  const visibles = filas.filter((f) => Number(f.solicitado_por) === auth.userId || puedeAprobar(auth, { ...f, estado: "pendiente" }) || (f.resuelto_por !== null && Number(f.resuelto_por) === auth.userId));
+  const visibles = await sinDocumentosOcultos(s, auth, filas.filter((f) => Number(f.solicitado_por) === auth.userId || puedeAprobar(auth, { ...f, estado: "pendiente" }) || (f.resuelto_por !== null && Number(f.resuelto_por) === auth.userId)));
   const items = visibles.map(decorar);
   return json({ items, total: items.length, por_autorizar: items.filter((i) => i.puedo_aprobar).length });
 }
@@ -244,12 +257,12 @@ export async function listarSolicitudes({ request, s }: RouteContext): Promise<R
 /* Cuantas solicitudes pendientes puede aprobar la persona (aviso del Inicio). */
 export async function porAutorizarDe(s: Session, auth: Autorizacion): Promise<Solicitud[]> {
   const filas = await s.query<Solicitud>("SELECT * FROM solicitudes_autorizacion WHERE estado = 'pendiente' AND vence_en > :ahora ORDER BY id ASC LIMIT 100", { ahora: ahoraIso() });
-  return filas.filter((f) => puedeAprobar(auth, f));
+  return sinDocumentosOcultos(s, auth, filas.filter((f) => puedeAprobar(auth, f)));
 }
 
 /* ---------- Resolver ---------- */
 
-async function cargarPendiente(s: Session, params: Record<string, string | string[]>): Promise<Solicitud> {
+async function cargarPendiente(s: Session, params: Record<string, string | string[]>, { permitirRetirada = false } = {}): Promise<Solicitud> {
   const id = Number.parseInt(String(params.id || ""), 10);
   const fila = Number.isFinite(id) ? await s.queryOne<Solicitud>("SELECT * FROM solicitudes_autorizacion WHERE id = :id", { id }) : null;
   if (!fila) throw new HttpError(404, { message: "Solicitud no encontrada" });
@@ -260,7 +273,8 @@ async function cargarPendiente(s: Session, params: Record<string, string | strin
     throw new HttpError(409, { message: `La solicitud #${fila.id} venció sin resolverse`, codigo: "solicitud_vencida" });
   }
   if (fila.estado !== "pendiente") throw new HttpError(409, { message: `La solicitud #${fila.id} ya está ${fila.estado}` });
-  if (!TIPOS_SOLICITUD.includes(fila.tipo)) throw new HttpError(409, { message: `Tipo de solicitud desconocido: ${fila.tipo}` });
+  // Accion retirada del catalogo: no se aprueba ni se rechaza (quien la pidio aun puede cancelarla).
+  if (!permitirRetirada && !TIPOS_SOLICITUD.includes(fila.tipo)) throw new HttpError(410, { message: "Esa acción se retiró del catálogo; la solicitud ya no se puede resolver y vencerá sola", codigo: "retirado" });
   return fila;
 }
 
@@ -326,7 +340,7 @@ export async function rechazarSolicitud({ request, s, params }: RouteContext): P
 export async function cancelarSolicitud({ request, s, params }: RouteContext): Promise<Response> {
   const user = await requireUser(request);
   await cargarAutorizacion(s, user);
-  const solicitud = await cargarPendiente(s, params);
+  const solicitud = await cargarPendiente(s, params, { permitirRetirada: true });
   const yo = userIdFromClaims(user) as number;
   if (Number(solicitud.solicitado_por) !== yo) throw new HttpError(403, { message: "Solo quien hizo la solicitud puede cancelarla" });
   const payload = await readJson(request);

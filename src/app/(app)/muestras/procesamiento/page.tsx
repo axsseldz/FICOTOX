@@ -14,12 +14,16 @@ import { FilterChips, FilterMenu, type FilterGroup, type FilterToggle } from "@/
 import { ActionMenu, type MenuItem } from "@/components/ui/Overlay";
 import { SearchInput, Toolbar } from "@/components/ui/PageHeader";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/ui/Primitives";
-import { CellPrimary, Table, TBody, Td, Th, THead, Tr, TableShell } from "@/components/ui/Table";
+import { FranjaPendientes } from "@/components/features/solicitudes/Solicitudes";
+import { StatusCell } from "@/components/ui/StatusFlag";
+import { CellPrimary, COL_FECHA, FILA_LISTA, SOLO_ANCHO, Table, TBody, Td, Th, THead, Tr, TableShell } from "@/components/ui/Table";
 import { API_BASE_URL, getJsonAuth } from "@/lib/client/api";
-import { fmt, fmtDate } from "@/lib/client/format";
-import { useDebouncedValue } from "@/lib/client/hooks";
+import { cn } from "@/components/ui/cn";
+import { contar, fmtDate } from "@/lib/client/format";
+import { useDebouncedValue, useInitialParam, useParamChange } from "@/lib/client/hooks";
 import { formatProcessingFolio, normalizeSampleStatus } from "@/lib/client/samples";
 import { useResource } from "@/lib/client/store";
+import { estaHabilitada, motivoDe, seOfrece, usePuedeCrear } from "@/lib/client/puede";
 import type { ApiRecord } from "@/lib/client/types";
 
 export default function ProcesamientoListPage() {
@@ -37,7 +41,8 @@ type OrganismoFilter = "" | "bivalvos" | "sardinas" | "otro";
 function ProcesamientoList() {
   const { token, can } = useSession();
   const router = useRouter();
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(useInitialParam("buscar"));
+  useParamChange("buscar", setSearch);
   const [showAnuladas, setShowAnuladas] = useState(false);
   const [mias, setMias] = useState(false);
   const [etapa, setEtapa] = useState<EtapaFilter>("");
@@ -55,9 +60,10 @@ function ProcesamientoList() {
   );
   const items = resource.data;
 
-  const canCreate = can("ensayos", "C", { objeto: "procesamiento", borrador: true });
+  const puedeCrear = usePuedeCrear();
+  const canCreate = puedeCrear("procesamiento", can("ensayos", "C", { objeto: "procesamiento", borrador: true }));
   const canEdit = (item: ApiRecord) => can("ensayos", "E", { objeto: "procesamiento", borrador: String(item.estado || "registrada") === "registrada" });
-  const canExtraer = can("ensayos", "C", { objeto: "extraccion", borrador: true });
+  const canExtraer = puedeCrear("extraccion", can("ensayos", "C", { objeto: "extraccion", borrador: true }));
   const canDelete = can("ensayos", "AN");
 
   const organismoDe = (item: ApiRecord) => (Array.isArray(item.tipo_organismo) ? String(item.tipo_organismo[0] || "") : String(item.tipo_organismo || ""));
@@ -67,7 +73,7 @@ function ProcesamientoList() {
   const groups: FilterGroup[] = [
     {
       key: "etapa",
-      label: "Etapa",
+      label: "Estado",
       value: etapa,
       defaultValue: "",
       onChange: (v) => setEtapa(v as EtapaFilter),
@@ -98,7 +104,7 @@ function ProcesamientoList() {
   const menuFor = (item: ApiRecord): MenuItem[] => {
     const anulada = item.estado === "anulada";
     const list: MenuItem[] = [{ label: "Abrir", description: "Ver el formato completo", icon: <ArrowSquareOut size={16} weight="duotone" />, tone: "brand", onSelect: () => router.push(`/muestras/procesamiento/${item.id}`) }];
-    if (canEdit(item) && !anulada) list.push({ label: "Editar", description: "Corregir pasos, pesos o resguardo", icon: <PencilSimple size={16} weight="duotone" />, onSelect: () => router.push(`/muestras/procesamiento/${item.id}`) });
+    if (seOfrece(item, "editar", canEdit(item)) && !anulada) list.push({ label: "Editar", description: motivoDe(item, "editar") || "Corregir pasos, pesos o resguardo", disabled: !estaHabilitada(item, "editar", canEdit(item)), icon: <PencilSimple size={16} weight="duotone" />, onSelect: () => router.push(`/muestras/procesamiento/${item.id}`) });
     if (canExtraer && !anulada) list.push({ label: "Extraer", description: "Nueva extracción ASP o DSP de esta molienda", icon: <Drop size={16} weight="duotone" />, tone: "success", onSelect: () => router.push(`/muestras/extraccion/nueva?procesamiento=${item.id}`) });
     list.push(...reportar("muestras_procesamiento", item.id, formatProcessingFolio(item)));
     if (canDelete) {
@@ -110,10 +116,11 @@ function ProcesamientoList() {
 
   return (
     <>
+      <FranjaPendientes entidades={["muestras_procesamiento"]} grupo="procesamiento" />
       <Toolbar
         end={
           canCreate ? (
-            <Link href="/muestras/procesamiento/nuevo" className="press inline-flex h-9 items-center gap-2 rounded-[9px] bg-brand px-3.5 text-[13.5px] font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] hover:bg-brand-strong">
+            <Link href="/muestras/procesamiento/nuevo" className="press inline-flex h-9 items-center gap-2 rounded-[9px] bg-brand px-3.5 text-[13.5px] font-medium text-on-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] hover:bg-brand-strong">
               <Plus size={16} weight="bold" /> Nuevo procesamiento
             </Link>
           ) : null
@@ -124,7 +131,7 @@ function ProcesamientoList() {
         <FilterChips groups={groups} toggles={toggles} />
       </Toolbar>
 
-      <TableShell footer={items ? `${fmt(visible.length)} procesamientos` : undefined}>
+      <TableShell footer={items ? contar(visible.length, "procesamiento", "procesamientos") : undefined}>
         {resource.error ? (
           <ErrorState message={resource.error} onRetry={resource.reload} />
         ) : !items ? (
@@ -135,11 +142,11 @@ function ProcesamientoList() {
           <Table>
             <THead>
               <tr>
-                <Th>Folio</Th>
-                <Th>Muestra</Th>
-                <Th>Recepción</Th>
-                <Th>Procesada</Th>
-                <Th>Organismo</Th>
+                <Th className="w-[136px]">Folio</Th>
+                <Th className="min-w-[240px]">Muestra</Th>
+                <Th className="w-[150px]">Recepción</Th>
+                <Th className={COL_FECHA}>Procesada</Th>
+                <Th className={SOLO_ANCHO}>Organismo</Th>
                 <Th>Estado</Th>
                 <Th align="right" sticky />
               </tr>
@@ -148,22 +155,24 @@ function ProcesamientoList() {
               {visible.map((item) => {
                 const anulada = item.estado === "anulada";
                 return (
-                  <Tr key={item.id} interactive onClick={() => router.push(`/muestras/procesamiento/${item.id}`)} className={anulada ? "opacity-60" : undefined}>
+                  <Tr key={item.id} interactive onClick={() => router.push(`/muestras/procesamiento/${item.id}`)} className={cn(FILA_LISTA, anulada && "opacity-60")}>
                     <Td>
                       <FolioChip type="P" num={item.folio_num} />
                     </Td>
-                    <Td className="max-w-[240px]">
-                      <CellPrimary title={item.id_interno || "—"} subtitle={item.muestra_tipo === "lote" ? "Lote" : "Muestra única"} />
+                    <Td className="min-w-[240px] max-w-[380px]">
+                      <CellPrimary lineas={2} title={item.id_interno || "—"} subtitle={item.muestra_tipo === "lote" ? "Lote" : "Muestra única"} />
                     </Td>
                     <Td>{item.folio_recepcion_num ? <FolioChip type="R" num={item.folio_recepcion_num} /> : <span className="text-[12.5px] text-ink-3">Sin vincular</span>}</Td>
-                    <Td muted className="whitespace-nowrap">
+                    <Td muted className={COL_FECHA}>
                       {fmtDate(item.fecha_procesamiento)}
                     </Td>
-                    <Td muted>{ORGANISMO[organismoDe(item)] || organismoDe(item) || "—"}</Td>
+                    <Td muted className={SOLO_ANCHO}>{ORGANISMO[organismoDe(item)] || organismoDe(item) || "—"}</Td>
                     <Td>
-                      <SampleStatus status={item.estado} />
-                      <SupervisionBadge estado={item.supervision_estado} />
-                      <SolicitudBadge solicitud={item.solicitud_pendiente as ApiRecord | null} />
+                      <StatusCell>
+                        <SampleStatus status={item.estado} />
+                        <SupervisionBadge estado={item.supervision_estado} />
+                        <SolicitudBadge solicitud={item.solicitud_pendiente as ApiRecord | null} />
+                      </StatusCell>
                     </Td>
                     <Td align="right" sticky onClick={(event) => event.stopPropagation()}>
                       <ActionMenu items={menuFor(item)} header={`${formatProcessingFolio(item)} · ${item.id_interno || "lote"}`} />

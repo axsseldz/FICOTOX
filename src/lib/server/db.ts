@@ -102,7 +102,7 @@ function getSqliteDb(): SqliteDatabase {
 }
 
 /*
- * Fase 12: configuracion de SQLite para produccion (docs/DECISION_BASE_DE_DATOS.md).
+ * Fase 12: configuracion de SQLite para produccion (README.md).
  * - journal_mode=WAL: los lectores no bloquean al escritor ni al reves (los
  *   scripts de respaldo, verificacion y pruebas leen mientras el servidor escribe).
  * - synchronous=NORMAL: con WAL es seguro ante caidas de la aplicacion y del

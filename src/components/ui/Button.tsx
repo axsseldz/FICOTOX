@@ -4,8 +4,8 @@ import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { CircleNotch } from "@phosphor-icons/react";
 import { cn } from "./cn";
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "soft";
-export type ButtonSize = "sm" | "md" | "lg";
+type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "soft";
+type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -21,11 +21,11 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * una superficie blanca con sombra fina, no un borde gris.
  */
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-brand text-white hover:bg-brand-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_1px_2px_rgba(11,95,117,0.25)] disabled:bg-ink-4 disabled:shadow-none",
+  primary: "bg-brand text-on-accent hover:bg-brand-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_1px_2px_rgba(11,95,117,0.25)] disabled:bg-ink-4 disabled:shadow-none",
   secondary: "bg-surface text-ink shadow-card hover:bg-surface-2 disabled:text-ink-4",
-  soft: "bg-brand-soft text-brand-strong hover:bg-[#cfe5ec] disabled:bg-surface-2 disabled:text-ink-4",
+  soft: "bg-brand-soft text-brand-strong hover:bg-brand-soft-hover disabled:bg-surface-2 disabled:text-ink-4",
   ghost: "bg-transparent text-ink-2 hover:bg-surface-3/70 hover:text-ink disabled:text-ink-4",
-  danger: "bg-danger text-white hover:bg-[#b03931] disabled:bg-ink-4",
+  danger: "bg-danger text-on-accent hover:bg-danger-strong disabled:bg-ink-4",
 };
 
 const SIZES: Record<ButtonSize, string> = {

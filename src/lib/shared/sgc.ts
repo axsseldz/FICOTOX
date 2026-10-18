@@ -30,14 +30,14 @@ export const SAMPLE_STATES: Record<string, { label: string; tone: "neutral" | "b
   validada: { label: "Validada", tone: "success" },
   informe_elaborado: { label: "Informe elaborado", tone: "success" },
   liberada: { label: "Liberada", tone: "success" },
-  en_proceso: { label: "En proceso", tone: "warning" },
+  en_proceso: { label: "En proceso", tone: "brand" },
   completada: { label: "Completada", tone: "success" },
   analizada: { label: "Analizada", tone: "success" },
   informada: { label: "Informada", tone: "success" },
-  cerrada: { label: "Cerrada", tone: "ink" },
+  cerrada: { label: "Cerrada", tone: "neutral" },
   anulada: { label: "Anulada", tone: "danger" },
   // Valores historicos de la version anterior.
-  procesamiento: { label: "En proceso", tone: "warning" },
+  procesamiento: { label: "En proceso", tone: "brand" },
   extraccion: { label: "Extracción", tone: "warning" },
   finalizada: { label: "Finalizada", tone: "success" },
   cancelada: { label: "Cancelada", tone: "danger" },
@@ -60,9 +60,6 @@ export const RECEPTION_STATE_RANK: Record<string, number> = {
   liberada: 8,
   cerrada: 9,
 };
-/* Estados anteriores a la Fase 5 y su equivalente. */
-export const RECEPTION_LEGACY_STATES: Record<string, string> = { en_proceso: "en_procesamiento", analizada: "validada", informada: "liberada" };
-
 /* Estados en los que un registro ya no se edita ni se usa como origen de otra etapa. */
 export const SAMPLE_TERMINAL_STATES = new Set(["anulada", "rechazada", "cerrada"]);
 
@@ -224,10 +221,10 @@ export const REPORT_STATES: Record<string, { label: string; tone: "neutral" | "b
   en_revision: { label: "En revisión", tone: "warning" },
   autorizado: { label: "Autorizado", tone: "warning" },
   // Fase 6: liberar genera el PDF final; el envio por correo lo deja "enviado".
-  liberado: { label: "Liberado", tone: "success" },
-  enviado: { label: "Enviado", tone: "ink" },
+  liberado: { label: "Liberado", tone: "brand" },
+  enviado: { label: "Enviado", tone: "brand" },
   // Valor anterior a la Fase 6 (el servidor lo migra a "enviado").
-  entregado: { label: "Enviado", tone: "ink" },
+  entregado: { label: "Enviado", tone: "brand" },
   sustituido: { label: "Sustituido por enmienda", tone: "neutral" },
   anulado: { label: "Anulado", tone: "danger" },
 };
@@ -255,29 +252,6 @@ export const LAB_IDENTITY = {
 
 /* ---------- Documentos controlados (FX-MC 8.3, FX-GCP-CD) ---------- */
 
-export const DOCUMENT_TYPES: CatalogItem[] = [
-  { value: "M", label: "Manual" },
-  { value: "P", label: "Procedimiento" },
-  { value: "I", label: "Instructivo de trabajo" },
-  { value: "F", label: "Formato" },
-  { value: "R", label: "Registro" },
-  { value: "L", label: "Lista maestra / plan" },
-  { value: "B", label: "Bitácora" },
-  { value: "E", label: "Documento externo (norma, manual de fabricante)" },
-];
-
-/* Area segun el segundo bloque de la clave: FX-GCP-CD -> GC. */
-export const DOCUMENT_AREAS: CatalogItem[] = [
-  { value: "MC", label: "Manual de calidad" },
-  { value: "GC", label: "Gestión de calidad" },
-  { value: "TC", label: "Técnica" },
-  { value: "AD", label: "Administración" },
-  { value: "CO", label: "Comercial / clientes" },
-  { value: "TH", label: "Talento humano" },
-  { value: "DI", label: "Dirección" },
-  { value: "EX", label: "Externo" },
-];
-
 export const DOCUMENT_STATES: Record<string, { label: string; tone: "neutral" | "brand" | "warning" | "success" | "danger" | "ink" }> = {
   borrador: { label: "Borrador", tone: "neutral" },
   // Fase 7: flujo de control documental.
@@ -287,127 +261,8 @@ export const DOCUMENT_STATES: Record<string, { label: string; tone: "neutral" | 
   aprobado: { label: "Aprobado", tone: "brand" },
   en_revision: { label: "Revisión de calidad", tone: "warning" },
   vigente: { label: "Vigente", tone: "success" },
-  obsoleto: { label: "Obsoleto", tone: "ink" },
+  obsoleto: { label: "Obsoleto", tone: "neutral" },
   cancelado: { label: "Cancelado", tone: "danger" },
 };
 
-/* Clave FX-<area><tipo>-<siglas>: FX-GCP-CD, FX-TCF-GMR, FX-ADF-IEQ... */
-export const DOCUMENT_KEY_RE = /^FX-[A-Z]{2}[A-Z]-[A-Z0-9]{1,8}(?:-[A-Z0-9]{1,8})?$/;
-
-export function parseDocumentKey(clave: string): { area: string; tipo: string } | null {
-  const text = String(clave || "").trim().toUpperCase();
-  if (text === "FX-MC") return { area: "MC", tipo: "M" };
-  const match = text.match(/^FX-([A-Z]{2})([A-Z])-/);
-  if (!match) return null;
-  return { area: match[1], tipo: match[2] };
-}
-
-/* Revision periodica al menos cada tres anos (FX-MC 7.2.1.2). */
-export const DOCUMENT_REVIEW_YEARS = 3;
-
 /* ---------- Auditoria ---------- */
-
-export const AUDIT_ACTIONS: Record<string, string> = {
-  crear: "Creó",
-  editar: "Editó",
-  anular: "Anuló",
-  restaurar: "Restauró",
-  baja: "Dio de baja",
-  reactivar: "Reactivó",
-  revisar: "Marcó revisado",
-  aprobar: "Aprobó",
-  autorizar: "Autorizó",
-  entregar: "Entregó",
-  rechazar: "Rechazó",
-  aceptar: "Aceptó",
-  cerrar: "Cerró",
-  importar: "Importó",
-  eliminar: "Eliminó",
-  reponer: "Repuso stock",
-  login: "Inició sesión",
-  login_fallido: "Intento de acceso fallido",
-  descargar: "Descargó",
-  asignar_rol: "Asignó rol",
-  revocar_rol: "Revocó rol",
-  vencer_rol: "Venció rol",
-  acotar_rol: "Acotó rol a la vigencia de la cuenta",
-  reauth_fallida: "Confirmación de identidad fallida",
-  bloquear: "Bloqueó la cuenta",
-  desbloquear: "Desbloqueó la cuenta",
-  cambiar_password: "Cambió su contraseña",
-  restablecer_password: "Restableció la contraseña",
-  cerrar_sesiones: "Cerró sesión en todos los dispositivos",
-  cambiar_vigencia: "Cambió la vigencia",
-  visto_bueno: "Dio visto bueno",
-  regresar_supervision: "Regresó con observaciones",
-  cambiar_cargo: "Cambió su cargo predeterminado",
-  solicitar: "Solicitó autorización",
-  aprobar_solicitud: "Aprobó la solicitud",
-  rechazar_solicitud: "Rechazó la solicitud",
-  cancelar_solicitud: "Canceló su solicitud",
-  vencer_solicitud: "Venció la solicitud",
-  otorgar_autorizacion: "Otorgó una autorización (FX-THF-AP)",
-  revocar_autorizacion: "Revocó una autorización (FX-THF-AP)",
-  vencer_autorizacion: "Venció una autorización (FX-THF-AP)",
-  imprimir_etiquetas: "Imprimió etiquetas",
-  asignar_muestra: "Asignó la muestra",
-  revocar_asignacion: "Revocó la asignación de la muestra",
-  enviar_revision: "Envió a revisión",
-  devolver: "Devolvió con observaciones",
-  enmendar: "Enmendó (nueva versión)",
-  sustituir: "Quedó sustituido por una enmienda",
-  cambiar_folio: "Cambió el folio",
-  reabrir: "Reabrió",
-  confirmar_firma: "Confirmó su firma con contraseña",
-  liberar: "Liberó",
-  enviar: "Envió por correo",
-  confirmar_envio: "Registró la confirmación de recepción",
-  requiere_enmienda: "Quedó marcado: requiere enmienda",
-  alerta_integridad: "Alerta de integridad (PDF o evidencia)",
-  publicar: "Publicó (vigente)",
-  confirmar_lectura: "Confirmó la lectura (leí y comprendí)",
-  proponer: "Propuso un documento o cambio",
-  exportar: "Exportó (CSV)",
-  adjuntar: "Adjuntó evidencia instrumental",
-  anular_adjunto: "Anuló evidencia instrumental",
-  respaldar: "Creó un respaldo",
-  restaurar_respaldo: "Restauración desde respaldo",
-  reportar: "Reportó una incidencia",
-  evaluar: "Inició la evaluación",
-  cerrar_sin_nc: "Cerró sin NC",
-  escalar: "Escaló a no conformidad",
-  avanzar: "Avanzó de etapa",
-  implementar: "Implementó una acción",
-  iniciar_accion: "Inició una acción",
-  cancelar: "Canceló una acción",
-  reasignar: "Reasignó",
-  verificar: "Verificó eficacia",
-  suspender: "Suspendió",
-  reanudar: "Reanudó",
-  retener: "Retuvo un informe",
-  liberar_retencion: "Liberó una retención",
-  comunicar: "Registró comunicación con el cliente",
-  afectar: "Marcó un informe afectado",
-};
-
-export const AUDIT_ENTITIES: Record<string, string> = {
-  muestras_recepcion: "Recepción",
-  muestras_procesamiento: "Procesamiento",
-  muestras_extraccion: "Extracción",
-  muestras_analisis: "Análisis",
-  informes: "Informe de resultados",
-  documentos_sgc: "Documento SGC",
-  reactivos: "Reactivo",
-  consumibles: "Consumible",
-  equipos: "Equipo",
-  mantenimientos: "Mantenimiento",
-  usuarios: "Usuario",
-  roles: "Rol",
-  sesion: "Sesión",
-  reportes_mantenimiento: "Reporte de mantenimiento",
-  respaldos: "Respaldo",
-  incidencias: "Incidencia",
-  no_conformidades: "No conformidad",
-  acciones_correctivas: "Acción correctiva",
-  suspensiones: "Suspensión",
-};

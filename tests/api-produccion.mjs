@@ -1,69 +1,56 @@
 /*
  * Fase 12 · deuda y concurrencia contra el servidor de prueba (base de instance/test):
- * - historial por registro (bitacora, su CSV y sus solicitudes) con los alcances
- *   de la ficha: asignado (muestras), autorizados (documentos), propio (usuarios),
+ * - historial por registro (bitacora y sus solicitudes) con los alcances
+ *   de la ficha: asignado (muestras), Documentos SGC (historico y confidencialidad), propio (usuarios),
  *   incidencias (calidad); lo no visible es 404, igual que si no existiera;
- * - CSV de la bitacora: aviso de exportacion parcial (fila final, encabezados,
- *   nombre -parcial, entrada en la bitacora) y exportacion por periodo;
+ * - la lista de la bitacora dice si esta cortada (la bitacora no se exporta);
  * - folios bajo concurrencia: muchas altas simultaneas de varias personas, sin
  *   errores 500 y con folios unicos y consecutivos.
  */
 import "./lib/reauth-auto.mjs";
-import { api, BASE, cadena, crearCheck, fila, filas, hoy, sesiones } from "./lib/calidad.mjs";
+import { api, cadena, crearCheck, fila, filas, sesiones } from "./lib/calidad.mjs";
+import { pdfConTexto } from "./lib/archivos.mjs";
 
 const { check, terminar } = crearCheck();
 const { t, id } = await sesiones();
-const historial = (entidad, entidadId, token, csv = false) => api("GET", `/audit?entidad=${entidad}&entidad_id=${entidadId}${csv ? "&formato=csv" : ""}`, undefined, token);
+const historial = (entidad, entidadId, token) => api("GET", `/audit?entidad=${entidad}&entidad_id=${entidadId}`, undefined, token);
 const solicitudes = (entidad, entidadId, token) => api("GET", `/solicitudes?entidad=${entidad}&entidad_id=${entidadId}`, undefined, token);
 
 /* ================= Historial con alcances ================= */
 // Asignado: recepcion no asignada a Luis (Tecnico Analista, muestras:V asignado).
 {
   const c = await cadena(t, "HISTASIG");
-  const [h, csv, sol, ficha] = await Promise.all([historial("muestras_recepcion", c.R, t.luis), historial("muestras_recepcion", c.R, t.luis, true), solicitudes("muestras_recepcion", c.R, t.luis), api("GET", `/samples/reception/${c.R}`, undefined, t.luis)]);
-  check("historial de una recepción NO asignada (alcance asignado): 404 en la bitácora, en el CSV y en las solicitudes (la ficha tampoco se ve)", h.status === 404 && csv.status === 404 && sol.status === 404 && [403, 404].includes(ficha.status), `${h.status} ${csv.status} ${sol.status} ficha ${ficha.status}`);
+  const [h, sol, ficha] = await Promise.all([historial("muestras_recepcion", c.R, t.luis), solicitudes("muestras_recepcion", c.R, t.luis), api("GET", `/samples/reception/${c.R}`, undefined, t.luis)]);
+  check("historial de una recepción NO asignada (alcance asignado): 404 en la bitácora y en las solicitudes (la ficha tampoco se ve)", h.status === 404 && sol.status === 404 && [403, 404].includes(ficha.status), `${h.status} ${sol.status} ficha ${ficha.status}`);
   await api("POST", `/samples/reception/${c.R}/asignaciones`, { usuario_id: id.luis, motivo: "Asignación de prueba de historial" }, t.ricardo);
-  const [h2, csv2] = await Promise.all([historial("muestras_recepcion", c.R, t.luis), historial("muestras_recepcion", c.R, t.luis, true)]);
-  check("  … una vez asignada: 200 (bitácora y CSV)", h2.status === 200 && (h2.data?.items || []).length > 0 && csv2.status === 200 && String(csv2.data).includes("Recepción"), `${h2.status} ${csv2.status}`);
+  const h2 = await historial("muestras_recepcion", c.R, t.luis);
+  check("  … una vez asignada: 200", h2.status === 200 && (h2.data?.items || []).length > 0, `${h2.status}`);
   const h3 = await historial("muestras_recepcion", c.R, t.ana);
   check("  … quien tiene muestras:V total la ve sin asignación", h3.status === 200, String(h3.status));
 }
 
-// Autorizados: Diego (Estudiante, documentos:V autorizados) solo ve documentos vigentes distribuidos a el.
+// Documentos SGC: el historial (bitacora) de un documento lo ve quien ve su historial (consultar_historico) y respeta la confidencialidad.
 {
-  // Un borrador (no vigente, no distribuido) creado por Ana.
-  const sufijo = Date.now().toString(36).slice(-3).toUpperCase();
-  const borrador = await api("POST", "/documentos-sgc", { clave: `FX-GCP-H${sufijo}`, titulo: "Borrador para la prueba de historial", tipo: "P", area: "GC" }, t.ana);
-  if (borrador.status !== 201 && borrador.status !== 200) console.log(`(no se pudo crear el borrador: ${borrador.status} ${borrador.data?.message})`);
-  const docs = filas("SELECT id, estado FROM documentos_sgc ORDER BY id DESC");
-  let coinciden = true;
-  let noVisibles = 0;
-  const detalle = [];
-  for (const d of docs.slice(0, 12)) {
-    const [h, csv, ficha] = await Promise.all([historial("documentos_sgc", d.id, t.diego), historial("documentos_sgc", d.id, t.diego, true), api("GET", `/documentos-sgc/${d.id}`, undefined, t.diego)]);
-    const esperado = ficha.status === 200 ? 200 : 404;
-    if (h.status !== esperado || csv.status !== esperado) coinciden = false;
-    if (esperado === 404) noVisibles += 1;
-    detalle.push(`${d.id}:${d.estado}:${ficha.status}/${h.status}/${csv.status}`);
-  }
-  check("historial de documentos (alcance autorizados): igual que la ficha — 404 en los no vigentes o no distribuidos (bitácora y CSV)", docs.length > 0 && coinciden && noVisibles > 0, detalle.slice(0, 6).join(" "));
-  // Positivo: un documento vigente DISTRIBUIDO a Diego si se ve (ficha, historial y CSV 200).
-  const idDiego = id.diego;
-  const prop = await api("POST", "/documentos-sgc/propuestas", { tipo: "nuevo", titulo: `Instructivo para historial ${sufijo}`, motivo: "Prueba del alcance autorizados en el historial" }, t.luis);
-  const acepta = await api("POST", `/documentos-sgc/propuestas/${prop.data?.id}/aceptar`, { asignado_a: id.ricardo, clave: `FX-TCP-H${sufijo}`, requiere_revision_tecnica: false }, t.ana);
-  const docDiego = acepta.data?.documento_id;
-  const form = new FormData();
-  form.set("titulo", `Instructivo para historial ${sufijo}`);
-  form.set("archivo", new Blob(["%PDF-1.4\n% instructivo\n"], { type: "application/pdf" }), "instructivo.pdf");
-  await fetch(`${BASE}/documentos-sgc/${docDiego}`, { method: "PUT", headers: { Authorization: `Bearer ${t.ricardo}` }, body: form });
-  await api("POST", `/documentos-sgc/${docDiego}/enviar-revision`, {}, t.ricardo);
-  await api("POST", `/documentos-sgc/${docDiego}/revisar-calidad`, { observaciones: "Correcto" }, t.ana);
-  await api("POST", `/documentos-sgc/${docDiego}/aprobar`, {}, t.patricia);
-  const publica = await api("POST", `/documentos-sgc/${docDiego}/publicar`, { usuarios: [idDiego] }, t.ana);
-  const [fichaD, histD, csvD] = await Promise.all([api("GET", `/documentos-sgc/${docDiego}`, undefined, t.diego), historial("documentos_sgc", docDiego, t.diego), historial("documentos_sgc", docDiego, t.diego, true)]);
-  check("  … un documento vigente distribuido a Diego SÍ se ve: ficha, historial y CSV 200", publica.status === 200 && fichaD.status === 200 && histD.status === 200 && (histD.data?.items || []).length > 0 && csvD.status === 200, `${publica.status} ${publica.data?.message || ""} ficha ${fichaD.status} hist ${histD.status} csv ${csvD.status}`);
-  const deAna = await historial("documentos_sgc", docs[0].id, t.ana);
-  check("  … quien gestiona documentos ve ese historial (200)", deAna.status === 200 && (deAna.data?.items || []).length > 0, String(deAna.status));
+  const sufijo = Date.now().toString(36).slice(-4).toUpperCase();
+  const crear = async (clave, titulo, confidencialidad) => {
+    const fd = new FormData();
+    fd.append("archivo_pdf", new Blob([await pdfConTexto(1, titulo)]), `${titulo}.pdf`);
+    for (const [k, v] of Object.entries({ clave, titulo, area_codigo: "GC", tipo_codigo: "P", confidencialidad, elaborador_id: id.luis, revisor_id: id.ricardo, autorizador_id: id.patricia })) fd.append(k, String(v));
+    return api("POST", "/sgc/documentos", fd, t.ana);
+  };
+  const restringido = await crear(`FX-GCP-HR${sufijo}`, `Restringido historial ${sufijo}`, "restringido");
+  const interno = await crear(`FX-GCP-HI${sufijo}`, `Uso interno historial ${sufijo}`, "uso_interno");
+  await api("POST", `/sgc/revisiones/${interno.data?.revision_id}/registrar-vigente`, { fecha_emision: "2026-03-01" }, t.ana);
+  const R = restringido.data?.id;
+  const T = interno.data?.id;
+  const [hR, fichaR] = await Promise.all([historial("sgc_documentos", R, t.hector), api("GET", `/sgc/documentos/${R}`, undefined, t.hector)]);
+  check("historial de un documento SGC restringido para quien no debe verlo: 404 en la bitácora y la ficha", restringido.status === 201 && hR.status === 404 && fichaR.status === 404, `${restringido.status} ${hR.status} ${fichaR.status}`);
+  const [hT, fichaT] = await Promise.all([historial("sgc_documentos", T, t.hector), api("GET", `/sgc/documentos/${T}`, undefined, t.hector)]);
+  check("  … uno de uso interno con consultar histórico: ficha e historial 200", interno.status === 201 && fichaT.status === 200 && hT.status === 200 && (hT.data?.items || []).length > 0, `${interno.status} ${fichaT.status} ${hT.status}`);
+  const [hD, fichaD] = await Promise.all([historial("sgc_documentos", T, t.diego), api("GET", `/sgc/documentos/${T}`, undefined, t.diego)]);
+  check("  … con solo consultar vigentes: ve la ficha, pero no su historial (404)", fichaD.status === 200 && hD.status === 404, `${fichaD.status} ${hD.status}`);
+  const deAna = await historial("sgc_documentos", R, t.ana);
+  check("  … Mejora Continua ve el historial del restringido (200)", deAna.status === 200 && (deAna.data?.items || []).length > 0, String(deAna.status));
 }
 
 // Propio: Luis (usuarios:V propio) ve su historial, no el de otra persona ni el de un rol.
@@ -75,9 +62,9 @@ const solicitudes = (entidad, entidadId, token) => api("GET", `/solicitudes?enti
 // Incidencias: Luis solo ve las suyas.
 {
   const ajena = await api("POST", "/calidad/incidencias", { tipo: "otro", fecha_hora_ocurrencia: new Date().toISOString(), descripcion: "Incidencia de Mariana para la prueba de historial", impacto_resultados: "no", accion_inmediata: "Ninguna" }, t.mariana);
-  const [h, csv] = await Promise.all([historial("incidencias", ajena.data?.id, t.luis), historial("incidencias", ajena.data?.id, t.luis, true)]);
+  const h = await historial("incidencias", ajena.data?.id, t.luis);
   const propia = await historial("incidencias", ajena.data?.id, t.mariana);
-  check("historial de una incidencia ajena (alcance incidencias): 404 (bitácora y CSV); la propia 200", ajena.status === 201 && h.status === 404 && csv.status === 404 && propia.status === 200, `${ajena.status} ${h.status} ${csv.status} ${propia.status}`);
+  check("historial de una incidencia ajena (alcance incidencias): 404; la propia 200", ajena.status === 201 && h.status === 404 && propia.status === 200, `${ajena.status} ${h.status} ${propia.status}`);
 }
 
 // Registro inexistente y sin permiso del modulo.
@@ -86,24 +73,10 @@ const solicitudes = (entidad, entidadId, token) => api("GET", `/solicitudes?enti
   check("historial de un registro inexistente: 404; sin V del módulo: 403 (como antes)", nada.status === 404 && sinModulo.status === 403, `${nada.status} ${sinModulo.status}`);
 }
 
-/* ================= CSV: aviso de exportacion parcial ================= */
+/* ================= Lista de la bitacora cortada ================= */
 {
-  const antes = fila("SELECT MAX(id) AS id FROM auditoria").id;
-  const parcial = await api("GET", "/audit?formato=csv&limit=3", undefined, t.ana);
-  const lineas = String(parcial.data).trim().split(/\r?\n/);
-  check(
-    "CSV de la bitácora cortado: X-Bitacora-Truncado=1, archivo «-parcial» y fila final «AVISO: exportación PARCIAL… Exporta por periodo»",
-    parcial.status === 200 && parcial.headers.get("x-bitacora-truncado") === "1" && parcial.headers.get("x-bitacora-filas") === "3" && /-parcial\.csv/.test(parcial.headers.get("content-disposition") || "") && /AVISO: exportación PARCIAL/.test(lineas.at(-1)) && /por periodo/.test(lineas.at(-1)) && lineas.length === 5,
-    `${parcial.status} ${parcial.headers.get("x-bitacora-truncado")} ${lineas.length} líneas`,
-  );
-  const entrada = fila("SELECT * FROM auditoria WHERE id > ? AND accion = 'exportar' ORDER BY id DESC LIMIT 1", antes);
-  check("  … la exportación queda en la bitácora con «truncado»", entrada && /"truncado":true/.test(entrada.datos_nuevos_json || entrada.cambios_json || ""), entrada ? (entrada.datos_nuevos_json || entrada.cambios_json || "").slice(0, 120) : "sin entrada");
   const json = await api("GET", "/audit?limit=2", undefined, t.ana);
-  check("  … la lista (JSON) también dice si está cortada", json.status === 200 && json.data?.truncado === true, String(json.data?.truncado));
-  const hoyL = hoy();
-  const periodo = await api("GET", `/audit?formato=csv&desde=${hoyL}&hasta=${hoyL}`, undefined, t.ana);
-  const vacio = await api("GET", "/audit?formato=csv&desde=2001-01-01&hasta=2001-01-31", undefined, t.ana);
-  check("CSV por periodo (Desde/Hasta): completo sin aviso; un periodo sin registros da solo encabezados", periodo.status === 200 && periodo.headers.get("x-bitacora-truncado") === "0" && !/AVISO/.test(String(periodo.data)) && vacio.status === 200 && String(vacio.data).trim().split(/\r?\n/).length === 1, `${periodo.headers.get("x-bitacora-filas")} filas; vacío ${String(vacio.data).trim().split(/\r?\n/).length} línea(s)`);
+  check("la lista de la bitácora dice si está cortada", json.status === 200 && json.data?.truncado === true, String(json.data?.truncado));
 }
 
 /* ================= Folios bajo concurrencia ================= */
@@ -138,5 +111,4 @@ const solicitudes = (entidad, entidadId, token) => api("GET", `/solicitudes?enti
   check("reanudaciones simultáneas (la misma dos veces y otra): 200/409 y 200, sin 500; el método queda libre y una sola entrada de reanudar por suspensión", [doble1.status, doble2.status].sort().join() === "200,409" && otra.status === 200 && quedan === 0 && reanudadas === 1, `${doble1.status} ${doble2.status} ${otra.status} quedan ${quedan}`);
 }
 
-void BASE;
 terminar();

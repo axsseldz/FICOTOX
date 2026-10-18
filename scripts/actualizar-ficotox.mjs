@@ -17,7 +17,7 @@
  *        quedo la base y como volver (restaurar el respaldo pre-actualizacion); no se arranca
  *   5. arrancar (servicio si estaba instalado) y comprobar salud (/api/health/db)
  *   6. npm run verificar-instalacion (informativo)
- * Reversion completa (si la version nueva no sirve): ver docs/INSTALACION.md, «Actualizar».
+ * Reversion completa (si la version nueva no sirve): ver README.md, «Actualizar».
  * Codigos: 0 bien, 1 fallo (con el servidor como estaba), 2 uso incorrecto.
  */
 import { spawnSync } from "node:child_process";
@@ -71,7 +71,7 @@ titulo("Respaldo previo");
 let respaldo = null;
 if (entorno.motor !== "sqlite") {
   if (!args.includes("--respaldo-hecho")) {
-    console.error("❌ En MySQL/MariaDB respalda antes con mysqldump (docs/INSTALACION.md) y repite con --respaldo-hecho.");
+    console.error("❌ En MySQL/MariaDB respalda antes con mysqldump (README.md) y repite con --respaldo-hecho.");
     process.exit(2);
   }
   console.log("MySQL/MariaDB: respaldo hecho con mysqldump (declarado con --respaldo-hecho).");
@@ -170,7 +170,7 @@ else {
   else {
     const salud = await esperarSalud(process.env, 180);
     if (!salud.ok) {
-      console.error(`❌ El servidor nuevo no respondió en ${salud.url} (${salud.ultimo}). Revisa <instancia>/logs y, si hace falta, revierte (docs/INSTALACION.md, «Actualizar»).`);
+      console.error(`❌ El servidor nuevo no respondió en ${salud.url} (${salud.ultimo}). Revisa <instancia>/logs y, si hace falta, revierte (README.md, «Actualizar»).`);
       process.exit(1);
     }
     console.log(`✅ Responde en ${salud.url} (${r.como}).`);

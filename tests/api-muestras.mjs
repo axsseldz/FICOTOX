@@ -58,7 +58,14 @@ let flujo = null;
 {
   const id = nuevaId("F5");
   const estados = [];
+  // Ajustes de interfaz: el solicitante (campo 3 del FX-TCF-GMR) es obligatorio al crear y al editar.
+  const sinSolicitante = await api("POST", "/samples/reception", recepcion(`${id}-SS`, { solicitante: "  " }), tM);
+  check("crear una recepción sin solicitante: 400 'Indica el solicitante'", sinSolicitante.status === 400 && sinSolicitante.data?.message === "Indica el solicitante", `${sinSolicitante.status} ${sinSolicitante.data?.message}`);
   const R = (await api("POST", "/samples/reception", recepcion(id), tM)).data?.id;
+  check("con solicitante se crea (201)", !!R);
+  const folioR = (await api("GET", `/samples/reception/${R}`, undefined, QA)).data?.item?.folio_num;
+  const editarSin = await api("PUT", `/samples/reception/${R}`, { ...recepcion(id), folio_num: folioR, solicitante: "" }, tM);
+  check("editar quitando el solicitante: 400 'Indica el solicitante'", editarSin.status === 400 && editarSin.data?.message === "Indica el solicitante", `${editarSin.status} ${editarSin.data?.message}`);
   estados.push(await estadoR(R));
   const sinAsignar = await api("POST", "/samples/processing", procesamiento(R, id), tL);
   check("el Analista sin asignacion no crea el procesamiento: 403 no_asignado", sinAsignar.status === 403 && sinAsignar.data?.codigo === "no_asignado", `${sinAsignar.status} ${sinAsignar.data?.message}`);
@@ -68,8 +75,17 @@ let flujo = null;
   const P = await api("POST", "/samples/processing", procesamiento(R, id), tL);
   estados.push(await estadoR(R));
   check("asignado, el Analista crea el procesamiento (201)", P.status === 201, `${P.status} ${P.data?.message}`);
-  const E = (await api("POST", "/samples/extraction", extraccion(P.data?.id, id), tL)).data?.id;
+  const E = (await api("POST", "/samples/extraction", extraccion(P.data?.id, id, { folio_procesamiento_num: 99999 }), tL)).data?.id;
   estados.push(await estadoR(R));
+  // El folio de la etapa anterior lo fija el servidor desde el registro vinculado (aqui no se manda, o se manda mal).
+  const fR = (await api("GET", `/samples/reception/${R}`, undefined, QA)).data?.item?.folio_num;
+  const fichaP = (await api("GET", `/samples/processing/${P.data?.id}`, undefined, QA)).data?.item;
+  const fichaE = (await api("GET", `/samples/extraction/${E}`, undefined, QA)).data?.item;
+  // Tambien al editar: un folio de origen equivocado en la peticion se corrige con el del registro vinculado.
+  const editP = await api("PUT", `/samples/processing/${P.data?.id}`, procesamiento(R, id, { folio_num: fichaP?.folio_num, folio_recepcion_num: 88888, observaciones_generales: "Edición con folio de origen equivocado" }), tL);
+  const fichaP2 = (await api("GET", `/samples/processing/${P.data?.id}`, undefined, QA)).data?.item;
+  check("al editar el procesamiento, el folio de la recepción tampoco lo decide el cliente", editP.status === 200 && Number(fichaP2?.folio_recepcion_num) === Number(fR), `${editP.status} ${editP.data?.message || ""} P.R=${fichaP2?.folio_recepcion_num} R=${fR}`);
+  check("el folio vinculado sale del registro de origen (procesamiento ← recepción, extracción ← procesamiento)", fR != null && Number(fichaP?.folio_recepcion_num) === Number(fR) && Number(fichaE?.folio_procesamiento_num) === Number(fichaP?.folio_num), `P.R=${fichaP?.folio_recepcion_num} R=${fR} E.P=${fichaE?.folio_procesamiento_num} P=${fichaP?.folio_num}`);
   const A = (await api("POST", "/samples/analysis", analisis(E, id), tL)).data?.id;
   estados.push(await estadoR(R));
   const enviar = await api("POST", `/samples/analysis/${A}/enviar-revision`, {}, tL);
@@ -101,7 +117,11 @@ let flujo = null;
 {
   const { id, E } = flujo;
   const A = (await api("POST", "/samples/analysis", analisis(E, id), tL)).data?.id;
-  const folio = (await api("GET", `/samples/analysis/${A}`, undefined, QA)).data?.item?.folio_num;
+  const ficha = (await api("GET", `/samples/analysis/${A}`, undefined, QA)).data?.item;
+  const folio = ficha?.folio_num;
+  // La ficha trae el folio de la recepcion para la cadena (antes solo la lista lo unia).
+  const folioR = (await api("GET", `/samples/reception/${flujo.R}`, undefined, QA)).data?.item?.folio_num;
+  check("la ficha del analisis trae el folio de su recepcion (cadena R → P → E)", folioR != null && Number(ficha?.folio_recepcion_num) === Number(folioR), `${ficha?.folio_recepcion_num} vs ${folioR}`);
   await api("POST", `/samples/analysis/${A}/enviar-revision`, {}, tL);
   const editar = await api("PUT", `/samples/analysis/${A}`, { ...analisis(E, id), folio_num: folio, observaciones: "Cambio tras enviar" }, tL);
   check("un analisis enviado a revision no se edita (409)", editar.status === 409, `${editar.status} ${editar.data?.message}`);
@@ -156,6 +176,16 @@ let flujo = null;
   check("con la contrasena del firmante: 201 y la firma queda ligada a su cuenta (usuario_id, nombre y cargo)", malo.status === 401 && conf.status === 200 && conToken.status === 201 && Number(item?.proceso_usuario_id) === idDe(LUIS) && /Luis/.test(item?.nombre_quien_proceso || "") && !!item?.proceso_cargo, `${malo.status} ${conf.status} ${conToken.status} ${item?.proceso_usuario_id} ${item?.proceso_cargo}`);
   const reuso = await api("POST", "/samples/processing", procesamiento(R, `${id}-b`, { firmantes: { proceso: { usuario_id: idDe(LUIS), token_firma: conf.data?.token_firma } } }), QA);
   check("el token de firma es de un solo uso (403 al reusarlo)", reuso.status === 403, `${reuso.status}`);
+  // Ajustes de interfaz: la contraseña del firmante viaja al GUARDAR (sin escribir nada antes) y se verifica en esa petición.
+  const totalAntes = ((await api("GET", "/samples/processing?search=", undefined, QA)).data?.items || []).length;
+  const conPasswordMala = await api("POST", "/samples/processing", procesamiento(R, `${id}-pm`, { firmantes: { proceso: { usuario_id: idDe(LUIS), password: "incorrecta-123" } } }), QA);
+  const totalTras = ((await api("GET", "/samples/processing?search=", undefined, QA)).data?.items || []).length;
+  check("contraseña del firmante incorrecta al guardar: 401 firma_invalida con el rol y nada se crea", conPasswordMala.status === 401 && conPasswordMala.data?.codigo === "firma_invalida" && conPasswordMala.data?.rol === "proceso" && totalTras === totalAntes, `${conPasswordMala.status} ${conPasswordMala.data?.codigo} ${totalAntes}→${totalTras}`);
+  const conPassword = await api("POST", "/samples/processing", procesamiento(R, `${id}-pw`, { firmantes: { proceso: { usuario_id: idDe(LUIS), password: credenciales[LUIS] } } }), QA);
+  const itemPw = (await api("GET", `/samples/processing/${conPassword.data?.id}`, undefined, QA)).data?.item;
+  check("contraseña del firmante correcta al guardar: 201 y la firma queda ligada a su cuenta", conPassword.status === 201 && Number(itemPw?.proceso_usuario_id) === idDe(LUIS), `${conPassword.status} ${conPassword.data?.message || ""}`);
+  const sinNada = await api("POST", "/samples/processing", procesamiento(R, `${id}-sn`, { firmantes: { proceso: { usuario_id: idDe(LUIS) } } }), QA);
+  check("otra persona como firmante sin contraseña ni token: 403 firma_sin_confirmar", sinNada.status === 403 && sinNada.data?.codigo === "firma_sin_confirmar", `${sinNada.status}`);
   // Firmante sin autorizacion FX-THF-AP: una cuenta nueva (sin roles ni autorizaciones).
   const email = `firmante.${Date.now()}@cicese.mx`;
   const alta = await api("POST", "/admin/usuarios", { nombre: "Firmante sin autorizacion", email, activo: true, rol_id: (await api("GET", "/admin/roles", undefined, QA)).data?.items?.find((r) => r.nombre === "Técnico Auxiliar")?.id, password: "Firmante-Prueba-2026", motivo: "Alta de prueba" }, QA, MANUAL);

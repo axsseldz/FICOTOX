@@ -6,6 +6,7 @@ import { usePrompt } from "@/components/ui/Overlay";
 import { API_BASE_URL, sendJsonAuth } from "@/lib/client/api";
 import { invalidate } from "@/lib/client/store";
 import type { ApiRecord } from "@/lib/client/types";
+import { esCancelacion, explicarError } from "@/lib/client/mensajes";
 
 /*
  * Acciones comunes de las pantallas de calidad (Fase 11): enviar una peticion
@@ -15,7 +16,8 @@ export function useAccionCalidad() {
   const { token } = useSession();
   const prompt = usePrompt();
 
-  const enviar = async (metodo: string, ruta: string, body: unknown = {}, exito?: string): Promise<ApiRecord | null> => {
+  /* `alFallar`: el formulario muestra el error con su validacion (al campo o en el pop-up); si no, aviso con que paso y que hacer. */
+  const enviar = async (metodo: string, ruta: string, body: unknown = {}, exito?: string, alFallar?: (err: unknown) => void): Promise<ApiRecord | null> => {
     try {
       const data = await sendJsonAuth(metodo, `${API_BASE_URL}${ruta}`, token, body);
       if (data.solicitud) toast.info(String(data.message || "Solicitud creada; falta la autorización de un segundo usuario"));
@@ -23,7 +25,12 @@ export function useAccionCalidad() {
       invalidate("calidad", "solicitudes");
       return data;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo completar la acción");
+      if (esCancelacion(err)) return null;
+      if (alFallar) alFallar(err);
+      else {
+        const e = explicarError(err);
+        toast.error(e.que, { description: e.hacer });
+      }
       return null;
     }
   };
