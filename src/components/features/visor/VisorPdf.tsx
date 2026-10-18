@@ -80,6 +80,25 @@ const leerZoom = (clave: string): Zoom => {
   return { modo: "ancho" };
 };
 
+/*
+ * Lleva `el` a la vista desplazando SOLO su contenedor `cont` (el visor o el panel
+ * de miniaturas). scrollIntoView movia tambien la pagina que contiene al visor
+ * (en la ficha SGC, el encabezado se salia de la pantalla al abrir o al ajustar el zoom).
+ */
+function desplazarDentro(cont: HTMLElement | null, el: HTMLElement | null | undefined, bloque: "start" | "center" | "nearest", comportamiento: ScrollBehavior = "auto") {
+  if (!cont || !el) return;
+  const r = el.getBoundingClientRect();
+  const c = cont.getBoundingClientRect();
+  let top = cont.scrollTop;
+  if (bloque === "start") top += r.top - c.top;
+  else if (bloque === "center") top += r.top - c.top - (c.height - r.height) / 2;
+  else if (r.top < c.top) top += r.top - c.top;
+  else if (r.bottom > c.bottom) top += r.bottom - c.bottom;
+  const left = bloque === "center" ? cont.scrollLeft + (r.left - c.left) - (c.width - r.width) / 2 : cont.scrollLeft;
+  const reducir = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  cont.scrollTo({ top, left, behavior: reducir ? "auto" : comportamiento });
+}
+
 /* Resalta las apariciones de `consulta` dentro de los fragmentos de la capa de texto; devuelve las marcas en orden. */
 function resaltar(capa: HTMLElement, consulta: string): HTMLElement[] {
   for (const m of Array.from(capa.querySelectorAll("mark.visor-resaltado"))) {
@@ -247,7 +266,7 @@ function Miniatura({ pdf, n, activa, onIr }: { pdf: PdfDocumento; n: number; act
     };
   }, [pdf, n, url]);
   useEffect(() => {
-    if (activa) ref.current?.scrollIntoView({ block: "nearest" });
+    if (activa) desplazarDentro(ref.current?.closest<HTMLElement>("[data-testid=visor-miniaturas]") ?? null, ref.current, "nearest");
   }, [activa]);
   return (
     <button ref={ref} type="button" onClick={() => onIr(n)} aria-label={`Ir a la página ${n}`} aria-current={activa ? "page" : undefined} className={cn("press flex w-full flex-col items-center gap-1 rounded-[10px] p-1.5 text-[11.5px]", activa ? "bg-brand-faint text-brand-strong" : "text-ink-3 hover:bg-surface-3")}>
@@ -445,7 +464,7 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
     (n: number, comportamiento: ScrollBehavior = "smooth") => {
       const destino = Math.min(Math.max(1, Math.round(n)), total || 1);
       const el = scrollRef.current?.querySelector<HTMLElement>(`[data-pagina="${destino}"]`);
-      el?.scrollIntoView({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : comportamiento });
+      desplazarDentro(scrollRef.current, el, "start", comportamiento);
       setCerca((prev) => (prev.has(destino) ? prev : new Set(prev).add(destino)));
     },
     [total],
@@ -619,7 +638,7 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
   // Al cambiar de coincidencia, la marca actual se centra cuando su pagina ya esta dibujada.
   useEffect(() => {
     if (!actualC) return;
-    const t = window.setTimeout(() => marcasPorPagina.current.get(actualC.pagina)?.[actualC.k]?.scrollIntoView({ block: "center" }), 250);
+    const t = window.setTimeout(() => desplazarDentro(scrollRef.current, marcasPorPagina.current.get(actualC.pagina)?.[actualC.k], "center"), 250);
     return () => window.clearTimeout(t);
   }, [actualC]);
 

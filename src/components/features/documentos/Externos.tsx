@@ -392,7 +392,8 @@ export function EditarExternoDialog({ docId, ext, catalogos, onClose }: { docId:
 }
 
 /* Seccion de la ficha con los datos de seguimiento de un externo. */
-export function SeguimientoExterno({ docId, clave, ext, catalogos }: { docId: number; clave: string; ext: DatosExterno; catalogos: Catalogos | null }) {
+/* `sinAcciones`: la ficha ofrece verificar, nueva version y editar en su accion principal y su menu ⋯ (aqui solo los datos). */
+export function SeguimientoExterno({ docId, clave, ext, catalogos, sinAcciones = false }: { docId: number; clave: string; ext: DatosExterno; catalogos: Catalogos | null; sinAcciones?: boolean }) {
   const [verificar, setVerificar] = useState(false);
   const [version, setVersion] = useState(false);
   const [editar, setEditar] = useState(false);
@@ -419,18 +420,18 @@ export function SeguimientoExterno({ docId, clave, ext, catalogos }: { docId: nu
           ) : null,
         )}
       </dl>
-      <div className="flex flex-wrap gap-2">
-        {ext.puede.verificar.ok ? (
+      <div className={sinAcciones ? "hidden" : "flex flex-wrap gap-2"}>
+        {!sinAcciones && ext.puede.verificar.ok ? (
           <Button size="sm" icon={<CheckCircle size={15} />} onClick={() => setVerificar(true)} data-testid="ext-verificar">
             Verificar vigencia
           </Button>
         ) : null}
-        {ext.puede.nueva_version.ok ? (
+        {!sinAcciones && ext.puede.nueva_version.ok ? (
           <Button size="sm" variant="secondary" icon={<FilePlus size={15} />} onClick={() => setVersion(true)} data-testid="ext-nueva-version">
             Registrar nueva versión
           </Button>
         ) : null}
-        {ext.puede.editar.ok ? (
+        {!sinAcciones && ext.puede.editar.ok ? (
           <Button size="sm" variant="ghost" icon={<PencilSimple size={15} />} onClick={() => setEditar(true)} data-testid="ext-editar">
             Editar seguimiento
           </Button>

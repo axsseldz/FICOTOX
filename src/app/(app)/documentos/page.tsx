@@ -1,9 +1,10 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { CheckCircle, Plus } from "@phosphor-icons/react";
+import { CheckCircle, FilePlus, Plus } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { IconoArea, RequireDocumentos, type Area, type DocLista } from "@/components/features/documentos/comun";
+import { IconoArea, RequireDocumentos, useCatalogos, type Area, type DocLista } from "@/components/features/documentos/comun";
+import { SolicitudSheet } from "@/components/features/documentos/SolicitudSheets";
 import { Callout } from "@/components/features/samples/FormLayout";
 import { PageBody } from "@/components/shell/AppShell";
 import { useSession } from "@/components/session/SessionProvider";
@@ -47,6 +48,12 @@ function Inicio() {
   const router = useRouter();
   const recurso = useResource<Resumen>(["sgc", "sgc-resumen"], async () => (await getJsonAuth(`${API_BASE_URL}/sgc/resumen`, token)) as unknown as Resumen, { enabled: !!token });
   const data = recurso.data;
+  const catalogos = useCatalogos();
+  const cat = catalogos.data;
+  // Accion principal: "Nueva solicitud" para quien puede proponer; Mejora Continua (crear ficha) ve tambien "Nueva ficha".
+  const proponer = !!cat?.yo.acciones.includes("documento_proponer");
+  const crearFicha = !!(cat?.puede.crear_ficha || data?.puede.crear_ficha);
+  const [solicitud, setSolicitud] = useState(false);
   const [texto, setTexto] = useState("");
   const [consulta, setConsulta] = useState("");
   // Busqueda en vivo: espera un momento tras la ultima tecla.
@@ -67,11 +74,18 @@ function Inicio() {
         title="Documentos SGC"
         description="Documentos controlados del Sistema de Gestión de Calidad."
         actions={
-          data?.puede.crear_ficha ? (
-            <Button icon={<Plus size={16} weight="bold" />} data-testid="sgc-nueva-ficha" onClick={() => router.push("/documentos/explorar?nueva=1")}>
-              Nueva ficha
-            </Button>
-          ) : null
+          <>
+            {crearFicha ? (
+              <Button variant={proponer ? "secondary" : "primary"} icon={<Plus size={16} weight="bold" />} data-testid="sgc-nueva-ficha" onClick={() => router.push("/documentos/explorar?nueva=1")}>
+                Nueva ficha
+              </Button>
+            ) : null}
+            {proponer ? (
+              <Button icon={<FilePlus size={16} weight="bold" />} data-testid="sgc-nueva-solicitud" onClick={() => setSolicitud(true)}>
+                Nueva solicitud
+              </Button>
+            ) : null}
+          </>
         }
       />
       {data?.diagnostico ? (
@@ -120,6 +134,7 @@ function Inicio() {
           </ul>
         </section>
       )}
+      {solicitud ? <SolicitudSheet catalogos={cat || null} onClose={() => setSolicitud(false)} /> : null}
     </PageBody>
   );
 }
@@ -137,7 +152,7 @@ function Carpeta({ area }: { area: Area & { conteos: Conteos } }) {
       {/* Banda lateral con el color del area (el estado nunca se expresa con este color). */}
       <span className="w-1.5 shrink-0" style={{ backgroundColor: area.color }} aria-hidden="true" />
       <span className="flex min-w-0 flex-1 items-center gap-3 p-4">
-        <IconoArea area={area} />
+        <IconoArea area={area} carpeta />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="code text-[12px] font-semibold tracking-wide text-ink-3">{area.codigo}</span>
           <span className="text-[15px] font-semibold leading-snug text-ink">{area.nombre}</span>

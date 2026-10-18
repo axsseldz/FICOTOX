@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActividadDialog, agruparActividades, ListaActividades, usePersonas } from "@/components/features/audit/Actividades";
 import { CATEGORIAS, type Categoria } from "@/components/features/audit/categorias";
 import { Callout } from "@/components/features/samples/FormLayout";
@@ -14,7 +14,7 @@ import { EmptyState, ErrorState, Skeleton } from "@/components/ui/Primitives";
 import { cn } from "@/components/ui/cn";
 import { API_BASE_URL, getJsonAuth } from "@/lib/client/api";
 import { fmt } from "@/lib/client/format";
-import { useDebouncedValue } from "@/lib/client/hooks";
+import { useDebouncedValue, useInitialParam } from "@/lib/client/hooks";
 import type { ApiRecord } from "@/lib/client/types";
 import { hoyLocal, sumarDias } from "@/lib/shared/fechas";
 
@@ -54,7 +54,9 @@ export default function AuditoriaPage() {
   return (
     <PageBody>
       <RequireModule modules="calidad">
-        <AuditoriaContent />
+        <Suspense fallback={<Skeleton className="h-[480px] rounded-card" />}>
+          <AuditoriaContent />
+        </Suspense>
       </RequireModule>
     </PageBody>
   );
@@ -66,13 +68,17 @@ const alternar = <T,>(lista: T[], valor: T, encendido: boolean) => (encendido ? 
 function AuditoriaContent() {
   const { token } = useSession();
   const personas = usePersonas();
-  const [search, setSearch] = useState("");
-  const [periodo, setPeriodo] = useState<Periodo>("30");
+  // Desde otra pantalla ("Ver en Auditoría" de un documento): ?buscar=<clave>&area=documentos&periodo=todo.
+  const buscarInicial = useInitialParam("buscar");
+  const areaInicial = useInitialParam("area");
+  const periodoInicial = useInitialParam("periodo");
+  const [search, setSearch] = useState(buscarInicial);
+  const [periodo, setPeriodo] = useState<Periodo>(() => (PERIODOS.some((p) => p.value === periodoInicial) ? (periodoInicial as Periodo) : "30"));
   const [desdeRango, setDesdeRango] = useState("");
   const [hastaRango, setHastaRango] = useState("");
   const [usuarios, setUsuarios] = useState<string[]>([]);
   const [tipos, setTipos] = useState<Categoria[]>([]);
-  const [areas, setAreas] = useState<string[]>([]);
+  const [areas, setAreas] = useState<string[]>(() => (AREAS.some((a) => a.value === areaInicial) ? [areaInicial] : []));
   const [conAccesos, setConAccesos] = useState(false);
   const [registros, setRegistros] = useState<ApiRecord[] | null>(null);
   const [hayMas, setHayMas] = useState(false);

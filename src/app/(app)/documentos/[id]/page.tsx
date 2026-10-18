@@ -1,26 +1,27 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { use, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { ArrowsClockwise, ClockCounterClockwise, CloudArrowUp, DownloadSimple, FilePdf, FileText, Info, Lightbulb, ListChecks, PaperPlaneTilt, PencilSimple, Plus, Prohibit, SealCheck, Signature, UsersThree, UserSwitch } from "@phosphor-icons/react";
-import { AcuseLectura, SeccionDistribucion } from "@/components/features/documentos/Distribucion";
-import { IconoExterno, SeguimientoExterno } from "@/components/features/documentos/Externos";
+import { ClockCounterClockwise, FilePdf, Info, ListBullets, Prohibit, UsersThree, Warning, type Icon } from "@phosphor-icons/react";
+import { AcuseLectura, AgregarDialog, SeccionDistribucion, useAcusarLectura } from "@/components/features/documentos/Distribucion";
+import { EditarExternoDialog, NuevaVersionExternoDialog, SeguimientoExterno, VerificarExternoDialog } from "@/components/features/documentos/Externos";
 import { ConfidencialidadEtiqueta, EstadoDocumentoEtiqueta, ExternoEtiqueta, EstadoRevisionEtiqueta, IconoArea, ProximaRevisionEtiqueta, RequireDocumentos, RutaDocumentos, useCatalogos, type Archivo, type FichaDocumento, type Puede, type Revision } from "@/components/features/documentos/comun";
 import { FichaSheet } from "@/components/features/documentos/FichaSheet";
+import { ICONO_ACCION, ICONO_ESTADO } from "@/components/features/documentos/iconos";
 import { ArchivoDialog, RegistrarVigenteDialog, RevisionSheet } from "@/components/features/documentos/RevisionSheets";
 import { DecisionDialog, ObsoletarDialog, OPCIONES_AUTORIZADOR, OPCIONES_RENOVACION_AUTORIZADOR, OPCIONES_RENOVACION_REVISOR, OPCIONES_REVISOR, PublicarDialog, ReasignarDialog, RenovarDialog } from "@/components/features/documentos/FlujoDialogs";
 import { SolicitudSheet } from "@/components/features/documentos/SolicitudSheets";
-import { Callout } from "@/components/features/samples/FormLayout";
 import { descargarUrl, imprimirPdfUrl } from "@/components/features/visor/usarArchivo";
 import { VisorPdf } from "@/components/features/visor/VisorPdf";
 import { PageBody } from "@/components/shell/AppShell";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
-import { useConfirm } from "@/components/ui/Overlay";
+import { ActionMenu, useConfirm, type MenuItem } from "@/components/ui/Overlay";
+import { PestanasDeslizantes } from "@/components/ui/PestanasDeslizantes";
 import { Badge, EmptyState, ErrorState, Skeleton } from "@/components/ui/Primitives";
 import { API_BASE_URL, getJsonAuth, sendJsonAuth } from "@/lib/client/api";
-import { humanizeAuditEntry } from "@/lib/client/audit-humanize";
 import { explicarError } from "@/lib/client/mensajes";
 import { urlArchivoSgc } from "@/lib/client/pdf";
 import { invalidate, useResource } from "@/lib/client/store";
@@ -29,11 +30,17 @@ import { ACCION_FLUJO, ESTADOS_RENOVACION, etiquetaConfidencialidad } from "@/li
 import { formatearFecha, formatearFechaHora, hoyLocal } from "@/lib/shared/fechas";
 
 /*
- * Ficha del documento: metadatos, revision vigente en el visor PDF interno,
- * revision en curso (archivos y acciones segun el servidor: banderas "puede"
- * con motivo), historial de revisiones y eventos de la bitacora (con permiso),
- * responsables, seguimiento de los externos y distribucion y lecturas con
- * el acuse de la persona (Fase 3).
+ * Ficha del documento:
+ * - encabezado compacto (area, clave, titulo, revision y estado) con UNA accion
+ *   principal: la que le toca a la persona ahora (revisar, autorizar, publicar,
+ *   confirmar vigencia, enviar a revision, confirmar lectura…); las demas van en
+ *   el menu ⋯, deshabilitadas con su motivo cuando el servidor lo indica;
+ * - una franja delgada de avisos (obsoleto, pendiente de revision, obsolescencia
+ *   solicitada, revision en curso, diagnostico);
+ * - el PDF vigente en el visor interno;
+ * - pestañas: Detalles, Revisiones (en curso, renovacion e historial plegado) y
+ *   Lecturas (solo si la revision vigente tiene distribucion).
+ * La bitacora vive en Calidad › Auditoría ("Ver en Auditoría" en el menu ⋯).
  */
 export default function FichaDocumentoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -46,8 +53,24 @@ export default function FichaDocumentoPage({ params }: { params: Promise<{ id: s
 
 const activo = (r: Revision | null | undefined, tipo: "pdf" | "fuente") => r?.archivos.find((a) => a.tipo === tipo && !a.reemplazado_en) || null;
 
+type Pestana = "detalles" | "revisiones" | "lecturas";
+
+/* Una accion de la ficha: con permiso (ok), deshabilitada con motivo, u oculta (sin permiso ni motivo). */
+interface Accion {
+  id: string;
+  etiqueta: string;
+  icono: Icon;
+  puede: Puede;
+  onSelect: () => void;
+  tono?: MenuItem["tone"];
+  cargando?: boolean;
+}
+const visible = (a: Accion) => a.puede.ok || !!a.puede.motivo;
+const SI: Puede = { ok: true };
+
 function Ficha({ id }: { id: string }) {
-  const { token } = useSession();
+  const { token, permissions } = useSession();
+  const router = useRouter();
   const catalogos = useCatalogos();
   const confirm = useConfirm();
   const [editar, setEditar] = useState(false);
@@ -61,12 +84,17 @@ function Ficha({ id }: { id: string }) {
   const [renovar, setRenovar] = useState(false);
   const [obsoletar, setObsoletar] = useState(false);
   const [proponer, setProponer] = useState(false);
+  const [externo, setExterno] = useState<"verificar" | "version" | "editar" | null>(null);
+  const [agregarLectura, setAgregarLectura] = useState(false);
+  const [pestana, setPestana] = useState<Pestana | null>(null);
   const recurso = useResource<FichaDocumento>(["sgc", `sgc:${id}`], async () => (await getJsonAuth(`${API_BASE_URL}/sgc/documentos/${encodeURIComponent(id)}`, token)) as unknown as FichaDocumento, { enabled: !!token });
+  const data = recurso.data;
+  const { acusar, enviando: acusando } = useAcusarLectura(data?.distribucion ?? null);
   // Desde "Lecturas pendientes" (?leer=1): lleva al acuse bajo el visor.
-  const leer = recurso.data?.distribucion?.mi_lectura?.requiere && !recurso.data.distribucion.mi_lectura.leido_en;
+  const leer = data?.distribucion?.mi_lectura?.requiere && !data.distribucion.mi_lectura.leido_en;
   useEffect(() => {
     if (!leer || typeof window === "undefined" || !new URLSearchParams(window.location.search).has("leer")) return;
-    const t = window.setTimeout(() => document.getElementById("acuse")?.scrollIntoView({ block: "center", behavior: "smooth" }), 300);
+    const t = window.setTimeout(() => document.getElementById("acuse")?.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }), 300);
     return () => window.clearTimeout(t);
   }, [leer]);
 
@@ -81,12 +109,11 @@ function Ficha({ id }: { id: string }) {
       </PageBody>
     );
   }
-  const data = recurso.data;
   if (!data) {
     return (
       <PageBody>
-        <Skeleton className="h-6 w-1/2" />
-        <Skeleton className="h-[120px] rounded-card" />
+        <Skeleton className="h-5 w-1/3" />
+        <Skeleton className="h-[92px] rounded-card" />
         <Skeleton className="h-[480px] rounded-card" />
       </PageBody>
     );
@@ -94,8 +121,15 @@ function Ficha({ id }: { id: string }) {
   const { item, revisiones } = data;
   const vigente = revisiones.find((r) => r.estado === "vigente") || null;
   const enCurso = revisiones.find((r) => ["borrador", "en_revision", "en_autorizacion", "autorizada"].includes(r.estado)) || null;
+  const renovacion = data.renovaciones.find((n) => n.estado === "en_revision" || n.estado === "en_autorizacion") || null;
   const pdfVigente = activo(vigente, "pdf");
   const fuenteVigente = activo(vigente, "fuente");
+  const dist = data.distribucion;
+  const ext = data.externo;
+  const conLecturas = !!dist && (dist.filas.length > 0 || dist.destinatarios.length > 0 || dist.puntos_uso.length > 0 || dist.avance.total > 0);
+  const conRevisiones = !!(enCurso || renovacion || data.historial || data.revisiones_ocultas > 0);
+  const alcanceBitacora = permissions.calidad?.V;
+  const verAuditoria = !!alcanceBitacora && alcanceBitacora !== "incidencias";
 
   const imprimirVigente = async (a: Archivo) => {
     try {
@@ -113,7 +147,6 @@ function Ficha({ id }: { id: string }) {
       toast.error(e.que, { description: e.hacer });
     }
   };
-
   const enviar = async (r: Revision) => {
     const ok = await confirm({ title: `Enviar a revisión la revisión ${r.numero}`, description: "Se bloquea el borrador y se remite al revisor asignado. Desde ese momento sus archivos ya no se pueden cambiar.", confirmLabel: "Enviar a revisión", tone: "primary" });
     if (!ok) return;
@@ -130,242 +163,213 @@ function Ficha({ id }: { id: string }) {
     }
   };
 
+  /*
+   * Acciones en orden de prioridad: la primera con permiso es la accion principal
+   * (lo que le toca a la persona ahora); el resto, si se puede o hay motivo, va en ⋯.
+   */
+  const flujo: Accion[] = [];
+  if (enCurso) {
+    flujo.push(
+      { id: "sgc-revisar", etiqueta: "Revisar", icono: ICONO_ACCION.revisar, puede: enCurso.puede.revisar, onSelect: () => setDecision({ tipo: "revisar", id: enCurso.id, numero: enCurso.numero }) },
+      { id: "sgc-autorizar", etiqueta: "Autorizar", icono: ICONO_ACCION.autorizar, puede: enCurso.puede.autorizar, onSelect: () => setDecision({ tipo: "autorizar", id: enCurso.id, numero: enCurso.numero }) },
+      { id: "sgc-publicar", etiqueta: "Publicar", icono: ICONO_ACCION.publicar, puede: enCurso.puede.publicar, onSelect: () => setPublicarDe(enCurso) },
+    );
+  }
+  if (renovacion) {
+    flujo.push(
+      { id: "sgc-renovacion-revisar", etiqueta: "Confirmar vigencia", icono: ICONO_ACCION.confirmar_vigencia, puede: renovacion.puede.revisar, onSelect: () => setDecision({ tipo: "ren_revisar", id: renovacion.id }) },
+      { id: "sgc-renovacion-autorizar", etiqueta: "Autorizar renovación", icono: ICONO_ACCION.autorizar_renovacion, puede: renovacion.puede.autorizar, onSelect: () => setDecision({ tipo: "ren_autorizar", id: renovacion.id }) },
+    );
+  }
+  if (enCurso) {
+    flujo.push(
+      { id: "sgc-enviar-revision", etiqueta: "Enviar a revisión", icono: ICONO_ACCION.enviar, puede: enCurso.puede.enviar_revision, onSelect: () => void enviar(enCurso), cargando: enviando },
+      { id: "sgc-registrar-vigente", etiqueta: "Registrar vigente (carga inicial)", icono: ICONO_ACCION.registrar_vigente, puede: enCurso.puede.registrar_vigente, onSelect: () => setVigenteDe(enCurso) },
+    );
+  }
+  if (dist?.mi_lectura?.requiere && !dist.mi_lectura.leido_en && vigente?.abrir && pdfVigente) {
+    flujo.push({ id: "acuse-confirmar", etiqueta: "Confirmar lectura", icono: ICONO_ACCION.confirmar_lectura, puede: dist.puede.acusar, onSelect: () => void acusar(), cargando: acusando });
+  }
+  if (ext) flujo.push({ id: "ext-verificar", etiqueta: "Verificar vigencia", icono: ICONO_ACCION.verificar_externo, puede: ext.puede.verificar.ok ? SI : { ok: false }, onSelect: () => setExterno("verificar") });
+  const principal = flujo.find((a) => a.puede.ok) || null;
+
+  // Menu ⋯: lo demas, agrupado (flujo de la revision, documento, archivos, bitacora).
+  const otrasFlujo = flujo.filter((a) => a !== principal && visible(a));
+  const deRevision: Accion[] = enCurso
+    ? [
+        { id: "sgc-editar-revision", etiqueta: "Editar datos de la revisión", icono: ICONO_ACCION.editar_revision, puede: enCurso.puede.editar.ok ? SI : { ok: false }, onSelect: () => setRevisionSheet({ revision: enCurso }) },
+        { id: "sgc-subir-archivo", etiqueta: "Cargar o sustituir archivo", icono: ICONO_ACCION.subir_archivo, puede: enCurso.puede.subir_archivo, onSelect: () => setArchivoDe(enCurso) },
+        { id: "sgc-reasignar", etiqueta: "Reasignar responsables", icono: ICONO_ACCION.reasignar, puede: enCurso.puede.reasignar, onSelect: () => setReasignarDe(enCurso) },
+      ].filter(visible)
+    : [];
+  const deExterno: Accion[] = ext
+    ? [
+        { id: "ext-nueva-version", etiqueta: "Registrar nueva versión", icono: ICONO_ACCION.nueva_revision, puede: ext.puede.nueva_version.ok ? SI : { ok: false }, onSelect: () => setExterno("version") },
+        { id: "ext-editar", etiqueta: "Editar seguimiento", icono: ICONO_ACCION.editar, puede: ext.puede.editar.ok ? SI : { ok: false }, onSelect: () => setExterno("editar") },
+      ].filter(visible)
+    : [];
+  const deDocumento: Accion[] = ([
+    { id: "sgc-proponer", etiqueta: "Proponer cambio", icono: ICONO_ACCION.proponer, puede: data.puede.proponer.ok ? SI : { ok: false }, onSelect: () => setProponer(true) },
+    { id: "sgc-nueva-revision", etiqueta: "Nueva revisión", icono: ICONO_ACCION.nueva_revision, puede: data.puede.nueva_revision, onSelect: () => setRevisionSheet({ revision: null }) },
+    { id: "sgc-renovar", etiqueta: "Renovar sin cambios", icono: ICONO_ACCION.renovar, puede: data.puede.renovar, onSelect: () => setRenovar(true) },
+    { id: "sgc-editar", etiqueta: "Editar metadatos", icono: ICONO_ACCION.editar, puede: data.puede.editar.ok ? SI : { ok: false }, onSelect: () => setEditar(true) },
+    { id: "dist-agregar", etiqueta: "Agregar destinatarios", icono: ICONO_ACCION.distribucion, puede: dist?.puede.administrar.ok ? SI : { ok: false }, onSelect: () => setAgregarLectura(true) },
+    { id: "sgc-obsoletar", etiqueta: "Declarar obsoleto", icono: ICONO_ACCION.obsoletar, puede: data.puede.obsoletar, onSelect: () => setObsoletar(true), tono: "danger" },
+  ] as Accion[]).filter(visible);
+  const deArchivos: Accion[] = vigente?.abrir
+    ? [
+        ...(pdfVigente ? [{ id: "sgc-descargar-pdf", etiqueta: "Descargar PDF", icono: ICONO_ACCION.descargar, puede: SI, onSelect: () => void descargar(pdfVigente) }] : []),
+        ...(fuenteVigente ? [{ id: "sgc-descargar-fuente", etiqueta: "Descargar archivo fuente", icono: ICONO_ACCION.descargar_fuente, puede: SI, onSelect: () => void descargar(fuenteVigente) }] : []),
+      ]
+    : [];
+  const deBitacora: Accion[] = verAuditoria ? [{ id: "sgc-ver-auditoria", etiqueta: "Ver en Auditoría", icono: ICONO_ACCION.auditoria, puede: SI, onSelect: () => router.push(`/auditoria?buscar=${encodeURIComponent(item.clave)}&area=documentos&periodo=todo`) }] : [];
+  // En cada grupo, primero lo que la persona puede hacer; despues lo deshabilitado (con su motivo).
+  const grupos = [otrasFlujo, deRevision, deExterno, deDocumento, deArchivos, deBitacora].filter((g) => g.length).map((g) => [...g.filter((a) => a.puede.ok), ...g.filter((a) => !a.puede.ok)]);
+  const menu: MenuItem[] = grupos.flatMap((g, gi) =>
+    g.map((a, i) => ({
+      label: a.etiqueta,
+      icon: <a.icono size={16} weight="bold" />,
+      onSelect: a.onSelect,
+      disabled: !a.puede.ok,
+      tone: a.tono || "neutral",
+      testid: a.id,
+      separatorBefore: gi > 0 && i === 0,
+      description: !a.puede.ok && a.puede.motivo ? <span data-testid={`${a.id}-motivo`}>{a.puede.motivo}</span> : undefined,
+    })),
+  );
+
+  // Pestañas disponibles; por omision Revisiones si hay trabajo en curso, si no Detalles.
+  const pestanas: Array<{ value: Pestana; label: string; icon: ReactNode }> = [
+    { value: "detalles", label: "Detalles", icon: <Info size={15} weight="bold" aria-hidden="true" /> },
+    ...(conRevisiones ? [{ value: "revisiones" as const, label: "Revisiones", icon: <ClockCounterClockwise size={15} weight="bold" aria-hidden="true" /> }] : []),
+    ...(conLecturas ? [{ value: "lecturas" as const, label: "Lecturas", icon: <UsersThree size={15} weight="bold" aria-hidden="true" /> }] : []),
+  ];
+  const porOmision: Pestana = enCurso || renovacion ? "revisiones" : "detalles";
+  const actual: Pestana = pestana && pestanas.some((p) => p.value === pestana) ? pestana : porOmision;
+
   return (
     <PageBody>
       <RutaDocumentos area={item.area} tipo={item.tipo} documento={item.clave} />
 
       <header className="flex overflow-hidden rounded-card bg-surface shadow-card" data-testid="sgc-ficha" data-clave={item.clave}>
         <span className="w-1.5 shrink-0" style={{ backgroundColor: item.area.color }} aria-hidden="true" />
-        <div className="flex min-w-0 flex-1 flex-col gap-4 p-5">
-          <div className="flex min-w-0 flex-1 items-start gap-4">
-            <IconoArea area={item.area} size="lg" />
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <span className="code text-[13px] font-semibold text-ink-2" data-testid="sgc-clave">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5 sm:px-5">
+          <div className="flex min-w-0 flex-1 items-center gap-3.5">
+            <IconoArea area={item.area} />
+            <div className="flex min-w-0 flex-col gap-1">
+              <span className="code text-[12.5px] font-semibold text-ink-2" data-testid="sgc-clave">
                 {item.clave}
               </span>
-              <h1 className="break-words text-[21px] font-semibold leading-tight tracking-[-0.015em] text-ink">{item.titulo}</h1>
+              <h1 className="break-words text-[18px] font-semibold leading-snug tracking-[-0.01em] text-ink">{item.titulo}</h1>
               <div className="flex flex-wrap items-center gap-1.5">
-                <EstadoDocumentoEtiqueta estado={item.estado} />
-                {vigente ? <Badge tone="neutral">{item.origen === "externo" && vigente.version_externa ? `Versión ${vigente.version_externa}` : `Rev. ${vigente.numero}`}</Badge> : null}
-                <ProximaRevisionEtiqueta fecha={vigente?.fecha_proxima_revision} />
-                <ConfidencialidadEtiqueta valor={item.confidencialidad} />
+                {vigente ? <span className="tnum text-[12.5px] font-medium text-ink-2">{item.origen === "externo" && vigente.version_externa ? `Versión ${vigente.version_externa}` : `Rev. ${vigente.numero}`}</span> : null}
+                <span className="transicion-estado inline-flex" key={item.estado}>
+                  <EstadoDocumentoEtiqueta estado={item.estado} />
+                </span>
                 {item.origen === "externo" ? <ExternoEtiqueta /> : null}
+                <ConfidencialidadEtiqueta valor={item.confidencialidad} />
               </div>
             </div>
           </div>
-          <div className="flex flex-wrap items-start gap-2 border-t border-line pt-3 empty:hidden" aria-label="Acciones del documento">
-            {data.puede.editar.ok ? (
-              <Button size="sm" variant="secondary" icon={<PencilSimple size={15} />} onClick={() => setEditar(true)} data-testid="sgc-editar">
-                Editar metadatos
-              </Button>
-            ) : null}
-            {data.puede.proponer.ok ? (
-              <Button size="sm" variant="secondary" icon={<Lightbulb size={15} />} onClick={() => setProponer(true)} data-testid="sgc-proponer">
-                Proponer cambio
-              </Button>
-            ) : null}
-            <BotonPuede puede={data.puede.nueva_revision} icono={<Plus size={15} weight="bold" />} testid="sgc-nueva-revision" onClick={() => setRevisionSheet({ revision: null })}>
-              Nueva revisión
-            </BotonPuede>
-            <BotonPuede puede={data.puede.renovar} icono={<ArrowsClockwise size={15} />} testid="sgc-renovar" onClick={() => setRenovar(true)}>
-              Renovar sin cambios
-            </BotonPuede>
-            <BotonPuede puede={data.puede.obsoletar} icono={<Prohibit size={15} />} testid="sgc-obsoletar" onClick={() => setObsoletar(true)}>
-              Declarar obsoleto
-            </BotonPuede>
-          </div>
+          {principal || menu.length ? (
+            <div className="flex shrink-0 items-center gap-1.5" aria-label="Acciones del documento">
+              {principal ? (
+                <Button icon={<principal.icono size={16} weight="bold" />} onClick={principal.onSelect} loading={principal.cargando} data-testid={principal.id} data-principal="1">
+                  {principal.etiqueta}
+                </Button>
+              ) : null}
+              {menu.length ? <ActionMenu items={menu} label="Más acciones" /> : null}
+            </div>
+          ) : null}
         </div>
       </header>
 
-      {item.estado === "obsoleto" ? (
-        <div data-testid="sgc-aviso-obsoleto">
-          <Callout tone="danger" title="Documento obsoleto">
-            Retirado del uso {item.obsoleto_en ? `el ${formatearFecha(item.obsoleto_en)}` : ""}
-            {item.motivo_obsolescencia ? `. Motivo: ${item.motivo_obsolescencia}` : ""}. Se conserva en el historial; no es la versión de referencia.
-          </Callout>
-        </div>
-      ) : null}
-      {item.pendiente_revision && item.estado === "vigente" ? (
-        <div data-testid="sgc-aviso-pendiente">
-          <Callout tone="warning" title="Pendiente de revisión">
-            Su próxima revisión es el {formatearFecha(vigente?.fecha_proxima_revision)}.{" "}
-            {item.origen === "externo" ? "El responsable de seguimiento o Mejora Continua verifica que siga vigente o registra la nueva versión." : "Mejora Continua decide si se renueva sin cambios o si se abre una nueva revisión."}
-          </Callout>
-        </div>
-      ) : null}
-      {item.obsolescencia_pendiente ? (
-        <Callout tone="info" title="Obsolescencia solicitada">
-          Hay una solicitud (#{item.obsolescencia_pendiente}) para declararlo obsoleto; la debe aprobar otra persona en «Por autorizar».
-        </Callout>
-      ) : null}
-      {data.solo_diagnostico ? (
-        <Callout tone="info" title="Solo metadatos (diagnóstico)">
-          La administración técnica consulta la ficha y sus metadatos para dar soporte, pero no abre los archivos del documento.
-        </Callout>
-      ) : null}
+      <Avisos item={item} vigente={vigente} enCurso={enCurso} diagnostico={data.solo_diagnostico} />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="flex min-w-0 flex-col gap-6">
-          <Seccion titulo="Revisión vigente" icono={<FilePdf size={17} weight="duotone" />} testid="sgc-vigente">
-            {vigente ? (
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-2">
-                  <span className="flex items-center gap-1.5">
-                    <EstadoRevisionEtiqueta estado="vigente" /> Revisión {vigente.numero}
-                  </span>
-                  <span>Emisión: {formatearFecha(vigente.fecha_emision)}</span>
-                  <span>Vigencia: {formatearFecha(vigente.fecha_vigencia)}</span>
-                  {vigente.fecha_proxima_revision ? <span>Próxima revisión: {formatearFecha(vigente.fecha_proxima_revision)}</span> : null}
-                  {vigente.renovada_en ? <Badge tone="success">Renovado el {formatearFecha(vigente.renovada_en)}</Badge> : null}
-                </div>
-                {vigente.abrir ? (
-                  <div className="flex flex-wrap gap-2">
-                    {pdfVigente ? (
-                      <Button size="sm" variant="secondary" icon={<DownloadSimple size={15} />} onClick={() => void descargar(pdfVigente)} data-testid="sgc-descargar-pdf">
-                        Descargar PDF
-                      </Button>
-                    ) : null}
-                    {fuenteVigente ? (
-                      <Button size="sm" variant="secondary" icon={<DownloadSimple size={15} />} onClick={() => void descargar(fuenteVigente)}>
-                        Descargar archivo fuente
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : null}
-                {vigente.abrir && pdfVigente ? (
-                  <div className="h-[72vh] min-h-[420px] overflow-hidden rounded-[12px] ring-1 ring-line" data-testid="sgc-visor">
-                    <VisorPdf key={pdfVigente.id} url={urlArchivoSgc(pdfVigente.id)} ambito="sgc" docId={item.id} acciones={{ descargar: () => void descargar(pdfVigente), imprimir: () => void imprimirVigente(pdfVigente) }} />
-                  </div>
-                ) : !vigente.abrir ? (
-                  <p className="text-[13px] text-ink-3">El archivo no se muestra en la vista de diagnóstico.</p>
-                ) : (
-                  <p className="text-[13px] text-ink-3">{item.origen === "externo" ? "Sin PDF registrado (solo con derechos de uso); consúltalo en el enlace del emisor." : "Esta revisión no tiene PDF de consulta."}</p>
-                )}
-                {data.distribucion && vigente.abrir && pdfVigente ? <AcuseLectura dist={data.distribucion} /> : null}
+      <section aria-label="Revisión vigente" data-testid="sgc-vigente" className="flex flex-col gap-3">
+        {vigente ? (
+          vigente.abrir && pdfVigente ? (
+            <>
+              <div className="h-[74vh] min-h-[420px] overflow-hidden rounded-card bg-surface shadow-card ring-1 ring-line" data-testid="sgc-visor">
+                <VisorPdf key={pdfVigente.id} url={urlArchivoSgc(pdfVigente.id)} ambito="sgc" docId={item.id} acciones={{ descargar: () => void descargar(pdfVigente), imprimir: () => void imprimirVigente(pdfVigente) }} />
               </div>
-            ) : (
-              <EmptyState compact icon={<FilePdf size={20} weight="duotone" />} title="Sin revisión vigente" description={enCurso ? "El documento está en elaboración; aparecerá aquí cuando su revisión quede vigente." : "Este documento todavía no tiene una revisión vigente visible para ti."} />
-            )}
-          </Seccion>
-
-          {data.externo ? (
-            <Seccion titulo="Seguimiento del documento externo" icono={<IconoExterno size={17} weight="duotone" />} testid="sgc-externo">
-              <SeguimientoExterno docId={item.id} clave={item.clave} ext={data.externo} catalogos={catalogos.data} />
-            </Seccion>
-          ) : null}
-
-          {vigente || item.estado === "obsoleto" ? (
-            <Seccion titulo="Distribución y lecturas" icono={<UsersThree size={17} weight="duotone" />} testid="sgc-distribucion">
-              <SeccionDistribucion dist={data.distribucion} catalogos={catalogos.data} obsoleto={item.estado === "obsoleto"} />
-            </Seccion>
-          ) : null}
-
-          {data.renovaciones.filter((n) => n.estado === "en_revision" || n.estado === "en_autorizacion").map((n) => (
-            <Seccion key={n.id} titulo="Renovación de vigencia" icono={<ArrowsClockwise size={17} weight="duotone" />} testid="sgc-renovacion" accion={<Badge tone="brand">{ESTADOS_RENOVACION[n.estado]?.etiqueta}</Badge>}>
-              <dl className="grid gap-3 sm:grid-cols-3">
-                <Dato etiqueta="Revisor">{n.revisor_nombre || "—"}</Dato>
-                <Dato etiqueta="Autorizador">{n.autorizador_nombre || "—"}</Dato>
-                <Dato etiqueta="Nueva próxima revisión">{formatearFecha(n.fecha_proxima_nueva)}</Dato>
-              </dl>
-              <div className="flex flex-wrap gap-3">
-                <BotonPuede puede={n.puede.revisar} icono={<ListChecks size={15} />} variante="primary" testid="sgc-renovacion-revisar" onClick={() => setDecision({ tipo: "ren_revisar", id: n.id })}>
-                  Confirmar vigencia
-                </BotonPuede>
-                <BotonPuede puede={n.puede.autorizar} icono={<Signature size={15} />} variante="primary" testid="sgc-renovacion-autorizar" onClick={() => setDecision({ tipo: "ren_autorizar", id: n.id })}>
-                  Autorizar renovación
-                </BotonPuede>
-              </div>
-            </Seccion>
-          ))}
-
-          {enCurso ? (
-            <Seccion titulo={`Revisión en curso · ${enCurso.numero}`} icono={<FileText size={17} weight="duotone" />} testid="sgc-en-curso" accion={<EstadoRevisionEtiqueta estado={enCurso.estado} />}>
-              <RevisionEnCurso
-                revision={enCurso}
-                onEditar={() => setRevisionSheet({ revision: enCurso })}
-                onArchivo={() => setArchivoDe(enCurso)}
-                onEnviar={() => void enviar(enCurso)}
-                onVigente={() => setVigenteDe(enCurso)}
-                onRevisar={() => setDecision({ tipo: "revisar", id: enCurso.id, numero: enCurso.numero })}
-                onAutorizar={() => setDecision({ tipo: "autorizar", id: enCurso.id, numero: enCurso.numero })}
-                onPublicar={() => setPublicarDe(enCurso)}
-                onReasignar={() => setReasignarDe(enCurso)}
-                onDescargar={descargar}
-                enviando={enviando}
+              {dist ? <AcuseLectura dist={dist} sinBoton /> : null}
+            </>
+          ) : (
+            <div className="rounded-card bg-surface shadow-card">
+              <EmptyState
+                compact
+                icon={<FilePdf size={20} weight="duotone" />}
+                title={!vigente.abrir ? "Sin vista del archivo" : "Sin PDF de consulta"}
+                description={!vigente.abrir ? "El archivo no se muestra en la vista de diagnóstico." : item.origen === "externo" ? "Solo con derechos de uso; consúltalo en el enlace del emisor." : "Esta revisión no tiene PDF de consulta."}
               />
-            </Seccion>
-          ) : null}
+            </div>
+          )
+        ) : (
+          <div className="rounded-card bg-surface shadow-card">
+            <EmptyState compact icon={<FilePdf size={20} weight="duotone" />} title="Sin revisión vigente" description={enCurso ? "Aparecerá aquí cuando su revisión quede vigente." : "Todavía no tiene una revisión vigente visible para ti."} />
+          </div>
+        )}
+      </section>
 
-          {data.historial ? (
-            <Seccion titulo="Historial de revisiones" icono={<ClockCounterClockwise size={17} weight="duotone" />} testid="sgc-historial">
-              <Historial revisiones={revisiones} onDescargar={descargar} />
-            </Seccion>
-          ) : data.revisiones_ocultas > 0 ? (
-            <p className="text-[12.5px] text-ink-3">Hay {data.revisiones_ocultas} revisión(es) más en el historial; consultarlas requiere el permiso de consultar el histórico.</p>
-          ) : null}
+      <section className="flex flex-col gap-4" aria-label="Información del documento">
+        {pestanas.length > 1 ? <PestanasDeslizantes<Pestana> value={actual} onChange={setPestana} options={pestanas} label="Información del documento" className="w-full max-w-[460px]" /> : null}
 
-          {data.historial ? (
-            <Seccion titulo="Eventos de la bitácora" icono={<ClockCounterClockwise size={17} weight="duotone" />} testid="sgc-eventos">
-              {data.eventos.length ? (
-                <ol className="flex flex-col divide-y divide-line">
-                  {data.eventos.map((e) => {
-                    const h = humanizeAuditEntry(e as unknown as Record<string, unknown>);
-                    return (
-                      <li key={e.id} className="flex flex-col gap-0.5 py-2.5">
-                        <span className="text-[13.5px] text-ink">{h.frase}</span>
-                        <span className="text-[12px] text-ink-3">
-                          {formatearFechaHora(e.fecha_hora)}
-                          {h.motivo ? ` · Motivo: ${h.motivo}` : ""}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ol>
-              ) : (
-                <p className="text-[13px] text-ink-3">Sin eventos.</p>
-              )}
-            </Seccion>
+        <div role="tabpanel" aria-label="Detalles" hidden={actual !== "detalles"} data-testid="sgc-pestana-detalles" className="flex flex-col gap-4">
+          <Detalles data={data} vigente={vigente} enCurso={enCurso} />
+          {ext ? (
+            <Tarjeta titulo="Seguimiento del documento externo" testid="sgc-externo">
+              <SeguimientoExterno docId={item.id} clave={item.clave} ext={ext} catalogos={catalogos.data} sinAcciones />
+            </Tarjeta>
           ) : null}
         </div>
 
-        <aside className="flex flex-col gap-6" aria-label="Datos del documento">
-          <Seccion titulo="Metadatos" icono={<Info size={17} weight="duotone" />} testid="sgc-metadatos">
-            <dl className="grid grid-cols-1 gap-3">
-              <Dato etiqueta="Gestión">
-                {item.area.codigo} · {item.area.nombre}
-              </Dato>
-              <Dato etiqueta="Tipo documental">
-                {item.tipo.codigo} · {item.tipo.nombre}
-              </Dato>
-              <Dato etiqueta="Origen">{item.origen === "externo" ? "Externo" : "Interno"}</Dato>
-              <Dato etiqueta="Proceso o subproceso">{item.proceso || "—"}</Dato>
-              <Dato etiqueta="Confidencialidad">{etiquetaConfidencialidad(item.confidencialidad)}</Dato>
-              <Dato etiqueta="Palabras clave">{item.palabras_clave.length ? item.palabras_clave.join(", ") : "—"}</Dato>
-              <Dato etiqueta="Propietario">{item.propietario_nombre || "—"}</Dato>
-              <Dato etiqueta="Ficha creada">
-                {formatearFecha(item.creado_en)}
-                {item.creado_por_nombre ? ` · ${item.creado_por_nombre}` : ""}
-              </Dato>
-            </dl>
-          </Seccion>
-          <Seccion titulo="Responsables" icono={<UsersThree size={17} weight="duotone" />}>
-            <dl className="grid grid-cols-1 gap-3">
-              {item.origen === "externo" ? (
-                <Dato etiqueta="Responsable de seguimiento">{data.externo?.responsable_nombre || "—"}</Dato>
-              ) : (enCurso || vigente) ? (
-                <>
-                  <Dato etiqueta="Elaborador">{(enCurso || vigente)!.elaborador_nombre || "Sin asignar"}</Dato>
-                  <Dato etiqueta="Revisor">{(enCurso || vigente)!.revisor_nombre || "Sin asignar"}</Dato>
-                  <Dato etiqueta="Autorizador">{(enCurso || vigente)!.autorizador_nombre || "Sin asignar"}</Dato>
-                </>
-              ) : (
-                <p className="text-[13px] text-ink-3">—</p>
-              )}
-            </dl>
-            {enCurso && vigente ? <p className="mt-2 text-[12px] text-ink-3">De la revisión en curso ({enCurso.numero}).</p> : null}
-          </Seccion>
-        </aside>
-      </div>
+        {conRevisiones ? (
+          <div role="tabpanel" aria-label="Revisiones" hidden={actual !== "revisiones"} data-testid="sgc-pestana-revisiones" className="flex flex-col gap-4">
+            {renovacion ? (
+              <Tarjeta titulo="Renovación de vigencia" testid="sgc-renovacion" accion={<Badge tone="brand">{ESTADOS_RENOVACION[renovacion.estado]?.etiqueta}</Badge>}>
+                <Lista
+                  datos={[
+                    ["Revisor", renovacion.revisor_nombre],
+                    ["Autorizador", renovacion.autorizador_nombre],
+                    ["Nueva próxima revisión", formatearFecha(renovacion.fecha_proxima_nueva)],
+                    ["Fecha límite", formatearFecha(renovacion.fecha_limite)],
+                  ]}
+                />
+              </Tarjeta>
+            ) : null}
+            {enCurso ? (
+              <Tarjeta titulo={`Revisión ${enCurso.numero} en curso`} testid="sgc-en-curso" accion={<span className="transicion-estado inline-flex" key={enCurso.estado}><EstadoRevisionEtiqueta estado={enCurso.estado} /></span>}>
+                <RevisionEnCurso revision={enCurso} onDescargar={descargar} />
+              </Tarjeta>
+            ) : null}
+            {data.historial ? (
+              <details className="group/historial rounded-card bg-surface shadow-card" data-testid="sgc-historial">
+                <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3.5 text-[14px] font-semibold text-ink focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+                  <ListBullets size={16} weight="bold" className="text-ink-3" aria-hidden="true" />
+                  Historial de revisiones
+                  <span className="tnum font-normal text-ink-3">({revisiones.length})</span>
+                  <span className="ml-auto text-[12px] font-normal text-ink-3 group-open/historial:hidden">Mostrar</span>
+                  <span className="ml-auto hidden text-[12px] font-normal text-ink-3 group-open/historial:inline">Ocultar</span>
+                </summary>
+                <div className="border-t border-line px-5 pt-2 pb-4">
+                  <Historial revisiones={revisiones} onDescargar={descargar} />
+                </div>
+              </details>
+            ) : data.revisiones_ocultas > 0 ? (
+              <p className="text-[12.5px] text-ink-3">Hay {data.revisiones_ocultas} revisión(es) más en el historial; consultarlas requiere el permiso de consultar el histórico.</p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {conLecturas && dist ? (
+          <div role="tabpanel" aria-label="Lecturas" hidden={actual !== "lecturas"} data-testid="sgc-pestana-lecturas">
+            <Tarjeta titulo="Distribución y lecturas" testid="sgc-distribucion">
+              <SeccionDistribucion dist={dist} catalogos={catalogos.data} obsoleto={item.estado === "obsoleto"} sinAgregar />
+            </Tarjeta>
+          </div>
+        ) : null}
+      </section>
 
       {editar && catalogos.data ? <FichaSheet open onClose={() => setEditar(false)} catalogos={catalogos.data} editar={item} /> : null}
       {revisionSheet ? <RevisionSheet doc={item} revision={revisionSheet.revision} catalogos={catalogos.data} onClose={() => setRevisionSheet(null)} /> : null}
@@ -375,21 +379,49 @@ function Ficha({ id }: { id: string }) {
       {decision?.tipo === "autorizar" ? <DecisionDialog titulo={`Autorizar ${item.clave} rev. ${decision.numero}`} descripcion="Como autorizador asignado. Autorizar pide tu contraseña." url={`${API_BASE_URL}/sgc/revisiones/${decision.id}/autorizar`} opciones={OPCIONES_AUTORIZADOR} onClose={() => setDecision(null)} /> : null}
       {decision?.tipo === "ren_revisar" ? <DecisionDialog titulo={`Confirmar la vigencia de ${item.clave}`} descripcion="Como revisor de la renovación: confirma que el documento sigue vigente sin cambios, con tu comentario." url={`${API_BASE_URL}/sgc/renovaciones/${decision.id}/revisar`} opciones={OPCIONES_RENOVACION_REVISOR} onClose={() => setDecision(null)} /> : null}
       {decision?.tipo === "ren_autorizar" ? <DecisionDialog titulo={`Autorizar la renovación de ${item.clave}`} descripcion="La misma revisión sigue vigente con la nueva fecha de próxima revisión. Autorizar pide tu contraseña." url={`${API_BASE_URL}/sgc/renovaciones/${decision.id}/autorizar`} opciones={OPCIONES_RENOVACION_AUTORIZADOR} onClose={() => setDecision(null)} /> : null}
-      {publicarDe ? <PublicarDialog doc={item} revision={publicarDe} catalogos={catalogos.data} distribucionAnterior={data.distribucion} onClose={() => setPublicarDe(null)} /> : null}
+      {publicarDe ? <PublicarDialog doc={item} revision={publicarDe} catalogos={catalogos.data} distribucionAnterior={dist} onClose={() => setPublicarDe(null)} /> : null}
       {reasignarDe ? <ReasignarDialog revision={reasignarDe} catalogos={catalogos.data} onClose={() => setReasignarDe(null)} /> : null}
       {renovar ? <RenovarDialog doc={item} catalogos={catalogos.data} onClose={() => setRenovar(false)} /> : null}
       {obsoletar ? <ObsoletarDialog doc={item} onClose={() => setObsoletar(false)} /> : null}
       {proponer ? <SolicitudSheet catalogos={catalogos.data} documento={{ id: item.id, clave: item.clave, titulo: item.titulo }} onClose={() => setProponer(false)} /> : null}
+      {externo === "verificar" ? <VerificarExternoDialog docId={item.id} clave={item.clave} onClose={() => setExterno(null)} /> : null}
+      {externo === "version" && ext ? <NuevaVersionExternoDialog docId={item.id} clave={item.clave} ext={ext} onClose={() => setExterno(null)} /> : null}
+      {externo === "editar" && ext ? <EditarExternoDialog docId={item.id} ext={ext} catalogos={catalogos.data} onClose={() => setExterno(null)} /> : null}
+      {agregarLectura && dist ? <AgregarDialog revisionId={dist.revision_id} numero={dist.numero} catalogos={catalogos.data} onClose={() => setAgregarLectura(false)} /> : null}
     </PageBody>
   );
 }
 
-function Seccion({ titulo, icono, accion, testid, children }: { titulo: string; icono?: ReactNode; accion?: ReactNode; testid?: string; children: ReactNode }) {
+/* Franja de avisos: una sola, delgada, con un renglon por aviso (icono + texto; el color nunca es la unica senal). */
+function Avisos({ item, vigente, enCurso, diagnostico }: { item: FichaDocumento["item"]; vigente: Revision | null; enCurso: Revision | null; diagnostico: boolean }) {
+  const avisos: Array<{ clave: string; tono: "danger" | "warning" | "info"; icono: Icon; titulo: string; texto: string; testid?: string }> = [];
+  if (item.estado === "obsoleto") avisos.push({ clave: "obsoleto", tono: "danger", icono: Prohibit, titulo: "Documento obsoleto", texto: `Retirado del uso${item.obsoleto_en ? ` el ${formatearFecha(item.obsoleto_en)}` : ""}${item.motivo_obsolescencia ? `. Motivo: ${item.motivo_obsolescencia}` : ""}. Se conserva en el historial.`, testid: "sgc-aviso-obsoleto" });
+  if (item.pendiente_revision && item.estado === "vigente")
+    avisos.push({ clave: "pendiente", tono: "warning", icono: ICONO_ESTADO.pendiente, titulo: "Pendiente de revisión", texto: `Próxima revisión: ${formatearFecha(vigente?.fecha_proxima_revision)}. ${item.origen === "externo" ? "Se verifica que siga vigente o se registra la nueva versión." : "Mejora Continua decide si se renueva sin cambios o se abre una nueva revisión."}`, testid: "sgc-aviso-pendiente" });
+  if (item.obsolescencia_pendiente) avisos.push({ clave: "obsolescencia", tono: "info", icono: Warning, titulo: "Obsolescencia solicitada", texto: `Solicitud #${item.obsolescencia_pendiente}; la aprueba otra persona en «Por autorizar».` });
+  if (enCurso && vigente) avisos.push({ clave: "en-curso", tono: "info", icono: ICONO_ESTADO[enCurso.estado === "borrador" ? "borrador" : enCurso.estado === "autorizada" ? "autorizada" : enCurso.estado === "en_autorizacion" ? "autorizacion" : "revision"], titulo: `Revisión ${enCurso.numero} en curso`, texto: `La revisión ${vigente.numero} sigue vigente mientras tanto.` });
+  if (diagnostico) avisos.push({ clave: "diagnostico", tono: "info", icono: Info, titulo: "Solo metadatos (diagnóstico)", texto: "La administración técnica consulta la ficha para dar soporte, sin abrir sus archivos." });
+  if (!avisos.length) return null;
+  const color = { danger: "text-danger-text", warning: "text-warning-text", info: "text-brand-strong" };
+  return (
+    <div role="status" className="flex flex-col divide-y divide-line overflow-hidden rounded-[12px] bg-surface ring-1 ring-line" data-testid="sgc-avisos">
+      {avisos.map((a) => (
+        <p key={a.clave} className="flex items-start gap-2 px-3.5 py-2 text-[13px] leading-snug text-ink-2" data-testid={a.testid}>
+          <a.icono size={15} weight="bold" className={cn("mt-px shrink-0", color[a.tono])} aria-hidden="true" />
+          <span>
+            <b className="font-semibold text-ink">{a.titulo}.</b> {a.texto}
+          </span>
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function Tarjeta({ titulo, accion, testid, children }: { titulo: string; accion?: ReactNode; testid?: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3 rounded-card bg-surface p-5 shadow-card" data-testid={testid} aria-label={titulo}>
       <header className="flex items-center gap-2">
-        {icono ? <span className="text-ink-3" aria-hidden="true">{icono}</span> : null}
-        <h2 className="text-[15px] font-semibold text-ink">{titulo}</h2>
+        <h2 className="text-[14.5px] font-semibold text-ink">{titulo}</h2>
         {accion ? <span className="ml-auto">{accion}</span> : null}
       </header>
       {children}
@@ -397,25 +429,69 @@ function Seccion({ titulo, icono, accion, testid, children }: { titulo: string; 
   );
 }
 
-function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
+/* Lista etiqueta/valor; los campos vacios no se muestran. */
+function Lista({ datos, columnas = 2 }: { datos: Array<[string, ReactNode]>; columnas?: 1 | 2 | 3 }) {
+  const llenos = datos.filter(([, v]) => v !== null && v !== undefined && v !== "" && v !== "—");
+  if (!llenos.length) return null;
   return (
-    <div className="flex flex-col gap-0.5">
-      <dt className="text-[11.5px] font-medium uppercase tracking-wide text-ink-4">{etiqueta}</dt>
-      <dd className="break-words text-[13.5px] text-ink">{children}</dd>
-    </div>
+    <dl className={cn("grid gap-x-6 gap-y-3", columnas === 3 ? "sm:grid-cols-3" : columnas === 2 ? "sm:grid-cols-2" : "")}>
+      {llenos.map(([etiqueta, valor]) => (
+        <div key={etiqueta} className="flex min-w-0 flex-col gap-0.5">
+          <dt className="text-[11.5px] font-medium uppercase tracking-wide text-ink-4">{etiqueta}</dt>
+          <dd className="break-words text-[13.5px] text-ink">{valor}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
-/* Accion segun la bandera del servidor: oculta si no puede; deshabilitada con su motivo si puede pero falta algo. */
-function BotonPuede({ puede, icono, onClick, testid, variante = "secondary", cargando, children }: { puede: Puede; icono: ReactNode; onClick: () => void; testid?: string; variante?: "primary" | "secondary"; cargando?: boolean; children: ReactNode }) {
-  if (!puede.ok && !puede.motivo) return null;
+function Detalles({ data, vigente, enCurso }: { data: FichaDocumento; vigente: Revision | null; enCurso: Revision | null }) {
+  const { item } = data;
+  const responsables = enCurso || vigente;
   return (
-    <span className="flex flex-col items-start gap-1">
-      <Button size="sm" variant={variante} icon={icono} onClick={onClick} disabled={!puede.ok} title={puede.motivo} data-testid={testid} loading={cargando}>
-        {children}
-      </Button>
-      {!puede.ok && puede.motivo ? <span className="max-w-[260px] text-[11.5px] leading-snug text-ink-3" data-testid={testid ? `${testid}-motivo` : undefined}>{puede.motivo}</span> : null}
-    </span>
+    <div className="grid gap-4 lg:grid-cols-2" data-testid="sgc-metadatos">
+      <Tarjeta titulo="Documento">
+        <Lista
+          datos={[
+            ["Gestión", `${item.area.codigo} · ${item.area.nombre}`],
+            ["Tipo documental", `${item.tipo.codigo} · ${item.tipo.nombre}`],
+            ["Origen", item.origen === "externo" ? "Externo" : "Interno"],
+            ["Proceso o subproceso", item.proceso],
+            ["Confidencialidad", etiquetaConfidencialidad(item.confidencialidad)],
+            ["Palabras clave", item.palabras_clave.length ? item.palabras_clave.join(", ") : null],
+            ["Propietario", item.propietario_nombre],
+            ["Ficha creada", `${formatearFecha(item.creado_en)}${item.creado_por_nombre ? ` · ${item.creado_por_nombre}` : ""}`],
+          ]}
+        />
+      </Tarjeta>
+      <div className="flex flex-col gap-4">
+        {vigente ? (
+          <Tarjeta titulo={`Revisión ${vigente.numero} vigente`}>
+            <Lista
+              datos={[
+                ["Emisión", vigente.fecha_emision ? formatearFecha(vigente.fecha_emision) : null],
+                ["Vigencia", vigente.fecha_vigencia ? formatearFecha(vigente.fecha_vigencia) : null],
+                ["Próxima revisión", vigente.fecha_proxima_revision ? <span className="inline-flex flex-wrap items-center gap-1.5">{formatearFecha(vigente.fecha_proxima_revision)} <ProximaRevisionEtiqueta fecha={vigente.fecha_proxima_revision} /></span> : null],
+                ["Renovado", vigente.renovada_en ? formatearFecha(vigente.renovada_en) : null],
+                ["Versión del emisor", vigente.version_externa],
+              ]}
+            />
+          </Tarjeta>
+        ) : null}
+        {item.origen !== "externo" && responsables ? (
+          <Tarjeta titulo={enCurso && vigente ? `Responsables (revisión ${enCurso.numero} en curso)` : "Responsables"}>
+            <Lista
+              datos={[
+                ["Elaborador", responsables.elaborador_nombre],
+                ["Revisor", responsables.revisor_nombre],
+                ["Autorizador", responsables.autorizador_nombre],
+              ]}
+              columnas={3}
+            />
+          </Tarjeta>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -429,7 +505,7 @@ function ArchivoFila({ a, abrir, onDescargar }: { a: Archivo; abrir: boolean; on
       </span>
       {a.reemplazado_en ? <Badge tone="neutral">Sustituido {formatearFecha(a.reemplazado_en)}</Badge> : null}
       {abrir ? (
-        <Button size="sm" variant="ghost" icon={<DownloadSimple size={14} />} onClick={() => onDescargar(a)} aria-label={`Descargar ${a.nombre_original}`}>
+        <Button size="sm" variant="ghost" icon={<ICONO_ACCION.descargar size={14} />} onClick={() => onDescargar(a)} aria-label={`Descargar ${a.nombre_original}`}>
           Descargar
         </Button>
       ) : null}
@@ -437,30 +513,33 @@ function ArchivoFila({ a, abrir, onDescargar }: { a: Archivo; abrir: boolean; on
   );
 }
 
-function RevisionEnCurso({ revision: r, onEditar, onArchivo, onEnviar, onVigente, onRevisar, onAutorizar, onPublicar, onReasignar, onDescargar, enviando }: { revision: Revision; onEditar: () => void; onArchivo: () => void; onEnviar: () => void; onVigente: () => void; onRevisar: () => void; onAutorizar: () => void; onPublicar: () => void; onReasignar: () => void; onDescargar: (a: Archivo) => void; enviando: boolean }) {
+function RevisionEnCurso({ revision: r, onDescargar }: { revision: Revision; onDescargar: (a: Archivo) => void }) {
   const activos = r.archivos.filter((a) => !a.reemplazado_en);
   const reemplazados = r.archivos.filter((a) => a.reemplazado_en);
+  const vencida = !!r.fecha_limite && r.fecha_limite < hoyLocal();
   return (
     <div className="flex flex-col gap-4">
-      {r.fecha_limite ? (
-        <p className={cn("text-[13px]", r.fecha_limite < hoyLocal() ? "font-semibold text-danger-text" : "text-ink-2")} data-testid="sgc-fecha-limite">
-          Fecha límite: {formatearFecha(r.fecha_limite)}
-          {r.fecha_limite < hoyLocal() ? " · vencida" : ""}
+      {r.fecha_limite || r.estado !== "borrador" ? (
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-3">
+          {r.fecha_limite ? (
+            <span className={cn(vencida && "font-semibold text-danger-text")} data-testid="sgc-fecha-limite">
+              Fecha límite: {formatearFecha(r.fecha_limite)}
+              {vencida ? " · vencida" : ""}
+            </span>
+          ) : null}
+          {r.estado !== "borrador" ? <span>Archivos bloqueados{r.enviada_revision_en ? ` desde el ${formatearFechaHora(r.enviada_revision_en)}` : ""}; para cambiarlos debe devolverse a borrador.</span> : null}
         </p>
       ) : null}
-      {r.estado !== "borrador" ? (
-        <Callout tone="info" title="Archivos bloqueados">
-          La revisión se envió a revisión{r.enviada_revision_en ? ` el ${formatearFechaHora(r.enviada_revision_en)}` : ""}: su archivo no se puede cambiar; para cambiarlo debe devolverse a borrador.
-        </Callout>
-      ) : null}
-      <dl className="grid gap-3 sm:grid-cols-2">
-        <Dato etiqueta="Motivo del cambio">{r.motivo_cambio || "—"}</Dato>
-        <Dato etiqueta="Apartados afectados">{r.apartados_afectados || "—"}</Dato>
-        <Dato etiqueta="Descripción del cambio">{r.descripcion_cambio || "—"}</Dato>
-        <Dato etiqueta="Responsables">
-          {r.elaborador_nombre || "Sin elaborador"} · {r.revisor_nombre || "sin revisor"} · {r.autorizador_nombre || "sin autorizador"}
-        </Dato>
-      </dl>
+      <Lista
+        datos={[
+          ["Motivo del cambio", r.motivo_cambio],
+          ["Apartados afectados", r.apartados_afectados],
+          ["Descripción del cambio", r.descripcion_cambio],
+          ["Elaborador", r.elaborador_nombre],
+          ["Revisor", r.revisor_nombre],
+          ["Autorizador", r.autorizador_nombre],
+        ]}
+      />
       <div className="flex flex-col gap-2">
         <h3 className="text-[13px] font-semibold text-ink">Archivos</h3>
         {activos.length ? (
@@ -482,34 +561,6 @@ function RevisionEnCurso({ revision: r, onEditar, onArchivo, onEnviar, onVigente
             </ul>
           </details>
         ) : null}
-      </div>
-      <div className="flex flex-wrap items-start gap-3">
-        {r.puede.editar.ok ? (
-          <Button size="sm" variant="secondary" icon={<PencilSimple size={15} />} onClick={onEditar} data-testid="sgc-editar-revision">
-            Editar datos
-          </Button>
-        ) : null}
-        <BotonPuede puede={r.puede.subir_archivo} icono={<CloudArrowUp size={15} />} onClick={onArchivo} testid="sgc-subir-archivo">
-          Cargar o sustituir archivo
-        </BotonPuede>
-        <BotonPuede puede={r.puede.enviar_revision} icono={<PaperPlaneTilt size={15} />} onClick={onEnviar} testid="sgc-enviar-revision" variante="primary" cargando={enviando}>
-          Enviar a revisión
-        </BotonPuede>
-        <BotonPuede puede={r.puede.revisar} icono={<ListChecks size={15} />} onClick={onRevisar} testid="sgc-revisar" variante="primary">
-          Revisar
-        </BotonPuede>
-        <BotonPuede puede={r.puede.autorizar} icono={<Signature size={15} />} onClick={onAutorizar} testid="sgc-autorizar" variante="primary">
-          Autorizar
-        </BotonPuede>
-        <BotonPuede puede={r.puede.publicar} icono={<SealCheck size={15} />} onClick={onPublicar} testid="sgc-publicar" variante="primary">
-          Publicar
-        </BotonPuede>
-        <BotonPuede puede={r.puede.reasignar} icono={<UserSwitch size={15} />} onClick={onReasignar} testid="sgc-reasignar">
-          Reasignar
-        </BotonPuede>
-        <BotonPuede puede={r.puede.registrar_vigente} icono={<SealCheck size={15} />} onClick={onVigente} testid="sgc-registrar-vigente">
-          Registrar vigente (carga inicial)
-        </BotonPuede>
       </div>
       <LineaTiempo pasos={r.linea_tiempo} />
     </div>
@@ -586,7 +637,7 @@ function Historial({ revisiones, onDescargar }: { revisiones: Revision[]; onDesc
                 <td className="py-2 pr-3 text-ink-2">{r.motivo_cambio || "—"}</td>
                 <td className="py-2">
                   {pdf && r.abrir ? (
-                    <Button size="sm" variant="ghost" icon={<DownloadSimple size={14} />} onClick={() => onDescargar(pdf)} aria-label={`Descargar el PDF de la revisión ${r.numero}`}>
+                    <Button size="sm" variant="ghost" icon={<ICONO_ACCION.descargar size={14} />} onClick={() => onDescargar(pdf)} aria-label={`Descargar el PDF de la revisión ${r.numero}`}>
                       PDF
                     </Button>
                   ) : (

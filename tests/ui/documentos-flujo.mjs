@@ -20,6 +20,7 @@ const BASE = process.env.BASE || "http://localhost:3100";
 process.env.BASE = `${BASE}/api`;
 const { api, credenciales, crearCheck, EMAIL, sesiones } = await import("../lib/calidad.mjs");
 const { pdfConTexto } = await import("../lib/archivos.mjs");
+const { accion, contarAccion, motivo, cerrarMenu, pestana } = await import("../lib/ficha.mjs");
 const executablePath = process.env.CHROME_PATH || path.join(os.homedir(), "Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing");
 const { check, terminar } = crearCheck();
 const stamp = Date.now().toString(36).slice(-4).toUpperCase();
@@ -84,7 +85,7 @@ try {
   /* ---------- Luis propone el cambio ---------- */
   await paso("luis", "Luis propone", async (page) => {
     await page.goto(`${BASE}/documentos/${D.id}`);
-    await page.getByTestId("sgc-proponer").click();
+    await (await accion(page, "sgc-proponer")).click();
     await page.locator("#sol-justificacion").fill("Actualizar la instrucción con el nuevo procedimiento de limpieza");
     await page.getByTestId("solicitud-guardar").click();
     await page.getByText("Solicitud #").first().waitFor();
@@ -115,7 +116,8 @@ try {
     await page.getByTestId("aceptar-guardar").click();
     await page.waitForURL((url) => url.pathname === `/documentos/${D.id}`);
     await page.getByTestId("sgc-en-curso").waitFor();
-    check("aceptada: la ficha muestra la revisión en curso con fecha límite y la vigente sigue", (await page.getByTestId("sgc-fecha-limite").count()) === 1 && (await page.getByTestId("sgc-visor").count()) === 1 && (await page.getByTestId("sgc-reasignar").isEnabled()));
+    check("aceptada: la ficha muestra la revisión en curso con fecha límite y la vigente sigue", (await page.getByTestId("sgc-fecha-limite").count()) === 1 && (await page.getByTestId("sgc-visor").count()) === 1 && (await (await accion(page, "sgc-reasignar")).isEnabled()));
+    await cerrarMenu(page);
   });
 
   // Luis carga el PDF y los datos del cambio por la API y la envía a revision.
@@ -129,10 +131,12 @@ try {
   }
   await paso("luis", "Luis envía a revisión", async (page) => {
     await page.goto(`${BASE}/documentos/${D.id}`);
-    await page.getByTestId("sgc-enviar-revision").click();
+    await (await accion(page, "sgc-enviar-revision")).click();
     await page.getByRole("button", { name: "Enviar a revisión", exact: true }).last().click();
-    await page.getByTestId("sgc-subir-archivo-motivo").waitFor();
-    check("el elaborador envía a revisión desde la ficha; el archivo queda bloqueado con su motivo", await page.getByTestId("sgc-subir-archivo").isDisabled());
+    await page.locator('[data-principal="1"][data-testid="sgc-enviar-revision"]').waitFor({ state: "detached" });
+    await page.getByText("Archivos bloqueados", { exact: false }).first().waitFor();
+    check("el elaborador envía a revisión desde la ficha; el archivo queda bloqueado con su motivo", (await (await accion(page, "sgc-subir-archivo")).isDisabled()) && (await motivo(page, "sgc-subir-archivo")).length > 0);
+    await cerrarMenu(page);
   });
 
   /* ---------- Revisor: bandeja, contador, devolver y aceptar ---------- */
@@ -143,7 +147,7 @@ try {
     check("el revisor tiene la tarea «Revisar» en su bandeja y contador en el menú", (await tarea.getAttribute("data-tipo")) === "revisar" && (await page.locator('[data-contador="/documentos"]').count()) === 1);
     await tarea.getByRole("button", { name: "Ir" }).click();
     await page.waitForURL((url) => url.pathname === `/documentos/${D.id}`);
-    await page.getByTestId("sgc-revisar").click();
+    await (await accion(page, "sgc-revisar")).click();
     await page.getByText("Devolver", { exact: true }).first().click();
     await page.getByTestId("decision-guardar").click();
     await page.getByText("Escribe el comentario").first().waitFor();
@@ -152,13 +156,13 @@ try {
     await page.locator("#decision-comentario").fill("Agrega la tabla de concentraciones");
     await page.getByTestId("decision-guardar").click();
     await page.getByTestId("sgc-revisar").waitFor({ state: "detached" });
-    check("devuelta: el revisor ya no tiene el botón «Revisar»", (await page.getByTestId("sgc-revisar").count()) === 0);
+    check("devuelta: el revisor ya no tiene la acción «Revisar» (ni como principal ni en el menú ⋯)", (await contarAccion(page, "sgc-revisar")) === 0);
   });
   check("devuelta: la revisión vuelve a borrador", (await revisionEnCurso())?.estado === "borrador");
   await api("POST", `/sgc/revisiones/${r2.id}/enviar-revision`, {}, t.luis);
   await paso("gabriela", "Gabriela acepta", async (page) => {
     await page.goto(`${BASE}/documentos/${D.id}`);
-    await page.getByTestId("sgc-revisar").click();
+    await (await accion(page, "sgc-revisar")).click();
     await page.getByTestId("decision-guardar").click();
     await page.getByTestId("sgc-revisar").waitFor({ state: "detached" });
     check("el revisor acepta: pasa a autorización", true);
@@ -168,13 +172,13 @@ try {
   await paso("ricardo", "Ricardo sin asignación", async (page) => {
     await page.goto(`${BASE}/documentos/${D.id}`);
     await page.getByTestId("sgc-en-curso").waitFor();
-    check("quien no está asignado (aunque tenga el permiso) no ve «Revisar» ni «Autorizar»", (await page.getByTestId("sgc-revisar").count()) === 0 && (await page.getByTestId("sgc-autorizar").count()) === 0 && (await page.getByTestId("sgc-publicar").count()) === 0);
+    check("quien no está asignado (aunque tenga el permiso) no ve «Revisar» ni «Autorizar»", (await contarAccion(page, "sgc-revisar")) === 0 && (await contarAccion(page, "sgc-autorizar")) === 0 && (await contarAccion(page, "sgc-publicar")) === 0);
   });
 
   /* ---------- Autorizar (contrasena) y publicar (contrasena) ---------- */
   await paso("patricia", "Patricia autoriza", async (page) => {
     await page.goto(`${BASE}/documentos/${D.id}`);
-    await page.getByTestId("sgc-autorizar").click();
+    await (await accion(page, "sgc-autorizar")).click();
     await page.getByTestId("decision-guardar").click();
     await contrasena(page, "patricia");
     await page.getByTestId("sgc-autorizar").waitFor({ state: "detached" });
@@ -182,10 +186,13 @@ try {
   });
   await paso("ana", "Ana publica", async (page) => {
     await page.goto(`${BASE}/documentos/${D.id}`);
-    await page.getByTestId("sgc-publicar").click();
+    await (await accion(page, "sgc-publicar")).click();
     await page.getByTestId("publicar-guardar").click();
     await contrasena(page, "ana");
     await page.getByTestId("sgc-en-curso").waitFor({ state: "detached" });
+    // Sin revision en curso la ficha abre en Detalles: el historial (plegado) vive en la pestaña Revisiones.
+    await pestana(page, "Revisiones");
+    await page.getByTestId("sgc-historial").locator("summary").first().click();
     await page.getByTestId("sgc-historial-fila").first().waitFor();
     const estados = await page.getByTestId("sgc-historial-fila").evaluateAll((filas) => filas.map((f) => `${f.getAttribute("data-numero")}:${f.getAttribute("data-estado")}`));
     check("publicada: la nueva vigente y la anterior obsoleta en el historial", estados.includes("2:vigente") && estados.includes("1:obsoleta"), estados.join(" "));
@@ -200,14 +207,14 @@ try {
     await page.goto(`${BASE}/documentos/${P.id}`);
     await page.getByTestId("sgc-aviso-pendiente").waitFor();
     check("pendiente de revisión: aviso en la ficha", true);
-    await page.getByTestId("sgc-renovar").click();
+    await (await accion(page, "sgc-renovar")).click();
     await page.locator("#ren-revisor").selectOption(String(id.gabriela));
     await page.locator("#ren-autorizador").selectOption(String(id.patricia));
     await page.getByTestId("renovar-guardar").click();
     await page.getByTestId("sgc-renovacion").waitFor();
     check("renovación iniciada desde la interfaz", true);
     await page.goto(`${BASE}/documentos/${D.id}`);
-    await page.getByTestId("sgc-obsoletar").click();
+    await (await accion(page, "sgc-obsoletar")).click();
     await page.locator("#obs-motivo").fill("La instrucción se integra en otro procedimiento");
     await page.getByTestId("obsoletar-guardar").click();
     await contrasena(page, "ana");
@@ -216,7 +223,7 @@ try {
   });
   await paso("gabriela", "Gabriela confirma la vigencia", async (page) => {
     await page.goto(`${BASE}/documentos/${P.id}`);
-    await page.getByTestId("sgc-renovacion-revisar").click();
+    await (await accion(page, "sgc-renovacion-revisar")).click();
     await page.locator("#decision-comentario").fill("El procedimiento sigue vigente sin cambios");
     await page.getByTestId("decision-guardar").click();
     await page.getByTestId("sgc-renovacion-revisar").waitFor({ state: "detached" });

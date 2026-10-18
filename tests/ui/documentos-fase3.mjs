@@ -19,6 +19,7 @@ const BASE = process.env.BASE || "http://localhost:3100";
 process.env.BASE = `${BASE}/api`;
 const { api, credenciales, crearCheck, EMAIL, sesiones } = await import("../lib/calidad.mjs");
 const { pdfConTexto } = await import("../lib/archivos.mjs");
+const { accion, contarAccion, motivo, cerrarMenu, pestana } = await import("../lib/ficha.mjs");
 const executablePath = process.env.CHROME_PATH || path.join(os.homedir(), "Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing");
 const { check, terminar } = crearCheck();
 const stamp = Date.now().toString(36).slice(-4).toUpperCase();
@@ -117,8 +118,10 @@ try {
     const seguimiento = (await page.getByTestId("sgc-externo").textContent()) || "";
     const claveFicha = await page.getByTestId("sgc-clave").innerText();
     check("el externo queda vigente y la ficha muestra «Externo» y su seguimiento", (await page.getByTestId("etiqueta-externo").count()) > 0 && seguimiento.includes("Secretaría de Salud") && claveFicha.trim() === IDENT, `${claveFicha} | ${seguimiento.slice(0, 120)}`);
-    check("externo: sin «Nueva revisión» del flujo interno (deshabilitada con su motivo)", (await page.getByTestId("sgc-nueva-revision-motivo").innerText()).includes("externos no pasan por el flujo"));
-    await page.getByTestId("ext-verificar").click();
+    check("externo: sin «Nueva revisión» del flujo interno (deshabilitada con su motivo en el menú ⋯)", (await (await accion(page, "sgc-nueva-revision")).isDisabled()) && (await motivo(page, "sgc-nueva-revision")).includes("externos no pasan por el flujo"));
+    await cerrarMenu(page);
+    check("externo: «Verificar vigencia» es la acción principal", (await page.locator('[data-principal="1"][data-testid="ext-verificar"]').count()) === 1);
+    await (await accion(page, "ext-verificar")).click();
     await page.getByTestId("ver-guardar").click();
     await page.getByText("Escribe cómo verificaste la vigencia").first().waitFor();
     await entendido(page);
@@ -131,10 +134,12 @@ try {
   /* ---------- Mejora Continua: distribucion ---------- */
   await paso("ana", "Ana: distribución", async (page) => {
     await page.goto(`${BASE}/documentos/${D.id}`);
+    await page.getByTestId("sgc-ficha").waitFor();
+    await pestana(page, "Lecturas");
     await page.getByTestId("sgc-distribucion").waitFor();
     const antes = await page.getByTestId("dist-fila").count();
     check("ficha: distribución con punto de uso y avance 0 %", antes === 1 && (await page.getByTestId("sgc-distribucion").innerText()).includes("Área de extracción") && (await page.getByTestId("dist-avance").getAttribute("data-porcentaje")) === "0");
-    await page.getByTestId("dist-agregar").click();
+    await (await accion(page, "dist-agregar")).click();
     await page.getByTestId("dist-guardar").click();
     await page.getByText("Elige al menos un rol o una persona").first().waitFor();
     await entendido(page);
@@ -164,7 +169,7 @@ try {
     await page.getByRole("button", { name: "Confirmo", exact: true }).click();
     await page.getByTestId("acuse-hecho").waitFor();
     check("acuse «Confirmo que leí y comprendí la revisión 1» registrado con fecha y hora", (await page.getByTestId("acuse-hecho").innerText()).includes("revisión 1"));
-    check("el destinatario sin permiso no ve «Agregar destinatarios»", (await page.getByTestId("dist-agregar").count()) === 0);
+    check("el destinatario sin permiso no ve «Agregar destinatarios»", (await contarAccion(page, "dist-agregar")) === 0);
     await page.goto(`${BASE}/documentos/lista-maestra`);
     await page.getByTestId("lm-tabla").waitFor();
     check("Lista Maestra sin «Ver PDF» para quien no la exporta", (await page.getByTestId("lm-pdf").count()) === 0);
@@ -213,6 +218,8 @@ try {
       await page.getByTestId("lm-tabla").waitFor();
       check("tableta: Lista Maestra sin desborde de página (la tabla se desplaza en su contenedor)", await sinDesborde(page));
       await page.goto(`${BASE}/documentos/${D.id}`);
+      await page.getByTestId("sgc-ficha").waitFor();
+      await pestana(page, "Lecturas");
       await page.getByTestId("sgc-distribucion").waitFor();
       check("tableta: ficha con distribución sin desbordes", await sinDesborde(page));
       await page.goto(`${BASE}/documentos/bandeja`);

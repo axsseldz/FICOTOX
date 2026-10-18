@@ -20,7 +20,9 @@ export function PestanasDeslizantes<T extends string>({ value, onChange, options
     else return;
     event.preventDefault();
     onChange(options[siguiente].value);
-    requestAnimationFrame(() => (event.currentTarget.querySelectorAll<HTMLButtonElement>("[role=tab]")[siguiente] as HTMLButtonElement | undefined)?.focus());
+    // La lista se toma antes del siguiente cuadro: para entonces `event.currentTarget` ya es null.
+    const lista = event.currentTarget;
+    requestAnimationFrame(() => (lista.querySelectorAll<HTMLButtonElement>("[role=tab]")[siguiente] as HTMLButtonElement | undefined)?.focus());
   };
   return (
     <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className={cn("relative grid rounded-full bg-surface-3/70 p-1", className)} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>

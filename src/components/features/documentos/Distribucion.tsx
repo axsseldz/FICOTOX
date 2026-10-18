@@ -74,7 +74,7 @@ export function SelectorDestinatarios({ valor, onChange, catalogos, prefijo }: {
 
 export const cuerpoDestinatarios = (d: Destinatarios) => ({ roles: d.roles, usuarios: d.usuarios, punto_uso: d.punto_uso.trim() || null, requiere_lectura: d.requiere_lectura });
 
-function AgregarDialog({ revisionId, numero, catalogos, onClose }: { revisionId: number; numero: number; catalogos: Catalogos | null; onClose: () => void }) {
+export function AgregarDialog({ revisionId, numero, catalogos, onClose }: { revisionId: number; numero: number; catalogos: Catalogos | null; onClose: () => void }) {
   const { token } = useSession();
   const [d, setD] = useState<Destinatarios>(destinatariosVacios);
   const [motivo, setMotivo] = useState("");
@@ -178,20 +178,13 @@ function RetirarDialog({ fila, onClose }: { fila: FilaDistribucion; onClose: () 
 }
 
 /* Acuse de la persona bajo el visor de la revision vigente. */
-export function AcuseLectura({ dist }: { dist: Distribucion }) {
+/* Confirmar la lectura de la revision vigente (acuse): pide confirmacion y lo registra. Lo usa la accion principal de la ficha. */
+export function useAcusarLectura(dist: Distribucion | null) {
   const { token } = useSession();
   const confirm = useConfirm();
   const [enviando, setEnviando] = useState(false);
-  const mia = dist.mi_lectura;
-  if (!mia?.requiere) return null;
-  if (mia.leido_en)
-    return (
-      <p className="flex items-center gap-2 rounded-[12px] bg-success-soft px-3.5 py-2.5 text-[13.5px] text-success-text" data-testid="acuse-hecho">
-        <CheckCircle size={17} weight="fill" aria-hidden="true" />
-        Confirmaste la lectura de la revisión {dist.numero} el {formatearFechaHora(mia.leido_en)}.
-      </p>
-    );
   const acusar = async () => {
+    if (!dist) return;
     const ok = await confirm({ title: `Confirmar la lectura de la revisión ${dist.numero}`, description: "Queda registrado con tu usuario, la revisión y la fecha y hora. No se puede deshacer.", confirmLabel: "Confirmo", tone: "primary" });
     if (!ok) return;
     setEnviando(true);
@@ -206,21 +199,43 @@ export function AcuseLectura({ dist }: { dist: Distribucion }) {
       setEnviando(false);
     }
   };
+  return { acusar, enviando };
+}
+
+/*
+ * Lectura requerida de la persona, bajo el visor: pendiente (con el boton para
+ * confirmar, salvo que la ficha ya lo ofrezca como accion principal: `sinBoton`)
+ * o confirmada con su fecha y hora.
+ */
+export function AcuseLectura({ dist, sinBoton = false }: { dist: Distribucion; sinBoton?: boolean }) {
+  const { acusar, enviando } = useAcusarLectura(dist);
+  const mia = dist.mi_lectura;
+  if (!mia?.requiere) return null;
+  if (mia.leido_en)
+    return (
+      <p className="flex items-center gap-2 rounded-[12px] bg-success-soft px-3.5 py-2.5 text-[13.5px] text-success-text" data-testid="acuse-hecho">
+        <CheckCircle size={17} weight="fill" aria-hidden="true" />
+        Confirmaste la lectura de la revisión {dist.numero} el {formatearFechaHora(mia.leido_en)}.
+      </p>
+    );
   return (
     <div id="acuse" className="flex scroll-mt-24 flex-wrap items-center gap-3 rounded-[12px] bg-brand-soft px-4 py-3 ring-1 ring-brand/25" data-testid="acuse-pendiente">
       <BookOpenText size={20} weight="duotone" className="text-brand-strong" aria-hidden="true" />
       <span className="min-w-0 flex-1 text-[13.5px] text-ink">
-        Este documento te fue distribuido{mia.puntos.length ? ` (${mia.puntos.join(", ")})` : ""} y requiere que confirmes su lectura. Léelo en el visor y confirma.
+        Este documento te fue distribuido{mia.puntos.length ? ` (${mia.puntos.join(", ")})` : ""} y requiere que confirmes su lectura. {sinBoton ? "Léelo en el visor y usa «Confirmar lectura» arriba." : "Léelo en el visor y confirma."}
       </span>
-      <Button icon={<CheckCircle size={16} />} loading={enviando} disabled={!dist.puede.acusar.ok} title={dist.puede.acusar.motivo} onClick={() => void acusar()} data-testid="acuse-confirmar">
-        Confirmo que leí y comprendí la revisión {dist.numero}
-      </Button>
+      {sinBoton ? null : (
+        <Button icon={<CheckCircle size={16} />} loading={enviando} disabled={!dist.puede.acusar.ok} title={dist.puede.acusar.motivo} onClick={() => void acusar()} data-testid="acuse-confirmar">
+          Confirmo que leí y comprendí la revisión {dist.numero}
+        </Button>
+      )}
     </div>
   );
 }
 
 /* Seccion "Distribucion y lecturas" de la ficha. */
-export function SeccionDistribucion({ dist, catalogos, obsoleto }: { dist: Distribucion | null; catalogos: Catalogos | null; obsoleto: boolean }) {
+/* `sinAgregar`: la ficha ofrece "Agregar destinatarios" en su menu ⋯ (no se repite aqui). */
+export function SeccionDistribucion({ dist, catalogos, obsoleto, sinAgregar = false }: { dist: Distribucion | null; catalogos: Catalogos | null; obsoleto: boolean; sinAgregar?: boolean }) {
   const { token } = useSession();
   const confirm = useConfirm();
   const [agregar, setAgregar] = useState(false);
@@ -307,9 +322,11 @@ export function SeccionDistribucion({ dist, catalogos, obsoleto }: { dist: Distr
       ) : null}
       {dist.puede.administrar.ok ? (
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="secondary" icon={<Plus size={15} />} onClick={() => setAgregar(true)} data-testid="dist-agregar">
-            Agregar destinatarios
-          </Button>
+          {sinAgregar ? null : (
+            <Button size="sm" variant="secondary" icon={<Plus size={15} />} onClick={() => setAgregar(true)} data-testid="dist-agregar">
+              Agregar destinatarios
+            </Button>
+          )}
           <Boton puede={dist.puede.recordatorio} onClick={() => void recordar()} cargando={recordando} />
         </div>
       ) : null}
