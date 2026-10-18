@@ -2,17 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, CaretDown, CaretUp, CornersIn, CornersOut, DownloadSimple, Printer } from "@phosphor-icons/react";
-import { ESTILOS_IMPRESION, useAncho } from "@/components/features/visor/comun";
+import { ArrowLeft, CaretDown, CaretUp, Warning } from "@phosphor-icons/react";
+import { ESTILOS_IMPRESION } from "@/components/features/visor/comun";
 import { descargarUrl, imprimirPdfUrl } from "@/components/features/visor/usarArchivo";
 import { VisorPdf } from "@/components/features/visor/VisorPdf";
 import { Callout } from "@/components/features/samples/FormLayout";
 import { StateBadge } from "@/components/features/samples/status";
 import { useSession } from "@/components/session/SessionProvider";
-import { Button, IconButton } from "@/components/ui/Button";
-import { cn } from "@/components/ui/cn";
+import { IconButton } from "@/components/ui/Button";
 import { API_BASE_URL } from "@/lib/client/api";
 import { explicarError } from "@/lib/client/mensajes";
 import { urlPdfInforme } from "@/lib/client/pdf";
@@ -38,11 +37,7 @@ const tienePdfFinal = (item: ApiRecord | undefined | null): boolean => !!item?.a
 export function VisorInforme({ item }: { item: ApiRecord }) {
   const { token } = useSession();
   const router = useRouter();
-  const raiz = useRef<HTMLDivElement | null>(null);
-  const amplia = useAncho(1024);
   const [encabezado, setEncabezado] = useState(true);
-  const [completa, setCompleta] = useState(false);
-  const [descargando, setDescargando] = useState(false);
   const id = Number(item.id);
   const folio = String(item.folio || "Informe");
   const version = Number(item.version || 1);
@@ -54,35 +49,19 @@ export function VisorInforme({ item }: { item: ApiRecord }) {
   const cliente = String((item.cliente as ApiRecord | undefined)?.nombre || "");
   const fichaHref = `/informes/${id}`;
 
-  useEffect(() => {
-    const cambio = () => setCompleta(document.fullscreenElement === raiz.current);
-    document.addEventListener("fullscreenchange", cambio);
-    return () => document.removeEventListener("fullscreenchange", cambio);
-  }, []);
-
   // Con el archivo faltante no hay nada que mostrar: se consulta una vez para que el servidor registre la alerta y la incidencia.
   useEffect(() => {
     if (integridad !== "faltante" || !token) return;
     void fetch(urlPdfInforme(id), { headers: { Authorization: `Bearer ${token}` } }).catch(() => undefined);
   }, [integridad, id, token]);
 
-  const pantallaCompleta = async () => {
-    try {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      else await raiz.current?.requestFullscreen();
-    } catch {
-      toast.error("El navegador no permitió la pantalla completa");
-    }
-  };
+  // Descargar e imprimir viven en la barra del visor (con el mismo permiso de siempre: el informe se puede ver).
   const descargar = async () => {
-    setDescargando(true);
     try {
       await descargarUrl(`${API_BASE_URL}/informes/${id}/pdf`, token, `${folio.replace(/\s+/g, "-")}-v${version}${tienePdf ? "" : "-vista-previa"}.pdf`);
     } catch (err) {
       const e = explicarError(err, "No se pudo descargar el PDF");
       toast.error(e.que, { description: e.hacer });
-    } finally {
-      setDescargando(false);
     }
   };
   const imprimir = async () => {
@@ -96,7 +75,7 @@ export function VisorInforme({ item }: { item: ApiRecord }) {
 
   const hayAvisos = !tienePdf || integridad === "alterado" || integridad === "faltante" || estado === "sustituido" || estado === "anulado";
   return (
-    <div ref={raiz} className={cn("flex flex-col overflow-hidden bg-canvas", completa ? "h-dvh" : "-mx-4 -my-6 h-[calc(100dvh-56px)] sm:-mx-8 sm:-my-8 lg:h-dvh")} data-visor data-visor-informe>
+    <div className="-mx-4 -my-6 flex h-[calc(100dvh-56px)] flex-col overflow-hidden bg-canvas sm:-mx-8 sm:-my-8 lg:h-dvh" data-visor data-visor-informe>
       <style>{ESTILOS_IMPRESION}</style>
       {encabezado ? (
         <header className="material z-10 flex flex-wrap items-center gap-2 border-b border-line/70 px-3 py-2 sm:px-4">
@@ -123,22 +102,6 @@ export function VisorInforme({ item }: { item: ApiRecord }) {
                 ))}
               </select>
             ) : null}
-            <span className="hidden sm:contents">
-              <Button variant="secondary" size="sm" icon={<DownloadSimple size={15} />} onClick={descargar} loading={descargando}>
-                Descargar
-              </Button>
-            </span>
-            <span className="contents sm:hidden">
-              <IconButton label="Descargar" onClick={descargar}>
-                <DownloadSimple size={17} />
-              </IconButton>
-            </span>
-            <IconButton label="Imprimir" onClick={imprimir} disabled={integridad === "faltante"}>
-              <Printer size={17} />
-            </IconButton>
-            <IconButton label={completa ? "Salir de pantalla completa" : "Pantalla completa"} onClick={pantallaCompleta}>
-              {completa ? <CornersIn size={17} /> : <CornersOut size={17} />}
-            </IconButton>
             <IconButton label="Ocultar encabezado" onClick={() => setEncabezado(false)}>
               <CaretUp size={16} />
             </IconButton>
@@ -158,11 +121,13 @@ export function VisorInforme({ item }: { item: ApiRecord }) {
             </Callout>
           ) : null}
           {integridad === "alterado" || integridad === "faltante" ? (
-            <div data-testid="visor-aviso-integridad">
-              <Callout tone="danger" title={integridad === "faltante" ? "El PDF no está en el servidor" : "El PDF no coincide con su huella SHA-256"}>
-                {integridad === "faltante" ? "No se puede mostrar este informe. " : "El contenido pudo alterarse fuera de la plataforma; no lo entregues hasta aclararlo. "}
-                Se registró una alerta de integridad en la bitácora y una incidencia para Calidad.
-              </Callout>
+            <div data-testid="visor-aviso-integridad" role="alert" className="-mx-3 -mt-2 flex items-start gap-2 border-b border-danger/25 bg-danger-soft px-3 py-1.5 text-[12.5px] text-danger sm:-mx-4 sm:px-4">
+              <Warning size={15} weight="bold" className="mt-0.5 shrink-0" />
+              <p>
+                <b className="font-semibold">{integridad === "faltante" ? "El PDF no está en el servidor." : "El PDF no coincide con su huella SHA-256."}</b>{" "}
+                {integridad === "faltante" ? "No se puede mostrar este informe. " : "No lo entregues hasta aclararlo. "}
+                Se registró una alerta en la bitácora y una incidencia para Calidad.
+              </p>
             </div>
           ) : null}
           {estado === "sustituido" ? (
@@ -189,7 +154,7 @@ export function VisorInforme({ item }: { item: ApiRecord }) {
       ) : null}
 
       <div className="min-h-0 min-w-0 flex-1" data-visor-contenido>
-        {integridad === "faltante" ? null : <VisorPdf key={id} url={urlPdfInforme(id)} ambito="informes" docId={id} compacto={!amplia} />}
+        {integridad === "faltante" ? null : <VisorPdf key={id} url={urlPdfInforme(id)} ambito="informes" docId={id} acciones={{ descargar, imprimir }} />}
       </div>
     </div>
   );

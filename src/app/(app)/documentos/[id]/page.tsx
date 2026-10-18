@@ -11,8 +11,7 @@ import { ArchivoDialog, RegistrarVigenteDialog, RevisionSheet } from "@/componen
 import { DecisionDialog, ObsoletarDialog, OPCIONES_AUTORIZADOR, OPCIONES_RENOVACION_AUTORIZADOR, OPCIONES_RENOVACION_REVISOR, OPCIONES_REVISOR, PublicarDialog, ReasignarDialog, RenovarDialog } from "@/components/features/documentos/FlujoDialogs";
 import { SolicitudSheet } from "@/components/features/documentos/SolicitudSheets";
 import { Callout } from "@/components/features/samples/FormLayout";
-import { useAncho } from "@/components/features/visor/comun";
-import { descargarUrl } from "@/components/features/visor/usarArchivo";
+import { descargarUrl, imprimirPdfUrl } from "@/components/features/visor/usarArchivo";
 import { VisorPdf } from "@/components/features/visor/VisorPdf";
 import { PageBody } from "@/components/shell/AppShell";
 import { useSession } from "@/components/session/SessionProvider";
@@ -51,7 +50,6 @@ function Ficha({ id }: { id: string }) {
   const { token } = useSession();
   const catalogos = useCatalogos();
   const confirm = useConfirm();
-  const amplia = useAncho(1024);
   const [editar, setEditar] = useState(false);
   const [revisionSheet, setRevisionSheet] = useState<{ revision: Revision | null } | null>(null);
   const [archivoDe, setArchivoDe] = useState<Revision | null>(null);
@@ -99,6 +97,14 @@ function Ficha({ id }: { id: string }) {
   const pdfVigente = activo(vigente, "pdf");
   const fuenteVigente = activo(vigente, "fuente");
 
+  const imprimirVigente = async (a: Archivo) => {
+    try {
+      await imprimirPdfUrl(urlArchivoSgc(a.id), token);
+    } catch (err) {
+      const e = explicarError(err, "No se pudo preparar la impresión");
+      toast.error(e.que, { description: e.hacer });
+    }
+  };
   const descargar = async (a: Archivo) => {
     try {
       await descargarUrl(urlArchivoSgc(a.id, "descargar"), token, a.nombre_original);
@@ -228,7 +234,7 @@ function Ficha({ id }: { id: string }) {
                 ) : null}
                 {vigente.abrir && pdfVigente ? (
                   <div className="h-[72vh] min-h-[420px] overflow-hidden rounded-[12px] ring-1 ring-line" data-testid="sgc-visor">
-                    <VisorPdf key={pdfVigente.id} url={urlArchivoSgc(pdfVigente.id)} ambito="sgc" docId={item.id} compacto={!amplia} />
+                    <VisorPdf key={pdfVigente.id} url={urlArchivoSgc(pdfVigente.id)} ambito="sgc" docId={item.id} acciones={{ descargar: () => void descargar(pdfVigente), imprimir: () => void imprimirVigente(pdfVigente) }} />
                   </div>
                 ) : !vigente.abrir ? (
                   <p className="text-[13px] text-ink-3">El archivo no se muestra en la vista de diagnóstico.</p>
