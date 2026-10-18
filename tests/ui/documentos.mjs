@@ -79,10 +79,15 @@ try {
         const c = page.locator(`[data-testid="sgc-carpeta"][data-area="${codigo}"]`);
         const texto = await c.innerText();
         const banda = await c.locator("span").first().evaluate((el) => getComputedStyle(el).backgroundColor);
-        if (!texto.includes(codigo) || banda !== rgb(hex) || !/Vigentes/.test(texto)) colores = false;
+        if (!texto.includes(codigo) || banda !== rgb(hex) || !/\d/.test(texto)) colores = false;
       }
-      check("cada carpeta con sigla, nombre, color HEX del área (banda) y conteos con texto", colores);
-      check("menú Calidad: Incidencias y NC · Documentos SGC · Auditoría · Respaldos", (await page.locator('aside[aria-label="Navegación principal"] nav a').allInnerTexts()).map((x) => x.replace(/^(Documentos SGC)\s*\d+$/, "$1")).join("|").includes("Incidencias y NC|Documentos SGC|Auditoría|Respaldos"));
+      check("cada carpeta con sigla, nombre, color HEX del área (banda) y su conteo de vigentes", colores);
+      // Documentos SGC es un grupo propio del menú, con sus subitems (solo los que la persona puede ver).
+      const desplegar = page.getByRole("button", { name: "Desplegar Documentos SGC" });
+      if (await desplegar.count()) await desplegar.click();
+      await page.locator('aside[aria-label="Navegación principal"] a', { hasText: "Lista Maestra" }).first().waitFor();
+      const subitems = (await page.locator('aside[aria-label="Navegación principal"] a').allInnerTexts()).map((x) => x.trim());
+      check("menú: Documentos SGC con subitems Documentos, Bandeja, Solicitudes, Externos y Lista Maestra", ["Documentos", "Bandeja", "Solicitudes", "Externos", "Lista Maestra"].every((x) => subitems.includes(x)), subitems.join("|"));
 
       await page.locator('[data-testid="sgc-carpeta"][data-area="TC"]').click();
       await page.waitForURL((url) => url.pathname === "/documentos/explorar" && url.searchParams.get("area") === "TC");

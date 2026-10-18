@@ -89,12 +89,11 @@ try {
   /* ---------- Mejora Continua: vista general y externo ---------- */
   await paso("ana", "Ana: vista general y externo", async (page) => {
     await page.goto(`${BASE}/documentos`);
-    await page.getByTestId("sgc-indicadores").waitFor();
-    const ids = await page.getByTestId("sgc-indicadores").locator("[data-testid^=ind-]").evaluateAll((xs) => xs.map((x) => x.getAttribute("data-testid")));
-    check("vista general: vigentes, en revisión y autorización, por publicar, pendientes y lecturas", ["ind-vigentes", "ind-revision", "ind-publicar", "ind-pendientes", "ind-lecturas"].every((x) => ids.includes(x)), ids.join(","));
-    check("vista general: accesos a Externos y Lista Maestra; actividad reciente", (await page.getByTestId("sgc-ir-externos").count()) === 1 && (await page.getByTestId("sgc-ir-maestra").count()) === 1 && (await page.getByTestId("sgc-actividad").count()) === 1);
+    await page.getByTestId("sgc-carpetas").waitFor();
+    check("inicio: sin indicadores, actividad ni accesos duplicados (viven en el menú)", (await page.getByTestId("sgc-indicadores").count()) === 0 && (await page.getByTestId("sgc-actividad").count()) === 0 && (await page.getByTestId("sgc-ir-externos").count()) === 0);
+    check("inicio: buscador de documentos", (await page.getByTestId("sgc-buscador").count()) === 1);
     check("modo claro por omisión", (await page.evaluate(() => document.documentElement.dataset.theme || "light")) !== "dark");
-    await page.getByTestId("sgc-ir-externos").click();
+    await page.locator('aside[aria-label="Navegación principal"] a[href="/documentos/externos"]').first().click();
     await page.getByRole("heading", { name: "Documentos externos" }).waitFor();
     await page.getByTestId("ext-registrar").click();
     await page.locator("#ext-id").fill(`FX-ABC-${stamp}`);
@@ -204,7 +203,7 @@ try {
     "oscuro y tableta",
     async (page) => {
       await page.goto(`${BASE}/documentos`);
-      await page.getByTestId("sgc-indicadores").waitFor();
+      await page.getByTestId("sgc-carpetas").waitFor();
       check("modo oscuro: vista general con el tema oscuro", (await page.evaluate(() => document.documentElement.dataset.theme || "")) === "dark");
       check("tableta: vista general sin desbordes", await sinDesborde(page));
       await page.goto(`${BASE}/documentos/externos`);
