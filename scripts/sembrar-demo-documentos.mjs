@@ -40,8 +40,11 @@ try {
   console.error(`No se pudo leer ${archivoUsuarios}. Indica el archivo de cuentas con --usuarios.`);
   process.exit(2);
 }
+// Por nombre o por una de sus palabras, sin distinguir acentos ("sofía" encuentra a "Sofía" y a "Ana Sofía Torres Vega").
+const sinAcentos = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 const cuenta = (nombre) => {
-  const u = lista.find((x) => String(x.nombre).toLowerCase() === nombre);
+  const buscado = sinAcentos(nombre);
+  const u = lista.find((x) => sinAcentos(x.nombre) === buscado) || lista.find((x) => sinAcentos(x.nombre).split(/\s+/).includes(buscado));
   if (!u) {
     console.error(`Falta la cuenta de ${nombre} en ${path.basename(archivoUsuarios)}.`);
     process.exit(2);
