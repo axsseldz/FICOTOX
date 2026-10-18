@@ -1,33 +1,44 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { CaretLeft, CaretRight, ListBullets, MagnifyingGlass, MagnifyingGlassMinus, MagnifyingGlassPlus, MoonStars, SidebarSimple, SquaresFour, X } from "@phosphor-icons/react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type UIEvent } from "react";
+import { BookOpenText, CaretDown, CaretLeft, CaretRight, CornersIn, CornersOut, DownloadSimple, ListBullets, MagnifyingGlass, MagnifyingGlassMinus, MagnifyingGlassPlus, MoonStars, Printer, SidebarSimple, SquaresFour, X } from "@phosphor-icons/react";
 import { useSession } from "@/components/session/SessionProvider";
 import { IconButton } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
-import { ErrorState, Skeleton } from "@/components/ui/Primitives";
 import { explicarError } from "@/lib/client/mensajes";
 import { abrirPdfUrl, cargarPdfjs, type PdfDocumento } from "@/lib/client/pdf";
 
 /*
- * Visor interno de PDF (Documentos SGC, informes) con pdf.js (carga progresiva por rangos):
- * - solo se dibujan las paginas cercanas a la vista (IntersectionObserver);
- * - capa de texto (TextLayer) para seleccionar y buscar con resaltado;
- * - miniaturas plegables e indice del PDF (getOutline) si lo tiene;
- * - zoom: ajustar al ancho, a la pagina, porcentajes, Ctrl + rueda y pellizco;
- * - pagina N de M, flechas y teclado (←/→, RePag/AvPag, Inicio/Fin, Ctrl+F);
- * - recuerda la ultima pagina leida por persona y documento.
+ * Visor interno de PDF (Documentos SGC, informes, reportes y NC) con pdf.js (carga progresiva por rangos):
+ * - el documento es lo principal: paginas centradas, nitidas a la densidad de la pantalla;
+ * - una sola barra flotante abajo: se oculta sola al leer y reaparece al mover el cursor, al subir o al tocar;
+ * - solo se dibujan las paginas cercanas a la vista (IntersectionObserver), con siluetas mientras cargan;
+ * - capa de texto para seleccionar y buscar con resaltado; miniaturas e indice plegables (cerrados por omision);
+ * - zoom: ajustar al ancho (con ancho maximo de lectura), a la pagina, 100 % o porcentajes; se recuerda por persona;
+ * - teclado (flechas, RePag/AvPag, +/−, F, Ctrl+F, Esc) y tableta (pellizco, doble toque, deslizar);
+ * - modo Lectura: el documento a pantalla completa dentro de la plataforma; Esc lo cierra;
+ * - descargar e imprimir solo si la persona tiene permiso (si no, deshabilitados con el motivo).
  */
 
 /* 100 % = tamano real (pt a px CSS). */
 const PT_A_PX = 96 / 72;
 const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+/* Ancho maximo comodo de lectura para "Ajustar al ancho" (px CSS). */
+const ANCHO_LECTURA = 900;
 type Zoom = { modo: "ancho" } | { modo: "pagina" } | { modo: "valor"; valor: number };
 
 interface Coincidencia {
   pagina: number;
   /* Indice de la coincidencia dentro de la pagina (orden de los fragmentos de texto). */
   k: number;
+}
+
+/* Acciones de la barra. Sin accion (o con `null`) el boton queda deshabilitado con su motivo. */
+export interface AccionesVisor {
+  descargar?: (() => void) | null;
+  imprimir?: (() => void) | null;
+  motivoDescargar?: string;
+  motivoImprimir?: string;
 }
 
 const ESTILOS = `
@@ -40,21 +51,33 @@ const ESTILOS = `
 .visor-textlayer ::selection { background: color-mix(in srgb, var(--color-brand) 30%, transparent); color: transparent; }
 .visor-textlayer .endOfContent { display: block; position: absolute; inset: 100% 0 0; z-index: 0; cursor: default; user-select: none; }
 .visor-resaltado { background: color-mix(in srgb, var(--color-warning) 45%, transparent); color: transparent; border-radius: 2px; }
+.visor-resaltado-actual { background: color-mix(in srgb, var(--color-bloom) 60%, transparent); box-shadow: 0 0 0 1px var(--color-bloom); }
 /* Lectura nocturna: solo en pantalla invierte suavemente la pagina (no cambia el documento ni lo impreso). */
 .visor-nocturna [data-pagina] { filter: invert(0.88) hue-rotate(180deg) contrast(0.95); }
 [data-pagina] { transition: filter 260ms ease; }
 @media print { .visor-nocturna [data-pagina] { filter: none; } }
 @media (prefers-reduced-motion: reduce) { [data-pagina] { transition: none; } }
-.visor-resaltado-actual { background: color-mix(in srgb, var(--color-bloom) 60%, transparent); box-shadow: 0 0 0 1px var(--color-bloom); }
 `;
 
 const claveUltimaPagina = (usuario: unknown, docId: number | string, ambito: string) => `ficotox.${ambito}.pagina.${String(usuario || "anon")}.${docId}`;
+const claveZoom = (usuario: unknown) => `ficotox.visor.zoom.${String(usuario || "anon")}`;
 const leerUltimaPagina = (clave: string): number => {
   try {
     return Number(window.localStorage.getItem(clave)) || 1;
   } catch {
     return 1;
   }
+};
+/* Zoom recordado por persona; si el valor guardado no sirve, ajustar al ancho. */
+const leerZoom = (clave: string): Zoom => {
+  try {
+    const v = JSON.parse(window.localStorage.getItem(clave) || "null");
+    if (v?.modo === "ancho" || v?.modo === "pagina") return { modo: v.modo };
+    if (v?.modo === "valor" && typeof v.valor === "number" && v.valor >= 0.25 && v.valor <= 5) return { modo: "valor", valor: v.valor };
+  } catch {
+    /* sin almacenamiento o dato invalido */
+  }
+  return { modo: "ancho" };
 };
 
 /* Resalta las apariciones de `consulta` dentro de los fragmentos de la capa de texto; devuelve las marcas en orden. */
@@ -92,6 +115,23 @@ function resaltar(capa: HTMLElement, consulta: string): HTMLElement[] {
   return marcas;
 }
 
+/* Silueta de una pagina mientras se dibuja: bloque con lineas de texto que pulsan (sin movimiento con reduced-motion). */
+function SilhuetaPagina({ className }: { className?: string }) {
+  return (
+    <div className={cn("flex flex-col gap-2.5 p-[9%] motion-safe:animate-pulse", className)} aria-hidden="true">
+      <span className="h-3 w-2/5 rounded bg-surface-3" />
+      <span className="mt-2 h-2 w-full rounded bg-surface-3/70" />
+      <span className="h-2 w-[94%] rounded bg-surface-3/70" />
+      <span className="h-2 w-[88%] rounded bg-surface-3/70" />
+      <span className="h-2 w-full rounded bg-surface-3/70" />
+      <span className="h-2 w-[72%] rounded bg-surface-3/70" />
+      <span className="mt-4 h-2 w-full rounded bg-surface-3/70" />
+      <span className="h-2 w-[96%] rounded bg-surface-3/70" />
+      <span className="h-2 w-[60%] rounded bg-surface-3/70" />
+    </div>
+  );
+}
+
 function PaginaPdf({ pdf, n, escala, base, cerca, consulta, actualK, onMarcas }: { pdf: PdfDocumento; n: number; escala: number; base: { w: number; h: number }; cerca: boolean; consulta: string; actualK: number; onMarcas?: (n: number, marcas: HTMLElement[]) => void }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const capaRef = useRef<HTMLDivElement | null>(null);
@@ -110,6 +150,7 @@ function PaginaPdf({ pdf, n, escala, base, cerca, consulta, actualK, onMarcas }:
       const vistaBase = pagina.getViewport({ scale: 1 });
       setTam((prev) => (prev && prev.w === vistaBase.width && prev.h === vistaBase.height ? prev : { w: vistaBase.width, h: vistaBase.height }));
       const vista = pagina.getViewport({ scale: escala });
+      // Densidad de la pantalla: el documento se ve nitido en retina.
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const canvas = canvasRef.current;
       const capa = capaRef.current;
@@ -158,7 +199,7 @@ function PaginaPdf({ pdf, n, escala, base, cerca, consulta, actualK, onMarcas }:
     <div data-pagina={n} className="relative mx-auto bg-papel shadow-[0_1px_3px_rgba(16,32,43,0.18),0_8px_24px_-12px_rgba(16,32,43,0.25)]" style={{ width: w, height: h }}>
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
       <div ref={capaRef} className="visor-textlayer" />
-      {dibujada === null ? <span className="absolute inset-0 flex items-center justify-center text-[12px] text-ink-4">Página {n}</span> : null}
+      {dibujada === null ? <SilhuetaPagina className="absolute inset-0" /> : null}
     </div>
   );
 }
@@ -231,36 +272,72 @@ function Indice({ nodos, onIr, nivel = 0 }: { nodos: NodoIndice[]; onIr: (dest: 
   );
 }
 
-/* `url`: archivo protegido (con Range); `ambito` y `docId`: clave de la ultima pagina leida. */
-export function VisorPdf({ url, ambito, docId, compacto }: { url: string; ambito: string; docId: number | string; compacto: boolean }) {
+const SIN_PERMISO_DESCARGAR = "No tienes permiso para descargar este archivo";
+const SIN_PERMISO_IMPRIMIR = "No tienes permiso para imprimir este archivo";
+
+/* `url`: archivo protegido (con Range); `ambito` y `docId`: clave de la ultima pagina leida y del zoom. */
+export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito: string; docId: number | string; acciones?: AccionesVisor }) {
   const { token, user } = useSession();
   const [pdf, setPdf] = useState<PdfDocumento | null>(null);
   const [error, setError] = useState<unknown>(null);
+  const [reintento, setReintento] = useState(0);
   const [base, setBase] = useState<{ w: number; h: number }>({ w: 612, h: 792 });
-  const [zoom, setZoom] = useState<Zoom>({ modo: "ancho" });
+  const clave = claveUltimaPagina(user?.id || user?.email, docId, ambito);
+  const zoomClave = claveZoom(user?.id || user?.email);
+  const [zoom, setZoom] = useState<Zoom>(() => leerZoom(zoomClave));
   const [area, setArea] = useState({ w: 800, h: 600 });
   const [pagina, setPagina] = useState(1);
   // Texto del campo de pagina mientras se escribe (null = muestra la pagina actual).
   const [paginaTexto, setPaginaTexto] = useState<string | null>(null);
   const [cerca, setCerca] = useState<Set<number>>(() => new Set([1, 2]));
-  // Miniaturas abiertas en pantallas medianas o grandes; en la angosta, ocultas.
-  const [panel, setPanel] = useState<"miniaturas" | "indice" | null>(() => (compacto && typeof window !== "undefined" && !window.matchMedia("(min-width: 768px)").matches ? null : "miniaturas"));
+  // Miniaturas e indice cerrados por omision.
+  const [panel, setPanel] = useState<"miniaturas" | "indice" | null>(null);
   const [indice, setIndice] = useState<NodoIndice[]>([]);
   const [buscando, setBuscando] = useState(false);
   const [consultaTexto, setConsultaTexto] = useState("");
   const [consulta, setConsulta] = useState("");
   const [coincidencias, setCoincidencias] = useState<Coincidencia[]>([]);
   const [actual, setActual] = useState(0);
-  // Lectura nocturna (opcional, no se guarda en el documento).
   const [nocturna, setNocturna] = useState(false);
+  const [lectura, setLectura] = useState(false);
+  const [completa, setCompleta] = useState(false);
+  const [menuZoom, setMenuZoom] = useState(false);
+  // Barra flotante: visible al empezar, se oculta sola al leer y reaparece con el cursor, el scroll hacia arriba o un toque.
+  const [barra, setBarra] = useState(true);
+  const [sobreBarra, setSobreBarra] = useState(false);
+  const fijadaRef = useRef(false);
+  const temporizadorBarra = useRef<number | null>(null);
+  const ultimoTop = useRef(0);
+  const raiz = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const buscarRef = useRef<HTMLInputElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const textos = useRef<Map<number, string[]>>(new Map());
   const marcasPorPagina = useRef<Map<number, HTMLElement[]>>(new Map());
-  const clavePagina = claveUltimaPagina(user?.id || user?.email, docId, ambito);
   const restaurada = useRef(false);
+  const ocultarBarra = useCallback(() => {
+    if (temporizadorBarra.current) window.clearTimeout(temporizadorBarra.current);
+    temporizadorBarra.current = window.setTimeout(() => {
+      if (!fijadaRef.current) setBarra(false);
+    }, 3000);
+  }, []);
+  const mostrarBarra = useCallback(() => {
+    setBarra(true);
+    ocultarBarra();
+  }, [ocultarBarra]);
+  // Con la busqueda, el menu o el cursor sobre la barra, la barra no se oculta.
+  const fijada = buscando || menuZoom || sobreBarra;
+  useEffect(() => {
+    fijadaRef.current = fijada;
+    if (fijada) {
+      if (temporizadorBarra.current) window.clearTimeout(temporizadorBarra.current);
+    } else ocultarBarra();
+  }, [fijada, ocultarBarra]);
+  useEffect(() => () => {
+    if (temporizadorBarra.current) window.clearTimeout(temporizadorBarra.current);
+  }, []);
 
-  // Cargar el PDF (progresivo) y su indice.
+  // Cargar el PDF (progresivo) y su indice. `reintento` lo vuelve a intentar.
   useEffect(() => {
     if (!token) return;
     let vivo = true;
@@ -273,6 +350,7 @@ export function VisorPdf({ url, ambito, docId, compacto }: { url: string; ambito
         const v = p1.getViewport({ scale: 1 });
         setBase({ w: v.width, h: v.height });
         setPdf(doc);
+        mostrarBarra();
         const outline = (await doc.getOutline().catch(() => null)) as NodoIndice[] | null;
         if (vivo && outline?.length) setIndice(outline);
       } catch (err) {
@@ -283,7 +361,7 @@ export function VisorPdf({ url, ambito, docId, compacto }: { url: string; ambito
       vivo = false;
       void doc?.loadingTask.destroy();
     };
-  }, [url, token]);
+  }, [url, token, reintento, mostrarBarra]);
 
   // Tamano del area visible (para ajustar al ancho o a la pagina).
   useLayoutEffect(() => {
@@ -296,8 +374,17 @@ export function VisorPdf({ url, ambito, docId, compacto }: { url: string; ambito
     return () => ro.disconnect();
   }, [pdf]);
 
+  // El zoom elegido se recuerda por persona.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(zoomClave, JSON.stringify(zoom));
+    } catch {
+      /* sin almacenamiento */
+    }
+  }, [zoom, zoomClave]);
+
   const escala = useMemo(() => {
-    const anchoUtil = Math.max(200, area.w - 48);
+    const anchoUtil = Math.max(200, Math.min(area.w - 48, ANCHO_LECTURA));
     if (zoom.modo === "ancho") return Math.min(anchoUtil / base.w, 4);
     if (zoom.modo === "pagina") return Math.min(anchoUtil / base.w, Math.max(200, area.h - 32) / base.h);
     return zoom.valor * PT_A_PX;
@@ -307,8 +394,8 @@ export function VisorPdf({ url, ambito, docId, compacto }: { url: string; ambito
 
   // Paginas cercanas a la vista (se dibujan) y pagina actual (la mas visible).
   useEffect(() => {
-    const raiz = scrollRef.current;
-    if (!raiz || !pdf) return;
+    const raizScroll = scrollRef.current;
+    if (!raizScroll || !pdf) return;
     const cercanas = new IntersectionObserver(
       (entradas) => {
         setCerca((prev) => {
@@ -320,7 +407,7 @@ export function VisorPdf({ url, ambito, docId, compacto }: { url: string; ambito
           return sig.size === prev.size ? prev : sig;
         });
       },
-      { root: raiz, rootMargin: "800px 0px" },
+      { root: raizScroll, rootMargin: "800px 0px" },
     );
     const visibles = new Map<number, number>();
     const actualIo = new IntersectionObserver(
@@ -331,9 +418,9 @@ export function VisorPdf({ url, ambito, docId, compacto }: { url: string; ambito
         for (const [n, r] of visibles) if (r > ratio || (r === ratio && n < mejor)) [mejor, ratio] = [n, r];
         if (mejor) setPagina(mejor);
       },
-      { root: raiz, threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] },
+      { root: raizScroll, threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] },
     );
-    for (const el of Array.from(raiz.querySelectorAll<HTMLElement>("[data-pagina]"))) {
+    for (const el of Array.from(raizScroll.querySelectorAll<HTMLElement>("[data-pagina]"))) {
       cercanas.observe(el);
       actualIo.observe(el);
     }
@@ -357,17 +444,17 @@ export function VisorPdf({ url, ambito, docId, compacto }: { url: string; ambito
   useEffect(() => {
     if (!pdf || restaurada.current) return;
     restaurada.current = true;
-    const ultima = leerUltimaPagina(clavePagina);
+    const ultima = leerUltimaPagina(clave);
     if (ultima > 1 && ultima <= pdf.numPages) window.setTimeout(() => irA(ultima, "auto"), 60);
-  }, [pdf, clavePagina, irA]);
+  }, [pdf, clave, irA]);
   useEffect(() => {
     if (!restaurada.current) return;
     try {
-      window.localStorage.setItem(clavePagina, String(pagina));
+      window.localStorage.setItem(clave, String(pagina));
     } catch {
       /* sin almacenamiento */
     }
-  }, [pagina, clavePagina]);
+  }, [pagina, clave]);
 
   // Al cambiar la escala, la pagina actual sigue a la vista.
   const paginaRef = useRef(pagina);
@@ -378,7 +465,16 @@ export function VisorPdf({ url, ambito, docId, compacto }: { url: string; ambito
     if (pdf) irA(paginaRef.current, "auto");
   }, [escala, pdf, irA]);
 
-  // Ctrl + rueda y pellizco.
+  const pasoZoom = useCallback(
+    (dir: 1 | -1) => {
+      const actualZ = escala / PT_A_PX;
+      const sig = dir > 0 ? ZOOMS.find((z) => z > actualZ + 0.01) : [...ZOOMS].reverse().find((z) => z < actualZ - 0.01);
+      setZoom({ modo: "valor", valor: sig ?? (dir > 0 ? Math.min(5, actualZ * 1.25) : Math.max(0.25, actualZ / 1.25)) });
+    },
+    [escala],
+  );
+
+  // Ctrl + rueda, pellizco, doble toque (acercar o ajustar) y deslizar entre paginas (tableta).
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -389,31 +485,75 @@ export function VisorPdf({ url, ambito, docId, compacto }: { url: string; ambito
       fijar(Math.exp(-e.deltaY * 0.0025));
     };
     let distancia = 0;
-    const toque = (e: TouchEvent) => {
-      if (e.touches.length !== 2) return;
+    let pellizco = false;
+    let inicio: { x: number; y: number; t: number } | null = null;
+    let tapAnterior: { x: number; y: number; t: number } | null = null;
+    const pinzaMover = (e: TouchEvent) => {
       const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-      if (e.type === "touchstart") distancia = d;
-      else if (distancia) {
+      if (distancia) {
         e.preventDefault();
         fijar(d / distancia);
-        distancia = d;
       }
+      distancia = d;
+    };
+    const toque = (e: TouchEvent) => {
+      if (e.type === "touchstart") {
+        if (e.touches.length === 2) {
+          pellizco = true;
+          inicio = null;
+          distancia = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+        } else if (e.touches.length === 1) {
+          pellizco = false;
+          inicio = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+        }
+        return;
+      }
+      if (e.type === "touchmove") {
+        if (e.touches.length === 2) pinzaMover(e);
+        else inicio = null;
+        return;
+      }
+      // touchend: solo cuando se levanta el ultimo dedo.
+      if (e.touches.length > 0) return;
+      const termino = e.changedTouches[0];
+      if (pellizco || !inicio || !termino) {
+        pellizco = false;
+        distancia = 0;
+        inicio = null;
+        return;
+      }
+      const dx = termino.clientX - inicio.x;
+      const dy = termino.clientY - inicio.y;
+      const duracion = Date.now() - inicio.t;
+      const quieto = Math.hypot(dx, dy) < 12 && duracion < 300;
+      if (quieto) {
+        const ahora = Date.now();
+        if (tapAnterior && ahora - tapAnterior.t < 320 && Math.hypot(termino.clientX - tapAnterior.x, termino.clientY - tapAnterior.y) < 30) {
+          // Doble toque: alterna entre ajustar al ancho y 200 %.
+          tapAnterior = null;
+          setZoom((z) => (z.modo === "valor" && z.valor >= 2 ? { modo: "ancho" } : { modo: "valor", valor: 2 }));
+        } else tapAnterior = { x: termino.clientX, y: termino.clientY, t: ahora };
+      } else {
+        tapAnterior = null;
+        // Deslizar horizontal (sin desplazamiento lateral de la pagina) cambia de pagina.
+        const sinDesplazamientoLateral = el.scrollWidth <= el.clientWidth + 1;
+        if (sinDesplazamientoLateral && duracion < 600 && Math.abs(dx) > 60 && Math.abs(dx) > 1.5 * Math.abs(dy)) irA(pagina + (dx < 0 ? 1 : -1));
+      }
+      inicio = null;
+      pellizco = false;
+      distancia = 0;
     };
     el.addEventListener("wheel", rueda, { passive: false });
     el.addEventListener("touchstart", toque, { passive: true });
     el.addEventListener("touchmove", toque, { passive: false });
+    el.addEventListener("touchend", toque, { passive: true });
     return () => {
       el.removeEventListener("wheel", rueda);
       el.removeEventListener("touchstart", toque);
       el.removeEventListener("touchmove", toque);
+      el.removeEventListener("touchend", toque);
     };
-  }, [escala]);
-
-  const pasoZoom = (dir: 1 | -1) => {
-    const actualZ = escala / PT_A_PX;
-    const sig = dir > 0 ? ZOOMS.find((z) => z > actualZ + 0.01) : [...ZOOMS].reverse().find((z) => z < actualZ - 0.01);
-    setZoom({ modo: "valor", valor: sig ?? (dir > 0 ? Math.min(5, actualZ * 1.25) : Math.max(0.25, actualZ / 1.25)) });
-  };
+  }, [escala, irA, pagina]);
 
   // Busqueda en todo el documento: cuenta por fragmento de texto (igual que el resaltado).
   const buscar = useCallback(
@@ -453,6 +593,11 @@ export function VisorPdf({ url, ambito, docId, compacto }: { url: string; ambito
     setActual(sig);
     irA(coincidencias[sig].pagina);
   };
+  const cerrarBusqueda = () => {
+    setBuscando(false);
+    setConsultaTexto("");
+    void buscar("");
+  };
   const onMarcas = useCallback((n: number, marcas: HTMLElement[]) => {
     marcasPorPagina.current.set(n, marcas);
   }, []);
@@ -476,14 +621,66 @@ export function VisorPdf({ url, ambito, docId, compacto }: { url: string; ambito
     }
   };
 
+  // Pantalla completa del navegador (sobre el propio visor).
+  const pantallaCompleta = useCallback(async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await raiz.current?.requestFullscreen();
+    } catch {
+      /* el navegador no permitio la pantalla completa */
+    }
+  }, []);
+  useEffect(() => {
+    const cambio = () => setCompleta(document.fullscreenElement === raiz.current);
+    document.addEventListener("fullscreenchange", cambio);
+    return () => document.removeEventListener("fullscreenchange", cambio);
+  }, []);
+
+  // Modo Lectura: Esc lo cierra sin cerrar lo que lo contiene (captura antes que el resto).
+  useEffect(() => {
+    if (!lectura) return;
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || (e.target as HTMLElement).closest?.("input")) return;
+      e.stopPropagation();
+      setLectura(false);
+    };
+    window.addEventListener("keydown", tecla, true);
+    return () => window.removeEventListener("keydown", tecla, true);
+  }, [lectura]);
+
+  // Cerrar el menu de zoom al pulsar fuera.
+  useEffect(() => {
+    if (!menuZoom) return;
+    const fuera = (e: PointerEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuZoom(false);
+    };
+    document.addEventListener("pointerdown", fuera);
+    return () => document.removeEventListener("pointerdown", fuera);
+  }, [menuZoom]);
+
+  const alDesplazar = (e: UIEvent<HTMLDivElement>) => {
+    const top = e.currentTarget.scrollTop;
+    if (top > ultimoTop.current + 2) {
+      if (!fijadaRef.current) setBarra(false);
+    } else if (top < ultimoTop.current - 2) mostrarBarra();
+    ultimoTop.current = top;
+  };
+
   const teclado = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    mostrarBarra();
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
       e.preventDefault();
+      mostrarBarra();
       setBuscando(true);
       window.setTimeout(() => buscarRef.current?.focus(), 0);
       return;
     }
+    if (e.key === "Escape" && menuZoom) {
+      setMenuZoom(false);
+      return;
+    }
     if ((e.target as HTMLElement).closest("input, textarea, select")) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === "ArrowRight" || e.key === "PageDown") {
       e.preventDefault();
       irA(pagina + 1);
@@ -496,141 +693,55 @@ export function VisorPdf({ url, ambito, docId, compacto }: { url: string; ambito
     } else if (e.key === "End") {
       e.preventDefault();
       irA(total);
+    } else if (e.key === "+" || e.key === "=") {
+      e.preventDefault();
+      pasoZoom(1);
+    } else if (e.key === "-" || e.key === "_") {
+      e.preventDefault();
+      pasoZoom(-1);
+    } else if (e.key === "f" || e.key === "F") {
+      e.preventDefault();
+      void pantallaCompleta();
     }
   };
 
-  if (error) return <div className="p-6"><ErrorState message={explicarError(error, "No se pudo abrir el PDF").que} /></div>;
+  // Descargar e imprimir: solo con permiso (si no, el boton queda deshabilitado con su motivo).
+  const descargar = acciones?.descargar ?? null;
+  const imprimir = acciones?.imprimir ?? null;
+  const motivoDescargar = acciones?.motivoDescargar || SIN_PERMISO_DESCARGAR;
+  const motivoImprimir = acciones?.motivoImprimir || SIN_PERMISO_IMPRIMIR;
 
-  return (
-    <div className="flex h-full min-h-0 flex-col" data-testid="visor-pdf" onKeyDown={teclado}>
-      <style>{ESTILOS}</style>
-      {/* Barra del PDF: paneles, pagina, zoom y busqueda. */}
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-line bg-surface px-2 py-1.5 sm:gap-2 sm:px-3">
-        <span className="hidden md:contents">
-          <IconButton label={panel ? "Ocultar panel lateral" : "Mostrar miniaturas"} onClick={() => setPanel((p) => (p ? null : "miniaturas"))} aria-pressed={!!panel}>
-            <SidebarSimple size={17} />
-          </IconButton>
-        </span>
-        <div className="flex items-center gap-1">
-          <IconButton label="Página anterior" onClick={() => irA(pagina - 1)} disabled={pagina <= 1}>
-            <CaretLeft size={16} weight="bold" />
-          </IconButton>
-          <label className="flex items-center gap-1 text-[13px] text-ink-2">
-            <span className="sr-only">Página</span>
-            <input
-              data-testid="visor-pagina-actual"
-              value={paginaTexto ?? String(pagina)}
-              inputMode="numeric"
-              onChange={(e) => setPaginaTexto(e.target.value.replace(/\D/g, ""))}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  irA(Number(paginaTexto ?? pagina) || 1);
-                  setPaginaTexto(null);
-                }
-              }}
-              onBlur={() => setPaginaTexto(null)}
-              aria-label="Página actual"
-              className="tnum h-8 w-12 rounded-[8px] border border-line bg-surface-2 px-1.5 text-center text-[13px] text-ink focus:border-brand/55 focus:outline-none"
-            />
-            <span className="tnum whitespace-nowrap">
-              de <span data-testid="visor-total-paginas">{total || "…"}</span>
-            </span>
-          </label>
-          <IconButton label="Página siguiente" onClick={() => irA(pagina + 1)} disabled={!total || pagina >= total}>
-            <CaretRight size={16} weight="bold" />
-          </IconButton>
-        </div>
-        <div className="mx-0.5 hidden h-5 w-px bg-line sm:block" />
-        <div className="flex items-center gap-1">
-          <IconButton label="Alejar" onClick={() => pasoZoom(-1)}>
-            <MagnifyingGlassMinus size={17} />
-          </IconButton>
-          <select
-            aria-label="Zoom"
-            value={zoom.modo === "valor" ? "valor" : zoom.modo}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v === "ancho" || v === "pagina") setZoom({ modo: v });
-              else if (v !== "valor") setZoom({ modo: "valor", valor: Number(v) });
+  if (error)
+    return (
+      <div className="flex h-full min-h-[320px] items-center justify-center p-6">
+        <div role="alert" className="flex flex-col items-center gap-3 text-center">
+          <p className="text-[15px] font-semibold text-ink">No se pudo cargar el documento</p>
+          <p className="max-w-md text-[13px] text-ink-3">{explicarError(error, "No se pudo abrir el PDF").hacer}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setReintento((r) => r + 1);
             }}
-            className="h-8 rounded-[8px] border border-line bg-surface-2 px-1.5 text-[12.5px] text-ink focus:border-brand/55 focus:outline-none"
+            className="press h-8 rounded-[8px] bg-surface px-3 text-[13px] font-medium text-ink shadow-card hover:bg-surface-2"
           >
-            <option value="ancho">Ajustar al ancho</option>
-            <option value="pagina">Ajustar a la página</option>
-            {zoom.modo === "valor" && !ZOOMS.includes(zoom.valor) ? <option value="valor">{porcentaje} %</option> : null}
-            {ZOOMS.map((z) => (
-              <option key={z} value={zoom.modo === "valor" && zoom.valor === z ? "valor" : z}>
-                {Math.round(z * 100)} %
-              </option>
-            ))}
-          </select>
-          <IconButton label="Acercar" onClick={() => pasoZoom(1)}>
-            <MagnifyingGlassPlus size={17} />
-          </IconButton>
-          <span data-testid="visor-zoom" className="tnum hidden min-w-[3.2rem] text-right text-[12px] text-ink-3 sm:inline">
-            {porcentaje} %
-          </span>
-          <IconButton label={nocturna ? "Quitar lectura nocturna" : "Lectura nocturna"} onClick={() => setNocturna((v) => !v)} aria-pressed={nocturna} className={nocturna ? "bg-brand-soft text-brand-strong" : undefined}>
-            <MoonStars size={17} weight={nocturna ? "fill" : "regular"} />
-          </IconButton>
-        </div>
-        <div className="ml-auto flex items-center gap-1">
-          {buscando ? (
-            <div className="flex items-center gap-1">
-              <input
-                ref={buscarRef}
-                data-testid="visor-buscar"
-                type="search"
-                value={consultaTexto}
-                placeholder="Buscar en el documento"
-                aria-label="Buscar en el documento"
-                onChange={(e) => setConsultaTexto(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    if (consultaTexto.trim().toLowerCase() === consulta && coincidencias.length) irCoincidencia(actual + (e.shiftKey ? -1 : 1));
-                    else void buscar(consultaTexto);
-                  } else if (e.key === "Escape") {
-                    setBuscando(false);
-                    setConsultaTexto("");
-                    void buscar("");
-                  }
-                }}
-                className="h-8 w-36 rounded-[8px] border border-line bg-surface-2 px-2 text-[13px] text-ink focus:border-brand/55 focus:outline-none sm:w-52"
-              />
-              <span data-testid="visor-resultados" className="tnum min-w-[4.5rem] text-center text-[12px] text-ink-3" aria-live="polite">
-                {consulta ? (coincidencias.length ? `${actual + 1} de ${coincidencias.length}` : "Sin resultados") : ""}
-              </span>
-              <IconButton label="Coincidencia anterior" onClick={() => irCoincidencia(actual - 1)} disabled={!coincidencias.length}>
-                <CaretLeft size={15} />
-              </IconButton>
-              <IconButton label="Coincidencia siguiente" onClick={() => irCoincidencia(actual + 1)} disabled={!coincidencias.length}>
-                <CaretRight size={15} />
-              </IconButton>
-              <IconButton
-                label="Cerrar búsqueda"
-                onClick={() => {
-                  setBuscando(false);
-                  setConsultaTexto("");
-                  void buscar("");
-                }}
-              >
-                <X size={15} />
-              </IconButton>
-            </div>
-          ) : (
-            <IconButton
-              label="Buscar en el documento (Ctrl+F)"
-              onClick={() => {
-                setBuscando(true);
-                window.setTimeout(() => buscarRef.current?.focus(), 0);
-              }}
-            >
-              <MagnifyingGlass size={17} />
-            </IconButton>
-          )}
+            Reintentar
+          </button>
         </div>
       </div>
+    );
+
+  return (
+    <div
+      ref={raiz}
+      className={cn("relative flex h-full min-h-0 flex-col", lectura && "fixed inset-0 z-[var(--z-ventana)] h-auto bg-black/85")}
+      data-testid="visor-pdf"
+      data-lectura={lectura || undefined}
+      onKeyDown={teclado}
+      onPointerMove={mostrarBarra}
+      onTouchStart={mostrarBarra}
+    >
+      <style>{ESTILOS}</style>
 
       <div className="flex min-h-0 flex-1">
         {panel && pdf ? (
@@ -658,19 +769,182 @@ export function VisorPdf({ url, ambito, docId, compacto }: { url: string; ambito
             </div>
           </aside>
         ) : null}
-        <div ref={scrollRef} tabIndex={0} aria-label="Páginas del PDF" className={cn("scroll-thin relative min-h-0 flex-1 overflow-auto bg-surface-3/70 outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--color-brand)]", nocturna && "visor-nocturna")}>
+        <div ref={scrollRef} tabIndex={0} onScroll={alDesplazar} aria-label="Páginas del PDF" className={cn("scroll-thin relative min-h-0 flex-1 overflow-auto outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--color-brand)]", lectura ? "bg-transparent" : "bg-surface-3/70", nocturna && "visor-nocturna")}>
           {!pdf ? (
-            <div className="mx-auto flex max-w-[720px] flex-col gap-4 p-6">
-              <Skeleton className="h-[480px] w-full" />
+            <div className="mx-auto flex w-[min(90%,600px)] flex-col gap-4 py-8" role="status" aria-label="Cargando el documento">
+              <div className="aspect-[0.77] w-full rounded-[4px] bg-papel shadow-[0_1px_3px_rgba(16,32,43,0.18)]">
+                <SilhuetaPagina className="h-full" />
+              </div>
             </div>
           ) : (
-            <div className="flex min-w-max flex-col items-center gap-4 px-6 py-5">
+            <div className="flex min-w-max flex-col items-center gap-4 px-6 pt-5 pb-24">
               {Array.from({ length: total }, (_, i) => (
                 <PaginaPdf key={i + 1} pdf={pdf} n={i + 1} escala={escala} base={base} cerca={cerca.has(i + 1)} consulta={consulta} actualK={actualC && actualC.pagina === i + 1 ? actualC.k : -1} onMarcas={onMarcas} />
               ))}
             </div>
           )}
         </div>
+      </div>
+
+      {/* Barra flotante: una sola, centrada abajo. */}
+      <div
+        role="toolbar"
+        aria-label="Controles del documento"
+        onPointerEnter={() => setSobreBarra(true)}
+        onPointerLeave={() => setSobreBarra(false)}
+        onFocus={mostrarBarra}
+        className={cn(
+          "absolute bottom-4 left-1/2 z-20 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-full border border-line/70 bg-surface/85 px-2 py-1 text-ink-2 shadow-card backdrop-blur-md transition-[opacity,transform] duration-200 motion-reduce:transition-none",
+          barra ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0",
+        )}
+        data-testid="visor-barra"
+      >
+        <span className="hidden md:contents">
+          <IconButton label={panel ? "Ocultar panel lateral" : "Mostrar miniaturas"} onClick={() => setPanel((p) => (p ? null : "miniaturas"))} aria-pressed={!!panel}>
+            <SidebarSimple size={17} />
+          </IconButton>
+        </span>
+        <IconButton label="Página anterior" onClick={() => irA(pagina - 1)} disabled={pagina <= 1}>
+          <CaretLeft size={16} weight="bold" />
+        </IconButton>
+        <label className="flex items-center gap-1 text-[13px] text-ink-2">
+          <span className="sr-only">Página</span>
+          <input
+            data-testid="visor-pagina-actual"
+            value={paginaTexto ?? String(pagina)}
+            inputMode="numeric"
+            onChange={(e) => setPaginaTexto(e.target.value.replace(/\D/g, ""))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                irA(Number(paginaTexto ?? pagina) || 1);
+                setPaginaTexto(null);
+              }
+            }}
+            onBlur={() => setPaginaTexto(null)}
+            aria-label="Página actual"
+            className="tnum h-8 w-11 rounded-[8px] border border-line bg-surface-2 px-1.5 text-center text-[13px] text-ink focus:border-brand/55 focus:outline-none"
+          />
+          <span className="tnum whitespace-nowrap">
+            de <span data-testid="visor-total-paginas">{total || "…"}</span>
+          </span>
+        </label>
+        <IconButton label="Página siguiente" onClick={() => irA(pagina + 1)} disabled={!total || pagina >= total}>
+          <CaretRight size={16} weight="bold" />
+        </IconButton>
+
+        <div className="mx-0.5 hidden h-5 w-px bg-line sm:block" />
+
+        <IconButton label="Alejar (−)" onClick={() => pasoZoom(-1)}>
+          <MagnifyingGlassMinus size={17} />
+        </IconButton>
+        <div ref={menuRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setMenuZoom((v) => !v)}
+            aria-haspopup="menu"
+            aria-expanded={menuZoom}
+            aria-label="Zoom"
+            title="Zoom"
+            className="press flex h-8 items-center gap-0.5 rounded-[8px] px-1.5 text-[12.5px] text-ink hover:bg-surface-3/80"
+          >
+            <span data-testid="visor-zoom" className="tnum min-w-[3.2rem] text-center">
+              {porcentaje} %
+            </span>
+            <CaretDown size={11} />
+          </button>
+          {menuZoom ? (
+            <div role="menu" aria-label="Opciones de zoom" className="absolute bottom-full left-1/2 mb-2 flex w-44 -translate-x-1/2 flex-col rounded-[12px] border border-line bg-surface p-1 text-[13px] shadow-card">
+              {[
+                { etiqueta: "Ajustar al ancho", zoom: { modo: "ancho" } as Zoom },
+                { etiqueta: "Página completa", zoom: { modo: "pagina" } as Zoom },
+                { etiqueta: "100 %", zoom: { modo: "valor", valor: 1 } as Zoom },
+              ].map((op) => (
+                <button
+                  key={op.etiqueta}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setZoom(op.zoom);
+                    setMenuZoom(false);
+                  }}
+                  className="press rounded-[8px] px-2.5 py-1.5 text-left text-ink-2 hover:bg-surface-3 hover:text-ink"
+                >
+                  {op.etiqueta}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <IconButton label="Acercar (+)" onClick={() => pasoZoom(1)}>
+          <MagnifyingGlassPlus size={17} />
+        </IconButton>
+
+        <div className="mx-0.5 hidden h-5 w-px bg-line sm:block" />
+
+        {buscando ? (
+          <div className="flex items-center gap-1">
+            <input
+              ref={buscarRef}
+              data-testid="visor-buscar"
+              type="search"
+              value={consultaTexto}
+              placeholder="Buscar en el documento"
+              aria-label="Buscar en el documento"
+              onChange={(e) => setConsultaTexto(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (consultaTexto.trim().toLowerCase() === consulta && coincidencias.length) irCoincidencia(actual + (e.shiftKey ? -1 : 1));
+                  else void buscar(consultaTexto);
+                } else if (e.key === "Escape") {
+                  e.stopPropagation();
+                  cerrarBusqueda();
+                }
+              }}
+              className="h-8 w-32 rounded-[8px] border border-line bg-surface-2 px-2 text-[13px] text-ink focus:border-brand/55 focus:outline-none sm:w-48"
+            />
+            <span data-testid="visor-resultados" className="tnum min-w-[4.5rem] text-center text-[12px] text-ink-3" aria-live="polite">
+              {consulta ? (coincidencias.length ? `${actual + 1} de ${coincidencias.length}` : "Sin resultados") : ""}
+            </span>
+            <IconButton label="Coincidencia anterior" onClick={() => irCoincidencia(actual - 1)} disabled={!coincidencias.length}>
+              <CaretLeft size={15} />
+            </IconButton>
+            <IconButton label="Coincidencia siguiente" onClick={() => irCoincidencia(actual + 1)} disabled={!coincidencias.length}>
+              <CaretRight size={15} />
+            </IconButton>
+            <IconButton label="Cerrar búsqueda" onClick={cerrarBusqueda}>
+              <X size={15} />
+            </IconButton>
+          </div>
+        ) : (
+          <IconButton
+            label="Buscar en el documento (Ctrl+F)"
+            onClick={() => {
+              setBuscando(true);
+              window.setTimeout(() => buscarRef.current?.focus(), 0);
+            }}
+          >
+            <MagnifyingGlass size={17} />
+          </IconButton>
+        )}
+        <IconButton label={nocturna ? "Quitar lectura nocturna" : "Lectura nocturna"} onClick={() => setNocturna((v) => !v)} aria-pressed={nocturna} className={nocturna ? "bg-brand-soft text-brand-strong" : undefined}>
+          <MoonStars size={17} weight={nocturna ? "fill" : "regular"} />
+        </IconButton>
+        <IconButton label={lectura ? "Salir del modo Lectura (Esc)" : "Modo Lectura"} onClick={() => setLectura((v) => !v)} aria-pressed={lectura}>
+          <BookOpenText size={17} />
+        </IconButton>
+        <IconButton label={completa ? "Salir de pantalla completa (F)" : "Pantalla completa (F)"} onClick={() => void pantallaCompleta()}>
+          {completa ? <CornersIn size={17} /> : <CornersOut size={17} />}
+        </IconButton>
+
+        <div className="mx-0.5 hidden h-5 w-px bg-line sm:block" />
+
+        <IconButton label={descargar ? "Descargar" : `Descargar: ${motivoDescargar}`} onClick={descargar ?? undefined} disabled={!descargar}>
+          <DownloadSimple size={17} />
+        </IconButton>
+        <IconButton label={imprimir ? "Imprimir" : `Imprimir: ${motivoImprimir}`} onClick={imprimir ?? undefined} disabled={!imprimir}>
+          <Printer size={17} />
+        </IconButton>
       </div>
     </div>
   );
