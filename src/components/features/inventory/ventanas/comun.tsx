@@ -181,6 +181,14 @@ export const esEntrada = (m: ApiRecord) => {
 
 /* Cantidad sin signo (el signo lo da la flecha y el color) y rotulo del tipo. */
 export const cantidadMovimiento = (m: ApiRecord): number => Math.abs(Number(m.cantidad) || 0);
+
+/* Cantidad con su unidad en singular cuando es exactamente 1 ("1 unidad", "1 litro"); las abreviaturas (L, mL, g) no cambian. */
+export function conUnidad(cantidad: number, unidad: string | null | undefined): string {
+  const u = String(unidad || "").trim();
+  if (!u) return fmt(cantidad);
+  const singular = cantidad === 1 ? (/es$/.test(u) && /(d|n|l|r)es$/.test(u) ? u.slice(0, -2) : /[aeiou]s$/.test(u) ? u.slice(0, -1) : u) : u;
+  return `${fmt(cantidad)} ${singular}`;
+}
 export const TIPO_MOVIMIENTO: Record<string, string> = { entrada: "Entrada", salida: "Salida", consumo: "Consumo", ajuste: "Ajuste por conteo" };
 export const tipoMovimiento = (m: ApiRecord): string => TIPO_MOVIMIENTO[String(m.tipo || "").toLowerCase()] || (esEntrada(m) ? "Entrada" : "Salida");
 
@@ -255,8 +263,7 @@ export function MovimientosRecientes({ tabla, id, unidad }: { tabla: "reactivos"
             <IconoMovimientoInsumo m={m} />
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="text-[13.5px] font-medium text-ink">
-                {tipoMovimiento(m)} de {fmt(cantidadMovimiento(m))}
-                {unidad || m.unidad ? ` ${unidad || m.unidad}` : ""}
+                {tipoMovimiento(m)} de {conUnidad(cantidadMovimiento(m), String(unidad || m.unidad || ""))}
               </span>
               <span className="break-words text-[12.5px] text-ink-3">
                 {origen.href ? (

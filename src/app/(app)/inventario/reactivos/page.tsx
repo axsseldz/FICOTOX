@@ -255,11 +255,11 @@ function ReactivosContent() {
         vacio={{
           icono: <Flask size={20} />,
           titulo: search || filter !== "todos" ? "Sin coincidencias" : "Aún no hay reactivos",
-          descripcion: search || filter !== "todos" ? "Prueba con otro término o cambia el filtro." : "Crea el primero con «Nuevo reactivo.",
+          descripcion: search || filter !== "todos" ? "Prueba con otro término o cambia el filtro." : "Crea el primero con «Nuevo reactivo».",
           accion: canCreate && !search && filter === "todos" ? <Button onClick={() => modal.open(null)}>Nuevo reactivo</Button> : undefined,
         }}
       />
-      {items && visible.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-4">{visible.length === 1 ? "1 reactivo" : `${fmt(visible.length)} reactivos`}</p> : null}
+      {items && visible.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-3">{visible.length === 1 ? "1 reactivo" : `${fmt(visible.length)} reactivos`}</p> : null}
 
       <InsumoVentana
         tipo="reactivo"

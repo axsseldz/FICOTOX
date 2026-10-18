@@ -12,9 +12,8 @@ import { useResource } from "@/lib/client/store";
 import type { ApiRecord } from "@/lib/client/types";
 
 /*
- * Reportes de mantenimiento en PDF (modulo equipos). Antes vivian en una
- * pestaña del flujo anterior de documentos; desde su retiro viven
- * aqui, junto a los mantenimientos que los generan. Misma API (/api/documents).
+ * Reportes de mantenimiento en PDF (modulo equipos), junto a los mantenimientos
+ * que los generan. Misma API (/api/documents).
  */
 const COLUMNAS: ColumnaLista[] = [
   { clave: "codigo", titulo: "Reporte", ancho: "minmax(220px,1.4fr)" },
@@ -74,9 +73,9 @@ export function ReportesMantenimiento() {
           ];
         }}
         anchoExtremo="12px"
-        vacio={{ icono: <FileText size={20} />, titulo: "Sin reportes", descripcion: "Los reportes en PDF se generan desde el menú de cada mantenimiento." }}
+        vacio={{ icono: <FileText size={20} />, titulo: "Sin reportes", descripcion: "Aquí aparecen los reportes en PDF ligados a los mantenimientos." }}
       />
-      {recurso.data && items.length ? <p className="tnum px-1 text-[12px] text-ink-4">{items.length === 1 ? "1 reporte" : `${fmt(items.length)} reportes`}</p> : null}
+      {recurso.data && items.length ? <p className="tnum px-1 text-[12px] text-ink-3">{items.length === 1 ? "1 reporte" : `${fmt(items.length)} reportes`}</p> : null}
     </section>
   );
 }

@@ -239,7 +239,7 @@ function MantenimientoContent() {
           accion: canCreate && !filtered ? <Button onClick={() => modal.open(null)}>Programar mantenimiento</Button> : undefined,
         }}
       />
-      {items && visible.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-4">{visible.length === 1 ? "1 registro" : `${fmt(visible.length)} registros`}</p> : null}
+      {items && visible.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-3">{visible.length === 1 ? "1 registro" : `${fmt(visible.length)} registros`}</p> : null}
 
       <MantenimientoVentana
         items={visible}
