@@ -109,6 +109,7 @@ try {
     await page.goto(`${BASE}/documentos`);
     await page.getByTestId("sgc-carpetas").waitFor();
     const solicitud = page.getByTestId("sgc-nueva-solicitud");
+    await solicitud.waitFor();
     const nuevaFicha = page.getByTestId("sgc-nueva-ficha");
     check("inicio (Mejora Continua): «Nueva solicitud» principal y «Nueva ficha» secundaria", (await solicitud.count()) === 1 && (await nuevaFicha.count()) === 1 && (await fondo(solicitud)) !== (await fondo(nuevaFicha)), `${await fondo(solicitud)} / ${await fondo(nuevaFicha)}`);
     await solicitud.click();
@@ -119,6 +120,8 @@ try {
   await paso("luis", "inicio: solo Nueva solicitud", async (page) => {
     await page.goto(`${BASE}/documentos`);
     await page.getByTestId("sgc-carpetas").waitFor();
+    // Los botones aparecen cuando llegan los permisos (catálogos), que pueden llegar después que las carpetas.
+    await page.getByTestId("sgc-nueva-solicitud").waitFor();
     check("inicio (quien solo propone): «Nueva solicitud» sin «Nueva ficha»", (await page.getByTestId("sgc-nueva-solicitud").count()) === 1 && (await page.getByTestId("sgc-nueva-ficha").count()) === 0);
   });
 

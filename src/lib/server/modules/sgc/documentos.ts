@@ -194,6 +194,8 @@ const enDias = (dias: number) => {
 /* Vigente con proxima revision en los siguientes 30 dias (o ya pasada). */
 const proximaRevision = (x: DocLista, limite = enDias(30)) => !!x.vigente?.fecha_proxima_revision && String(x.vigente.fecha_proxima_revision) <= limite;
 const enProceso = (x: DocLista) => !!x.trabajo && x.trabajo.estado !== "borrador";
+/* En elaboracion, revision o autorizacion: con una revision de trabajo visible, o sin revision vigente todavia. */
+const enCurso = (x: DocLista) => !!x.trabajo || x.doc.estado === "en_elaboracion";
 const enBorrador = (x: DocLista) => x.trabajo?.estado === "borrador";
 
 export async function resumenSgc({ request, s }: RouteContext): Promise<Response> {
@@ -234,6 +236,9 @@ export async function resumenSgc({ request, s }: RouteContext): Promise<Response
       lecturas_mias: mias.length,
       lecturas_globales: administra ? await lecturasPendientesGlobales(s, vigentesRev.map((v) => v.revision_id)) : null,
       externos: activos.filter((x) => x.doc.origen === "externo").length,
+      // Inicio del modulo: los mismos criterios que los filtros de la lista (estado=en_curso y estado=pendiente_revision).
+      en_curso: activos.filter(enCurso).length,
+      proximos_revision: activos.filter((x) => proximaRevision(x)).length,
     },
     lecturas_pendientes: mias.length,
     actividad: eventos,
@@ -265,6 +270,7 @@ export async function listarDocumentos({ request, s }: RouteContext): Promise<Re
   if (propietario) lista = lista.filter((x) => Number(x.doc.propietario_id) === propietario);
   if (estado === "vigente" || estado === "obsoleto" || estado === "en_elaboracion") lista = lista.filter((x) => x.doc.estado === estado);
   if (estado === "en_revision") lista = lista.filter(enProceso);
+  if (estado === "en_curso") lista = lista.filter(enCurso);
   if (estado === "borrador") lista = lista.filter(enBorrador);
   if (estado === "proxima_revision" || estado === "pendiente_revision") lista = lista.filter((x) => proximaRevision(x));
   // Fechas: la de emision de la revision vigente (o la de creacion de la ficha si no tiene vigente).

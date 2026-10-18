@@ -118,6 +118,7 @@ function Explorador() {
       options: [
         { value: "", label: "Todos" },
         { value: "vigente", label: "Vigentes" },
+        { value: "en_curso", label: "En elaboración, revisión o autorización" },
         { value: "en_revision", label: "En revisión o autorización" },
         { value: "borrador", label: "Con borrador en curso" },
         { value: "en_elaboracion", label: "Sin revisión vigente" },

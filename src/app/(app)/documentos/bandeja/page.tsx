@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import type { CSSProperties } from "react";
+import { useEffect, type CSSProperties } from "react";
 import { Clock, WarningCircle, type Icon } from "@phosphor-icons/react";
 import { useBandejaSgc, type TareaSgc } from "@/components/features/documentos/bandeja";
 import { areaDeClave, IconoArea, RequireDocumentos, RutaDocumentos, useCatalogos, type Area } from "@/components/features/documentos/comun";
@@ -73,6 +73,11 @@ function Bandeja() {
   const catalogos = useCatalogos();
   const items = recurso.data?.items || [];
   const lecturas = recurso.data?.lecturas_pendientes || [];
+  // Desde «Mis lecturas pendientes» (/documentos/bandeja#lecturas): al llegar los datos se baja a ese grupo.
+  const hayLecturas = lecturas.length > 0;
+  useEffect(() => {
+    if (hayLecturas && window.location.hash === "#lecturas") document.getElementById("lecturas")?.scrollIntoView({ block: "start" });
+  }, [hayLecturas]);
   const conocidos = new Set(GRUPOS.flatMap((g) => g.tipos));
   const otras = items.filter((t) => !conocidos.has(t.tipo));
   let i = 0;

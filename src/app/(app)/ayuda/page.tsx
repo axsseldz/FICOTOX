@@ -297,6 +297,9 @@ export default function AyudaPage() {
                 <b>Consultar:</b> en <b>Documentos SGC › Documentos</b> busca por clave FX, título o palabra clave, o entra a la carpeta de su gestión; la revisión vigente se lee en el visor. Descargada o impresa es una copia no controlada.
               </li>
               <li>
+                <b>Indicadores del inicio:</b> arriba de las carpetas, <b>Vigentes</b>, <b>En revisión</b> (en elaboración, revisión o autorización), <b>Próximos a revisar</b> (vence en 30 días o ya pasó) y <b>Mis lecturas pendientes</b>. Solo cuentan lo que tú puedes ver; al pulsarlos llegas a la lista o a la Bandeja ya filtrada.
+              </li>
+              <li>
                 <b>Proponer un cambio:</b> «Nueva solicitud» (o «Proponer cambio» en la ficha) con la justificación. Mejora Continua la acepta y asigna elaborador, revisor y autorizador: tres personas distintas.
               </li>
               <li>

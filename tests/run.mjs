@@ -172,7 +172,7 @@ try {
     if (!existsSync(chrome)) {
       console.log(`\n(navegador omitido: no se encontro Chrome en ${chrome}; define CHROME_PATH)`);
     } else {
-      for (const file of ["roles.mjs", "dsp.mjs", "sgc.mjs", "seguridad.mjs", "fechas.mjs", "segregacion.mjs", "autorizaciones.mjs", "etiquetas.mjs", "auditoria.mjs", "evidencias.mjs", "no-conformidades.mjs", "validacion.mjs", "documentos.mjs", "documentos-flujo.mjs", "documentos-fase3.mjs", "documentos-ficha.mjs", "documentos-listas.mjs", "visor.mjs", "animaciones.mjs", "firmantes.mjs", "mantenimiento-reporte.mjs"]) {
+      for (const file of ["roles.mjs", "dsp.mjs", "sgc.mjs", "seguridad.mjs", "fechas.mjs", "segregacion.mjs", "autorizaciones.mjs", "etiquetas.mjs", "auditoria.mjs", "evidencias.mjs", "no-conformidades.mjs", "validacion.mjs", "documentos.mjs", "documentos-flujo.mjs", "documentos-fase3.mjs", "documentos-ficha.mjs", "documentos-listas.mjs", "documentos-inicio.mjs", "visor.mjs", "animaciones.mjs", "firmantes.mjs", "mantenimiento-reporte.mjs"]) {
         console.log(`\n=== ui/${file}`);
         failed += (await run(path.join(here, "ui", file), entornoUi())) ? 1 : 0;
       }
