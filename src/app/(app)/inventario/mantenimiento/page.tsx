@@ -248,6 +248,7 @@ function MantenimientoContent() {
         onCerrar={() => setAbierta(null)}
         puedeEditar={canUpdate}
         puedeCancelar={canDelete}
+        puedeAdjuntar={canCreate || canUpdate}
         editar={(item) => {
           setAbierta(null);
           void editItem(Number(item.id));

@@ -776,6 +776,7 @@ function redactar(record: ApiRecord, actor: string, sistema: boolean): Partes {
       return { accion: `modificó ${O}`, quePaso: `${quien} modificó datos ${de(O)}.` };
     }
     case "anular": {
+      if (entidad === "reportes_mantenimiento") return { accion: `quitó ${O}`, quePaso: `${quien} quitó ${O} del mantenimiento. El PDF se conserva para consulta.` };
       const repuso = Number(d.movimientos_repuestos) ? " Los reactivos y consumibles que había usado se devolvieron al inventario." : "";
       return { accion: `anuló ${O}`, quePaso: `${quien} anuló ${O}. El registro se conserva para consulta, pero ya no cuenta para el trabajo del laboratorio.${repuso}${conSolicitud}` };
     }
@@ -922,6 +923,7 @@ function redactar(record: ApiRecord, actor: string, sistema: boolean): Partes {
     case "enmendar":
       return { accion: `abrió una corrección ${de(O)}`, quePaso: `${quien} abrió una nueva versión ${de(O)} para corregirlo. La versión anterior se conserva.` };
     case "sustituir":
+      if (entidad === "reportes_mantenimiento") return { accion: `reemplazó ${O} por otro PDF`, quePaso: `${quien} reemplazó ${O} por otro PDF. El anterior se conserva para consulta.` };
       if (entidad === "sgc_documentos") return { accion: `sustituyó un archivo ${de(O)}`, quePaso: `${quien} sustituyó un archivo ${de(O)} mientras estaba en borrador. El archivo anterior se conserva.` };
       return { accion: `${cap(O)} quedó reemplazado por su versión corregida`, quePaso: `${cap(O)} quedó reemplazado por una versión corregida${actor ? ` (lo registró ${actor})` : ""}. Se conserva para consulta.`, sinActor: true };
     case "cambiar_folio":

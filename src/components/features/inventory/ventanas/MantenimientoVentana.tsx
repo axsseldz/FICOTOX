@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarBlank, CheckCircle, FilePdf, PencilSimple, Prohibit, Toolbox, User, Wrench } from "@phosphor-icons/react";
+import { CalendarBlank, CheckCircle, PencilSimple, Prohibit, Toolbox, User, Wrench } from "@phosphor-icons/react";
 import { MANTENIMIENTO_ESTADOS, MANTENIMIENTO_TIPOS, metaFor } from "@/components/features/inventory/meta";
+import { ReporteMantenimientoPdf } from "@/components/features/inventory/ReporteMantenimientoPdf";
 import { Button } from "@/components/ui/Button";
 import { FiguraPersona } from "@/components/ui/FiguraPersona";
 import { Badge } from "@/components/ui/Primitives";
 import { ColumnasVentana, DatoLateral, DatosLista, DatosRapidos, TarjetaLateral, VentanaAcciones, VentanaCentrada, VentanaEncabezado, VentanaSeccion, VentanaTarjeta, VentanaTitulo } from "@/components/ui/Ventana";
-import { API_BASE_URL } from "@/lib/client/api";
-import { verPdf } from "@/lib/client/files";
 import { fmt } from "@/lib/client/format";
 import { cantidadMovimiento, fechaDelMovimiento, origenDeMovimiento, esEntrada, tipoMovimiento, IconoEquipo, IconoMantenimiento, IconoMovimientoInsumo, IconoOrigen, moverEn } from "./comun";
 import { cn } from "@/components/ui/cn";
@@ -18,13 +17,13 @@ import { formatearFecha, formatearFechaCorta, formatearFechaHora, formatearHora,
 
 /*
  * Ventanas de Mantenimiento (detalle de un mantenimiento con sus acciones de
- * siempre: Editar y Cancelar) y de Movimientos (detalle de una entrada o
+ * siempre: Editar y Cancelar, y su reporte de servicio en PDF) y de Movimientos (detalle de una entrada o
  * salida con el registro de origen enlazado).
  */
 
 const mantenimientoVencido = (m: ApiRecord) => m.estado === "vencido" || (["programado", "en_proceso"].includes(String(m.estado)) && String(m.fecha_programada || "").slice(0, 10) < hoyLocal());
 
-export function MantenimientoVentana({ items, indice, onIndice, onCerrar, puedeEditar, puedeCancelar, editar, cancelar }: { items: ApiRecord[]; indice: number | null; onIndice: (i: number) => void; onCerrar: () => void; puedeEditar: boolean; puedeCancelar: boolean; editar: (m: ApiRecord) => void; cancelar: (m: ApiRecord) => void }) {
+export function MantenimientoVentana({ items, indice, onIndice, onCerrar, puedeEditar, puedeCancelar, puedeAdjuntar, editar, cancelar }: { items: ApiRecord[]; indice: number | null; onIndice: (i: number) => void; onCerrar: () => void; puedeEditar: boolean; puedeCancelar: boolean; /* Adjuntar, reemplazar o quitar el reporte PDF (quien registra o edita mantenimientos). */ puedeAdjuntar: boolean; editar: (m: ApiRecord) => void; cancelar: (m: ApiRecord) => void }) {
   const m = indice !== null ? items[indice] : undefined;
   const mover = (paso: number) => {
     const siguiente = moverEn(indice, items.length, paso);
@@ -63,23 +62,15 @@ export function MantenimientoVentana({ items, indice, onIndice, onCerrar, puedeE
                     <p className="whitespace-pre-line text-[14px] text-ink">{m.observaciones ? String(m.observaciones) : "Sin observaciones."}</p>
                   </VentanaTarjeta>
                 </VentanaSeccion>
-                {m.reporte_codigo ? (
-                  <VentanaSeccion titulo="Reporte en PDF" i={2}>
-                    <div>
-                      <Button
-                        variant="secondary"
-                        icon={<FilePdf size={16} />}
-                        onClick={() => {
-                          const raw = String(m.reporte_pdf_url || "");
-                          const url = raw.startsWith("/") ? raw : `${API_BASE_URL}/documents/files/${raw.split("/").pop()}`;
-                          verPdf(url, `${String(m.reporte_codigo || "reporte")}.pdf`, String(m.reporte_codigo || "Reporte de mantenimiento"));
-                        }}
-                      >
-                        Abrir reporte {String(m.reporte_codigo)}
-                      </Button>
-                    </div>
-                  </VentanaSeccion>
-                ) : null}
+                <VentanaSeccion titulo="Reporte de servicio (PDF)" i={2}>
+                  <ReporteMantenimientoPdf
+                    mantenimientoId={Number(m.id)}
+                    puedeGestionar={puedeAdjuntar}
+                    // El visor va sobre la plataforma: la ventana se cierra mientras se lee y vuelve al cerrarlo.
+                    alVer={onCerrar}
+                    alCerrarVisor={indice !== null ? () => onIndice(indice) : undefined}
+                  />
+                </VentanaSeccion>
               </>
             }
             lateral={

@@ -748,6 +748,7 @@ const MANTENIMIENTO_SELECT = `
       INNER JOIN (
           SELECT id_mantenimiento, MAX(id) AS id
           FROM reportes_mantenimiento
+          WHERE anulado_en IS NULL
           GROUP BY id_mantenimiento
       ) latest ON latest.id = r1.id
   ) rm ON rm.id_mantenimiento = mt.id

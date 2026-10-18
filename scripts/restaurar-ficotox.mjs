@@ -23,7 +23,8 @@
  *   5. cadena de la bitacora integra con esa llave (alteraciones, huecos, triggers)
  *   6. conteos por tabla iguales al manifest
  *   7. archivos contra la base: PDF de informes, evidencias de envio, adjuntos,
- *      documentos SGC (flujo anterior), versiones de la biblioteca y PDF de NC
+ *      documentos SGC (flujo anterior), versiones de la biblioteca, PDF de NC
+ *      y reportes PDF de mantenimiento
  *   8. tiempo total
  * Resultado: backups/pruebas-restauracion/<fecha>.md y .json. Codigo de salida
  * distinto de 0 si algo falla (1 verificacion fallida; 2 uso incorrecto o modo real rechazado).
@@ -285,6 +286,8 @@ if (restauradaDb) {
     // Documentos SGC: nombre_almacenado es relativo a <instancia>/sgc ("<documento>/<revision>/<uuid>.<ext>").
     { etiqueta: "archivos de Documentos SGC", tabla: "sgc_archivos", archivo: "nombre_almacenado", sha: "sha256", carpeta: "sgc" },
     { etiqueta: "PDF de no conformidades", tabla: "no_conformidades", archivo: "archivo_pdf", sha: "pdf_sha256", carpeta: path.join("calidad", "nc") },
+    // Reportes de mantenimiento: nombre_almacenado es relativo a <instancia>/maintenance_reports ("<mantenimiento>/<uuid>.pdf").
+    { etiqueta: "reportes PDF de mantenimiento", tabla: "reportes_mantenimiento", archivo: "nombre_almacenado", sha: "sha256", carpeta: "maintenance_reports" },
   ];
   const resumen = [];
   const problemas7 = [];

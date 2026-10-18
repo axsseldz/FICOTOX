@@ -274,6 +274,9 @@ export default function AyudaPage() {
                 <b>Equipos y mantenimiento.</b> Programar un mantenimiento pone el equipo <b>En mantenimiento</b>; al completarlo vuelve a <b>Operativo</b> y, si fue calibración, actualiza la próxima fecha. Una calibración vencida se marca en el equipo y en los avisos.
               </li>
               <li>
+                <b>Reporte de servicio (PDF).</b> Abre el mantenimiento y usa <b>Adjuntar reporte PDF</b> para subir el reporte que entregó el proveedor o el técnico (solo PDF; se guarda con su huella SHA-256 y entra en los respaldos). Se abre en el visor. Si se adjuntó por error, <b>Reemplazar</b> o <b>Quitar</b> piden motivo y tu contraseña; el archivo anterior se conserva y todo queda en la bitácora. Quien solo consulta lo ve, pero no puede cambiarlo.
+              </li>
+              <li>
                 <b>Movimientos.</b> Cada entrada y salida queda con motivo y referencia («Extracción E-A folio 1»). Al anular un registro, lo que descontó se repone.
               </li>
               <li>
