@@ -9,6 +9,7 @@ import { Callout } from "@/components/features/samples/FormLayout";
 import { PageBody } from "@/components/shell/AppShell";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
+import { Conteo } from "@/components/ui/Conteo";
 import { PageHeader, SearchInput } from "@/components/ui/PageHeader";
 import { ErrorState, Skeleton } from "@/components/ui/Primitives";
 import { API_BASE_URL, getJsonAuth } from "@/lib/client/api";
@@ -74,18 +75,21 @@ function Inicio() {
         title="Documentos SGC"
         description="Documentos controlados del Sistema de Gestión de Calidad."
         actions={
-          <>
-            {crearFicha ? (
-              <Button variant={proponer ? "secondary" : "primary"} icon={<Plus size={16} weight="bold" />} data-testid="sgc-nueva-ficha" onClick={() => router.push("/documentos/explorar?nueva=1")}>
-                Nueva ficha
-              </Button>
-            ) : null}
-            {proponer ? (
-              <Button icon={<FilePlus size={16} weight="bold" />} data-testid="sgc-nueva-solicitud" onClick={() => setSolicitud(true)}>
-                Nueva solicitud
-              </Button>
-            ) : null}
-          </>
+          // Los botones aparecen cuando se conocen los permisos (sin que «Nueva ficha» cambie de principal a secundario).
+          cat ? (
+            <>
+              {crearFicha ? (
+                <Button variant={proponer ? "secondary" : "primary"} icon={<Plus size={16} weight="bold" />} data-testid="sgc-nueva-ficha" onClick={() => router.push("/documentos/explorar?nueva=1")}>
+                  Nueva ficha
+                </Button>
+              ) : null}
+              {proponer ? (
+                <Button icon={<FilePlus size={16} weight="bold" />} data-testid="sgc-nueva-solicitud" onClick={() => setSolicitud(true)}>
+                  Nueva solicitud
+                </Button>
+              ) : null}
+            </>
+          ) : null
         }
       />
       {data?.diagnostico ? (
@@ -147,7 +151,7 @@ function Carpeta({ area }: { area: Area & { conteos: Conteos } }) {
       data-testid="sgc-carpeta"
       data-area={area.codigo}
       aria-label={`${area.codigo}, ${area.nombre}: ${c.total} documentos`}
-      className="group relative flex h-full overflow-hidden rounded-card bg-surface shadow-card transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-raised focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+      className="press group relative flex h-full overflow-hidden rounded-card bg-surface shadow-card transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-raised focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none motion-reduce:transition-none motion-reduce:hover:translate-y-0"
     >
       {/* Banda lateral con el color del area (el estado nunca se expresa con este color). */}
       <span className="w-1.5 shrink-0" style={{ backgroundColor: area.color }} aria-hidden="true" />
@@ -157,9 +161,10 @@ function Carpeta({ area }: { area: Area & { conteos: Conteos } }) {
           <span className="code text-[12px] font-semibold tracking-wide text-ink-3">{area.codigo}</span>
           <span className="text-[15px] font-semibold leading-snug text-ink">{area.nombre}</span>
         </span>
-        <span className="tnum flex shrink-0 items-center gap-1 text-[12.5px] text-ink-3" title="Documentos vigentes">
+        <span className="tnum flex shrink-0 items-center gap-1 text-[12.5px] text-ink-3" title="Documentos vigentes" data-testid="sgc-carpeta-vigentes" data-valor={c.vigentes}>
           <CheckCircle size={14} weight="bold" aria-hidden="true" />
-          {c.vigentes}
+          <Conteo valor={c.vigentes} duracion={300} />
+          <span className="sr-only">{c.vigentes} vigentes</span>
         </span>
       </span>
     </Link>

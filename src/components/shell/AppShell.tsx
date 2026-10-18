@@ -16,6 +16,7 @@ import { BrandLockup, BrandMark } from "./Brand";
 import { ABRIR_MIS_AUTORIZACIONES, AccountSheet, EVENTO_ABRIR_CUENTA } from "./AccountSheet";
 import { usePendientesPorResolver } from "@/components/features/solicitudes/Solicitudes";
 import { useBandejaSgc } from "@/components/features/documentos/bandeja";
+import { Conteo } from "@/components/ui/Conteo";
 import { Campana } from "./Campana";
 import { CommandPalette } from "./CommandPalette";
 import { VisorPdfFlotante } from "./VisorPdfFlotante";
@@ -233,7 +234,7 @@ function SidebarContent({ items, pathname, collapsed, onSearch, onToggle, onAcco
   // Documentos SGC: tareas de su bandeja (solo si tiene acciones documentales).
   const { can } = useSession();
   const bandejaSgc = useBandejaSgc(can("documentos"));
-  const contador: Record<string, number> = { "/solicitudes": pendientes.solicitudes.length, "/supervision": pendientes.supervision.length, "/documentos": bandejaSgc.data?.total || 0 };
+  const contador: Record<string, number> = { "/solicitudes": pendientes.solicitudes.length, "/supervision": pendientes.supervision.length, "/documentos/bandeja": bandejaSgc.data?.total || 0 };
 
   const toggleExpanded = (label: string, active: boolean) => {
     setExpanded((current) => {
@@ -345,7 +346,8 @@ function SidebarContent({ items, pathname, collapsed, onSearch, onToggle, onAcco
                   <div className={cn("grid transition-[grid-template-rows,opacity] duration-300 ease-[var(--ease-spring)]", open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")} aria-hidden={!open}>
                     <ul className="ml-[21px] min-h-0 overflow-hidden border-l border-line pl-2.5">
                       {item.children.map((child) => {
-                          const childActive = isActivePath(pathname, child.href);
+                          // Activo solo el subdestino mas especifico (en /documentos/bandeja no se marca tambien "Documentos").
+                          const childActive = isActivePath(pathname, child.href) && !item.children.some((otro) => otro.href !== child.href && otro.href.startsWith(`${child.href}/`) && isActivePath(pathname, otro.href));
                         return (
                           <li key={child.href} className="pt-0.5 last:pb-1.5">
                             <Link
@@ -358,7 +360,8 @@ function SidebarContent({ items, pathname, collapsed, onSearch, onToggle, onAcco
                               <span className="truncate">{child.label}</span>
                               {contador[child.href] ? (
                                 <span className={cn("tnum ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold", "bg-warning text-on-accent")} aria-label={`${contador[child.href]} pendientes`} data-contador={child.href}>
-                                  {contador[child.href]}
+                                  {/* La Bandeja de Documentos SGC cuenta con animacion al cambiar (sin movimiento con movimiento reducido). */}
+                                  {child.href === "/documentos/bandeja" ? <Conteo valor={contador[child.href]} duracion={300} /> : contador[child.href]}
                                 </span>
                               ) : null}
                             </Link>

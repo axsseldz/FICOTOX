@@ -1,14 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { BellRinging, BookOpenText, CheckCircle, Clock, MapPin, Plus, Trash, UsersThree } from "@phosphor-icons/react";
 import { Callout } from "@/components/features/samples/FormLayout";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
+import { Conteo } from "@/components/ui/Conteo";
 import { Checkbox, Field, Input, Switch, Textarea } from "@/components/ui/Field";
-import { Dialog, useConfirm } from "@/components/ui/Overlay";
+import { useConfirm } from "@/components/ui/Overlay";
 import { Badge } from "@/components/ui/Primitives";
 import { CampoValidado, useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
 import { API_BASE_URL, sendJsonAuth } from "@/lib/client/api";
@@ -17,6 +18,8 @@ import { invalidate } from "@/lib/client/store";
 import { MOTIVO_MIN_SGC } from "@/lib/shared/documentos";
 import { formatearFecha, formatearFechaHora } from "@/lib/shared/fechas";
 import type { Catalogos, Distribucion, FilaDistribucion, Puede } from "./comun";
+import { confirmarConCheck } from "./Confirmacion";
+import { conDato, MasOpciones, VentanaFormulario } from "./VentanaFormulario";
 
 /*
  * Distribucion y lectura controlada (Fase 3, CA-11): destinatarios por rol o
@@ -34,12 +37,21 @@ export interface Destinatarios {
 export const destinatariosVacios = (): Destinatarios => ({ roles: [], usuarios: [], punto_uso: "", requiere_lectura: true });
 
 /* Seleccion de roles y personas (solo quienes pueden consultar vigentes; con lectura, quienes pueden confirmarla). */
-export function SelectorDestinatarios({ valor, onChange, catalogos, prefijo }: { valor: Destinatarios; onChange: (v: Destinatarios) => void; catalogos: Catalogos | null; prefijo: string }) {
+/* `plegarOpcionales`: punto de uso y lectura requerida (con valor por omision) van en "Más opciones". */
+export function SelectorDestinatarios({ valor, onChange, catalogos, prefijo, plegarOpcionales = false, antesDeOpcionales }: { valor: Destinatarios; onChange: (v: Destinatarios) => void; catalogos: Catalogos | null; prefijo: string; plegarOpcionales?: boolean; antesDeOpcionales?: ReactNode }) {
   const [filtro, setFiltro] = useState("");
   const roles = catalogos?.roles || [];
   const personas = useMemo(() => (catalogos?.personas || []).filter((p) => p.acciones.includes("documento_consultar_vigente")), [catalogos]);
   const visibles = personas.filter((p) => !filtro.trim() || p.nombre.toLowerCase().includes(filtro.trim().toLowerCase()));
   const alternar = (campo: "roles" | "usuarios", id: number) => onChange({ ...valor, [campo]: valor[campo].includes(id) ? valor[campo].filter((x) => x !== id) : [...valor[campo], id] });
+  const opcionales = (
+    <>
+      <Field label="Punto de uso" htmlFor={`${prefijo}-punto`} hint="Dónde se usa el documento, por ejemplo «Área de extracción»">
+        <Input id={`${prefijo}-punto`} maxLength={200} value={valor.punto_uso} onChange={(e) => onChange({ ...valor, punto_uso: e.target.value })} />
+      </Field>
+      <Switch checked={valor.requiere_lectura} onCheckedChange={(x) => onChange({ ...valor, requiere_lectura: x, ...(x ? { roles: valor.roles.filter((id) => roles.find((r) => r.id === id)?.acusa), usuarios: valor.usuarios.filter((id) => personas.find((p) => p.id === id)?.acciones.includes("documento_acusar_lectura")) } : {}) })} label="Requiere confirmación de lectura" description="Cada destinatario abre el PDF vigente y confirma que lo leyó y comprendió." />
+    </>
+  );
   return (
     <div className="flex flex-col gap-4">
       <CampoValidado id={`${prefijo}-destinatarios`} className="grid gap-4 sm:grid-cols-2">
@@ -64,10 +76,8 @@ export function SelectorDestinatarios({ valor, onChange, catalogos, prefijo }: {
           </div>
         </fieldset>
       </CampoValidado>
-      <Field label="Punto de uso" htmlFor={`${prefijo}-punto`} hint="Dónde se usa el documento, por ejemplo «Área de extracción»">
-        <Input id={`${prefijo}-punto`} maxLength={200} value={valor.punto_uso} onChange={(e) => onChange({ ...valor, punto_uso: e.target.value })} />
-      </Field>
-      <Switch checked={valor.requiere_lectura} onCheckedChange={(x) => onChange({ ...valor, requiere_lectura: x, ...(x ? { roles: valor.roles.filter((id) => roles.find((r) => r.id === id)?.acusa), usuarios: valor.usuarios.filter((id) => personas.find((p) => p.id === id)?.acciones.includes("documento_acusar_lectura")) } : {}) })} label="Requiere confirmación de lectura" description="Cada destinatario debe abrir el PDF vigente y confirmar que lo leyó y comprendió." />
+      {antesDeOpcionales}
+      {plegarOpcionales ? <MasOpciones llenos={conDato(valor.punto_uso, !valor.requiere_lectura)}>{opcionales}</MasOpciones> : opcionales}
     </div>
   );
 }
@@ -103,11 +113,10 @@ export function AgregarDialog({ revisionId, numero, catalogos, onClose }: { revi
     }
   };
   return (
-    <Dialog
-      open
+    <VentanaFormulario
       onOpenChange={(o) => !o && !guardando && onClose()}
       title={`Agregar destinatarios · revisión ${numero}`}
-      description="Quien tenga hoy el rol elegido (y quien lo reciba después) queda como destinatario. Se te pedirá tu contraseña."
+      description="Quien tenga el rol elegido (hoy o después) queda como destinatario. Se te pedirá tu contraseña."
       size="lg"
       footer={
         <>
@@ -122,13 +131,21 @@ export function AgregarDialog({ revisionId, numero, catalogos, onClose }: { revi
     >
       <ValidacionAmbito v={v}>
         <div className="flex flex-col gap-4">
-          <SelectorDestinatarios valor={d} onChange={setD} catalogos={catalogos} prefijo="dist" />
-          <Field label="Motivo" htmlFor="dist-motivo" required>
-            <Textarea id="dist-motivo" rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
-          </Field>
+          <SelectorDestinatarios
+            valor={d}
+            onChange={setD}
+            catalogos={catalogos}
+            prefijo="dist"
+            plegarOpcionales
+            antesDeOpcionales={
+              <Field label="Motivo" htmlFor="dist-motivo" required>
+                <Textarea id="dist-motivo" rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+              </Field>
+            }
+          />
         </div>
       </ValidacionAmbito>
-    </Dialog>
+    </VentanaFormulario>
   );
 }
 
@@ -152,8 +169,8 @@ function RetirarDialog({ fila, onClose }: { fila: FilaDistribucion; onClose: () 
     }
   };
   return (
-    <Dialog
-      open
+    <VentanaFormulario
+      size="sm"
       onOpenChange={(o) => !o && !guardando && onClose()}
       title={`Quitar a ${fila.rol_nombre ? `el rol «${fila.rol_nombre}»` : fila.usuario_nombre}`}
       description="Deja de ser destinatario de esta revisión; los acuses ya registrados se conservan. Se te pedirá tu contraseña."
@@ -173,7 +190,7 @@ function RetirarDialog({ fila, onClose }: { fila: FilaDistribucion; onClose: () 
           <Textarea id="ret-motivo" rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
         </Field>
       </ValidacionAmbito>
-    </Dialog>
+    </VentanaFormulario>
   );
 }
 
@@ -191,6 +208,7 @@ export function useAcusarLectura(dist: Distribucion | null) {
     try {
       const r = await sendJsonAuth("POST", `${API_BASE_URL}/sgc/revisiones/${dist.revision_id}/acusar`, token, {});
       toast.success(String(r.message || "Lectura confirmada"));
+      confirmarConCheck("Lectura confirmada");
       invalidate("sgc");
     } catch (err) {
       const e = explicarError(err, "No se pudo confirmar la lectura");
@@ -270,9 +288,15 @@ export function SeccionDistribucion({ dist, catalogos, obsoleto, sinAgregar = fa
         {dist.avance.total ? (
           <span className="flex items-center gap-2" data-testid="dist-avance" data-porcentaje={dist.avance.porcentaje ?? ""}>
             <span className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-3" aria-hidden="true">
-              <span className="block h-full rounded-full bg-brand" style={{ width: `${dist.avance.porcentaje || 0}%` }} />
+              {/* La barra crece con transform (scaleX) y el numero cuenta al cambiar; sin movimiento con movimiento reducido. */}
+              <span className="avance-barra block h-full w-full rounded-full bg-brand" style={{ transform: `scaleX(${(dist.avance.porcentaje || 0) / 100})` }} />
             </span>
-            {dist.avance.leidos} de {dist.avance.total} leídas ({dist.avance.porcentaje} %)
+            <span aria-hidden="true">
+              <Conteo valor={dist.avance.leidos} duracion={300} /> de {dist.avance.total} leídas (<Conteo valor={dist.avance.porcentaje || 0} duracion={300} /> %)
+            </span>
+            <span className="sr-only">
+              {dist.avance.leidos} de {dist.avance.total} leídas ({dist.avance.porcentaje} %)
+            </span>
           </span>
         ) : null}
       </div>

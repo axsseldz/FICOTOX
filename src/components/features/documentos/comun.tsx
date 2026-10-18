@@ -9,9 +9,9 @@ import { Badge, EmptyState } from "@/components/ui/Primitives";
 import { API_BASE_URL, getJsonAuth } from "@/lib/client/api";
 import { useResource } from "@/lib/client/store";
 import { hoyLocal, sumarDias } from "@/lib/shared/fechas";
-import { ESTADO_DOCUMENTO, ESTADO_REVISION, etiquetaConfidencialidad, type EstadoDocumento, type EstadoRevision } from "@/lib/shared/documentos";
+import { ESTADO_DOCUMENTO, ESTADO_REVISION, ESTADOS_SOLICITUD_SGC, etiquetaConfidencialidad, type EstadoDocumento, type EstadoRevision } from "@/lib/shared/documentos";
 import type { AccionDocumental } from "@/lib/shared/permisos";
-import { ICONO_AREA, ICONO_AREA_RESPALDO, ICONO_ESTADO } from "./iconos";
+import { ICONO_AREA, ICONO_AREA_RESPALDO, ICONO_ESTADO, ICONO_SOLICITUD } from "./iconos";
 
 /*
  * Documentos SGC: piezas compartidas de las pantallas (inicio por carpetas,
@@ -378,3 +378,23 @@ export function RutaDocumentos({ area, tipo, documento }: { area?: Pick<Area, "c
 /* Nombre del tipo documental por codigo (con el codigo si no esta en el catalogo). */
 export const nombreTipo = (tipos: Tipo[] | undefined, codigo: string) => tipos?.find((t) => t.codigo === codigo)?.nombre || codigo;
 export const areaDe = (areas: Area[] | undefined, codigo: string): Area => areas?.find((a) => a.codigo === codigo) || { codigo, nombre: codigo, color: "#7d8b96" };
+
+/* Area de un documento a partir de su clave FX (FX-TCP-… -> TC); los rectores (FX-MC, FX-MO) son DI. Null si no es una clave FX. */
+export function areaDeClave(areas: Area[] | undefined, clave: string | null | undefined): Area | null {
+  const c = String(clave || "").toUpperCase();
+  const m = /^FX-([A-Z]{2})[A-Z]-/.exec(c);
+  const codigo = m ? m[1] : /^FX-M[CO]\b/.test(c) ? "DI" : null;
+  return codigo ? areaDe(areas, codigo) : null;
+}
+
+/* Estado de una solicitud: etiqueta con icono y texto. */
+export function EstadoSolicitudEtiqueta({ estado }: { estado: string }) {
+  const def = ESTADOS_SOLICITUD_SGC[estado] || { etiqueta: estado, tono: "neutral" as const };
+  const I = ICONO_SOLICITUD[estado] || ICONO_SOLICITUD.pendiente;
+  return (
+    <Badge tone={def.tono} className="gap-1">
+      <I size={12} weight="bold" aria-hidden="true" />
+      {def.etiqueta}
+    </Badge>
+  );
+}

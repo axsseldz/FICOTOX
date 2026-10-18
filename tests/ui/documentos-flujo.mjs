@@ -97,7 +97,7 @@ try {
   /* ---------- Mejora Continua acepta y asigna ---------- */
   await paso("ana", "Ana acepta", async (page) => {
     await page.goto(`${BASE}/documentos/bandeja`);
-    await page.getByTestId("bandeja-tarea").filter({ hasText: "Atender solicitud de cambio" }).first().waitFor();
+    await page.locator('[data-testid="bandeja-grupo"][data-grupo="solicitud"] [data-testid="bandeja-tarea"][data-tipo="solicitud"]').filter({ hasText: `FX-TCI-W${stamp}` }).first().waitFor();
     check("Mejora Continua ve la solicitud en su bandeja", true);
     await page.goto(`${BASE}/documentos/solicitudes`);
     const tarjeta = page.getByTestId("sgc-solicitud").filter({ hasText: `FX-TCI-W${stamp}` }).first();
@@ -111,6 +111,7 @@ try {
     await page.getByRole("button", { name: "Entendido", exact: true }).click();
     await page.locator("#acep-elaborador").selectOption(String(id.luis));
     await page.locator("#acep-revisor").selectOption(String(id.gabriela));
+    await page.getByRole("dialog").getByRole("button", { name: "Más opciones" }).click();
     await page.locator("#acep-limite").fill(new Date(Date.now() + 7 * 86_400_000).toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" }));
     await page.locator("#acep-limite").blur();
     await page.getByTestId("aceptar-guardar").click();
@@ -144,10 +145,12 @@ try {
     await page.goto(`${BASE}/documentos/bandeja`);
     const tarea = page.getByTestId("bandeja-tarea").filter({ hasText: `FX-TCI-W${stamp}` }).first();
     await tarea.waitFor();
-    check("el revisor tiene la tarea «Revisar» en su bandeja y contador en el menú", (await tarea.getAttribute("data-tipo")) === "revisar" && (await page.locator('[data-contador="/documentos"]').count()) === 1);
-    await tarea.getByRole("button", { name: "Ir" }).click();
+    check("el revisor tiene la tarea «Revisar» en su bandeja y contador en el subitem «Bandeja» del menú", (await tarea.getAttribute("data-tipo")) === "revisar" && (await page.locator('[data-contador="/documentos/bandeja"]').count()) === 1);
+    // La acción directa del renglón abre la ficha con la ventana de la decisión ya abierta.
+    await tarea.getByRole("button", { name: "Revisar" }).click();
     await page.waitForURL((url) => url.pathname === `/documentos/${D.id}`);
-    await (await accion(page, "sgc-revisar")).click();
+    await page.getByTestId("decision-guardar").waitFor();
+    check("«Revisar» en la bandeja abre directamente la ventana de revisión", (await page.getByTestId("ventana-formulario").count()) === 1);
     await page.getByText("Devolver", { exact: true }).first().click();
     await page.getByTestId("decision-guardar").click();
     await page.getByText("Escribe el comentario").first().waitFor();
@@ -241,7 +244,7 @@ try {
       check("modo oscuro: bandeja con el tema oscuro", tema === "dark");
       check("tableta: bandeja sin desbordes", await sinDesborde(page));
       await page.goto(`${BASE}/documentos/solicitudes`);
-      await page.getByRole("heading", { name: "Solicitudes de documentos" }).waitFor();
+      await page.getByRole("heading", { name: "Solicitudes", exact: true }).waitFor();
       check("tableta: solicitudes sin desbordes", await sinDesborde(page));
       await page.goto(`${BASE}/documentos/${P.id}`);
       await page.getByTestId("sgc-renovacion").waitFor();

@@ -9,7 +9,6 @@ import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
 import { DateInput } from "@/components/ui/DateInput";
 import { Field, FormGrid, Input, Select, Textarea } from "@/components/ui/Field";
-import { Dialog, Sheet } from "@/components/ui/Overlay";
 import { CampoValidado, useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
 import { API_BASE_URL, getJsonAuth, sendFormAuth, sendJsonAuth } from "@/lib/client/api";
 import { type Problema } from "@/lib/client/mensajes";
@@ -19,6 +18,7 @@ import { CONFIDENCIALIDADES, MOTIVO_MIN_SGC, normalizarClave, validarClave } fro
 import type { AccionDocumental } from "@/lib/shared/permisos";
 import type { Catalogos } from "./comun";
 import { opcionesPersonas } from "./FichaSheet";
+import { conDato, MasOpciones, VentanaFormulario } from "./VentanaFormulario";
 
 export interface SolicitudSgc {
   id: number;
@@ -98,11 +98,10 @@ export function SolicitudSheet({ catalogos, documento, onClose }: { catalogos: C
     }
   };
   return (
-    <Sheet
-      open
+    <VentanaFormulario
       onOpenChange={(o) => !o && !guardando && onClose()}
       title="Nueva solicitud"
-      description="Mejora Continua la revisa: si la acepta, crea la ficha o abre la revisión y asigna elaborador, revisor y autorizador."
+      description="Mejora Continua la revisa y, si la acepta, crea la ficha o abre la revisión."
       size="lg"
       footer={
         <>
@@ -165,21 +164,23 @@ export function SolicitudSheet({ catalogos, documento, onClose }: { catalogos: C
               </Select>
             </Field>
           )}
-          <Field label="Necesidad" htmlFor="sol-necesidad">
-            <Textarea id="sol-necesidad" rows={2} value={necesidad} onChange={(e) => setNecesidad(e.target.value)} />
-          </Field>
           <Field label="Justificación" htmlFor="sol-justificacion" required>
             <Textarea id="sol-justificacion" rows={3} value={justificacion} onChange={(e) => setJustificacion(e.target.value)} />
           </Field>
-          <CampoValidado id="sol-apoyo" className="flex flex-col gap-1.5">
-            <label htmlFor="sol-apoyo-input" className="text-[13px] font-medium text-ink">
-              Archivo de apoyo (opcional)
-            </label>
-            <input id="sol-apoyo-input" type="file" accept={EXT_APOYO.map((e) => `.${e}`).join(",")} onChange={(e) => setApoyo(e.target.files?.[0] || null)} className="text-[13px] text-ink-2 file:mr-3 file:rounded-[8px] file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-[13px] file:font-medium file:text-ink file:shadow-card" />
-          </CampoValidado>
+          <MasOpciones llenos={conDato(necesidad, apoyo)}>
+            <Field label="Necesidad" htmlFor="sol-necesidad">
+              <Textarea id="sol-necesidad" rows={2} value={necesidad} onChange={(e) => setNecesidad(e.target.value)} />
+            </Field>
+            <CampoValidado id="sol-apoyo" className="flex flex-col gap-1.5">
+              <label htmlFor="sol-apoyo-input" className="text-[13px] font-medium text-ink">
+                Archivo de apoyo
+              </label>
+              <input id="sol-apoyo-input" type="file" accept={EXT_APOYO.map((e) => `.${e}`).join(",")} onChange={(e) => setApoyo(e.target.files?.[0] || null)} className="text-[13px] text-ink-2 file:mr-3 file:rounded-[8px] file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-[13px] file:font-medium file:text-ink file:shadow-card" />
+            </CampoValidado>
+          </MasOpciones>
         </div>
       </ValidacionAmbito>
-    </Sheet>
+    </VentanaFormulario>
   );
 }
 
@@ -244,11 +245,10 @@ export function AceptarSolicitudSheet({ solicitud, catalogos, onClose }: { solic
     }
   };
   return (
-    <Sheet
-      open
+    <VentanaFormulario
       onOpenChange={(o) => !o && !guardando && onClose()}
       title={`Aceptar la solicitud #${solicitud.id}`}
-      description={nuevo ? "Captura la clave FX autorizada: se crea la ficha con la revisión en borrador." : `Se abre una revisión de trabajo de ${solicitud.documento_clave || "el documento"} sin tocar la vigente.`}
+      description={nuevo ? "Con la clave FX autorizada se crea la ficha con la revisión en borrador." : `Se abre una revisión de trabajo de ${solicitud.documento_clave || "el documento"}; la vigente no cambia.`}
       size="lg"
       footer={
         <>
@@ -271,27 +271,8 @@ export function AceptarSolicitudSheet({ solicitud, catalogos, onClose }: { solic
               <Field label="Clave FX autorizada" htmlFor="acep-clave" required hint={`Área ${area} · tipo ${tipo}`}>
                 <Input id="acep-clave" mono maxLength={80} value={clave} onChange={(e) => setClave(e.target.value)} placeholder={`FX-${area}${tipo}-`} autoComplete="off" />
               </Field>
-              <Field label="Confidencialidad" htmlFor="acep-conf">
-                <Select id="acep-conf" value={confidencialidad} onChange={(e) => setConfidencialidad(e.target.value)}>
-                  {CONFIDENCIALIDADES.map((c) => (
-                    <option key={c.value} value={c.value}>
-                      {c.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Título" htmlFor="acep-titulo" required className="sm:col-span-2">
+              <Field label="Título" htmlFor="acep-titulo" required>
                 <Input id="acep-titulo" maxLength={300} value={titulo} onChange={(e) => setTitulo(e.target.value)} />
-              </Field>
-              <Field label="Propietario" htmlFor="acep-propietario">
-                <Select id="acep-propietario" value={propietario} onChange={(e) => setPropietario(e.target.value)}>
-                  <option value="">Sin asignar</option>
-                  {(catalogos?.personas || []).map((p) => (
-                    <option key={p.id} value={String(p.id)}>
-                      {p.nombre}
-                    </option>
-                  ))}
-                </Select>
               </Field>
             </FormGrid>
           ) : null}
@@ -300,17 +281,42 @@ export function AceptarSolicitudSheet({ solicitud, catalogos, onClose }: { solic
             <Persona id="acep-revisor" etiqueta="Revisor" valor={r.revisor_id} onChange={(x) => setR((p) => ({ ...p, revisor_id: x }))} catalogos={catalogos} accion="documento_revisar" />
             <Persona id="acep-autorizador" etiqueta="Autorizador" valor={r.autorizador_id} onChange={(x) => setR((p) => ({ ...p, autorizador_id: x }))} catalogos={catalogos} accion="documento_autorizar" />
           </FormGrid>
-          <FormGrid>
-            <Field label="Fecha límite (opcional)" htmlFor="acep-limite">
-              <DateInput id="acep-limite" value={limite} onChange={setLimite} />
-            </Field>
-            <Field label="Comentario (opcional)" htmlFor="acep-comentario">
-              <Input id="acep-comentario" maxLength={400} value={comentario} onChange={(e) => setComentario(e.target.value)} />
-            </Field>
-          </FormGrid>
+          <MasOpciones llenos={conDato(limite, comentario, ...(nuevo ? [confidencialidad !== "uso_interno" ? confidencialidad : ""] : []))}>
+            {nuevo ? (
+              <FormGrid>
+                <Field label="Confidencialidad" htmlFor="acep-conf">
+                  <Select id="acep-conf" value={confidencialidad} onChange={(e) => setConfidencialidad(e.target.value)}>
+                    {CONFIDENCIALIDADES.map((c) => (
+                      <option key={c.value} value={c.value}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Propietario" htmlFor="acep-propietario">
+                  <Select id="acep-propietario" value={propietario} onChange={(e) => setPropietario(e.target.value)}>
+                    <option value="">Sin asignar</option>
+                    {(catalogos?.personas || []).map((p) => (
+                      <option key={p.id} value={String(p.id)}>
+                        {p.nombre}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </FormGrid>
+            ) : null}
+            <FormGrid>
+              <Field label="Fecha límite" htmlFor="acep-limite">
+                <DateInput id="acep-limite" value={limite} onChange={setLimite} />
+              </Field>
+              <Field label="Comentario" htmlFor="acep-comentario">
+                <Input id="acep-comentario" maxLength={400} value={comentario} onChange={(e) => setComentario(e.target.value)} />
+              </Field>
+            </FormGrid>
+          </MasOpciones>
         </div>
       </ValidacionAmbito>
-    </Sheet>
+    </VentanaFormulario>
   );
 }
 
@@ -334,8 +340,8 @@ export function RechazarSolicitudDialog({ solicitud, onClose }: { solicitud: Sol
     }
   };
   return (
-    <Dialog
-      open
+    <VentanaFormulario
+      size="sm"
       onOpenChange={(o) => !o && !guardando && onClose()}
       title={`Rechazar la solicitud #${solicitud.id}`}
       description="Quien la pidió recibe el aviso con el motivo."
@@ -355,6 +361,6 @@ export function RechazarSolicitudDialog({ solicitud, onClose }: { solicitud: Sol
           <Textarea id="rech-motivo" rows={3} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
         </Field>
       </ValidacionAmbito>
-    </Dialog>
+    </VentanaFormulario>
   );
 }

@@ -11,6 +11,7 @@ import { MiniaturaDocumento } from "@/components/features/documentos/Miniatura";
 import { PageBody } from "@/components/shell/AppShell";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
+import { cn } from "@/components/ui/cn";
 import { FilterMenu, type FilterGroup } from "@/components/ui/FilterMenu";
 import { Dropdown } from "@/components/ui/Overlay";
 import { PageHeader, SearchInput, Toolbar } from "@/components/ui/PageHeader";
@@ -128,7 +129,8 @@ function Explorador() {
 
   return (
     <PageBody>
-      <div className="flex flex-col gap-2">
+      {/* Al entrar desde el inicio, la carpeta aparece suave (sin movimiento con movimiento reducido). */}
+      <div className={cn("flex flex-col gap-2", areaSel && "transicion-carpeta")} data-testid="sgc-carpeta-encabezado">
         <RutaDocumentos area={areaSel} tipo={tipoSel} />
         <PageHeader
           title={areaSel ? areaSel.nombre : "Todos los documentos"}
