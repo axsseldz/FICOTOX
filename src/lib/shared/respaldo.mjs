@@ -174,6 +174,8 @@ export const huellaManifest = (carpeta) => createHash("sha256").update(fs.readFi
 
 /* Rutas que un manifest puede declarar: la base y archivos dentro de las carpetas respaldadas, sin "..", "." ni segmentos vacios. */
 export const RUTA_BASE = "datos/ficotox.sqlite3";
+/* Carpeta de las copias de "Probar restauracion": junto a la carpeta de la instancia (en una instalacion normal, en la raiz del proyecto). La usan el script y el servidor. */
+export const carpetaRestauradas = (instanceDir) => path.join(/*turbopackIgnore: true*/ path.dirname(path.resolve(/*turbopackIgnore: true*/ instanceDir)), "instance-restaurada");
 export function rutaArchivoValida(ruta) {
   if (typeof ruta !== "string" || !ruta || ruta.includes("\\") || ruta.includes("\0") || path.isAbsolute(ruta)) return false;
   const partes = ruta.split("/");

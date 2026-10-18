@@ -7,6 +7,8 @@
  * - Respaldo con el servidor encendido: snapshot valido (integrity_check ok);
  *   manifest con conteos, archivos y huella de la llave; sin secretos.
  * - Restauracion en modo prueba: todas las verificaciones ✅ y acta.
+ * - «Probar restauracion» desde la plataforma con la instancia en otra carpeta
+ *   (FICOTOX_INSTANCE_DIR): no deja la copia restaurada.
  * - Respaldo alterado: falla la verificacion 1. Llave distinta o ausente: falla
  *   la verificacion de la bitacora con mensaje claro.
  * - Modo real sin --confirmar o con el servidor encendido: se niega. Modo real
@@ -22,6 +24,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { adjuntarEvidencia } from "./lib/evidencia.mjs";
 import { evaluarCadena } from "../src/lib/shared/audit-chain.mjs";
+import { carpetaRestauradas } from "../src/lib/shared/respaldo.mjs";
 import * as awaitCrypto from "node:crypto";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -154,6 +157,31 @@ let destinoPrueba = null;
   check("el modo prueba no toca la instancia real de prueba y deja la copia en el destino", fs.existsSync(path.join(destinoPrueba, "ficotox.sqlite3")) && fs.existsSync(path.join(destinoPrueba, "evidencias")), destinoPrueba);
   // Documentos SGC: el respaldo incluye instance/sgc/ con huellas y la restauracion la copia y verifica (paso 7).
   check("Documentos SGC: el respaldo incluye sus archivos (con SHA-256) y la restauración los copia y verifica", manifest.archivos.some((a) => a.ruta.startsWith("archivos/sgc/")) && fs.existsSync(path.join(destinoPrueba, "sgc")) && verif(acta, 7)?.ok === true && /Documentos SGC/i.test(verif(acta, 7)?.detalle || ""), `${verif(acta, 7)?.detalle}`);
+}
+
+/* ---------- Probar restauracion desde la plataforma: la copia se borra al terminar ---------- */
+// El servidor de prueba tiene la instancia en instance/test (FICOTOX_INSTANCE_DIR, no la raiz del proyecto): el script deja
+// la copia junto a esa carpeta y el servidor debe borrarla con la misma regla. Solo se toca la copia de esta prueba.
+{
+  const restauradas = carpetaRestauradas(TEST_DIR);
+  const inicio = await api("POST", `/respaldos/${respaldoId}/probar`, {}, tJ);
+  let trabajo = inicio.data?.trabajo || null;
+  for (let i = 0; i < 600 && inicio.status === 202 && trabajo?.estado === "en_curso"; i += 1) {
+    await new Promise((r) => setTimeout(r, 500));
+    trabajo = (await api("GET", "/respaldos/estado", undefined, tJ)).data?.trabajo || trabajo;
+  }
+  let acta = null;
+  try {
+    acta = JSON.parse(fs.readFileSync(path.join(BACKUPS, "pruebas-restauracion", `${trabajo?.acta}.json`), "utf8"));
+  } catch {
+    acta = null;
+  }
+  const destino = acta?.destino ? path.resolve(acta.destino) : null;
+  const dentro = !!destino && destino.startsWith(restauradas + path.sep);
+  const quedo = !!destino && fs.existsSync(destino);
+  check("«Probar restauración» con la instancia en otra carpeta: aprobada y no deja la copia en instance-restaurada/ (junto a la instancia)", inicio.status === 202 && trabajo?.resultado === "aprobada" && dentro && !quedo, `${inicio.status} ${trabajo?.estado}/${trabajo?.resultado} destino=${destino} ${quedo ? "QUEDÓ" : "borrada"}`);
+  // Si la plataforma no la borro, la prueba limpia su propia copia (nunca otras de esa carpeta).
+  if (dentro && quedo) fs.rmSync(destino, { recursive: true, force: true });
 }
 
 /* ---------- Respaldo alterado, llave distinta y sin llave ---------- */
@@ -300,6 +328,9 @@ let destinoPrueba = null;
   const quedan = fs.readdirSync(dir).filter((n) => /^\d{8}-\d{6}/.test(n)).sort();
   check("retencion (1): conserva el mas reciente y nunca borra el ultimo respaldo verificado (un acta de otra copia no cuenta)", quedan.length === 2 && quedan.includes(ids[0]) && quedan.includes(salida.id) && salida.eliminados.includes(ids[1]) && salida.eliminados.includes(ids[2]), `${ids.join(",")} -> ${quedan.join(",")}`);
 }
+
+// Las copias de restauracion de esta suite (todas en instance/test/restauradas) se borran al terminar.
+fs.rmSync(path.join(TEST_DIR, "restauradas"), { recursive: true, force: true });
 
 const failed = results.filter((r) => !r.ok).length;
 console.log(`\n${results.length - failed}/${results.length} pasos OK`);

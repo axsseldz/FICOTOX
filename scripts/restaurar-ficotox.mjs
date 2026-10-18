@@ -37,7 +37,7 @@ import { fileURLToPath } from "node:url";
 import { COLUMNAS_AUDITORIA, construirRegistro, evaluarCadena, leerClaveSello, sellar } from "../src/lib/shared/audit-chain.mjs";
 import { adaptadorSqlite, aplicarMigraciones, estadoMigraciones } from "../src/lib/server/migraciones/motor.mjs";
 import { bloqueoVivo as bloqueoCompartido } from "../src/lib/shared/bloqueo.mjs";
-import { ARCHIVO_LLAVE, CARPETA_ACTAS, CARPETAS_ARCHIVOS, ESQUEMA_VERSION, RUTA_BASE, crearRespaldo, hacerPrivado, huellaLlave, huellaManifest, inspeccionarBase, leerManifest, resolverEntorno, rutaArchivoValida, sellarManifest, sha256Archivo, versionApp } from "../src/lib/shared/respaldo.mjs";
+import { ARCHIVO_LLAVE, CARPETA_ACTAS, CARPETAS_ARCHIVOS, ESQUEMA_VERSION, RUTA_BASE, carpetaRestauradas, crearRespaldo, hacerPrivado, huellaLlave, huellaManifest, inspeccionarBase, leerManifest, resolverEntorno, rutaArchivoValida, sellarManifest, sha256Archivo, versionApp } from "../src/lib/shared/respaldo.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -135,8 +135,8 @@ try {
 }
 
 // Destino (en modo real se restaura primero a una carpeta de preparacion y se verifica ahi).
-// instance-restaurada/ va junto a la carpeta de la instancia (en una instalacion normal, en la raiz del proyecto).
-const restauradas = path.join(path.dirname(entorno.instanceDir), "instance-restaurada");
+// instance-restaurada/ va junto a la carpeta de la instancia (la misma regla con que el servidor la borra).
+const restauradas = carpetaRestauradas(entorno.instanceDir);
 const preparacion = modoReal ? path.join(restauradas, `${sello}-real`) : destinoArg ? path.resolve(destinoArg) : path.join(restauradas, sello);
 let llave = null;
 let restauradaDb = null;

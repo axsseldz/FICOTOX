@@ -115,7 +115,7 @@ const ENTORNO_FASE10 = (testDb) => ({ EVIDENCIA_MAX_MB: "25", EVIDENCIA_OBLIGATO
 const SMTP_PRUEBA = { SMTP_HOST: "prueba", SMTP_PORT: "2525", SMTP_USER: "ficotox", SMTP_PASS: "prueba", SMTP_FROM: "FICOTOX <informes@ficotox.local>" };
 const SIN_SMTP = { SMTP_HOST: "", SMTP_PORT: "", SMTP_USER: "", SMTP_PASS: "", SMTP_FROM: "" };
 const arrancarServidor = async (tz = "America/Tijuana", smtp = SMTP_PRUEBA) => {
-  server = spawn("npx", ["next", "dev", "-p", String(PORT)], { cwd: root, stdio: ["ignore", "ignore", "inherit"], env: { ...process.env, SQLITE_PATH: testDb, PORT: String(PORT), TZ: tz, ...ENTORNO_FASE2, ...ENTORNO_FASE10(testDb), ...smtp } });
+  server = spawn("npx", ["next", "dev", "-p", String(PORT)], { cwd: root, stdio: ["ignore", "ignore", "inherit"], env: { ...process.env, SQLITE_PATH: testDb, FICOTOX_INSTANCE_DIR: path.dirname(testDb), PORT: String(PORT), TZ: tz, ...ENTORNO_FASE2, ...ENTORNO_FASE10(testDb), ...smtp } });
   const salud = await waitFor(`http://localhost:${PORT}/api/health/db`);
   if (!salud) throw new Error("El servidor de pruebas no respondio");
   if (salud.archivo !== esperado) {
