@@ -144,7 +144,7 @@ function PaginaPdf({ pdf, n, escala, base, cerca, consulta, actualK, onMarcas }:
     if (!cerca || dibujada === escala) return;
     let cancelada = false;
     let tareaRender: { cancel: () => void } | null = null;
-    (async () => {
+    const dibujar = async () => {
       const pagina = await pdf.getPage(n);
       if (cancelada) return;
       const vistaBase = pagina.getViewport({ scale: 1 });
@@ -179,7 +179,9 @@ function PaginaPdf({ pdf, n, escala, base, cerca, consulta, actualK, onMarcas }:
       await new TextLayer({ textContentSource: contenido, container: capa, viewport: vista }).render();
       if (cancelada) return;
       setDibujada(escala);
-    })();
+    };
+    // Si el documento se cierra mientras se dibuja (al salir o cerrar el visor), no es un error.
+    dibujar().catch(() => undefined);
     return () => {
       cancelada = true;
       tareaRender?.cancel();
@@ -214,6 +216,13 @@ function Miniatura({ pdf, n, activa, onIr }: { pdf: PdfDocumento; n: number; act
     const io = new IntersectionObserver(async (entradas) => {
       if (!entradas.some((e) => e.isIntersecting)) return;
       io.disconnect();
+      try {
+        await generar();
+      } catch {
+        /* documento cerrado o pagina no disponible: la miniatura queda en blanco */
+      }
+    });
+    const generar = async () => {
       const pagina = await pdf.getPage(n);
       const base = pagina.getViewport({ scale: 1 });
       const vista = pagina.getViewport({ scale: 220 / base.width });
@@ -230,7 +239,7 @@ function Miniatura({ pdf, n, activa, onIr }: { pdf: PdfDocumento; n: number; act
         return;
       }
       if (!cancelada) setUrl(c.toDataURL("image/png"));
-    });
+    };
     io.observe(el);
     return () => {
       cancelada = true;
@@ -308,6 +317,8 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
   const fijadaRef = useRef(false);
   const temporizadorBarra = useRef<number | null>(null);
   const ultimoTop = useRef(0);
+  // Ultimo gesto de la persona: el scroll que hace el propio visor (al ajustar o saltar) no oculta la barra.
+  const ultimoGesto = useRef(0);
   const raiz = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const buscarRef = useRef<HTMLInputElement | null>(null);
@@ -486,7 +497,7 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
     };
     let distancia = 0;
     let pellizco = false;
-    let inicio: { x: number; y: number; t: number } | null = null;
+    let inicio: { x: number; y: number; x2: number; y2: number; t: number } | null = null;
     let tapAnterior: { x: number; y: number; t: number } | null = null;
     const pinzaMover = (e: TouchEvent) => {
       const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
@@ -504,24 +515,28 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
           distancia = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
         } else if (e.touches.length === 1) {
           pellizco = false;
-          inicio = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+          inicio = { x: e.touches[0].clientX, y: e.touches[0].clientY, x2: e.touches[0].clientX, y2: e.touches[0].clientY, t: Date.now() };
         }
         return;
       }
       if (e.type === "touchmove") {
         if (e.touches.length === 2) pinzaMover(e);
-        else inicio = null;
+        else if (inicio) {
+          // Ultima posicion del dedo: el gesto se mide hasta aqui (touchend no siempre trae el punto).
+          inicio.x2 = e.touches[0].clientX;
+          inicio.y2 = e.touches[0].clientY;
+        }
         return;
       }
       // touchend: solo cuando se levanta el ultimo dedo.
       if (e.touches.length > 0) return;
-      const termino = e.changedTouches[0];
-      if (pellizco || !inicio || !termino) {
+      if (pellizco || !inicio) {
         pellizco = false;
         distancia = 0;
         inicio = null;
         return;
       }
+      const termino = { clientX: inicio.x2, clientY: inicio.y2 };
       const dx = termino.clientX - inicio.x;
       const dy = termino.clientY - inicio.y;
       const duracion = Date.now() - inicio.t;
@@ -660,10 +675,14 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
 
   const alDesplazar = (e: UIEvent<HTMLDivElement>) => {
     const top = e.currentTarget.scrollTop;
-    if (top > ultimoTop.current + 2) {
+    const porPersona = Date.now() - ultimoGesto.current < 500;
+    if (porPersona && top > ultimoTop.current + 2) {
       if (!fijadaRef.current) setBarra(false);
-    } else if (top < ultimoTop.current - 2) mostrarBarra();
+    } else if (porPersona && top < ultimoTop.current - 2) mostrarBarra();
     ultimoTop.current = top;
+  };
+  const gesto = () => {
+    ultimoGesto.current = Date.now();
   };
 
   const teclado = (e: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -769,7 +788,7 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
             </div>
           </aside>
         ) : null}
-        <div ref={scrollRef} tabIndex={0} onScroll={alDesplazar} aria-label="Páginas del PDF" className={cn("scroll-thin relative min-h-0 flex-1 overflow-auto outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--color-brand)]", lectura ? "bg-transparent" : "bg-surface-3/70", nocturna && "visor-nocturna")}>
+        <div ref={scrollRef} tabIndex={0} onScroll={alDesplazar} onWheel={gesto} onTouchMove={gesto} onKeyDown={gesto} aria-label="Páginas del PDF" className={cn("scroll-thin relative min-h-0 flex-1 overflow-auto outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--color-brand)]", lectura ? "bg-transparent" : "bg-surface-3/70", nocturna && "visor-nocturna")}>
           {!pdf ? (
             <div className="mx-auto flex w-[min(90%,600px)] flex-col gap-4 py-8" role="status" aria-label="Cargando el documento">
               <div className="aspect-[0.77] w-full rounded-[4px] bg-papel shadow-[0_1px_3px_rgba(16,32,43,0.18)]">
