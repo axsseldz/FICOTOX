@@ -137,10 +137,13 @@ try {
   console.log("\n=== datos-apoyo.mjs");
   if (await run(path.join(here, "datos-apoyo.mjs"), api)) throw new Error("No se pudieron crear los datos de apoyo de las pruebas");
 
+  // Suites del navegador: servidor de prueba, Chrome y, en solo lectura, la copia de la base (para comprobar lo que no se ve en pantalla).
+  const entornoUi = () => ({ BASE: `http://localhost:${PORT}`, CHROME_PATH: chrome, CREDENCIALES_ROLES: CREDENCIALES, DATOS_APOYO_FILE: datosApoyo, TEST_DB_PATH: testDb, BETTER_SQLITE3: path.join(root, "node_modules/better-sqlite3") });
+
   if (solo) {
     console.log(`\n=== ${solo}`);
     const esUi = solo.startsWith("ui/");
-    failed += (await run(path.join(here, solo), esUi ? { BASE: `http://localhost:${PORT}`, CHROME_PATH: chrome, CREDENCIALES_ROLES: CREDENCIALES, DATOS_APOYO_FILE: datosApoyo } : api)) ? 1 : 0;
+    failed += (await run(path.join(here, solo), esUi ? entornoUi() : api)) ? 1 : 0;
     throw new Error("__solo__");
   }
 
@@ -168,9 +171,9 @@ try {
     if (!existsSync(chrome)) {
       console.log(`\n(navegador omitido: no se encontro Chrome en ${chrome}; define CHROME_PATH)`);
     } else {
-      for (const file of ["roles.mjs", "dsp.mjs", "sgc.mjs", "seguridad.mjs", "fechas.mjs", "segregacion.mjs", "autorizaciones.mjs", "etiquetas.mjs", "auditoria.mjs", "evidencias.mjs", "no-conformidades.mjs", "validacion.mjs", "documentos.mjs", "documentos-flujo.mjs", "documentos-fase3.mjs", "visor.mjs"]) {
+      for (const file of ["roles.mjs", "dsp.mjs", "sgc.mjs", "seguridad.mjs", "fechas.mjs", "segregacion.mjs", "autorizaciones.mjs", "etiquetas.mjs", "auditoria.mjs", "evidencias.mjs", "no-conformidades.mjs", "validacion.mjs", "documentos.mjs", "documentos-flujo.mjs", "documentos-fase3.mjs", "documentos-ficha.mjs", "visor.mjs"]) {
         console.log(`\n=== ui/${file}`);
-        failed += (await run(path.join(here, "ui", file), { BASE: `http://localhost:${PORT}`, CHROME_PATH: chrome, CREDENCIALES_ROLES: CREDENCIALES, DATOS_APOYO_FILE: datosApoyo })) ? 1 : 0;
+        failed += (await run(path.join(here, "ui", file), entornoUi())) ? 1 : 0;
       }
     }
   }

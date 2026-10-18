@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { CaretRight, CheckCircle, Clock, FileDashed, FolderSimple, Globe, LockKey, MinusCircle, PaperPlaneTilt, Prohibit, ShieldCheck, Signature, type Icon } from "@phosphor-icons/react";
+import { CaretRight, FolderOpen, FolderSimple, Globe, LockKey } from "@phosphor-icons/react";
 import { useSession } from "@/components/session/SessionProvider";
 import { cn } from "@/components/ui/cn";
 import { Badge, EmptyState } from "@/components/ui/Primitives";
 import { API_BASE_URL, getJsonAuth } from "@/lib/client/api";
 import { useResource } from "@/lib/client/store";
 import { hoyLocal, sumarDias } from "@/lib/shared/fechas";
-import { ESTADO_DOCUMENTO, ESTADO_REVISION, etiquetaConfidencialidad, type EstadoDocumento, type EstadoRevision, type IconoEstado } from "@/lib/shared/documentos";
+import { ESTADO_DOCUMENTO, ESTADO_REVISION, etiquetaConfidencialidad, type EstadoDocumento, type EstadoRevision } from "@/lib/shared/documentos";
 import type { AccionDocumental } from "@/lib/shared/permisos";
+import { ICONO_AREA, ICONO_AREA_RESPALDO, ICONO_ESTADO } from "./iconos";
 
 /*
  * Documentos SGC: piezas compartidas de las pantallas (inicio por carpetas,
@@ -266,20 +267,10 @@ export function RequireDocumentos({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-const ICONOS: Record<IconoEstado, Icon> = {
-  borrador: FileDashed,
-  revision: PaperPlaneTilt,
-  autorizacion: Signature,
-  autorizada: ShieldCheck,
-  vigente: CheckCircle,
-  obsoleta: Prohibit,
-  cancelada: MinusCircle,
-};
-
 /* Estado de una revision: etiqueta con icono y texto (el color nunca es la unica senal). */
 export function EstadoRevisionEtiqueta({ estado, className }: { estado: EstadoRevision | string; className?: string }) {
   const def = ESTADO_REVISION[estado as EstadoRevision] || ESTADO_REVISION.borrador;
-  const I = ICONOS[def.icono];
+  const I = ICONO_ESTADO[def.icono];
   return (
     <Badge tone={def.tono} className={cn("gap-1", className)}>
       <I size={12} weight="bold" aria-hidden="true" />
@@ -290,7 +281,7 @@ export function EstadoRevisionEtiqueta({ estado, className }: { estado: EstadoRe
 
 export function EstadoDocumentoEtiqueta({ estado }: { estado: EstadoDocumento | string }) {
   const def = ESTADO_DOCUMENTO[estado as EstadoDocumento] || ESTADO_DOCUMENTO.en_elaboracion;
-  const I = ICONOS[def.icono];
+  const I = ICONO_ESTADO[def.icono];
   return (
     <Badge tone={def.tono} className="gap-1">
       <I size={12} weight="bold" aria-hidden="true" />
@@ -307,7 +298,7 @@ export function ProximaRevisionEtiqueta({ fecha }: { fecha: string | null | unde
   if (fecha > limite) return null;
   return (
     <Badge tone="warning" className="gap-1">
-      <Clock size={12} weight="bold" aria-hidden="true" />
+      <ICONO_ESTADO.pendiente size={12} weight="bold" aria-hidden="true" />
       {fecha < hoy ? "Pendiente de revisión · vencida" : "Pendiente de revisión"}
     </Badge>
   );
@@ -324,21 +315,38 @@ export function ConfidencialidadEtiqueta({ valor }: { valor: string }) {
   );
 }
 
-/* Icono de carpeta en el color del area (con la sigla en texto neutro al lado o debajo). */
-export function IconoArea({ area, size = "md" }: { area: Pick<Area, "codigo" | "nombre" | "color">; size?: "sm" | "md" | "lg" }) {
+/*
+ * Icono del area en su color (HEX exacto). `carpeta`: la carpeta del inicio, que
+ * "se abre" al pasar el cursor o con el foco (solo opacidad; quieta con movimiento
+ * reducido), con el icono del area en una insignia.
+ */
+export function IconoArea({ area, size = "md", carpeta = false }: { area: Pick<Area, "codigo" | "nombre" | "color">; size?: "sm" | "md" | "lg"; carpeta?: boolean }) {
   const caja = { sm: "h-8 w-8 rounded-[9px]", md: "h-11 w-11 rounded-[12px]", lg: "h-14 w-14 rounded-[15px]" }[size];
   const icono = { sm: 17, md: 23, lg: 30 }[size];
+  const Glifo = ICONO_AREA[area.codigo] ?? ICONO_AREA_RESPALDO;
+  if (!carpeta) {
+    return (
+      <span className={cn("icono-area relative flex shrink-0 items-center justify-center bg-surface-2 ring-1 ring-line", caja)} aria-hidden="true">
+        <Glifo size={icono} weight="duotone" style={{ color: area.color }} />
+      </span>
+    );
+  }
+  const fundido = "transition-opacity duration-200 ease-[var(--ease-fluid)] motion-reduce:transition-none";
   return (
     <span className={cn("icono-area relative flex shrink-0 items-center justify-center bg-surface-2 ring-1 ring-line", caja)} aria-hidden="true">
-      <FolderSimple size={icono} weight="fill" style={{ color: area.color }} />
+      <FolderSimple size={icono} weight="fill" style={{ color: area.color }} className={cn(fundido, "group-hover:opacity-0 group-focus-visible:opacity-0")} />
+      <FolderOpen size={icono} weight="fill" style={{ color: area.color }} className={cn(fundido, "absolute opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100")} />
+      <span className="absolute -right-1.5 -bottom-1.5 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-surface ring-1 ring-line">
+        <Glifo size={12} weight="bold" style={{ color: area.color }} />
+      </span>
     </span>
   );
 }
 
-/* Ruta visible: Documentos SGC › Gestión › Tipo › Documento. */
+/* Ruta corta: Documentos › Gestión › Tipo › Documento. */
 export function RutaDocumentos({ area, tipo, documento }: { area?: Pick<Area, "codigo" | "nombre"> | null; tipo?: Pick<Tipo, "codigo" | "nombre"> | null; documento?: string | null }) {
-  const pasos: Array<{ label: string; href?: string }> = [{ label: "Documentos SGC", href: "/documentos" }];
-  if (area) pasos.push({ label: `${area.codigo} · ${area.nombre}`, href: `/documentos/explorar?area=${area.codigo}` });
+  const pasos: Array<{ label: string; href?: string }> = [{ label: "Documentos", href: "/documentos" }];
+  if (area) pasos.push({ label: area.nombre, href: `/documentos/explorar?area=${area.codigo}` });
   if (area && tipo) pasos.push({ label: tipo.nombre, href: `/documentos/explorar?area=${area.codigo}&tipo=${tipo.codigo}` });
   else if (tipo) pasos.push({ label: tipo.nombre, href: `/documentos/explorar?tipo=${tipo.codigo}` });
   if (documento) pasos.push({ label: documento });

@@ -1,7 +1,7 @@
 /*
  * Documentos SGC, Fase 1, en el navegador:
  * - inicio con las seis carpetas (sigla, nombre y color HEX del area en la banda) y conteos;
- * - explorador: ruta Documentos SGC › Gestión, filtros por URL, tabla y tarjetas;
+ * - carpeta: ruta corta Documentos › Gestión, filtros por URL y documentos en tarjetas (sin vista de tabla);
  * - nueva ficha desde la interfaz (clave validada en el formulario, archivo inicial) y
  *   carga inicial con contrasena; el visor PDF muestra la vigente;
  * - nueva revision: la vigente sigue en la ficha; quien solo consulta vigentes no ve el borrador;
@@ -21,6 +21,7 @@ const BASE = process.env.BASE || "http://localhost:3100";
 process.env.BASE = `${BASE}/api`;
 const { api, credenciales, crearCheck, EMAIL, sesiones } = await import("../lib/calidad.mjs");
 const { pdfConTexto } = await import("../lib/archivos.mjs");
+const { accion, contarAccion, motivo, cerrarMenu } = await import("../lib/ficha.mjs");
 const executablePath = process.env.CHROME_PATH || path.join(os.homedir(), "Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing");
 const { check, terminar } = crearCheck();
 const stamp = Date.now().toString(36).slice(-4).toUpperCase();
@@ -92,15 +93,12 @@ try {
 
       await page.locator('[data-testid="sgc-carpeta"][data-area="TC"]').click();
       await page.waitForURL((url) => url.pathname === "/documentos/explorar" && url.searchParams.get("area") === "TC");
-      await page.getByTestId("ruta-documentos").getByText("TC · Gestión Técnica").waitFor();
+      await page.getByTestId("ruta-documentos").getByText("Gestión Técnica").waitFor();
       const ruta = await page.getByTestId("ruta-documentos").innerText();
-      check("explorador: ruta «Documentos SGC › TC · Gestión Técnica»", /Documentos SGC/.test(ruta) && /TC · Gestión Técnica/.test(ruta), ruta.replace(/\n/g, " "));
-      await page.getByTestId("sgc-fila").first().waitFor();
-      check("explorador: solo documentos del área TC", (await page.getByTestId("sgc-fila").evaluateAll((filas) => filas.map((f) => f.getAttribute("data-clave")))).every((c) => /^FX-TC/.test(String(c))));
-      await page.getByRole("button", { name: "Ver en tarjetas" }).click();
+      check("carpeta: ruta corta «Documentos › Gestión Técnica»", /^Documentos\b/.test(ruta.trim()) && /Gestión Técnica/.test(ruta) && !/Documentos SGC/.test(ruta), ruta.replace(/\n/g, " "));
       await page.getByTestId("sgc-tarjeta").first().waitFor();
-      check("explorador: vista de tarjetas", (await page.getByTestId("sgc-tarjeta").count()) > 0);
-      await page.getByRole("button", { name: "Ver en tabla" }).click();
+      check("carpeta: solo documentos del área TC", (await page.getByTestId("sgc-tarjeta").evaluateAll((xs) => xs.map((f) => f.getAttribute("data-clave")))).every((c) => /^FX-TC/.test(String(c))));
+      check("carpeta: documentos en tarjetas y sin vista de tabla", (await page.getByTestId("sgc-tarjeta").count()) > 0 && (await page.getByRole("button", { name: "Ver en tabla" }).count()) === 0 && (await page.getByTestId("sgc-fila").count()) === 0);
 
       // Nueva ficha desde la interfaz.
       await page.getByTestId("sgc-nueva-ficha").click();
@@ -126,7 +124,7 @@ try {
       check("ficha: ruta Documentos SGC › Gestión › Tipo › Documento", /Gestión Técnica[\s\S]*Procedimiento[\s\S]*FX-TCP-U/.test(await page.getByTestId("ruta-documentos").innerText()));
 
       // Carga inicial con contrasena.
-      await page.getByTestId("sgc-registrar-vigente").click();
+      await (await accion(page, "sgc-registrar-vigente")).click();
       await page.locator("#rev-emision").fill("15/01/2026");
       await page.locator("#rev-emision").blur();
       await page.getByTestId("vigente-guardar").click();
@@ -137,7 +135,7 @@ try {
       check("carga inicial con contraseña: la revisión queda vigente y el PDF se ve en el visor interno", (await page.getByTestId("sgc-en-curso").count()) === 0);
 
       // Nueva revision: la vigente sigue en la ficha.
-      await page.getByTestId("sgc-nueva-revision").click();
+      await (await accion(page, "sgc-nueva-revision")).click();
       await page.locator("#rev-motivo").fill("Actualizar el apartado de reactivos");
       await page.locator("#rev-elaborador").selectOption(String(id.luis));
       await page.locator("#rev-revisor").selectOption(String(id.ricardo));
@@ -145,7 +143,8 @@ try {
       await page.getByTestId("revision-guardar").click();
       await page.getByTestId("sgc-en-curso").waitFor();
       check("nueva revisión: aparece en curso y la vigente sigue en el visor", (await page.getByTestId("sgc-visor").count()) === 1 && (await page.getByTestId("sgc-historial-fila").count()) === 2);
-      check("la nueva revisión no se puede abrir dos veces (botón deshabilitado con motivo)", await page.getByTestId("sgc-nueva-revision").isDisabled());
+      check("la nueva revisión no se puede abrir dos veces (deshabilitada con motivo en el menú ⋯)", (await (await accion(page, "sgc-nueva-revision")).isDisabled()) && (await motivo(page, "sgc-nueva-revision")).length > 0);
+      await cerrarMenu(page);
     } catch (err) {
       await captura(page);
       check("flujo de Mejora Continua", false, err instanceof Error ? err.message : String(err));
@@ -162,13 +161,13 @@ try {
       await page.goto(`${BASE}/documentos/${docUi}`);
       await page.getByTestId("sgc-vigente").waitFor();
       await page.locator('[data-testid="sgc-visor"] canvas').first().waitFor();
-      check("consulta: ve la vigente en el visor, sin la revisión en curso ni el historial", (await page.getByTestId("sgc-en-curso").count()) === 0 && (await page.getByTestId("sgc-historial").count()) === 0 && (await page.getByTestId("sgc-editar").count()) === 0);
+      check("consulta: ve la vigente en el visor, sin la revisión en curso ni el historial", (await page.getByTestId("sgc-en-curso").count()) === 0 && (await page.getByTestId("sgc-historial").count()) === 0 && (await contarAccion(page, "sgc-editar")) === 0);
       await page.goto(`${BASE}/documentos/${R.id}`);
       await page.getByTestId("sgc-no-encontrado").waitFor();
       check("confidencial por URL directa: «no encontrado»", /no encontrado/i.test(await page.getByTestId("sgc-no-encontrado").innerText()));
       await page.goto(`${BASE}/documentos/explorar?buscar=${R.clave ?? `FX-GCL-R${stamp}`}`);
       await page.getByTestId("sgc-vacio").waitFor();
-      check("confidencial: el explorador no lo muestra", (await page.getByTestId("sgc-fila").count()) === 0);
+      check("confidencial: el explorador no lo muestra", (await page.getByTestId("sgc-tarjeta").count()) === 0);
     } catch (err) {
       await captura(page);
       check("consulta del Técnico Auxiliar", false, err instanceof Error ? err.message : String(err));
@@ -184,11 +183,14 @@ try {
       await entrar(page, "luis");
       await page.goto(`${BASE}/documentos/${L.id}`);
       await page.getByTestId("sgc-en-curso").waitFor();
-      check("elaborador asignado: «Cargar o sustituir archivo» habilitado en borrador", await page.getByTestId("sgc-subir-archivo").isEnabled());
-      await page.getByTestId("sgc-enviar-revision").click();
+      check("elaborador asignado: «Cargar o sustituir archivo» habilitado en borrador", await (await accion(page, "sgc-subir-archivo")).isEnabled());
+      await cerrarMenu(page);
+      await (await accion(page, "sgc-enviar-revision")).click();
       await page.getByRole("button", { name: "Enviar a revisión", exact: true }).last().click();
-      await page.getByTestId("sgc-subir-archivo-motivo").waitFor();
-      check("enviada a revisión: el botón queda deshabilitado con su motivo", (await page.getByTestId("sgc-subir-archivo").isDisabled()) && /devolverse a borrador/.test(await page.getByTestId("sgc-subir-archivo-motivo").innerText()));
+      await page.locator('[data-principal="1"][data-testid="sgc-enviar-revision"]').waitFor({ state: "detached" });
+      await page.getByText("Archivos bloqueados", { exact: false }).first().waitFor();
+      check("enviada a revisión: «Cargar o sustituir archivo» queda deshabilitado con su motivo", (await (await accion(page, "sgc-subir-archivo")).isDisabled()) && /devolverse a borrador/.test(await motivo(page, "sgc-subir-archivo")));
+      await cerrarMenu(page);
     } catch (err) {
       await captura(page);
       check("elaborador", false, err instanceof Error ? err.message : String(err));
@@ -204,7 +206,7 @@ try {
       await entrar(page, "jorge");
       await page.goto(`${BASE}/documentos/${docUi}`);
       await page.getByTestId("sgc-ficha").waitFor();
-      check("administrador técnico: ficha en vista de diagnóstico, sin visor ni descargas", (await page.getByText("Solo metadatos (diagnóstico)").count()) === 1 && (await page.getByTestId("sgc-visor").count()) === 0 && (await page.getByTestId("sgc-descargar-pdf").count()) === 0);
+      check("administrador técnico: ficha en vista de diagnóstico, sin visor ni descargas", (await page.getByText("Solo metadatos (diagnóstico)").count()) === 1 && (await page.getByTestId("sgc-visor").count()) === 0 && (await contarAccion(page, "sgc-descargar-pdf")) === 0);
       await page.goto(`${BASE}/administracion/roles`);
       await page.getByText("Coordinador/a de Mejora Continua").first().click();
       await page.getByRole("button", { name: "Editar permisos" }).click();
@@ -239,7 +241,7 @@ try {
       check("modo oscuro: tema oscuro y las carpetas usan la superficie oscura", tema === "dark" && oscuro(fondo), `${tema} ${fondo}`);
       check("tableta: inicio sin desbordes horizontales", await sinDesborde(page));
       await page.goto(`${BASE}/documentos/explorar`);
-      await page.getByTestId("sgc-fila").first().waitFor();
+      await page.getByTestId("sgc-tarjeta").first().waitFor();
       check("tableta: explorador sin desbordes horizontales", await sinDesborde(page));
       await page.goto(`${BASE}/documentos/${docUi}`);
       await page.getByTestId("sgc-ficha").waitFor();

@@ -307,6 +307,8 @@ export interface MenuItem {
   tone?: "neutral" | "brand" | "success" | "warning" | "danger";
   disabled?: boolean;
   separatorBefore?: boolean;
+  /* Identificador para pruebas (data-testid del renglon). */
+  testid?: string;
 }
 
 const ITEM_ICON_TONE: Record<NonNullable<MenuItem["tone"]>, string> = {
@@ -344,6 +346,7 @@ export function Dropdown({ trigger, items, align = "end", label, header }: { tri
                 <RadixDropdown.Item
                   disabled={item.disabled}
                   onSelect={() => item.onSelect?.()}
+                  data-testid={item.testid}
                   className={cn(
                     "group flex cursor-pointer select-none items-center gap-3 rounded-[9px] px-2 py-1.5 text-[13.5px] outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45",
                     tone === "danger" ? "text-danger data-[highlighted]:bg-danger-soft" : "text-ink data-[highlighted]:bg-surface-3",
@@ -352,7 +355,8 @@ export function Dropdown({ trigger, items, align = "end", label, header }: { tri
                   {item.icon ? <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] transition-colors", ITEM_ICON_TONE[tone])}>{item.icon}</span> : null}
                   <span className="flex min-w-0 flex-col leading-tight">
                     <span className="truncate font-medium">{item.label}</span>
-                    {item.description ? <span className="truncate text-[11.5px] text-ink-3">{item.description}</span> : null}
+                    {/* Deshabilitada: la linea secundaria es el motivo y se lee completa. */}
+                    {item.description ? <span className={cn("text-[11.5px] text-ink-3", item.disabled ? "max-w-[280px] whitespace-normal" : "truncate")}>{item.description}</span> : null}
                   </span>
                 </RadixDropdown.Item>
               </div>
