@@ -809,8 +809,9 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
         ) : null}
         <div ref={scrollRef} tabIndex={0} onScroll={alDesplazar} onWheel={gesto} onTouchMove={gesto} onKeyDown={gesto} aria-label="Páginas del PDF" className={cn("scroll-thin relative min-h-0 flex-1 overflow-auto outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--color-brand)]", lectura ? "bg-transparent" : "bg-surface-3/70", nocturna && "visor-nocturna")}>
           {!pdf ? (
-            <div className="mx-auto flex w-[min(90%,600px)] flex-col gap-4 py-8" role="status" aria-label="Cargando el documento">
-              <div className="aspect-[0.77] w-full rounded-[4px] bg-papel shadow-[0_1px_3px_rgba(16,32,43,0.18)]">
+            // Silueta del mismo tamano y en el mismo lugar que tendra la primera pagina (hoja carta con el zoom elegido): al llegar el PDF no hay salto.
+            <div className="flex min-w-max flex-col items-center gap-4 px-6 pt-5 pb-24" role="status" aria-label="Cargando el documento">
+              <div className="rounded-[4px] bg-papel shadow-[0_1px_3px_rgba(16,32,43,0.18)]" style={{ width: base.w * escala, height: base.h * escala }}>
                 <SilhuetaPagina className="h-full" />
               </div>
             </div>
@@ -832,7 +833,7 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
         onPointerLeave={() => setSobreBarra(false)}
         onFocus={mostrarBarra}
         className={cn(
-          "absolute bottom-4 left-1/2 z-20 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-full border border-line/70 bg-surface/85 px-2 py-1 text-ink-2 shadow-card backdrop-blur-md transition-[opacity,transform] duration-200 motion-reduce:transition-none",
+          "absolute inset-x-0 bottom-4 z-20 mx-auto flex w-fit max-w-[calc(100%-1.5rem)] flex-wrap items-center justify-center gap-1 rounded-[18px] border border-line/70 bg-surface/85 px-2 py-1 sm:rounded-full text-ink-2 shadow-card backdrop-blur-md transition-[opacity,translate] duration-200 motion-reduce:transition-none",
           barra ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0",
         )}
         data-testid="visor-barra"

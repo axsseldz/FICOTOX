@@ -1,39 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useSession } from "@/components/session/SessionProvider";
 import { ApiError } from "@/lib/client/api";
-
-/*
- * Bytes de un archivo protegido para los visores que no son PDF (imagen, docx,
- * hojas, texto), desde su URL en modo "ver". Si falta el archivo, error.
- */
-export function useArchivo(url: string | null): { datos: ArrayBuffer | null; error: unknown; cargando: boolean } {
-  const { token } = useSession();
-  const [estado, setEstado] = useState<{ id: string | null; datos: ArrayBuffer | null; error: unknown }>({ id: null, datos: null, error: null });
-  useEffect(() => {
-    if (!url || !token) return;
-    let vivo = true;
-    (async () => {
-      try {
-        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new ApiError(res.status, data, "No se pudo abrir el archivo");
-        }
-        const datos = await res.arrayBuffer();
-        if (vivo) setEstado({ id: url, datos, error: null });
-      } catch (error) {
-        if (vivo) setEstado({ id: url, datos: null, error });
-      }
-    })();
-    return () => {
-      vivo = false;
-    };
-  }, [url, token]);
-  const actual = estado.id === url;
-  return { datos: actual ? estado.datos : null, error: actual ? estado.error : null, cargando: !actual };
-}
 
 /* Descarga un archivo protegido por URL con el nombre dado. */
 export async function descargarUrl(urlArchivo: string, token: string, nombre: string): Promise<void> {

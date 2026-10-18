@@ -24,7 +24,7 @@ import { withSession } from "../db";
 import { HttpError, json, readJson, type RouteContext } from "../http";
 import { cargarAutorizacion, permisoDe, requirePermission, type Autorizacion } from "../rbac";
 import { exigirReauth } from "../seguridad";
-import { aplicarRetencion, completarRespaldo, huellaManifest, iniciarRespaldo, leerManifest, listarActas, listarRespaldos, RUTA_BASE, type Acta, type Manifest, type RespaldoListado } from "../../shared/respaldo.mjs";
+import { aplicarRetencion, carpetaRestauradas, completarRespaldo, huellaManifest, iniciarRespaldo, leerManifest, listarActas, listarRespaldos, RUTA_BASE, type Acta, type Manifest, type RespaldoListado } from "../../shared/respaldo.mjs";
 import { formatearFechaHora } from "../../shared/fechas";
 
 const ID_RE = /^\d{8}-\d{6}(-\d+)?$/;
@@ -491,9 +491,9 @@ async function terminarRespaldo(user: CurrentUser, iniciado: Awaited<ReturnType<
 
 /* ---------- Probar restauracion ---------- */
 
-/* Borra la copia restaurada de una prueba (contiene todos los datos), solo si esta dentro de instance-restaurada/. */
+/* Borra la copia restaurada de una prueba (contiene todos los datos), solo si esta dentro de instance-restaurada/ (la misma carpeta que usa el script). */
 function borrarCopiaRestaurada(destino: unknown): void {
-  const base = path.resolve(/*turbopackIgnore: true*/ getConfig().BASE_DIR, "instance-restaurada");
+  const base = carpetaRestauradas(getConfig().INSTANCE_DIR);
   const objetivo = path.resolve(/*turbopackIgnore: true*/ String(destino || ""));
   if (!destino || !objetivo.startsWith(base + path.sep)) return;
   try {

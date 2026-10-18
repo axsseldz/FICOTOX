@@ -14,8 +14,15 @@ Documentos SGC es el lugar donde están los documentos controlados del laborator
   - DI Documentos rectores (azul).
 
   El color solo dice de qué gestión es el documento, **nunca** su estado.
+- **Indicadores del inicio:** arriba de las carpetas hay cuatro contadores. Cuentan solo los documentos que tú puedes ver y, al pulsarlos, te llevan a la lista ya filtrada:
+  - **Vigentes:** documentos con una revisión vigente;
+  - **En revisión:** documentos en elaboración, revisión o autorización;
+  - **Próximos a revisar:** su próxima revisión vence en los siguientes 30 días o ya pasó;
+  - **Mis lecturas pendientes:** lo que te toca leer y confirmar (te lleva a la Bandeja, a «Lecturas pendientes»).
+
+  Un contador en 0 se ve en gris. La actividad reciente no está en el inicio: cada documento la muestra con «Ver en Auditoría».
 - **El estado** siempre aparece como una etiqueta con texto e icono: Vigente, En revisión, Borrador, Pendiente de revisión, Obsoleto…
-- **Buscar:** en **Explorar** escribe la clave (por ejemplo FX-GCP-CD), una palabra del título o una palabra clave. Usa **Filtros** para elegir la gestión, el tipo, el estado o el origen.
+- **Buscar:** en **Documentos** escribe en el buscador la clave (por ejemplo FX-GCP-CD), una palabra del título o una palabra clave, o entra a una carpeta. Dentro de la carpeta, **Filtros** elige el tipo, el estado, el origen, el propietario o la fecha de emisión.
 - **Leer un documento:** ábrelo; la revisión vigente se ve en el visor. Con **Descargar PDF** te llevas una copia; impresa o descargada, es una copia no controlada.
 - **Bandeja:** junta todo lo que te toca: revisar, autorizar, elaborar y tus lecturas pendientes. El número junto a «Documentos SGC» en el menú y la campana te avisan.
 - **Contraseña:** algunas acciones (autorizar, publicar, registrar externos, cambiar destinatarios, declarar obsoleto) te piden volver a escribir tu contraseña. Así queda claro que fuiste tú.

@@ -49,11 +49,12 @@ interface Respuesta {
 }
 
 const COLUMNAS: ColumnaLista[] = [
-  { clave: "documento", titulo: "Documento", ancho: "minmax(220px,2.4fr)" },
-  { clave: "origen", titulo: "Emisor · versión", ancho: "minmax(130px,1fr)" },
-  { clave: "responsable", titulo: "Responsable", ancho: "minmax(110px,1fr)", ocultaEnTarjeta: true },
-  { clave: "proxima", titulo: "Próxima revisión", ancho: "minmax(110px,0.9fr)" },
-  { clave: "estado", titulo: "Estado", ancho: "minmax(140px,1.1fr)" },
+  // Minimos que caben en tableta (820 px) junto con las acciones del renglon.
+  { clave: "documento", titulo: "Documento", ancho: "minmax(200px,2.4fr)" },
+  { clave: "origen", titulo: "Emisor · versión", ancho: "minmax(100px,1fr)" },
+  { clave: "responsable", titulo: "Responsable", ancho: "minmax(96px,1fr)", ocultaEnTarjeta: true },
+  { clave: "proxima", titulo: "Próxima revisión", ancho: "minmax(96px,0.9fr)" },
+  { clave: "estado", titulo: "Estado", ancho: "minmax(166px,1.1fr)" },
 ];
 
 export default function ExternosPage() {
@@ -128,13 +129,15 @@ function Externos() {
         <SearchInput value={search} onChange={setSearch} placeholder="Buscar por identificador, título o emisor" className="w-full md:w-[360px]" />
         <FilterMenu groups={groups} toggles={data?.puede.ver_obsoletos ? [{ key: "obsoletos", label: "Mostrar obsoletos", description: "Versiones retiradas, solo para consulta histórica", checked: obsoletos, onChange: setObsoletos }] : []} />
       </Toolbar>
+      {/* Ancho de las acciones del renglon: solo icono en tableta, con texto desde xl (encabezados y renglones alineados). */}
+      <div className="[--ancho-acciones:92px] xl:[--ancho-acciones:196px]">
         <ListaCuadricula
           etiqueta="Documentos externos"
           columnas={COLUMNAS}
           filas={data ? data.items : null}
           error={recurso.error}
           onReintentar={recurso.reload}
-          anchoExtremo="190px"
+          anchoExtremo="var(--ancho-acciones)"
           extremo={(x) => {
             const menu: MenuItem[] = [
               { label: "Abrir ficha", icon: <ArrowSquareOut size={16} weight="bold" />, onSelect: () => router.push(`/documentos/${x.id}`) },
@@ -143,8 +146,9 @@ function Externos() {
             return (
               <>
                 {x.puede?.verificar ? (
-                  <Button size="sm" variant={x.pendiente_revision ? "primary" : "secondary"} icon={<ICONO_ACCION.verificar_externo size={15} weight="bold" />} onClick={() => setVerificar(x)} data-testid="ext-fila-verificar">
-                    Verificar vigencia
+                  <Button size="sm" variant={x.pendiente_revision ? "primary" : "secondary"} icon={<ICONO_ACCION.verificar_externo size={15} weight="bold" />} onClick={() => setVerificar(x)} data-testid="ext-fila-verificar" aria-label="Verificar vigencia" title="Verificar vigencia">
+                    {/* En tableta solo el icono (con su nombre accesible) para que el renglon quepa sin recortarse. */}
+                    <span className="hidden xl:inline">Verificar vigencia</span>
                   </Button>
                 ) : null}
                 <ActionMenu items={menu} label={`Más acciones de ${x.clave}`} />
@@ -184,6 +188,7 @@ function Externos() {
           }}
           vacio={{ icono: <Globe size={22} weight="duotone" />, titulo: debounced || area || estado ? "Nada coincide" : "Aún no hay documentos externos", descripcion: data?.puede.registrar ? "Registra las normas y guías que sigue el laboratorio con «Registrar externo»." : "Cuando Mejora Continua registre normas o guías, aparecerán aquí." }}
         />
+      </div>
       {registrar && data?.puede.registrar ? <RegistrarExternoSheet catalogos={cat || null} onClose={() => setRegistrar(false)} /> : null}
       {verificar ? <VerificarExternoDialog docId={verificar.id} clave={verificar.clave} onClose={() => setVerificar(null)} /> : null}
       {version ? <NuevaVersionExternoDialog docId={version.id} clave={version.clave} ext={{ fuente: version.fuente, version_fecha: version.version_fecha, enlace: version.enlace, responsable_id: version.responsable_id, responsable_nombre: version.responsable_nombre, ultima_verificacion: version.ultima_verificacion, proxima_revision: version.proxima_revision, puede: { verificar: { ok: !!version.puede?.verificar }, nueva_version: { ok: !!version.puede?.nueva_version }, editar: { ok: false } } }} onClose={() => setVersion(null)} /> : null}

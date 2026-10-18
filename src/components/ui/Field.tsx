@@ -177,7 +177,7 @@ export interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement
 }
 
 export const checkboxClass =
-  "checkbox-mark h-[18px] w-[18px] shrink-0 cursor-pointer appearance-none rounded-[5px] border border-line-strong bg-surface transition-[background-color,border-color,transform] duration-150 ease-[var(--ease-spring)] checked:border-brand checked:bg-brand hover:border-ink-4 active:scale-95 focus-visible:shadow-[var(--shadow-focus)] disabled:cursor-not-allowed";
+  "checkbox-mark h-[18px] w-[18px] shrink-0 cursor-pointer appearance-none rounded-[5px] border border-line-strong bg-surface transition-[background-color,border-color,scale] duration-150 ease-[var(--ease-spring)] checked:border-brand checked:bg-brand hover:border-ink-4 active:scale-95 focus-visible:shadow-[var(--shadow-focus)] disabled:cursor-not-allowed";
 
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Checkbox({ label, description, className, id, ...rest }, ref) {
   const autoId = useId();
@@ -196,7 +196,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
 });
 
 export const radioClass =
-  "h-[18px] w-[18px] shrink-0 cursor-pointer appearance-none rounded-full border border-line-strong bg-surface transition-[border-color,border-width,transform] duration-150 ease-[var(--ease-spring)] checked:border-[6px] checked:border-brand hover:border-ink-4 active:scale-95 focus-visible:shadow-[var(--shadow-focus)]";
+  "h-[18px] w-[18px] shrink-0 cursor-pointer appearance-none rounded-full border border-line-strong bg-surface transition-[border-color,scale] duration-150 ease-[var(--ease-spring)] checked:border-[6px] checked:border-brand hover:border-ink-4 active:scale-95 focus-visible:shadow-[var(--shadow-focus)]";
 
 export interface SwitchProps {
   checked: boolean;

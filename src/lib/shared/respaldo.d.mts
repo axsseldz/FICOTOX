@@ -91,6 +91,7 @@ export function listarActas(respaldosDir: string): Acta[];
 export function listarRespaldos(respaldosDir: string): RespaldoListado[];
 export function aplicarRetencion(respaldosDir: string, retencion: number): string[];
 export const RUTA_BASE: string;
+export function carpetaRestauradas(instanceDir: string): string;
 export function sellarManifest(manifest: Record<string, unknown>, clave: string): string;
 export function huellaManifest(carpeta: string): string;
 export function rutaArchivoValida(ruta: unknown): boolean;

@@ -260,6 +260,8 @@ export async function getAnalysis({ request, s, params }: RouteContext): Promise
   await requirePermission(s, user, "ensayos", "V");
   const row = await s.queryOne(`SELECT * FROM ${TABLE} WHERE id = :id`, { id });
   if (!row) return json({ message: "Registro no encontrado" }, 404);
+  // Folio de la recepcion para la cadena de la ficha (la lista lo trae con el mismo JOIN).
+  const folioRecepcion = row.recepcion_id ? await s.scalar("SELECT folio_num FROM muestras_recepcion WHERE id = :id", { id: row.recepcion_id }) : null;
   // Informes que reportan este analisis (el LIKE acota; la lista JSON decide).
   const candidatos = await s.query<Row>("SELECT id, folio_num, version, estado, analisis_ids_json FROM informes WHERE analisis_ids_json LIKE :like", { like: `%${id}%` }).catch(() => [] as Row[]);
   const informes = candidatos
@@ -276,7 +278,7 @@ export async function getAnalysis({ request, s, params }: RouteContext): Promise
   // Fase 10: resumen de la evidencia instrumental (la lista completa esta en /adjuntos).
   const adjuntos = { ...(await resumenAdjuntos(s, "analisis", id)), obligatoria: getConfig().EVIDENCIA_OBLIGATORIA_ANALISIS };
   const puede = (await banderasPuede(s, await cargarAutorizacion(s, user), TABLE, [id], new Set(pendiente ? [id] : []), true)).get(id) || {};
-  return json({ item: { ...serializeAnalysis(row), informes, adjuntos, puede, solicitud_pendiente: pendiente ? serializarSolicitud(pendiente) : null, segregacion: { revisar: bloqueo("revisar"), aprobar: bloqueo("aprobar") } } });
+  return json({ item: { ...serializeAnalysis(row), folio_recepcion_num: folioRecepcion ?? null, informes, adjuntos, puede, solicitud_pendiente: pendiente ? serializarSolicitud(pendiente) : null, segregacion: { revisar: bloqueo("revisar"), aprobar: bloqueo("aprobar") } } });
 }
 
 export async function createAnalysis({ request, s }: RouteContext): Promise<Response> {

@@ -312,7 +312,7 @@ function celdas(r: ApiRecord) {
     <span key="c" className="text-[13.5px] text-ink-2">{danado ? "—" : `Base + ${archivosTexto(r.archivos)}`}</span>,
     danado ? <span key="l" className="text-[13px] text-ink-4">—</span> : <span key="l" className="inline-flex items-center gap-1.5 text-[13px] text-ink-2"><Key size={14} weight="duotone" aria-hidden="true" />{r.incluye_llave ? "Incluida" : "No incluida"}</span>,
     <span key="v" className="flex flex-col items-start gap-1">
-      {danado ? <Badge tone="danger" dot>Dañado</Badge> : <InsigniaVerificacion verificacion={r.verificacion} />}
+      {danado ? <Badge tone="danger" dot>Dañado</Badge> : r.verificacion ? <InsigniaVerificacion verificacion={r.verificacion} /> : <span className="text-[13px] text-ink-3">Sin probar</span>}
       {r.protegido ? <MarcaProtegido /> : null}
     </span>,
   ];

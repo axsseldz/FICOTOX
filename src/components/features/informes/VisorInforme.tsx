@@ -30,7 +30,7 @@ const tienePdfFinal = (item: ApiRecord | undefined | null): boolean => !!item?.a
 
 /*
  * Pantalla de lectura del PDF de un informe, liberado o en vista previa (borrador,
- * en revisión, autorizado): el mismo visor de la biblioteca (pdf.js) con un
+ * en revisión, autorizado): el mismo visor de documentos (pdf.js) con un
  * encabezado compacto. Es el unico camino para ver un informe. Leerlo no se registra en la
  * bitacora; descargarlo si, igual que la descarga de siempre.
  */

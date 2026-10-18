@@ -109,6 +109,7 @@ try {
     await page.goto(`${BASE}/documentos`);
     await page.getByTestId("sgc-carpetas").waitFor();
     const solicitud = page.getByTestId("sgc-nueva-solicitud");
+    await solicitud.waitFor();
     const nuevaFicha = page.getByTestId("sgc-nueva-ficha");
     check("inicio (Mejora Continua): «Nueva solicitud» principal y «Nueva ficha» secundaria", (await solicitud.count()) === 1 && (await nuevaFicha.count()) === 1 && (await fondo(solicitud)) !== (await fondo(nuevaFicha)), `${await fondo(solicitud)} / ${await fondo(nuevaFicha)}`);
     await solicitud.click();
@@ -119,6 +120,8 @@ try {
   await paso("luis", "inicio: solo Nueva solicitud", async (page) => {
     await page.goto(`${BASE}/documentos`);
     await page.getByTestId("sgc-carpetas").waitFor();
+    // Los botones aparecen cuando llegan los permisos (catálogos), que pueden llegar después que las carpetas.
+    await page.getByTestId("sgc-nueva-solicitud").waitFor();
     check("inicio (quien solo propone): «Nueva solicitud» sin «Nueva ficha»", (await page.getByTestId("sgc-nueva-solicitud").count()) === 1 && (await page.getByTestId("sgc-nueva-ficha").count()) === 0);
   });
 
@@ -151,6 +154,44 @@ try {
     check("tarjeta: marca «Externo»", (await tarjeta(page, `NOM-${stamp}-SSA1`).getByTestId("etiqueta-externo").count()) === 1);
     check("carpeta: sin vista de tabla", (await page.getByRole("button", { name: "Ver en tabla" }).count()) === 0 && (await page.getByTestId("sgc-fila").count()) === 0);
     check("carpeta: filtros en un solo botón «Filtros»", (await page.getByRole("button", { name: /^Filtros/ }).count()) === 1);
+    // Especificación §5 (búsqueda y filtros): también por responsable (propietario) y por fecha de emisión.
+    const nTarjetas = await page.getByTestId("sgc-tarjeta").count();
+    await page.getByRole("button", { name: /^Filtros/ }).click();
+    const grupoPropietario = page.locator('section[aria-label="Propietario"]');
+    const grupoFecha = page.locator('section[aria-label="Fecha de emisión"]');
+    await grupoFecha.waitFor();
+    check("carpeta: «Filtros» incluye propietario y fecha de emisión", (await grupoPropietario.count()) === 1 && (await grupoPropietario.getByRole("switch").count()) >= 1);
+    // El filtro por propietario deja solo sus documentos (lo mismo que responde la API con ese filtro).
+    const { propietarios = [] } = (await api("GET", "/sgc/documentos?area=TC", undefined, t.ana)).data || {};
+    let duenio = null;
+    let esperadas = [];
+    for (const p of propietarios) {
+      const claves = ((await api("GET", `/sgc/documentos?area=TC&propietario=${p.id}`, undefined, t.ana)).data?.items || []).map((x) => x.clave).sort();
+      if (claves.length) {
+        duenio = p;
+        esperadas = claves;
+        break;
+      }
+    }
+    if (duenio) await grupoPropietario.getByRole("switch", { name: duenio.nombre }).click();
+    await page.keyboard.press("Escape");
+    await page.waitForFunction((n) => document.querySelectorAll('[data-testid="sgc-tarjeta"]').length === n, esperadas.length, { timeout: 15_000 }).catch(() => {});
+    const quedan = (await page.getByTestId("sgc-tarjeta").evaluateAll((xs) => xs.map((x) => x.getAttribute("data-clave")))).sort();
+    check("carpeta: el filtro por propietario deja solo sus documentos", !!duenio && esperadas.length > 0 && quedan.join() === esperadas.join(), `${duenio?.nombre}: ${quedan.join(", ")} vs ${esperadas.join(", ")}`);
+    await page.getByRole("button", { name: /^Filtros/ }).click();
+    if (duenio) await grupoPropietario.getByRole("switch", { name: duenio.nombre }).click();
+    await grupoFecha.getByRole("switch", { name: "Personalizado" }).click();
+    await page.locator("#sgc-desde").waitFor();
+    await page.locator("#sgc-desde").pressSequentially("01012099");
+    await page.locator("#sgc-desde").blur();
+    await page.keyboard.press("Escape");
+    await page.getByTestId("sgc-vacio").waitFor();
+    check("carpeta: el filtro por fecha de emisión se aplica (desde 2099: nada coincide)", /Nada coincide/.test(await page.getByTestId("sgc-vacio").innerText()));
+    await page.getByRole("button", { name: /^Filtros/ }).click();
+    await grupoFecha.getByRole("switch", { name: "Personalizado" }).click();
+    await page.keyboard.press("Escape");
+    await page.getByTestId("sgc-tarjeta").first().waitFor();
+    check("carpeta: al quitar el filtro de fecha vuelven las tarjetas", (await page.getByTestId("sgc-tarjeta").count()) === nTarjetas, `${await page.getByTestId("sgc-tarjeta").count()} vs ${nTarjetas}`);
     // Orden en un menú pequeño.
     await page.getByTestId("sgc-ordenar").click();
     await page.getByRole("menuitem", { name: "Título A–Z" }).click();
@@ -190,6 +231,11 @@ try {
     await page.locator('[data-testid="sgc-visor"] canvas').first().waitFor({ timeout: 60_000 });
     check("destinatario: acción principal «Confirmar lectura»", (await principal(page)) === "acuse-confirmar", String(await principal(page)));
     check("destinatario: el aviso bajo el visor no repite el botón", (await page.getByTestId("acuse-pendiente").getByRole("button").count()) === 0);
+    // En celular el título no se aplasta junto a la acción principal: las acciones bajan de renglón.
+    await page.setViewportSize({ width: 400, height: 860 });
+    await page.waitForTimeout(300);
+    const anchoTitulo = await page.getByTestId("sgc-ficha").locator("h1").evaluate((el) => el.getBoundingClientRect().width);
+    check("celular: el título de la ficha conserva su ancho junto a «Confirmar lectura» y sin desborde", anchoTitulo >= 180 && (await sinDesborde(page)), `${Math.round(anchoTitulo)} px`);
   });
 
   await paso("ricardo", "revisor", async (page) => {

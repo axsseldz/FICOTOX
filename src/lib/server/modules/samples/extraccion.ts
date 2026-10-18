@@ -293,7 +293,9 @@ export async function createExtractionSample({ request, s }: RouteContext): Prom
   // Fase 5: solo quien esta asignado a la muestra (o la coordinacion).
   await exigirAsignacion(s, user, await recepcionDe(s, "muestras_procesamiento", data.procesamiento_id), permiso.auth);
   // Solo se extrae a partir de un procesamiento vigente.
-  await assertOrigin(s, "muestras_procesamiento", data.procesamiento_id, { requerido: ORIGEN_REQUERIDO });
+  const origen = await assertOrigin(s, "muestras_procesamiento", data.procesamiento_id, { requerido: ORIGEN_REQUERIDO });
+  // El folio de la etapa anterior sale del registro vinculado, no de lo que mande el cliente.
+  if (origen) data.folio_procesamiento_num = toIntOrNull(origen.folio_num);
   const supervision = marcaSupervision(permiso);
   if (data.estado === "anulada") data.estado = "registrada";
   data.equipos_json = jsonText(await snapshotEquipos(s, normalizeEquipos(payload.equipos)));
@@ -377,7 +379,9 @@ export async function updateExtractionSample({ request, s, params }: RouteContex
   // Fase 5: solo quien esta asignado a la muestra (o la coordinacion).
   await exigirAsignacion(s, user, await recepcionDe(s, "muestras_procesamiento", data.procesamiento_id), permiso.auth);
   // El origen se valida tambien al editar.
-  await assertOrigin(s, "muestras_procesamiento", data.procesamiento_id, { requerido: ORIGEN_REQUERIDO });
+  const origen = await assertOrigin(s, "muestras_procesamiento", data.procesamiento_id, { requerido: ORIGEN_REQUERIDO });
+  // El folio de la etapa anterior sale del registro vinculado, no de lo que mande el cliente.
+  if (origen) data.folio_procesamiento_num = toIntOrNull(origen.folio_num);
   const supervision = marcaSupervision(permiso);
   if (data.estado === "anulada" || ["completada", "analizada"].includes(String(antes?.estado || ""))) data.estado = String(antes?.estado || "registrada");
   data.equipos_json = jsonText(await snapshotEquipos(s, normalizeEquipos(payload.equipos)));

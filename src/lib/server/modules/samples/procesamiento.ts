@@ -194,7 +194,9 @@ export async function createProcessingSample({ request, s }: RouteContext): Prom
   // Fase 5: solo quien esta asignado a la muestra (o la coordinacion).
   await exigirAsignacion(s, user, data.recepcion_id, permiso.auth);
   // Solo se procesa una muestra recibida, aceptada y vigente.
-  await assertOrigin(s, "muestras_recepcion", data.recepcion_id, { requireAccepted: true, requerido: ORIGEN_REQUERIDO });
+  const origen = await assertOrigin(s, "muestras_recepcion", data.recepcion_id, { requireAccepted: true, requerido: ORIGEN_REQUERIDO });
+  // El folio de la etapa anterior sale del registro vinculado, no de lo que mande el cliente.
+  if (origen) data.folio_recepcion_num = toIntOrNull(origen.folio_num);
   const supervision = marcaSupervision(permiso);
   if (data.estado === "anulada") data.estado = "registrada";
   const userId = userIdFromClaims(user);
@@ -274,7 +276,9 @@ export async function updateProcessingSample({ request, s, params }: RouteContex
   // Fase 5: solo quien esta asignado a la muestra (o la coordinacion).
   await exigirAsignacion(s, user, data.recepcion_id, permiso.auth);
   // El origen se valida tambien al editar (no se puede quitar ni cambiar por uno invalido).
-  await assertOrigin(s, "muestras_recepcion", data.recepcion_id, { requireAccepted: true, requerido: ORIGEN_REQUERIDO });
+  const origen = await assertOrigin(s, "muestras_recepcion", data.recepcion_id, { requireAccepted: true, requerido: ORIGEN_REQUERIDO });
+  // El folio de la etapa anterior sale del registro vinculado, no de lo que mande el cliente.
+  if (origen) data.folio_recepcion_num = toIntOrNull(origen.folio_num);
   const supervision = marcaSupervision(permiso);
   // El estado lo maneja el flujo: no se anula ni se retrocede desde el formato.
   if (data.estado === "anulada" || ["en_proceso", "completada"].includes(String(antes?.estado || ""))) data.estado = String(antes?.estado || "registrada");

@@ -227,6 +227,14 @@ const nuevaInst = instalacion("instancia", `SECRET_KEY=${"b".repeat(64)}\nJWT_SE
   check("registros: rotan al pasar LOG_MAX_MB y se quitan los de más de LOG_RETENCION_DIAS", !nombres.includes("ficotox-2020-01-01.log") && nombres.some((n) => /\.log\.1$/.test(n)), nombres.join(", "));
 }
 
+/* ---------- datos de demostración: las cuentas se encuentran por una palabra del nombre ---------- */
+{
+  // Con el archivo de ejemplo ("Ana Sofía Torres Vega"...) el script debe resolver las cinco cuentas y solo
+  // fallar despues, al conectarse (aqui a un puerto sin servidor), no con "Falta la cuenta de sofía".
+  const r = nodo("scripts/sembrar-demo-documentos.mjs", ["--url", "http://127.0.0.1:9", "--usuarios", "scripts/seed-usuarios.example.json"]);
+  check("demo de documentos: encuentra las cuentas por una palabra del nombre y sin acentos (archivo de ejemplo)", r.codigo !== 0 && !/Falta la cuenta/.test(r.salida), r.salida.split("\n").filter(Boolean).slice(-2).join(" | "));
+}
+
 /* ---------- con servidor (build standalone) ---------- */
 const hijos = [];
 const arrancar = (envArchivo, extra = {}) => {

@@ -165,7 +165,7 @@ export function NcForm({ item }: { item: ApiRecord }) {
   };
 
   const anular = async () => {
-    const motivo = await prompt({ critico: true, tone: "danger", title: `Anular ${item.folio}`, description: "La NC deja de contar, pero se conserva. La anulación la autoriza un segundo usuario con calidad:AN.", confirmLabel: "Solicitar anulación" });
+    const motivo = await prompt({ critico: true, tone: "danger", title: `Anular ${item.folio}`, description: "La NC deja de contar, pero se conserva. La anulación la autoriza otra persona con permiso para anular en calidad.", confirmLabel: "Solicitar anulación" });
     if (motivo) await enviar("POST", `/calidad/nc/${item.id}/anular`, { motivo });
   };
   const pdf = (actual: boolean) => verPdf(`${API_BASE_URL}/calidad/nc/${item.id}/pdf${actual ? "?actual=1" : ""}`, `${String(item.folio).replace(" ", "-")}.pdf`, String(item.folio));
@@ -231,7 +231,7 @@ export function NcForm({ item }: { item: ApiRecord }) {
       <div className="flex flex-col gap-3 rounded-card bg-surface p-4 shadow-card" data-etapa={estado}>
         <FlowSteps steps={ETAPAS_NC.map((e) => ({ key: e, label: ESTADOS_NC[e].label }))} current={estado === "anulada" ? "" : estado} failed={estado === "anulada" ? "Anulada" : Number(item.reaperturas) ? `${item.reaperturas} reapertura${Number(item.reaperturas) > 1 ? "s" : ""}` : undefined} />
         {sinGuardar ? <p className="text-[12.5px] text-warning-text">Tienes cambios sin guardar ({cambios.length}). Guárdalos antes de avanzar de etapa.</p> : null}
-        {!editar && !cerrada ? <p className="text-[12.5px] text-ink-3">Editan la NC quien administra calidad (calidad:G) y su responsable.</p> : null}
+        {!editar && !cerrada ? <p className="text-[12.5px] text-ink-3">Editan la NC quien administra calidad y su responsable.</p> : null}
       </div>
       <SolicitudCallout item={item} />
       {estado === "anulada" ? (
@@ -284,7 +284,7 @@ export function NcForm({ item }: { item: ApiRecord }) {
               </div>
             )}
           </Field>
-          <Field label="Responsable de la NC" htmlFor="nc-responsable" hint={administrar ? "Lo nombra o cambia quien administra calidad; el cambio pide motivo." : "Lo nombra quien administra calidad (calidad:G)."}>
+          <Field label="Responsable de la NC" htmlFor="nc-responsable" hint={administrar ? "Lo nombra o cambia quien administra calidad; el cambio pide motivo." : "Lo nombra quien administra calidad."}>
             {administrar && !cerrada ? (
               <Select id="nc-responsable" value={d.responsable_id} onChange={(event) => set("responsable_id")(event.target.value)}>
                 <option value="">Sin nombrar</option>
@@ -297,7 +297,7 @@ export function NcForm({ item }: { item: ApiRecord }) {
               </Select>
             ) : (
               <div className="flex h-10 items-center gap-2 text-[14px]">
-                {(item.responsable as ApiRecord)?.nombre || <span className="text-ink-4">Sin nombrar</span>}
+                {(item.responsable as ApiRecord)?.nombre || <span className="text-ink-3">Sin nombrar</span>}
               </div>
             )}
           </Field>
@@ -404,7 +404,7 @@ export function NcForm({ item }: { item: ApiRecord }) {
       </FormCard>
 
       {/* 6. Verificacion */}
-      <FormCard id="sec-verificacion" title="6. Verificación de eficacia (8.7.1 d)" description="Por NC: se verifica que el conjunto de acciones eliminó la causa. La verifica calidad:R, nunca el responsable de una acción.">
+      <FormCard id="sec-verificacion" title="6. Verificación de eficacia (8.7.1 d)" description="Por NC: se verifica que el conjunto de acciones eliminó la causa. La verifica quien revisa en calidad, nunca el responsable de una acción.">
         <Field label="Verificación programada" htmlFor="nc-verif-prog">
           {editar ? <DateInput id="nc-verif-prog" value={d.verificacion_programada} onChange={set("verificacion_programada")} min={hoyLocal()} /> : <ReadValue value={fmtDate(item.verificacion_programada)} />}
         </Field>
@@ -433,7 +433,7 @@ export function NcForm({ item }: { item: ApiRecord }) {
       </FormCard>
 
       {/* 8. Cierre */}
-      <FormCard id="sec-cierre" title="8. Cierre" description="Lo cierra quien tiene calidad:A (con tu contraseña), nunca el responsable de la NC.">
+      <FormCard id="sec-cierre" title="8. Cierre" description="Lo cierra quien aprueba en calidad (con su contraseña), nunca el responsable de la NC.">
         <Cierre item={item} bloqueo={segregacion.cerrar} onExcepcion={() => solicitarExcepcion("no_conformidades", item.id, "cerrar", String(segregacion.cerrar), String(item.folio))} onPdf={() => pdf(false)} />
       </FormCard>
     </FormPage>
@@ -567,7 +567,7 @@ function Suspensiones({ item, suspensiones }: { item: ApiRecord; suspensiones: A
     if (motivo) await enviar("POST", `/calidad/suspensiones/${su.id}/reanudar`, { motivo });
   };
   return (
-    <Panel title="Suspensión del trabajo (7.10.1 f)" description="Métodos o equipos detenidos por esta NC. Reanuda quien tiene calidad:A, nunca quien suspendió.">
+    <Panel title="Suspensión del trabajo (7.10.1 f)" description="Métodos o equipos detenidos por esta NC. Reanuda quien aprueba en calidad, nunca quien suspendió.">
       {suspensiones.length ? (
         <ul className="flex flex-col gap-2">
           {suspensiones.map((su) => {
@@ -909,7 +909,7 @@ function Verificar({ item, bloqueo, onExcepcion }: { item: ApiRecord; bloqueo: s
     void enviar("POST", `/calidad/nc/${item.id}/verificar`, { resultado, comentarios }, undefined, (err) => vVer.errorServidor(err));
   };
   if (!puede.verificar) {
-    return item.estado === "en_verificacion" ? <p className="text-[13px] text-ink-3">Pendiente: la verifica quien tiene calidad:R.</p> : null;
+    return item.estado === "en_verificacion" ? <p className="text-[13px] text-ink-3">Pendiente: la verifica quien revisa en calidad.</p> : null;
   }
   if (bloqueo) return <SegregacionCallout bloqueo={bloqueo} accion="verificar" onSolicitar={onExcepcion} />;
   return (
@@ -935,7 +935,7 @@ function Verificar({ item, bloqueo, onExcepcion }: { item: ApiRecord; bloqueo: s
 /* ---------- 7. Propuesta documental anterior (solo lectura) ---------- */
 
 /*
- * Desde la Biblioteca (y ahora con Documentos SGC) ya no se crean
+ * Desde la NC ya no se crean
  * propuestas de cambio documental: "requiere cambio documental" es solo una
  * bandera. Si la NC ya apuntaba a una propuesta del flujo anterior, se muestra
  * en solo lectura (titulo y estado), sin enlace a la pantalla retirada.
@@ -975,7 +975,7 @@ function Cierre({ item, bloqueo, onExcepcion, onPdf }: { item: ApiRecord; bloque
     );
   }
   if (item.estado === "anulada") return <p className="text-[13px] text-ink-3">La NC está anulada.</p>;
-  if (!puede.cerrar) return <p className="text-[13px] text-ink-3">La cierra quien tiene calidad:A (Responsable General o Mejora Continua) cuando se cumplan las condiciones.</p>;
+  if (!puede.cerrar) return <p className="text-[13px] text-ink-3">La cierra quien aprueba en calidad (Responsable General o Mejora Continua) cuando se cumplan las condiciones.</p>;
   if (bloqueo) return <SegregacionCallout bloqueo={bloqueo} accion="cerrar" onSolicitar={onExcepcion} />;
   const cerrar = async () => {
     const conclusion = await prompt({ critico: true, title: `Cerrar ${item.folio}`, description: "Se genera el PDF «Registro de no conformidad» con su huella SHA-256. Después ya no se edita.", label: "Conclusión del cierre", minLength: 10, confirmLabel: "Cerrar NC" });

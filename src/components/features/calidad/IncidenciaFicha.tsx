@@ -42,7 +42,7 @@ export function IncidenciaFicha({ item }: { item: ApiRecord }) {
   const editable = ["reportada", "en_evaluacion"].includes(String(item.estado));
 
   const anular = async () => {
-    const motivo = await prompt({ critico: true, tone: "danger", title: `Anular ${item.folio}`, description: "La incidencia deja de contar, pero se conserva. La anulación la autoriza un segundo usuario con calidad:AN.", confirmLabel: "Solicitar anulación" });
+    const motivo = await prompt({ critico: true, tone: "danger", title: `Anular ${item.folio}`, description: "La incidencia deja de contar, pero se conserva. La anulación la autoriza otra persona con permiso para anular en calidad.", confirmLabel: "Solicitar anulación" });
     if (motivo) await enviar("POST", `/calidad/incidencias/${item.id}/anular`, { motivo });
   };
 
@@ -104,7 +104,7 @@ export function IncidenciaFicha({ item }: { item: ApiRecord }) {
           </Card>
 
           <Card>
-            <CardHeader title="Fotos y archivos" description={editable ? "Quien reportó (o calidad:G) puede agregar fotos mientras se evalúa." : "Solo lectura: la incidencia ya se evaluó."} />
+            <CardHeader title="Fotos y archivos" description={editable ? "Quien reportó (o quien administra calidad) puede agregar fotos mientras se evalúa." : "Solo lectura: la incidencia ya se evaluó."} />
             <AdjuntosPanel registroId={Number(item.id)} base={`/calidad/incidencias/${item.id}`} token={token} clave="calidad" tipoInicial="foto" textos={{ vacioTitulo: "Sin fotos ni archivos", vacioEditable: "Agrega una foto de lo observado o un archivo de apoyo.", vacioLectura: "Esta incidencia no tiene archivos.", boton: "Adjuntar" }} />
           </Card>
 
@@ -120,7 +120,7 @@ export function IncidenciaFicha({ item }: { item: ApiRecord }) {
                 ) : null}
               </div>
             ) : (
-              <p className="text-[13.5px] text-ink-3">{item.estado === "anulada" ? "No se evaluó." : "Pendiente: la evalúa quien tiene calidad:R (Coordinación Técnica, Mejora Continua o Responsable General), nunca quien la reportó."}</p>
+              <p className="text-[13.5px] text-ink-3">{item.estado === "anulada" ? "No se evaluó." : "Pendiente: la evalúa quien revisa en calidad (Coordinación Técnica, Mejora Continua o Responsable General), nunca quien la reportó."}</p>
             )}
           </Card>
           <RecordHistory entidad="incidencias" entidadId={Number(item.id)} />

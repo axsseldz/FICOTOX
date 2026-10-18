@@ -3,7 +3,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { BellRinging, BookOpenText, CheckCircle, Clock, MapPin, Plus, Trash, UsersThree } from "@phosphor-icons/react";
-import { Callout } from "@/components/features/samples/FormLayout";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
@@ -288,8 +287,8 @@ export function SeccionDistribucion({ dist, catalogos, obsoleto, sinAgregar = fa
         {dist.avance.total ? (
           <span className="flex items-center gap-2" data-testid="dist-avance" data-porcentaje={dist.avance.porcentaje ?? ""}>
             <span className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-3" aria-hidden="true">
-              {/* La barra crece con transform (scaleX) y el numero cuenta al cambiar; sin movimiento con movimiento reducido. */}
-              <span className="avance-barra block h-full w-full rounded-full bg-brand" style={{ transform: `scaleX(${(dist.avance.porcentaje || 0) / 100})` }} />
+              {/* La barra avanza con transform (se recorre dentro del riel, sin deformar sus extremos redondeados) y el numero cuenta al cambiar; sin movimiento con movimiento reducido. */}
+              <span className="avance-barra block h-full w-full rounded-full bg-brand" style={{ transform: `translateX(${(dist.avance.porcentaje || 0) - 100}%)` }} />
             </span>
             <span aria-hidden="true">
               <Conteo valor={dist.avance.leidos} duracion={300} /> de {dist.avance.total} leídas (<Conteo valor={dist.avance.porcentaje || 0} duracion={300} /> %)
@@ -370,9 +369,4 @@ function Boton({ puede, onClick, cargando }: { puede: Puede; onClick: () => void
       {!puede.ok && puede.motivo ? <span className={cn("text-[11.5px] text-ink-3")}>{puede.motivo}</span> : null}
     </span>
   );
-}
-
-/* Aviso informativo cuando la persona no ve la lista completa. */
-export function AvisoDistribucionParcial() {
-  return <Callout tone="info" title="Distribución">Ves el punto de uso y tu propia lectura; la lista por persona la consulta Mejora Continua.</Callout>;
 }

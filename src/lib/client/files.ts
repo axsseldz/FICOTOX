@@ -7,14 +7,16 @@ export interface PeticionVerPdf {
   /* Nombre con que se descarga si la persona pulsa Descargar. */
   nombre: string;
   titulo?: string;
+  /* Se llama al cerrar el visor (p. ej. para volver a abrir la ventana desde la que se pidio). */
+  alCerrar?: () => void;
 }
 
 /*
  * Ver un PDF dentro de la plataforma: sin pestaña nueva y sin descarga
  * automatica; descargar es una accion explicita del visor.
  */
-export function verPdf(url: string, nombre: string, titulo?: string): void {
-  window.dispatchEvent(new CustomEvent<PeticionVerPdf>(EVENTO_VER_PDF, { detail: { url, nombre, titulo } }));
+export function verPdf(url: string, nombre: string, titulo?: string, alCerrar?: () => void): void {
+  window.dispatchEvent(new CustomEvent<PeticionVerPdf>(EVENTO_VER_PDF, { detail: { url, nombre, titulo, alCerrar } }));
 }
 
 /*

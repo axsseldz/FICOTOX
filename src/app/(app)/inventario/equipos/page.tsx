@@ -274,7 +274,7 @@ function EquiposContent() {
           accion: canCreate && !search && filter === "todos" ? <Button onClick={() => modal.open(null)}>Nuevo equipo</Button> : undefined,
         }}
       />
-      {items && visible.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-4">{visible.length === 1 ? "1 equipo" : `${fmt(visible.length)} equipos`}</p> : null}
+      {items && visible.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-3">{visible.length === 1 ? "1 equipo" : `${fmt(visible.length)} equipos`}</p> : null}
 
       <EquipoVentana
         items={visible}

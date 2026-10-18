@@ -10,13 +10,13 @@ import { fmt, parseNumberOrNull } from "@/lib/client/format";
 import { formatReactivoName, getReactivoExpiry, getReactivoLocation, getReactivoStockState, getReactivoTypeLabel } from "@/lib/client/reactivos";
 import type { ApiRecord } from "@/lib/client/types";
 import { formatearFecha, formatearFechaCorta, formatearFechaHora } from "@/lib/shared/fechas";
-import { caducidadDe, IconoCategoria, IconoConsumible, MovimientosRecientes, moverEn } from "./comun";
+import { caducidadDe, conUnidad, IconoCategoria, IconoConsumible, MovimientosRecientes, moverEn } from "./comun";
 
 /*
  * Ventana de un reactivo o un consumible (Inventario): encabezado con icono de
  * su categoria, datos rapidos (existencia, minimo, caducidad, lote),
  * existencia con barra, identificacion y resguardo, movimientos recientes,
- * incidencias que lo mencionan y las acciones de siempre (Reponer, Editar,
+ * incidencias que lo mencionan y las acciones de siempre (Registrar movimiento, Editar,
  * Dar de baja o Reactivar), segun permisos.
  */
 
@@ -101,8 +101,8 @@ function TarjetaExistencia({ actual, maximo, minimo, unidad, baja, vacia, nota }
         </div>
         {actual !== null ? <StockMeter size="lg" current={actual} max={maximo ?? undefined} min={minimo ?? undefined} unit={unidad} low={baja} label={nota} /> : <p className="text-[13.5px] text-ink-3">Todavía no se registra la cantidad.</p>}
         <div className="flex flex-wrap gap-x-5 gap-y-1 text-[12.5px] text-ink-3">
-          {minimo ? <span>Mínimo: {fmt(minimo)} {unidad}</span> : null}
-          {maximo ? <span>Máximo: {fmt(maximo)} {unidad}</span> : null}
+          {minimo ? <span>Mínimo: {conUnidad(minimo, unidad)}</span> : null}
+          {maximo ? <span>Máximo: {conUnidad(maximo, unidad)}</span> : null}
         </div>
       </VentanaTarjeta>
     </VentanaSeccion>
@@ -130,7 +130,7 @@ function FichaReactivo({ item, acciones }: { item: ApiRecord; acciones: Acciones
       ]
     : [
         { icono: <Gauge size={17} weight="duotone" />, etiqueta: "Existencia", valor: stock.current !== null ? `${fmt(stock.current)} ${unidad}`.trim() : "Sin registro", tono: stock.empty ? "danger" : stock.low ? "warning" : "brand" },
-        { icono: <WarningCircle size={17} weight="duotone" />, etiqueta: "Mínimo", valor: stock.min ? `${fmt(stock.min)} ${unidad}`.trim() : "20 %", titulo: stock.min ? undefined : "Sin mínimo: avisa al 20 % de la capacidad" },
+        { icono: <WarningCircle size={17} weight="duotone" />, etiqueta: "Mínimo", valor: stock.min ? conUnidad(stock.min, unidad) : "20 %", titulo: stock.min ? undefined : "Sin mínimo: avisa al 20 % de la capacidad" },
         { icono: <CalendarBlank size={17} weight="duotone" />, etiqueta: "Caducidad", valor: textoCaducidad, tono: cad?.tono || "brand", titulo: cad?.detalle || undefined },
         { icono: <Tag size={17} weight="duotone" />, etiqueta: "Lote", valor: item.lote ? String(item.lote) : "—" },
       ];
@@ -153,7 +153,7 @@ function FichaReactivo({ item, acciones }: { item: ApiRecord; acciones: Acciones
       <ColumnasVentana
         principal={
           <>
-            {esColumna ? null : <TarjetaExistencia actual={stock.current} maximo={stock.max ?? null} minimo={stock.min ?? null} unidad={unidad} baja={stock.low} vacia={stock.empty} nota={stock.min ? `Aviso de existencia baja al llegar a ${fmt(stock.min)} ${unidad}` : "Aviso de existencia baja al 20 % de la capacidad"} />}
+            {esColumna ? null : <TarjetaExistencia actual={stock.current} maximo={stock.max ?? null} minimo={stock.min ?? null} unidad={unidad} baja={stock.low} vacia={stock.empty} nota={stock.min ? `Aviso de existencia baja al llegar a ${conUnidad(stock.min, unidad)}` : "Aviso de existencia baja al 20 % de la capacidad"} />}
             {esColumna ? null : (
               <VentanaSeccion titulo="Movimientos recientes" i={2}>
                 <MovimientosRecientes tabla="reactivos" id={item.id} unidad={unidad} />
@@ -187,7 +187,7 @@ function FichaReactivo({ item, acciones }: { item: ApiRecord; acciones: Acciones
               {item.proveedor || item.vendor ? <DatoLateral etiqueta="Proveedor">{String(item.proveedor || item.vendor)}</DatoLateral> : null}
             </TarjetaLateral>
             <TarjetaLateral icono={<MapPin size={15} weight="duotone" />} titulo="Dónde está" i={1}>
-              <DatoLateral etiqueta="Ubicación">{ubicacion || "Sin ubicación"}</DatoLateral>
+              <DatoLateral etiqueta="Ubicación">{ubicacion && ubicacion !== "-" ? ubicacion : "Sin ubicación"}</DatoLateral>
               {item.contenedor ? <DatoLateral etiqueta="Contenedor">{String(item.contenedor)}</DatoLateral> : null}
               {capacidad !== null ? <DatoLateral etiqueta="Capacidad por envase">{`${fmt(capacidad)} ${item.unidad_capacidad || ""}`.trim()}</DatoLateral> : null}
               {piezas !== null ? <DatoLateral etiqueta="Piezas">{fmt(piezas)}</DatoLateral> : null}
@@ -217,7 +217,7 @@ function FichaConsumible({ item, acciones }: { item: ApiRecord; acciones: Accion
   const cad = caducidadDe(item.caducidad);
   const datos: DatoRapido[] = [
     { icono: <Gauge size={17} weight="duotone" />, etiqueta: "Existencia", valor: `${fmt(unidades)} ${unidades === 1 ? "unidad" : "unidades"}`, tono: unidades <= 0 ? "danger" : unidades <= minimo ? "warning" : "brand" },
-    { icono: <WarningCircle size={17} weight="duotone" />, etiqueta: "Mínimo", valor: `${fmt(minimo)} unidades`, titulo: item.stock_minimo ? undefined : "Sin mínimo propio: avisa con 5 unidades o menos" },
+    { icono: <WarningCircle size={17} weight="duotone" />, etiqueta: "Mínimo", valor: conUnidad(minimo, "unidades"), titulo: item.stock_minimo ? undefined : "Sin mínimo propio: avisa con 5 unidades o menos" },
     { icono: <CalendarBlank size={17} weight="duotone" />, etiqueta: "Caducidad", valor: cad ? cad.texto : "Sin fecha", tono: cad?.tono || "brand" },
     { icono: <Tag size={17} weight="duotone" />, etiqueta: "Lote", valor: item.lote ? String(item.lote) : "—" },
   ];
@@ -234,7 +234,7 @@ function FichaConsumible({ item, acciones }: { item: ApiRecord; acciones: Accion
       <ColumnasVentana
         principal={
           <>
-            <TarjetaExistencia actual={unidades} maximo={maximo || null} minimo={minimo} unidad="unidades" baja={unidades <= minimo} vacia={unidades <= 0} nota={`Aviso de existencia baja con ${fmt(minimo)} unidades o menos`} />
+            <TarjetaExistencia actual={unidades} maximo={maximo || null} minimo={minimo} unidad="unidades" baja={unidades <= minimo} vacia={unidades <= 0} nota={`Aviso de existencia baja con ${conUnidad(minimo, "unidades")} o menos`} />
             <VentanaSeccion titulo="Movimientos recientes" i={2}>
               <MovimientosRecientes tabla="consumibles" id={item.id} unidad="unidades" />
             </VentanaSeccion>

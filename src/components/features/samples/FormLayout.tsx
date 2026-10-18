@@ -261,7 +261,7 @@ export function FormPage({ backHref, backLabel, code, title, status, statusTone 
                     >
                       <span className={cn("tnum flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10.5px] font-semibold", section.complete ? "bg-success text-on-accent" : missing ? "bg-warning-soft text-warning-text" : active ? "bg-brand-soft text-brand-strong ring-1 ring-inset ring-brand/25" : "bg-surface-3 text-ink-3")}>{section.complete ? <Check size={11} weight="bold" /> : index + 1}</span>
                       <span className="truncate">{section.label}</span>
-                      {section.optional ? <span className="ml-auto shrink-0 text-[10.5px] font-medium uppercase tracking-wide text-ink-4">{section.optionalLabel ? "después" : "opcional"}</span> : null}
+                      {section.optional ? <span className="ml-auto shrink-0 text-[10.5px] font-medium uppercase tracking-wide text-ink-3">{section.optionalLabel ? "después" : "opcional"}</span> : null}
                     </button>
                   </li>
                 );
@@ -270,7 +270,7 @@ export function FormPage({ backHref, backLabel, code, title, status, statusTone 
             {evaluated > 0 ? (
               <div className="mt-3 hidden px-2 lg:block">
                 <div className="h-1 w-full overflow-hidden rounded-full bg-surface-3">
-                  <div className="h-full rounded-full bg-success transition-[width] duration-500 ease-[var(--ease-spring)]" style={{ width: `${Math.round((done / evaluated) * 100)}%` }} />
+                  <div className="h-full w-full rounded-full bg-success transition-[translate] duration-500 ease-[var(--ease-spring)]" style={{ translate: `${Math.round((done / evaluated) * 100) - 100}% 0` }} />
                 </div>
                 <p className="tnum mt-1.5 text-[12px] text-ink-3">
                   {done} de {evaluated} secciones completas
@@ -502,7 +502,7 @@ const slug = (text: string) => text.toLowerCase().normalize("NFD").replace(/[\u0
 /* id del selector de una PersonCard ("persona-<titulo>"); la firma es "<id>-firma". */
 export const personaId = (title: string) => `persona-${slug(title)}`;
 
-export function PersonCard({ title, name, onName, cargo, onCargo, signature, onSignature, disabled = false, requires = "muestras", firmante, onFirmante, firmanteSesion = true }: { title: string; name: string; onName: (v: string) => void; cargo?: string; onCargo?: (v: string) => void; signature: string; onSignature: (v: string) => void; disabled?: boolean; requires?: PersonaCapacidad; /* Fase 5: firma ligada a una cuenta activa (con contrasena si no es la sesion). */ firmante?: FirmanteState; onFirmante?: (v: FirmanteState) => void; firmanteSesion?: boolean }) {
+export function PersonCard({ title, name, onName, cargo, onCargo, signature, onSignature, disabled = false, requires = "muestras", firmante, onFirmante, firmanteSesion = true, nuevo = false }: { title: string; name: string; onName: (v: string) => void; cargo?: string; onCargo?: (v: string) => void; signature: string; onSignature: (v: string) => void; disabled?: boolean; requires?: PersonaCapacidad; /* Fase 5: firma ligada a una cuenta activa (con contrasena si no es la sesion). */ firmante?: FirmanteState; onFirmante?: (v: FirmanteState) => void; firmanteSesion?: boolean; /* Formato aun sin guardar (el nombre prellenado de la sesion se liga a su cuenta). */ nuevo?: boolean }) {
   const id = `persona-${slug(title)}`;
   return (
     <div className="on-panel grid gap-4 rounded-[12px] bg-surface-2 p-4 ring-1 ring-line md:grid-cols-[minmax(0,1fr)_300px]">
@@ -519,6 +519,7 @@ export function PersonCard({ title, name, onName, cargo, onCargo, signature, onS
                 nombre={name}
                 disabled={disabled}
                 porOmisionSesion={firmanteSesion}
+                nuevo={nuevo}
                 onChange={(value, cuenta) => {
                   onFirmante(value);
                   onName(cuenta?.nombre || "");

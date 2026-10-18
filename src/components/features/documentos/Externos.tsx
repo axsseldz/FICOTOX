@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowSquareOut, CheckCircle, FilePlus, Globe, PencilSimple, SealCheck } from "@phosphor-icons/react";
+import { ArrowSquareOut, CheckCircle, FilePlus, PencilSimple, SealCheck } from "@phosphor-icons/react";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
 import { DateInput } from "@/components/ui/DateInput";
@@ -448,4 +448,3 @@ export function SeguimientoExterno({ docId, clave, ext, catalogos, sinAcciones =
   );
 }
 
-export { Globe as IconoExterno };

@@ -32,7 +32,6 @@
   --color-brand-strong: #0b5f75;
   --color-brand-soft: #dcedf3;
   --color-brand-faint: #eef6f9;
-  --color-brand-bright: #34a7c4;
 
   /* Semánticos discretos */
   --color-success: #2f8a5b;
@@ -51,7 +50,6 @@
 
   /* Superficies especiales: barra lateral y lienzo claro del acceso */
   --color-sidebar: #f7f8fa;
-  --color-canvas-2: #fbfbfd;
   /* Texto sobre un relleno de color (botón primario, insignia roja, renglón resaltado) */
   --color-on-accent: #ffffff;
   /* Pasos de hover de los botones */
@@ -181,7 +179,6 @@
 
       /* Elevación tonal (mismo matiz azulado): lienzo → superficie → superficie 2/3 → ventana */
       --color-canvas: #0c1319;
-      --color-canvas-2: #0c1319;
       --color-sidebar: #0f171e;
       --color-surface: #141d25;
       --color-surface-2: #19232c;
@@ -201,7 +198,6 @@
       --color-brand-strong: #74c5da;
       --color-brand-soft: #16303d;
       --color-brand-faint: #112832;
-      --color-brand-bright: #5cbcd5;
       --color-brand-soft-hover: #1a4253;
       --color-on-accent: #04161d;
 
@@ -337,11 +333,19 @@
     display: none !important;
   }
 
+  /*
+   * Movimiento reducido: las animaciones terminan al instante (siguen disparando
+   * animationend, del que dependen las ventanas de Radix para desmontarse) y las
+   * transiciones no se crean (con 0.01 ms cada elemento, cuyo transition-property
+   * por omision es "all", generaba una transicion por cada propiedad que cambiara).
+   */
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
+      animation-delay: 0s !important;
       animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
+      transition-duration: 0s !important;
+      transition-delay: 0s !important;
       scroll-behavior: auto !important;
     }
   }
@@ -579,6 +583,10 @@
   .seleccion[aria-current="page"] {
     background-color: var(--color-surface-3);
   }
+  /* En oscuro, surface-3 casi iguala al fondo del popover y de la ventana ⌘K: el resultado elegido se aclara sobre lo que tenga debajo. */
+  :root[data-theme="dark"] .seleccion[data-selected="true"] {
+    background-color: color-mix(in srgb, var(--color-ink) 10%, transparent);
+  }
   @media (prefers-reduced-motion: reduce) {
     .seleccion {
       transition: none;
@@ -594,46 +602,24 @@
     transition-duration: 60ms;
   }
 
-  /* Materiales translúcidos: estructura (más denso) y flotante (más ligero). */
+  /* Material translúcido (barras, ventanas y paneles flotantes). */
   .material {
     background: rgba(255, 255, 255, 0.72);
     -webkit-backdrop-filter: blur(24px) saturate(180%);
     backdrop-filter: blur(24px) saturate(180%);
   }
-  .material-thick {
-    background: rgba(245, 247, 249, 0.82);
-    -webkit-backdrop-filter: blur(28px) saturate(160%);
-    backdrop-filter: blur(28px) saturate(160%);
-  }
   @media screen {
     :root[data-theme="dark"] .material {
       background: rgba(26, 37, 47, 0.82);
     }
-    :root[data-theme="dark"] .material-thick {
-      background: rgba(25, 35, 44, 0.88);
-    }
-    :root[data-theme="dark"] .material-dark {
-      background: rgba(44, 58, 70, 0.94);
-    }
-  }
-  .material-dark {
-    background: rgba(16, 32, 43, 0.82);
-    -webkit-backdrop-filter: blur(24px) saturate(160%);
-    backdrop-filter: blur(24px) saturate(160%);
   }
   @media (prefers-reduced-transparency: reduce) {
-    .material, .material-thick {
+    .material {
       background: var(--color-surface);
       -webkit-backdrop-filter: none;
       backdrop-filter: none;
     }
-    .material-dark {
-      background: #10202b;
-      -webkit-backdrop-filter: none;
-      backdrop-filter: none;
-    }
   }
-
 
   /* Marca animada (acceso): la célula gira despacio, las hijas flotan y el mar avanza. */
   .brand-animated .brand-cell {
@@ -759,6 +745,7 @@ html [data-sonner-toaster][data-sonner-theme] [data-description] {
 }
 
 /* Documentos SGC: el icono conserva el HEX exacto del area; en modo oscuro va sobre un recuadro claro para mantener contraste >= 3:1. */
-:root[data-theme="dark"] .icono-area {
+:root[data-theme="dark"] .icono-area,
+:root[data-theme="dark"] .icono-area .insignia-area {
   background-color: #ffffff;
 }

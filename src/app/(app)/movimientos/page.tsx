@@ -142,7 +142,7 @@ function MovimientosContent() {
       <span key="m" className="text-[13.5px] text-ink-2">{origen.texto}</span>,
       <span key="w" className="flex flex-col text-[13px] text-ink-2" title={`Capturado: ${formatearFechaHora(item.fecha_hora)}`}>
         {formatearFechaCorta(fechaDelMovimiento(item).fecha)}
-        {fechaDelMovimiento(item).distinta ? <span className="text-[11.5px] text-ink-4">Capturado el {formatearFechaCorta(fechaDelMovimiento(item).captura)}</span> : null}
+        {fechaDelMovimiento(item).distinta ? <span className="text-[11.5px] text-ink-3">Capturado el {formatearFechaCorta(fechaDelMovimiento(item).captura)}</span> : null}
       </span>,
     ];
   };
@@ -176,9 +176,9 @@ function MovimientosContent() {
         celdas={celdas}
         anchoExtremo="12px"
         propsFila={(item) => ({ "data-movimiento": String(item.id) })}
-        vacio={{ icono: <ArrowsLeftRight size={20} />, titulo: "Sin movimientos", descripcion: filtrando ? "No hay movimientos con ese filtro." : "Los descuentos y rellenos de inventario aparecerán aquí." }}
+        vacio={{ icono: <ArrowsLeftRight size={20} />, titulo: "Sin movimientos", descripcion: filtrando ? "No hay movimientos con ese filtro." : "Aquí aparecerán las entradas, salidas, consumos y ajustes de inventario." }}
       />
-      {resource.data && rows.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-4">{rows.length === 1 ? "1 movimiento" : `${fmt(rows.length)} movimientos`}</p> : null}
+      {resource.data && rows.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-3">{rows.length === 1 ? "1 movimiento" : `${fmt(rows.length)} movimientos`}</p> : null}
 
       <MovimientoVentana items={rows} indice={abierta !== null && abierta < rows.length ? abierta : null} onIndice={setAbierta} onCerrar={() => setAbierta(null)} />
     </PageBody>

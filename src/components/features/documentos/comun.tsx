@@ -336,7 +336,7 @@ export function IconoArea({ area, size = "md", carpeta = false }: { area: Pick<A
     <span className={cn("icono-area relative flex shrink-0 items-center justify-center bg-surface-2 ring-1 ring-line", caja)} aria-hidden="true">
       <FolderSimple size={icono} weight="fill" style={{ color: area.color }} className={cn(fundido, "group-hover:opacity-0 group-focus-visible:opacity-0")} />
       <FolderOpen size={icono} weight="fill" style={{ color: area.color }} className={cn(fundido, "absolute opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100")} />
-      <span className="absolute -right-1.5 -bottom-1.5 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-surface ring-1 ring-line">
+      <span className="insignia-area absolute -right-1.5 -bottom-1.5 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-surface ring-1 ring-line">
         <Glifo size={12} weight="bold" style={{ color: area.color }} />
       </span>
     </span>

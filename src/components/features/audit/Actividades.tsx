@@ -101,7 +101,7 @@ function FilaActividad({ grupo, activa, onAbrir }: { grupo: GrupoActividad; acti
       >
         <EntryIcon entry={entry} size="sm" />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-[14px] leading-[1.35] text-ink">
+          <span className="line-clamp-2 text-[14px] leading-[1.35] break-words text-ink">
             {entry.frase}
             {veces > 1 ? <span className="text-ink-3"> · {veces} veces</span> : null}
           </span>

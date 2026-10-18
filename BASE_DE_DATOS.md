@@ -255,7 +255,7 @@ erDiagram
 | `consumibles` | Material que se gasta por pieza (puntas, filtros…). | `producto`, `marca`, `proveedor`, `catalogo_parte_cas`, `piezas`, `cantidad_por_pieza`, `stock_maximo`, `activo`, columnas de baja. |
 | `equipos` | Instrumentos del laboratorio. | `nombre`, `marca`, `modelo`, `numero_serie` (único), `clave_bitacora`, `ubicacion`, `fecha_prox_calibracion`, `estado` (p. ej. «fuera de servicio»), `activo`, columnas de baja. |
 | `mantenimientos` | Mantenimientos programados o realizados de un equipo. | `id_equipo`, `tipo`, `fecha_programada`, `fecha_realizado`, `tecnico_proveedor`, `estado`, `observaciones`. |
-| `reportes_mantenimiento` | El reporte (archivo) de un mantenimiento. | `codigo` (único, `RM-<mantenimiento>-<n>`), `id_mantenimiento`, `version`, `archivo_url` (el archivo está en `instance/maintenance_reports/`). |
+| `reportes_mantenimiento` | El reporte de servicio (PDF) de un mantenimiento. | `codigo` (único, `RM-<mantenimiento>-<n>`), `id_mantenimiento`, `version`, `archivo_url`, `nombre_almacenado` (relativo a `instance/maintenance_reports/`), `sha256`, `subido_por`. Quitar o reemplazar no borra: `anulado_en`, `anulado_por`, `motivo_anulacion` y `reemplazado_por` (migración 25). |
 | `movimientos` | **Libro de entradas y salidas** de inventario. Cada consumo hecho desde un formato queda aquí. | `tipo` (`entrada`/`salida`), `tabla_origen` (`reactivos` o `consumibles`), `id_item`, `cantidad`, `motivo`, `referencia` (**única**; por ejemplo `EXT-78-INS-0` = «extracción 78, insumo 0»), `id_usuario`, `creado_en`. |
 
 ### 3.5 Calidad (incidencias, no conformidades y Documentos SGC)
@@ -780,6 +780,7 @@ Están en `src/lib/server/migraciones/` y se registran en `motor.mjs`:
 | 22 | Documentos SGC: catálogos de áreas y tipos, fichas, revisiones (una vigente), archivos inmutables tras enviar a revisión, tablas de las fases 2 y 3 y acciones documentales en `rol_acciones` (retira los permisos de la Biblioteca) |
 | 23 | Documentos SGC, flujo de aprobación: fecha límite, revisión/autorización/cancelación y «sustituida por» en `sgc_revisiones`; papel en `sgc_flujo_acciones`; clave asignada en `sgc_solicitudes`; tabla `sgc_renovaciones` |
 | 24 | Documentos SGC, externos y lectura controlada: `version_externa` en `sgc_revisiones`, motivos de alta y retiro en `sgc_distribucion`, `abierto_en` en `sgc_lecturas` e índice de lecturas por usuario |
+| 25 | Reporte PDF de mantenimiento: `nombre_almacenado`, `nombre_original`, `tamano_bytes`, `sha256`, `subido_por`, `anulado_en`, `anulado_por`, `motivo_anulacion` y `reemplazado_por` en `reportes_mantenimiento`, e índice por mantenimiento |
 
 (Empiezan en la 9 para coincidir con los respaldos anteriores, que usaban 10 y 11 como número de esquema.)
 

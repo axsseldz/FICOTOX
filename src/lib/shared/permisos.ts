@@ -94,9 +94,9 @@ export const ALCANCES = [
   { clave: "asignado", nombre: "Asignado", fase: null, descripcion: "Solo las muestras asignadas a la persona (o registradas por ella)" },
   { clave: "supervisado", nombre: "Supervisado", fase: null, descripcion: "Lo que crea o edita queda pendiente del visto bueno de su supervisor" },
   { clave: "proyecto", nombre: "Proyecto", fase: "8", descripcion: "Solo su proyecto" },
-  { clave: "tecnico", nombre: "Técnico", fase: "7/8", descripcion: "En la biblioteca equivale a total (sin filtro por tipo de documento)" },
-  { clave: "investigacion", nombre: "Investigación", fase: "7/8", descripcion: "En la biblioteca equivale a total (sin filtro por tipo de documento)" },
-  { clave: "autorizados", nombre: "Autorizados", fase: null, descripcion: "Solo los documentos de la biblioteca visibles para todos o para su rol" },
+  { clave: "tecnico", nombre: "Técnico", fase: "7/8", descripcion: "En documentos equivale a total (sin filtro por tipo de documento)" },
+  { clave: "investigacion", nombre: "Investigación", fase: "7/8", descripcion: "En documentos equivale a total (sin filtro por tipo de documento)" },
+  { clave: "autorizados", nombre: "Autorizados", fase: null, descripcion: "En Documentos SGC lo que ve cada quien lo fijan sus acciones documentales; en los documentos heredados, solo los visibles para todos o para su rol" },
   { clave: "administrativo", nombre: "Administrativo", fase: "7/8", descripcion: "Solo lo administrativo" },
   { clave: "limitado", nombre: "Limitado", fase: "posterior", descripcion: "Vista limitada" },
   { clave: "incidencias", nombre: "Incidencias", fase: null, descripcion: "Reportar incidencias y ver solo las propias y las NC o acciones de las que es responsable; no la bitacora" },
@@ -254,7 +254,7 @@ export function alcancePermite(alcance: Alcance, ctx: ContextoAlcance = {}): boo
     case "propio":
       return ctx.propio === true;
     case "autorizados":
-      // Se permite; el servidor filtra a los documentos de la biblioteca visibles para todos o para el rol de la persona.
+      // Se permite; en los documentos heredados el servidor filtra a los visibles para todos o para el rol de la persona.
       return true;
     case "asignado":
       // Fase 5: se permite salvo que el servidor sepa que la muestra no esta asignada a la persona.

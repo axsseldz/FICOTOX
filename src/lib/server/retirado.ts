@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 
 /*
- * Biblioteca de documentos: el flujo de control documental de Documentos SGC se
- * retiro por decision confirmada del laboratorio (Calidad › Documentos funciona
- * como biblioteca de consulta). Sus escrituras responden 410; las tablas y los
- * archivos se conservan sin uso (la migracion 13 los copio a la biblioteca).
+ * Flujo anterior de control documental (/api/documentos-sgc, Fase 7): se retiro
+ * y despues tambien la Biblioteca que lo sustituyo; el control documental vigente
+ * es Documentos SGC (/api/sgc). Sus escrituras responden 410; las tablas y los
+ * archivos se conservan sin uso.
  */
-const MENSAJE_RETIRADO = "Funcionalidad retirada: Calidad › Documentos ahora es la Biblioteca";
+const MENSAJE_RETIRADO = "Funcionalidad retirada: el control documental vigente está en Documentos SGC";
 
 export async function funcionalidadRetirada(): Promise<Response> {
   return NextResponse.json({ message: MENSAJE_RETIRADO, codigo: "retirado" }, { status: 410 });

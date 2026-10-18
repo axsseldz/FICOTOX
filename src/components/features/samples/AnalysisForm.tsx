@@ -526,7 +526,7 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
       tail={
         <>
         <FormCard id="sec-personal" title="Analista" description="Quién realizó el análisis.">
-          <PersonCard title="Analista" firmante={analistaCuenta} onFirmante={setAnalistaCuenta} name={form.analista} onName={(v) => patch({ analista: v })} signature={form.analistaFirma} onSignature={(v) => patch({ analistaFirma: v })} />
+          <PersonCard title="Analista" nuevo={!editing} firmante={analistaCuenta} onFirmante={setAnalistaCuenta} name={form.analista} onName={(v) => patch({ analista: v })} signature={form.analistaFirma} onSignature={(v) => patch({ analistaFirma: v })} />
         </FormCard>
 
         <FormCard id="sec-revision" title="Revisión y aprobación" description="Una segunda persona revisa; otra distinta aprueba. Solo los análisis aprobados pueden reportarse.">
@@ -699,7 +699,7 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
 
       <FormCard id="sec-origen" title="Muestra y origen" description={requiereExtraccion ? "El análisis parte de un extracto; la cadena recepción → procesamiento se deriva de él." : "Si el análisis no requiere extracción (plancton), vincula directamente la recepción."}>
         <FormGrid>
-          <Field label="Extracción" htmlFor="a-ext" required={requiereExtraccion} hint={ext ? `${formatearFolio(ext.tipo_registro, ext.folio_num)} · ${ext.id_interno || "sin ID"} · ${formatearFolio("P", ext.folio_procesamiento_num)}` : "Al vincular se cargan las muestras del extracto."}>
+          <Field label="Extracción" htmlFor="a-ext" required={requiereExtraccion} hint={ext ? [formatearFolio(ext.tipo_registro, ext.folio_num), ext.id_interno || "sin ID", ext.folio_procesamiento_num ? formatearFolio("P", ext.folio_procesamiento_num) : null].filter(Boolean).join(" · ") : "Al vincular se cargan las muestras del extracto."}>
             <Select
               id="a-ext"
               value={form.extraccionId}
@@ -733,7 +733,7 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
         </FormGrid>
         {editing && item?.recepcion_id ? (
           <p className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-ink-2">
-            Cadena: <FolioChip type="R" num={(item as ApiRecord).folio_recepcion_num || "?"} />
+            Cadena: {(item as ApiRecord).folio_recepcion_num ? <FolioChip type="R" num={(item as ApiRecord).folio_recepcion_num} /> : null}
             {item.procesamiento_id ? <Link href={`/muestras/procesamiento/${item.procesamiento_id}`} className="text-brand">procesamiento</Link> : null}
             {item.extraccion_id ? <Link href={`/muestras/extraccion/${item.extraccion_id}`} className="text-brand">extracción</Link> : null}
             <Link href={`/muestras/recepcion/${item.recepcion_id}`} className="text-brand">recepción</Link>

@@ -270,7 +270,7 @@ export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord |
   const [form, setForm] = useState<ProcessingForm>(() => (item ? formFromItem(item) : defaultForm()));
   // Fase 5: firmas ligadas a cuentas (procesó, supervisó).
   const [firmantes, setFirmantes] = useState<Record<string, FirmanteState>>(() => ({ proceso: firmanteDe(item, "proceso"), superviso: firmanteDe(item, "superviso") }));
-  const firmante = (rol: string) => ({ firmante: firmantes[rol], onFirmante: (v: FirmanteState) => setFirmantes((prev) => ({ ...prev, [rol]: v })) });
+  const firmante = (rol: string) => ({ nuevo: !item?.id, firmante: firmantes[rol], onFirmante: (v: FirmanteState) => setFirmantes((prev) => ({ ...prev, [rol]: v })) });
   const [receptions, setReceptions] = useState<ApiRecord[]>([]);
   const [equipos, setEquipos] = useState<ApiRecord[]>([]);
   const [submitting, setSubmitting] = useState(false);

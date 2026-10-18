@@ -155,7 +155,8 @@ export function StockMeter({ current, max, min, unit, low, size = "sm", label, c
   return (
     <div className={cn("flex min-w-[140px] flex-col", size === "lg" ? "gap-2" : "gap-1", className)}>
       <div className={cn("relative w-full overflow-hidden rounded-full bg-surface-3", size === "lg" ? "h-2.5" : "h-1.5")} role="progressbar" aria-valuenow={Math.round(percent)} aria-valuemin={0} aria-valuemax={100} aria-label={typeof label === "string" ? label : reading}>
-        <div className={cn("h-full rounded-full transition-[width,background-color] duration-700 ease-[var(--ease-spring)]", bar, state === "empty" && "animate-pulse")} style={{ width: ready ? `${percent}%` : "0%" }} />
+        {/* La barra ocupa todo el riel y se recorre con transform (sin animar el ancho): el riel redondeado la recorta igual. */}
+        <div className={cn("h-full w-full rounded-full transition-[translate,background-color] duration-700 ease-[var(--ease-spring)]", bar, state === "empty" && "animate-pulse")} style={{ translate: `${ready ? percent - 100 : -100}% 0` }} />
         {minPercent !== null ? <span className="absolute top-0 h-full w-0.5 bg-ink/35" style={{ left: `calc(${minPercent}% - 1px)` }} title={`Mínimo: ${fmtNumber(min as number)}${u}`} aria-hidden="true" /> : null}
       </div>
       <div className={cn("tnum flex items-center justify-between gap-2", size === "lg" ? "text-[13px]" : "text-[12px]")}>

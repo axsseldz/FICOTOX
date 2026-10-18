@@ -75,8 +75,17 @@ let flujo = null;
   const P = await api("POST", "/samples/processing", procesamiento(R, id), tL);
   estados.push(await estadoR(R));
   check("asignado, el Analista crea el procesamiento (201)", P.status === 201, `${P.status} ${P.data?.message}`);
-  const E = (await api("POST", "/samples/extraction", extraccion(P.data?.id, id), tL)).data?.id;
+  const E = (await api("POST", "/samples/extraction", extraccion(P.data?.id, id, { folio_procesamiento_num: 99999 }), tL)).data?.id;
   estados.push(await estadoR(R));
+  // El folio de la etapa anterior lo fija el servidor desde el registro vinculado (aqui no se manda, o se manda mal).
+  const fR = (await api("GET", `/samples/reception/${R}`, undefined, QA)).data?.item?.folio_num;
+  const fichaP = (await api("GET", `/samples/processing/${P.data?.id}`, undefined, QA)).data?.item;
+  const fichaE = (await api("GET", `/samples/extraction/${E}`, undefined, QA)).data?.item;
+  // Tambien al editar: un folio de origen equivocado en la peticion se corrige con el del registro vinculado.
+  const editP = await api("PUT", `/samples/processing/${P.data?.id}`, procesamiento(R, id, { folio_num: fichaP?.folio_num, folio_recepcion_num: 88888, observaciones_generales: "Edición con folio de origen equivocado" }), tL);
+  const fichaP2 = (await api("GET", `/samples/processing/${P.data?.id}`, undefined, QA)).data?.item;
+  check("al editar el procesamiento, el folio de la recepción tampoco lo decide el cliente", editP.status === 200 && Number(fichaP2?.folio_recepcion_num) === Number(fR), `${editP.status} ${editP.data?.message || ""} P.R=${fichaP2?.folio_recepcion_num} R=${fR}`);
+  check("el folio vinculado sale del registro de origen (procesamiento ← recepción, extracción ← procesamiento)", fR != null && Number(fichaP?.folio_recepcion_num) === Number(fR) && Number(fichaE?.folio_procesamiento_num) === Number(fichaP?.folio_num), `P.R=${fichaP?.folio_recepcion_num} R=${fR} E.P=${fichaE?.folio_procesamiento_num} P=${fichaP?.folio_num}`);
   const A = (await api("POST", "/samples/analysis", analisis(E, id), tL)).data?.id;
   estados.push(await estadoR(R));
   const enviar = await api("POST", `/samples/analysis/${A}/enviar-revision`, {}, tL);
@@ -108,7 +117,11 @@ let flujo = null;
 {
   const { id, E } = flujo;
   const A = (await api("POST", "/samples/analysis", analisis(E, id), tL)).data?.id;
-  const folio = (await api("GET", `/samples/analysis/${A}`, undefined, QA)).data?.item?.folio_num;
+  const ficha = (await api("GET", `/samples/analysis/${A}`, undefined, QA)).data?.item;
+  const folio = ficha?.folio_num;
+  // La ficha trae el folio de la recepcion para la cadena (antes solo la lista lo unia).
+  const folioR = (await api("GET", `/samples/reception/${flujo.R}`, undefined, QA)).data?.item?.folio_num;
+  check("la ficha del analisis trae el folio de su recepcion (cadena R → P → E)", folioR != null && Number(ficha?.folio_recepcion_num) === Number(folioR), `${ficha?.folio_recepcion_num} vs ${folioR}`);
   await api("POST", `/samples/analysis/${A}/enviar-revision`, {}, tL);
   const editar = await api("PUT", `/samples/analysis/${A}`, { ...analisis(E, id), folio_num: folio, observaciones: "Cambio tras enviar" }, tL);
   check("un analisis enviado a revision no se edita (409)", editar.status === 409, `${editar.status} ${editar.data?.message}`);

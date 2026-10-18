@@ -102,7 +102,7 @@ export const HELP_TOPICS: Array<{ anchor: string; label: string; sub: string; kw
   { anchor: "muestras", label: "Flujo de muestras", sub: "Recepción → procesamiento → extracción → análisis → informe", kw: "muestras flujo etapas recepcion procesamiento extraccion analisis" },
   { anchor: "extraccion", label: "Extracciones ASP y DSP", sub: "Folios, equipos, insumos y autollenado", kw: "extraccion asp dsp folio bitacora insumos" },
   { anchor: "analisis", label: "Análisis, revisión y aprobación", sub: "Resultados, controles de calidad y firmas", kw: "analisis revisar aprobar firma controles" },
-  { anchor: "informes", label: "Informes de resultados", sub: "Crear, revisar, autorizar (PDF) y entregar", kw: "informes pdf autorizar entregar enmienda" },
+  { anchor: "informes", label: "Informes de resultados", sub: "Crear, revisar, autorizar, liberar (PDF) y enviar", kw: "informes pdf autorizar liberar enviar envio correo entregar enmienda" },
   { anchor: "inventario", label: "Inventario y avisos", sub: "Stock, caducidad, equipos, mantenimiento y movimientos", kw: "inventario reactivos consumibles equipos mantenimiento movimientos avisos stock" },
   { anchor: "calidad", label: "Auditoría y trazabilidad", sub: "Qué se registra y cómo se consulta", kw: "auditoria bitacora historial trazabilidad calidad" },
   { anchor: "documentos", label: "Documentos SGC", sub: "Solicitudes, revisión, autorización, lecturas y Lista Maestra", kw: "documentos sgc procedimiento manual formato revision autorizar publicar lectura lista maestra externo norma clave fx" },

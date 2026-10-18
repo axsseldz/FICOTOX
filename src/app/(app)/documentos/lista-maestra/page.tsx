@@ -211,7 +211,7 @@ function ListaMaestra() {
                               .filter(([, v]) => v)
                               .map(([k, v]) => (
                                 <Fragment key={k}>
-                                  <dt className="text-ink-4">{k}</dt>
+                                  <dt className="text-ink-3">{k}</dt>
                                   <dd className="truncate text-ink-2" title={String(v)}>{v}</dd>
                                 </Fragment>
                               ))}
@@ -227,7 +227,7 @@ function ListaMaestra() {
                               .filter(([, v]) => v)
                               .map(([k, v]) => (
                                 <Fragment key={k}>
-                                  <dt className="text-ink-4">{k}</dt>
+                                  <dt className="text-ink-3">{k}</dt>
                                   <dd className="whitespace-nowrap text-ink-2">{formatearFecha(v)}</dd>
                                 </Fragment>
                               ))}

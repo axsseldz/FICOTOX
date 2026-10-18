@@ -263,7 +263,8 @@ function Ficha({ id }: { id: string }) {
       <header className="flex overflow-hidden rounded-card bg-surface shadow-card" data-testid="sgc-ficha" data-clave={item.clave}>
         <span className="w-1.5 shrink-0" style={{ backgroundColor: item.area.color }} aria-hidden="true" />
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5 sm:px-5">
-          <div className="flex min-w-0 flex-1 items-center gap-3.5">
+          {/* Base minima del titulo: en pantallas angostas las acciones bajan de renglon en vez de aplastarlo. */}
+          <div className="flex min-w-0 flex-[1_1_14rem] items-center gap-3.5">
             <IconoArea area={item.area} />
             <div className="flex min-w-0 flex-col gap-1">
               <span className="code text-[12.5px] font-semibold text-ink-2" data-testid="sgc-clave">
@@ -462,7 +463,7 @@ function Lista({ datos, columnas = 2 }: { datos: Array<[string, ReactNode]>; col
     <dl className={cn("grid gap-x-6 gap-y-3", columnas === 3 ? "sm:grid-cols-3" : columnas === 2 ? "sm:grid-cols-2" : "")}>
       {llenos.map(([etiqueta, valor]) => (
         <div key={etiqueta} className="flex min-w-0 flex-col gap-0.5">
-          <dt className="text-[11.5px] font-medium uppercase tracking-wide text-ink-4">{etiqueta}</dt>
+          <dt className="text-[11.5px] font-medium uppercase tracking-wide text-ink-3">{etiqueta}</dt>
           <dd className="break-words text-[13.5px] text-ink">{valor}</dd>
         </div>
       ))}

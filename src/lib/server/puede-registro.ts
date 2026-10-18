@@ -15,7 +15,7 @@ import { evaluarAnalisis, evaluarInforme, excepcionPara } from "../shared/segreg
  * Banderas "puede" por registro: lo que la persona de la sesion puede hacer
  * AHORA con cada registro, sumando el rol, la autorizacion FX-THF-AP (actividad,
  * metodo y equipos), la asignacion de la muestra y la separacion de funciones.
- * La interfaz las usa tal cual (como ya hacen NC y la Biblioteca):
+ * La interfaz las usa tal cual (como ya hacen las NC):
  * - { ok: true }                    el boton se ofrece;
  * - { ok: false }                   no puede (rol, autorizacion o asignacion): el boton se oculta;
  * - { ok: false, motivo: "..." }    lo bloquea solo la segregacion o algo pendiente: boton

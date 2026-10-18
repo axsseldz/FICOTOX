@@ -91,7 +91,8 @@ try {
   await paso("ana", "Ana: vista general y externo", async (page) => {
     await page.goto(`${BASE}/documentos`);
     await page.getByTestId("sgc-carpetas").waitFor();
-    check("inicio: sin indicadores, actividad ni accesos duplicados (viven en el menú)", (await page.getByTestId("sgc-indicadores").count()) === 0 && (await page.getByTestId("sgc-actividad").count()) === 0 && (await page.getByTestId("sgc-ir-externos").count()) === 0);
+    // Los cuatro indicadores volvieron al inicio (especificación §5 y §8; ver ui/documentos-inicio.mjs); la actividad y los accesos siguen en el menú.
+    check("inicio: los cuatro indicadores, sin actividad ni accesos duplicados (viven en el menú)", (await page.getByTestId("sgc-indicador").count()) === 4 && (await page.getByTestId("sgc-actividad").count()) === 0 && (await page.getByTestId("sgc-ir-externos").count()) === 0);
     check("inicio: buscador de documentos", (await page.getByTestId("sgc-buscador").count()) === 1);
     check("modo claro por omisión", (await page.evaluate(() => document.documentElement.dataset.theme || "light")) !== "dark");
     await page.locator('aside[aria-label="Navegación principal"] a[href="/documentos/externos"]').first().click();

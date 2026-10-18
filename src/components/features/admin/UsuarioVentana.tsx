@@ -64,7 +64,7 @@ function BarraVigencia({ desde, hasta, className }: { desde: unknown; hasta: unk
   const tono = restante < 0 ? "bg-ink-4" : restante <= 30 ? "bg-warning" : "bg-brand";
   return (
     <span className={cn("block h-1.5 w-full overflow-hidden rounded-full bg-surface-3", className)} role="img" aria-label={quedan(hasta) || undefined}>
-      <span className={cn("block h-full rounded-full transition-[width] duration-700 ease-[var(--ease-spring)]", tono)} style={{ width: `${pct}%` }} />
+      <span className={cn("block h-full w-full rounded-full transition-[translate] duration-700 ease-[var(--ease-spring)]", tono)} style={{ translate: `${pct - 100}% 0` }} />
     </span>
   );
 }

@@ -12,7 +12,7 @@
  */
 import { requireUser } from "../auth";
 import { construirIndice } from "../busqueda";
-import { buscar } from "../busqueda/buscar";
+import { buscar, tituloRegistrarMovimiento } from "../busqueda/buscar";
 import { type Row, type Session } from "../db";
 import { HttpError, json, readJson, type RouteContext } from "../http";
 import { cargarAutorizacion } from "../rbac";
@@ -55,7 +55,7 @@ export async function listarRecientes({ request, s }: RouteContext): Promise<Res
       continue;
     }
     const reponer = String(fila.clave).startsWith("accion:reponer:");
-    items.push({ id: Number(fila.id), tipo: "resultado", clave: String(fila.clave), titulo: reponer ? String(fila.titulo) : actual.titulo, sub: reponer ? (fila.sub as string | null) : actual.sub || null, href: reponer ? String(fila.href) : actual.href, kind: reponer ? "accion" : actual.tipo, comando: actual.comando || null, mono: !!actual.mono });
+    items.push({ id: Number(fila.id), tipo: "resultado", clave: String(fila.clave), titulo: reponer ? tituloRegistrarMovimiento(actual.titulo) : actual.titulo, sub: reponer ? (fila.sub as string | null) : actual.sub || null, href: reponer ? String(fila.href) : actual.href, kind: reponer ? "accion" : actual.tipo, comando: actual.comando || null, mono: !!actual.mono });
   }
   if (caducas.length) {
     await s.execute(`DELETE FROM busqueda_recientes WHERE usuario_id = :yo AND id IN (${caducas.map((id) => Number(id)).join(", ")})`, { yo: auth.userId });
@@ -89,7 +89,7 @@ export async function registrarReciente({ request, s }: RouteContext): Promise<R
     const reponer = clave.startsWith("accion:reponer:");
     const base = indice.hits.find((h) => h.clave === claveDeIndice(clave));
     if (!base) throw new HttpError(404, { message: "Ese resultado ya no está disponible" });
-    await guardar(s, auth.userId, { tipo: "resultado", clave, titulo: reponer ? `Reponer ${base.titulo}` : base.titulo, sub: base.sub || null, href: reponer ? `/inventario/${base.tipo === "reactivo" ? "reactivos" : "consumibles"}?reponer=${clave.split("-").pop()}` : base.href, kind: reponer ? "accion" : base.tipo, comando: base.comando || null, mono: !!base.mono });
+    await guardar(s, auth.userId, { tipo: "resultado", clave, titulo: reponer ? tituloRegistrarMovimiento(base.titulo) : base.titulo, sub: base.sub || null, href: reponer ? `/inventario/${base.tipo === "reactivo" ? "reactivos" : "consumibles"}?reponer=${clave.split("-").pop()}` : base.href, kind: reponer ? "accion" : base.tipo, comando: base.comando || null, mono: !!base.mono });
   } else if (payload.tipo !== "consulta") {
     throw new HttpError(400, { message: "Indica qué guardar" });
   }

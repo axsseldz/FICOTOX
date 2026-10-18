@@ -174,8 +174,8 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
                   ) : (
                     "—"
                   )}
-                  {e.evidencia_sha256 ? <span className="code block text-[11px] text-ink-4">SHA-256 {String(e.evidencia_sha256).slice(0, 12)}…</span> : null}
-                  {e.message_id ? <span className="code block text-[11px] text-ink-4">{String(e.message_id)}</span> : null}
+                  {e.evidencia_sha256 ? <span className="code block text-[11px] text-ink-3">SHA-256 {String(e.evidencia_sha256).slice(0, 12)}…</span> : null}
+                  {e.message_id ? <span className="code block text-[11px] text-ink-3">{String(e.message_id)}</span> : null}
                 </td>
                 <td className={cn(formTd)}>
                   {e.confirmacion_en ? (
@@ -224,7 +224,7 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
               </Field>
             </FormGrid>
             <Field label="Evidencia del correo enviado" htmlFor="envio-evidencia" required hint="PDF, PNG, JPG, WebP o .eml (máx. 15 MB). Se guarda con su huella SHA-256.">
-              <Input id="envio-evidencia" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.eml,.msg" onChange={(event) => setArchivo(event.target.files?.[0] || null)} />
+              <input id="envio-evidencia" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.eml,.msg" onChange={(event) => setArchivo(event.target.files?.[0] || null)} className="max-w-full text-[13px] text-ink-2 file:mr-3 file:rounded-[8px] file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-[13px] file:font-medium file:text-ink file:shadow-card" />
             </Field>
             <Field label="Observaciones" htmlFor="envio-obs">
               <Textarea id="envio-obs" rows={2} value={form.observaciones} onChange={(event) => setForm({ ...form, observaciones: event.target.value })} />
@@ -242,7 +242,7 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
                 Registrar envío
               </Button>
             </div>
-            <p className="text-[12px] text-ink-4">«Abrir en mi correo» prepara el asunto y el texto; el PDF se adjunta a mano.</p>
+            <p className="text-[12px] text-ink-3">«Abrir en mi correo» prepara el asunto y el texto; el PDF se adjunta a mano.</p>
           </div>
           </ValidacionAmbito>
         )

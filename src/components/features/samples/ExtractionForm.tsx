@@ -456,7 +456,7 @@ export function ExtractionForm({ item, tipo, prefillProcessingId }: { item: ApiR
   const [form, setForm] = useState<ExtractionState>(() => (item ? formFromItem(item, protocol) : defaultForm(protocol)));
   // Fase 5: firmas ligadas a cuentas (extrajo, limpió, supervisó).
   const [firmantes, setFirmantes] = useState<Record<string, FirmanteState>>(() => ({ extrajo: firmanteDe(item, "extrajo"), limpio: firmanteDe(item, "limpio"), superviso: firmanteDe(item, "superviso") }));
-  const firmante = (rol: string) => ({ firmante: firmantes[rol], onFirmante: (v: FirmanteState) => setFirmantes((prev) => ({ ...prev, [rol]: v })) });
+  const firmante = (rol: string) => ({ nuevo: !item?.id, firmante: firmantes[rol], onFirmante: (v: FirmanteState) => setFirmantes((prev) => ({ ...prev, [rol]: v })) });
   const [processings, setProcessings] = useState<ApiRecord[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const detailCache = useRef(new Map<number, ApiRecord>());
