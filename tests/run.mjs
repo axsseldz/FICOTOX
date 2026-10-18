@@ -7,6 +7,7 @@
  *   npm test                         # API + navegador
  *   npm test -- --api                # solo API
  *   npm test -- --rebuild-fixture    # regenera antes la base congelada (npm run test:fixture)
+ *   npm test -- --solo=e2e/flujo-completo.mjs   # solo el recorrido de punta a punta
  *   CHROME_PATH=/ruta/a/chrome npm test
  *
  * Antes de escribir nada comprueba dos cosas: que el puerto este libre (para no
@@ -142,7 +143,7 @@ try {
 
   if (solo) {
     console.log(`\n=== ${solo}`);
-    const esUi = solo.startsWith("ui/");
+    const esUi = solo.startsWith("ui/") || solo.startsWith("e2e/");
     failed += (await run(path.join(here, solo), esUi ? entornoUi() : api)) ? 1 : 0;
     throw new Error("__solo__");
   }
@@ -175,6 +176,9 @@ try {
         console.log(`\n=== ui/${file}`);
         failed += (await run(path.join(here, "ui", file), entornoUi())) ? 1 : 0;
       }
+      // Recorrido de punta a punta del laboratorio (despues de las suites del navegador: no depende de folios exactos).
+      console.log("\n=== e2e/flujo-completo.mjs");
+      failed += (await run(path.join(here, "e2e", "flujo-completo.mjs"), entornoUi())) ? 1 : 0;
     }
   }
 
