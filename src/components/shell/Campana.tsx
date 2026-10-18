@@ -212,7 +212,8 @@ function FilaNotificacion({ n, leida = false, saliendo = false, onAbrir, onMarca
             <span className="text-[13.5px] leading-snug font-medium text-ink">{n.frase}</span>
             <span className="truncate text-[12.5px] text-ink-2">{n.registro}</span>
             <span className="truncate text-[11.5px] text-ink-3">
-              {[n.detalle, n.cuando ? haceCuantoCorto(n.cuando) : null].filter(Boolean).join(" · ")}
+              {/* Una fecha sola (p. ej. un vencimiento) no da "hace X": haceCuantoCorto devuelve "—" y se omite. */}
+              {[n.detalle, n.cuando ? haceCuantoCorto(n.cuando) : null].filter((parte) => parte && parte !== "—").join(" · ")}
             </span>
           </span>
           {!leida ? <span aria-label="Sin leer" className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand" /> : null}

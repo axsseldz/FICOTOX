@@ -148,7 +148,7 @@ export function Busqueda({ modo, onCerrar, alAbrirVentana, className }: { modo: 
               heading={
                 <>
                   <span>Recientes</span>
-                  <button type="button" onPointerDown={(event) => event.preventDefault()} onClick={borrarRecientes} className="rounded-[6px] px-1.5 py-0.5 text-[11.5px] font-normal text-ink-4 transition-colors hover:bg-surface-3 hover:text-ink-2">
+                  <button type="button" onPointerDown={(event) => event.preventDefault()} onClick={borrarRecientes} className="rounded-[6px] px-1.5 py-0.5 text-[11.5px] font-normal text-ink-3 transition-colors hover:bg-surface-3 hover:text-ink-2">
                     Borrar recientes
                   </button>
                 </>

@@ -575,6 +575,10 @@
   .seleccion[aria-current="page"] {
     background-color: var(--color-surface-3);
   }
+  /* En oscuro, surface-3 casi iguala al fondo del popover y de la ventana ⌘K: el resultado elegido se aclara sobre lo que tenga debajo. */
+  :root[data-theme="dark"] .seleccion[data-selected="true"] {
+    background-color: color-mix(in srgb, var(--color-ink) 10%, transparent);
+  }
   @media (prefers-reduced-motion: reduce) {
     .seleccion {
       transition: none;

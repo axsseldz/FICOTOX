@@ -114,7 +114,7 @@ export function PanelFoto({ onCambio }: { onCambio: () => Promise<void> }) {
           </span>
         )}
         <p className="text-[13px] text-ink-2">{user?.foto ? "Arrastra otra foto aquí para cambiarla" : "Arrastra una foto aquí o súbela"}</p>
-        <p className="text-[12px] text-ink-4">JPG, PNG o WEBP · hasta {MAX_MB} MB</p>
+        <p className="text-[12px] text-ink-3">JPG, PNG o WEBP · hasta {MAX_MB} MB</p>
         <div className="flex flex-wrap justify-center gap-2">
           <Button size="sm" icon={<UploadSimple size={14} />} onClick={() => entrada.current?.click()}>
             {user?.foto ? "Cambiar foto" : "Subir foto"}
@@ -297,11 +297,11 @@ function Recortador({ archivo, onCerrar, onGuardado }: { archivo: File; onCerrar
           <div className="flex items-center gap-4 sm:flex-col sm:pt-6">
             <span className="flex flex-col items-center gap-1.5">
               <span className="relative block h-24 w-24 overflow-hidden rounded-full bg-surface-3 shadow-card">{imagen(96)}</span>
-              <span className="text-[11.5px] text-ink-4">En ventanas</span>
+              <span className="text-[11.5px] text-ink-3">En ventanas</span>
             </span>
             <span className="flex flex-col items-center gap-1.5">
               <span className="relative block h-8 w-8 overflow-hidden rounded-full bg-surface-3 shadow-card">{imagen(32)}</span>
-              <span className="text-[11.5px] text-ink-4">En listas</span>
+              <span className="text-[11.5px] text-ink-3">En listas</span>
             </span>
           </div>
         </div>

@@ -141,7 +141,7 @@ export function AccountSheet({ open, onClose, abrirClave = false }: { open: bool
     >
       <div className="flex flex-col gap-6">
         <div className="flex items-center gap-4 rounded-[14px] bg-surface-2 p-4 ring-1 ring-line">
-          {fotoVisible ? <Avatar id={user?.id} name={user?.nombre} email={user?.email} avatar={user?.avatar} size="xl" className="shadow-raised" /> : <AvatarArt avatar={choice} seed={seed} size={72} animado="siempre" className="shadow-raised" />}
+          {fotoVisible ? <Avatar id={user?.id} name={user?.nombre} email={user?.email} avatar={user?.avatar} size="xl" className="shadow-raised" /> : <AvatarArt avatar={choice} seed={seed} size={72} animado="siempre" className="rounded-full shadow-raised" />}
           <div className="flex min-w-0 flex-col">
             <p className="truncate text-[16px] font-semibold text-ink">{user?.nombre || user?.email}</p>
             <p className="truncate text-[13px] text-ink-3">{user?.email}</p>
@@ -150,14 +150,14 @@ export function AccountSheet({ open, onClose, abrirClave = false }: { open: bool
                 {roles.map((rol) => (
                   <li key={rol.id}>
                     {rol.nombre}
-                    {rol.vigente_hasta ? <span className="text-ink-4"> · hasta {fmtDate(rol.vigente_hasta)}</span> : null}
+                    {rol.vigente_hasta ? <span className="text-ink-3"> · hasta {fmtDate(rol.vigente_hasta)}</span> : null}
                   </li>
                 ))}
               </ul>
             ) : (
               <p className="mt-1 text-[12.5px] text-warning-text">Sin roles vigentes</p>
             )}
-            <p className="mt-1 text-[12px] text-ink-4">{fotoVisible ? "Tu foto" : AVATARS[resolveAvatarKey(choice, seed)].label}</p>
+            <p className="mt-1 text-[12px] text-ink-3">{fotoVisible ? "Tu foto" : AVATARS[resolveAvatarKey(choice, seed)].label}</p>
           </div>
         </div>
         {user?.tipo_cuenta === "temporal" ? (
@@ -227,7 +227,7 @@ export function AccountSheet({ open, onClose, abrirClave = false }: { open: bool
             {modo === "foto" ? <PanelFoto onCambio={alCambiarFoto} /> : <AvatarPicker value={choice} seed={seed} onChange={setChoice} />}
           </div>
         </section>
-        <p className="text-[12px] text-ink-4">Nombre, correo y roles los administra quien tiene la administración de usuarios (Administración › Usuarios).</p>
+        <p className="text-[12px] text-ink-3">Nombre, correo y roles los administra quien tiene la administración de usuarios (Administración › Usuarios).</p>
       </div>
     </Sheet>
   );
