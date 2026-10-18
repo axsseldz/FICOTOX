@@ -40,6 +40,15 @@ export const INVENTORY_TABS: NavChild[] = [
   { href: "/inventario/mantenimiento", label: "Mantenimiento", module: "equipos" },
 ];
 
+/* Documentos SGC: las carpetas y sus secciones. La administracion tecnica (usuarios:G) ve las carpetas solo para diagnostico. */
+export const DOCUMENTOS_TABS: NavChild[] = [
+  { href: "/documentos", label: "Documentos", visible: (p) => !!p.documentos?.V || !!p.usuarios?.G },
+  { href: "/documentos/bandeja", label: "Bandeja", module: "documentos" },
+  { href: "/documentos/solicitudes", label: "Solicitudes", module: "documentos" },
+  { href: "/documentos/externos", label: "Externos", module: "documentos" },
+  { href: "/documentos/lista-maestra", label: "Lista Maestra", module: "documentos" },
+];
+
 export const SAMPLE_TABS: NavChild[] = [
   { href: "/muestras/recepcion", label: "Recepción", module: "muestras" },
   { href: "/muestras/procesamiento", label: "Procesamiento", module: "ensayos" },
@@ -50,6 +59,14 @@ export const SAMPLE_TABS: NavChild[] = [
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Inicio", modules: [], description: "Búsqueda y lo pendiente", icon: "house" },
+  {
+    href: "/documentos",
+    label: "Documentos SGC",
+    modules: ["documentos", "usuarios"],
+    description: "Carpetas, bandeja, solicitudes, externos y Lista Maestra",
+    icon: "filetext",
+    children: DOCUMENTOS_TABS,
+  },
   { href: "/muestras", label: "Muestras", modules: ["muestras", "ensayos", "informes"], description: "Recepción, procesamiento, extracción, análisis e informes", icon: "testtube", children: [...SAMPLE_TABS, { href: "/supervision", label: "Por supervisar" }, { href: "/solicitudes", label: "Por autorizar" }] },
   {
     href: "/inventario",
@@ -62,15 +79,13 @@ const NAV_ITEMS: NavItem[] = [
   {
     href: "/auditoria",
     label: "Calidad",
-    modules: ["documentos", "calidad", "respaldos"],
+    modules: ["calidad", "respaldos"],
     // Documentos SGC tambien lo ve la administracion tecnica (usuarios:G) para diagnostico; ya ve Calidad por la bitacora.
-    description: "Incidencias y no conformidades, Documentos SGC, bitácora de auditoría y respaldos",
+    description: "Incidencias y no conformidades, bitácora de auditoría y respaldos",
     icon: "seal",
     children: [
       // Fase 11: incidencias, NC y acciones (con el alcance "incidencias", solo lo propio). El admin tecnico (V bitacora) no las ve.
       { href: "/calidad/incidencias", label: "Incidencias y NC", visible: (p) => !!p.calidad?.V && p.calidad.V !== "bitacora" },
-      // Documentos SGC (reemplaza a la Biblioteca). La administracion tecnica (usuarios:G) entra solo a metadatos, para diagnostico.
-      { href: "/documentos", label: "Documentos SGC", visible: (p) => !!p.documentos?.V || !!p.usuarios?.G },
       // Con el alcance "incidencias" no se ve la bitacora.
       { href: "/auditoria", label: "Auditoría", module: "calidad", hideForScopes: ["incidencias"] },
       // Copias de seguridad y pruebas de restauración (respaldos:V; solo el administrador técnico las gestiona).
@@ -114,9 +129,11 @@ function visibleChildren(item: NavItem, permissions: PermissionsMap): NavChild[]
 
 /* Destinos de primer nivel visibles, con el enlace del padre apuntando a su primer hijo visible. */
 export function visibleNav(permissions: PermissionsMap): Array<NavItem & { children: NavChild[] }> {
-  return NAV_ITEMS.filter((item) => canAny(permissions, item.modules)).map((item) => {
+  return NAV_ITEMS.filter((item) => canAny(permissions, item.modules)).flatMap((item) => {
     const children = visibleChildren(item, permissions);
-    return { ...item, href: children[0]?.href || item.href, children };
+    // Un grupo sin ningun subdestino visible no se muestra.
+    if (item.children && !children.length) return [];
+    return [{ ...item, href: children[0]?.href || item.href, children }];
   });
 }
 
