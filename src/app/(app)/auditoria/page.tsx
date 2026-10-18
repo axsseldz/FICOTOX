@@ -248,7 +248,7 @@ function AuditoriaContent() {
         )}
       </div>
       {registros && grupos.length ? (
-        <p className="tnum mt-2 px-1 text-[12px] text-ink-4" data-audit-resumen>
+        <p className="tnum mt-2 px-1 text-[12px] text-ink-3" data-audit-resumen>
           {fmt(registros.length)}
           {hayMas ? "+" : ""} {registros.length === 1 ? "actividad" : "actividades"}
         </p>

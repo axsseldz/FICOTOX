@@ -322,7 +322,7 @@ function celdasNc(item: ApiRecord) {
       {Number(item.retenciones_activas) ? <StatusFlag kind="bloqueo" label="Informe retenido" detail="Hay un informe retenido por esta NC" data-retenido /> : null}
       {Number(item.reaperturas) ? <StatusFlag kind="aviso" label={`${item.reaperturas} reapertura${Number(item.reaperturas) > 1 ? "s" : ""}`} detail="La verificación de eficacia resultó no eficaz y la NC volvió a análisis." data-reaperturas={String(item.reaperturas)} /> : null}
     </span>,
-    item.responsable_id || item.responsable_nombre ? <FiguraPersona key="r" id={item.responsable_id} nombre={item.responsable_nombre} conNombre /> : <span key="r" className="text-[13px] text-ink-4">Sin nombrar</span>,
+    item.responsable_id || item.responsable_nombre ? <FiguraPersona key="r" id={item.responsable_id} nombre={item.responsable_nombre} conNombre /> : <span key="r" className="text-[13px] text-ink-3">Sin nombrar</span>,
     <span key="o" className="text-[13px] text-ink-2" title={fmtDateTime(item.fecha)}>
       {formatearFechaCorta(item.fecha)}
     </span>,

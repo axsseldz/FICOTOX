@@ -120,7 +120,7 @@ function FichaIncidencia({ id, onCerrar }: { id: number; onCerrar: () => void })
     router.push(`/calidad/incidencias/${id}`);
   };
   const anular = async () => {
-    const motivo = await prompt({ critico: true, tone: "danger", title: `Anular ${item.folio}`, description: "La incidencia deja de contar, pero se conserva. La anulación la autoriza un segundo usuario con calidad:AN.", confirmLabel: "Solicitar anulación" });
+    const motivo = await prompt({ critico: true, tone: "danger", title: `Anular ${item.folio}`, description: "La incidencia deja de contar, pero se conserva. La anulación la autoriza otra persona con permiso para anular en calidad.", confirmLabel: "Solicitar anulación" });
     if (motivo && (await enviar("POST", `/calidad/incidencias/${id}/anular`, { motivo }))) await cargar();
   };
   let paso = 0;
@@ -288,7 +288,7 @@ function FichaNc({ id, onCerrar }: { id: number; onCerrar: () => void }) {
     router.push(`/calidad/nc/${id}`);
   };
   const anular = async () => {
-    const motivo = await prompt({ critico: true, tone: "danger", title: `Anular ${item.folio}`, description: "La NC deja de contar, pero se conserva. La anulación la autoriza un segundo usuario con calidad:AN.", confirmLabel: "Solicitar anulación" });
+    const motivo = await prompt({ critico: true, tone: "danger", title: `Anular ${item.folio}`, description: "La NC deja de contar, pero se conserva. La anulación la autoriza otra persona con permiso para anular en calidad.", confirmLabel: "Solicitar anulación" });
     if (motivo && (await enviar("POST", `/calidad/nc/${id}/anular`, { motivo }))) await cargar();
   };
   const pdf = () => verPdf(`${API_BASE_URL}/calidad/nc/${id}/pdf`, `${String(item.folio).replace(" ", "-")}.pdf`, String(item.folio));

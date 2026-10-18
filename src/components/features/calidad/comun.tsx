@@ -17,7 +17,7 @@ export const EstadoNc = ({ estado }: { estado: unknown }) => <EstadoBadge catalo
 export const EstadoAccion = ({ estado }: { estado: unknown }) => <EstadoBadge catalogo={ESTADOS_ACCION} estado={estado} />;
 
 export function ClasificacionNc({ valor }: { valor: unknown }) {
-  if (!valor) return <span className="text-ink-4">Sin clasificar</span>;
+  if (!valor) return <span className="text-ink-3">Sin clasificar</span>;
   const tone = valor === "critica" ? "danger" : valor === "mayor" ? "warning" : "neutral";
   return <Badge tone={tone}>{CLASIFICACION_NC_LABEL[String(valor)] || String(valor)}</Badge>;
 }
