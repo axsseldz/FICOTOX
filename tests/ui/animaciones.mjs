@@ -10,13 +10,13 @@
  *   y terminan en su valor; la barra del avance avanza con transform;
  * - ficha: etiqueta de estado, pestañas deslizantes, barra del visor (aparece y se oculta con
  *   opacidad y translate), menú ⋯ y confirmación con check que se dibuja y se va sola;
- * - ventanas: VentanaFormulario (entrada y salida, aunque se desmonte al cerrar), «Más opciones»,
+ * - ventanas: VentanaFormulario (entrada; al cerrar se desmonta sin dejar restos), «Más opciones»,
  *   VentanaCentrada (la salida conserva su contenido) y el diálogo de confirmación;
  * - pantalla de acceso: entrada, olas, sacudida con contraseña errónea;
  * - solo se animan opacity y transform (keyframes de toda la hoja y transiciones en pantalla, salvo
  *   los pliegues que el usuario abre: menú lateral y acordeones); sin saltos de diseño al cargar;
  * - con prefers-reduced-motion: reduce, todo se apaga (duración ~0, sin transiciones, sin conteo,
- *   sin copia de salida de las ventanas); sin errores de consola.
+ *   y las ventanas se quitan sin dejar nada); sin errores de consola.
  */
 import "../lib/reauth-auto.mjs";
 import { createRequire } from "node:module";
@@ -71,19 +71,18 @@ await api("POST", "/sgc/solicitudes", { tipo: "cambio", documento_id: L.id, just
   await api("POST", "/sgc/externos", fd, t.ana);
 }
 
-/* ---------- Grabadora en la página: eventos de animación, saltos de diseño, contadores y copias de salida ---------- */
+/* ---------- Grabadora en la página: eventos de animación, saltos de diseño y contadores ---------- */
 const GRABADORA = () => {
   window.__ev = [];
   window.__ls = [];
   window.__conteos = {};
-  window.__copias = [];
   for (const tipo of ["animationstart", "animationend", "transitionrun", "transitionend"])
     document.addEventListener(
       tipo,
       (e) => {
         const el = e.target;
         if (!(el instanceof Element)) return;
-        window.__ev.push({ tipo, nombre: e.animationName || e.propertyName, testid: el.closest("[data-testid]")?.getAttribute("data-testid") || "", clase: String(el.className?.baseVal ?? el.className ?? ""), inerte: !!el.closest("[inert]") });
+        window.__ev.push({ tipo, nombre: e.animationName || e.propertyName, testid: el.closest("[data-testid]")?.getAttribute("data-testid") || "", clase: String(el.className?.baseVal ?? el.className ?? "") });
       },
       true,
     );
@@ -97,7 +96,6 @@ const GRABADORA = () => {
   const CONTADOR = '[data-testid="sgc-carpeta-vigentes"], [data-testid="bandeja-contador"], [data-contador], [data-testid="dist-avance"]';
   new MutationObserver((ms) => {
     for (const m of ms) {
-      if (m.type === "childList" && m.target === document.body) for (const n of m.addedNodes) if (n instanceof Element && n.hasAttribute("inert")) window.__copias.push(n.className);
       const el = m.target instanceof Element ? m.target : m.target.parentElement;
       const c = el?.closest?.(CONTADOR);
       if (!c) continue;
@@ -155,7 +153,6 @@ const limpiar = (page) =>
     window.__ev = [];
     window.__ls = [];
     window.__conteos = {};
-    window.__copias = [];
   });
 const esperarEvento = (page, filtro, timeout = 8000) => page.waitForFunction(filtro, null, { timeout, polling: 50 }).then(() => true, () => false);
 const saltos = (page) => page.evaluate(() => window.__ls.reduce((s, v) => s + v, 0));
@@ -392,7 +389,7 @@ try {
     }, null, { polling: "raf", timeout: 5000 }).then((h) => h.jsonValue(), () => null);
     check("ventana centrada: sale con pop-out sin vaciarse", !!saliendo && saliendo.nombre === "pop-out" && saliendo.texto > 40, JSON.stringify(saliendo));
     await page.getByTestId("sgc-solicitud-detalle").waitFor({ state: "detached" });
-    // VentanaFormulario: entrada, «Más opciones» y salida (la ventana se desmonta al cerrar).
+    // VentanaFormulario: entrada, «Más opciones» y cierre (la ventana se desmonta al cerrar).
     await page.getByTestId("sgc-nueva-solicitud").click();
     const ventana = page.getByTestId("ventana-formulario");
     await ventana.waitFor();
@@ -406,9 +403,9 @@ try {
     await limpiar(page);
     await page.keyboard.press("Escape");
     await ventana.waitFor({ state: "detached" });
-    const salida = await esperarEvento(page, () => ["pop-out", "fade-out"].every((n) => window.__ev.some((e) => e.tipo === "animationend" && e.nombre === n && e.inerte)));
-    await page.waitForFunction(() => !document.querySelector("body > [inert]"), null, { timeout: 5000 });
-    check("formulario en ventana: al cerrar sale con pop-out y fade-out, y la copia de salida se quita", salida && (await page.evaluate(() => window.__copias.length)) === 2 && (await page.getByTestId("ventana-formulario").count()) === 0);
+    // Quien la usa la desmonta al cerrar: se quita sin dejar restos (velo ni ventana) y la página queda usable.
+    await page.waitForFunction(() => !document.querySelector('[data-testid="ventana-formulario"], .capa-ventana'), null, { timeout: 5000 });
+    check("formulario en ventana: al cerrar se quita por completo (sin velo ni capa)", (await page.getByTestId("ventana-formulario").count()) === 0 && (await page.locator("body > [inert]").count()) === 0 && (await page.getByTestId("sgc-nueva-solicitud").isEnabled()));
 
     await page.goto(`${BASE}/documentos/externos`);
     await entrada(page, "externos: renglones", '[data-testid="ext-fila"]');
@@ -476,7 +473,7 @@ try {
       await page.keyboard.press("Escape");
       await page.getByTestId("ventana-formulario").waitFor({ state: "detached" });
       await page.waitForTimeout(300);
-      check("reduced-motion: al cerrar la ventana no queda copia de salida", (await page.evaluate(() => window.__copias.length)) === 0 && (await page.locator("body > [inert]").count()) === 0);
+      check("reduced-motion: al cerrar la ventana no queda nada en pantalla", (await page.locator('[data-testid="ventana-formulario"], .capa-ventana').count()) === 0 && (await page.locator("body > [inert]").count()) === 0);
       await page.goto(`${BASE}/documentos/${L2.id}`);
       await page.locator('[data-testid="sgc-visor"] canvas').first().waitFor({ timeout: 60_000 });
       vivas = await todoQuieto(page);

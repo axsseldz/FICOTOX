@@ -15,7 +15,7 @@ instance-restaurada/
 instance/test/
 instance/fixtures/
 instance/test-fixture/
-tests/ui/fail.png
+tests/ui/fail*.png
 
 # Node / Next.js
 node_modules/
