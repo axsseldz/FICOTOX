@@ -112,6 +112,8 @@ try {
       await page.getByRole("button", { name: "Entendido", exact: true }).click();
       await page.getByRole("button", { name: "Entendido", exact: true }).waitFor({ state: "detached" });
       await page.locator("#ficha-clave").fill(`fx-tcp-u${stamp.toLowerCase()}`);
+      // Los responsables son opcionales: viven plegados en «Más opciones».
+      await page.getByRole("dialog").getByRole("button", { name: "Más opciones" }).click();
       await page.locator("#ficha-elaborador").selectOption(String(id.luis));
       await page.locator("#ficha-revisor").selectOption(String(id.ricardo));
       await page.locator("#ficha-autorizador").selectOption(String(id.patricia));

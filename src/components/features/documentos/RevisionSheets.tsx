@@ -3,12 +3,10 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { CloudArrowUp, FloppyDisk, SealCheck } from "@phosphor-icons/react";
-import { Callout } from "@/components/features/samples/FormLayout";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
 import { DateInput } from "@/components/ui/DateInput";
 import { Field, FormGrid, Input, Select, Textarea } from "@/components/ui/Field";
-import { Dialog, Sheet } from "@/components/ui/Overlay";
 import { CampoValidado, useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
 import { API_BASE_URL, sendFormAuthProgress, sendJsonAuth } from "@/lib/client/api";
 import { type Problema } from "@/lib/client/mensajes";
@@ -18,6 +16,7 @@ import { MOTIVO_MIN_SGC, TIPOS_ARCHIVO_SGC, type TipoArchivoSgc } from "@/lib/sh
 import type { AccionDocumental } from "@/lib/shared/permisos";
 import type { Catalogos, FichaDocumento, Revision } from "./comun";
 import { opcionesPersonas } from "./FichaSheet";
+import { conDato, MasOpciones, VentanaFormulario } from "./VentanaFormulario";
 
 type Resp = { elaborador_id: string; revisor_id: string; autorizador_id: string };
 const respDe = (r?: Revision | null): Resp => ({ elaborador_id: r?.elaborador_id ? String(r.elaborador_id) : "", revisor_id: r?.revisor_id ? String(r.revisor_id) : "", autorizador_id: r?.autorizador_id ? String(r.autorizador_id) : "" });
@@ -83,11 +82,10 @@ export function RevisionSheet({ doc, revision, catalogos, onClose }: { doc: Fich
     </Field>
   );
   return (
-    <Sheet
-      open
+    <VentanaFormulario
       onOpenChange={(o) => !o && !guardando && onClose()}
       title={editar ? `Revisión ${revision!.numero} · ${doc.clave}` : `Nueva revisión · ${doc.clave}`}
-      description={editar ? "Datos de la revisión en borrador. Los cambios quedan en la bitácora." : "Queda registrada como una solicitud tuya aceptada: se abre la revisión de trabajo en borrador y la vigente sigue disponible sin cambios hasta que la nueva se publique."}
+      description={editar ? "Datos de la revisión en borrador; los cambios quedan en la bitácora." : "Se abre en borrador; la vigente sigue disponible hasta que la nueva se publique."}
       size="lg"
       footer={
         <>
@@ -102,19 +100,11 @@ export function RevisionSheet({ doc, revision, catalogos, onClose }: { doc: Fich
     >
       <ValidacionAmbito v={v}>
         <div className="flex flex-col gap-5">
-          <FormGrid>
-            <Field label="Motivo del cambio" htmlFor="rev-motivo" required className="sm:col-span-2">
-              <Textarea id="rev-motivo" rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
-            </Field>
-            <Field label="Páginas o apartados afectados" htmlFor="rev-apartados">
-              <Input id="rev-apartados" maxLength={400} value={apartados} onChange={(e) => setApartados(e.target.value)} />
-            </Field>
-            <Field label="Descripción breve del cambio" htmlFor="rev-descripcion">
-              <Input id="rev-descripcion" maxLength={600} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
-            </Field>
-          </FormGrid>
+          <Field label="Motivo del cambio" htmlFor="rev-motivo" required>
+            <Textarea id="rev-motivo" rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+          </Field>
           <section className="flex flex-col gap-2" aria-labelledby="rev-resp-titulo">
-            <h3 id="rev-resp-titulo" className="text-[14px] font-semibold text-ink">
+            <h3 id="rev-resp-titulo" className="text-[13.5px] font-semibold text-ink">
               Responsables
             </h3>
             {!puedeAsignar ? <p className="text-[12.5px] text-ink-3">Solo Mejora Continua asigna a los responsables.</p> : null}
@@ -124,37 +114,46 @@ export function RevisionSheet({ doc, revision, catalogos, onClose }: { doc: Fich
               {persona("autorizador_id", "Autorizador", "documento_autorizar", "rev-autorizador")}
             </FormGrid>
           </section>
-          {!editar ? (
-            <Field label="Fecha límite (opcional)" htmlFor="rev-limite">
-              <DateInput id="rev-limite" value={limite} onChange={setLimite} />
-            </Field>
-          ) : null}
-          {editar ? (
-            <>
-              <FormGrid cols={3}>
-                <Field label="Fecha de emisión" htmlFor="rev-emision">
-                  <DateInput id="rev-emision" value={fechas.fecha_emision} onChange={(x) => setFechas((f) => ({ ...f, fecha_emision: x }))} />
-                </Field>
-                <Field label="Fecha de vigencia" htmlFor="rev-vigencia">
-                  <DateInput id="rev-vigencia" value={fechas.fecha_vigencia} onChange={(x) => setFechas((f) => ({ ...f, fecha_vigencia: x }))} />
-                </Field>
-                <Field label="Próxima revisión" htmlFor="rev-proxima">
-                  <DateInput id="rev-proxima" value={fechas.fecha_proxima_revision} onChange={(x) => setFechas((f) => ({ ...f, fecha_proxima_revision: x }))} />
-                </Field>
-              </FormGrid>
-              <FormGrid>
-                <Field label="Ubicación histórica" htmlFor="rev-ubicacion" hint="Dónde se conserva al quedar obsoleta">
-                  <Input id="rev-ubicacion" maxLength={300} value={retencion.ubicacion_historica} onChange={(e) => setRetencion((r) => ({ ...r, ubicacion_historica: e.target.value }))} />
-                </Field>
-                <Field label="Regla de conservación" htmlFor="rev-conservacion">
-                  <Input id="rev-conservacion" maxLength={300} value={retencion.regla_conservacion} onChange={(e) => setRetencion((r) => ({ ...r, regla_conservacion: e.target.value }))} />
-                </Field>
-              </FormGrid>
-            </>
-          ) : null}
+          <MasOpciones llenos={conDato(apartados, descripcion, ...(editar ? [fechas.fecha_emision, fechas.fecha_vigencia, fechas.fecha_proxima_revision, retencion.ubicacion_historica, retencion.regla_conservacion] : [limite]))}>
+            <FormGrid>
+              <Field label="Páginas o apartados afectados" htmlFor="rev-apartados">
+                <Input id="rev-apartados" maxLength={400} value={apartados} onChange={(e) => setApartados(e.target.value)} />
+              </Field>
+              <Field label="Descripción breve del cambio" htmlFor="rev-descripcion">
+                <Input id="rev-descripcion" maxLength={600} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
+              </Field>
+            </FormGrid>
+            {!editar ? (
+              <Field label="Fecha límite" htmlFor="rev-limite">
+                <DateInput id="rev-limite" value={limite} onChange={setLimite} />
+              </Field>
+            ) : (
+              <>
+                <FormGrid cols={3}>
+                  <Field label="Fecha de emisión" htmlFor="rev-emision">
+                    <DateInput id="rev-emision" value={fechas.fecha_emision} onChange={(x) => setFechas((f) => ({ ...f, fecha_emision: x }))} />
+                  </Field>
+                  <Field label="Fecha de vigencia" htmlFor="rev-vigencia">
+                    <DateInput id="rev-vigencia" value={fechas.fecha_vigencia} onChange={(x) => setFechas((f) => ({ ...f, fecha_vigencia: x }))} />
+                  </Field>
+                  <Field label="Próxima revisión" htmlFor="rev-proxima">
+                    <DateInput id="rev-proxima" value={fechas.fecha_proxima_revision} onChange={(x) => setFechas((f) => ({ ...f, fecha_proxima_revision: x }))} />
+                  </Field>
+                </FormGrid>
+                <FormGrid>
+                  <Field label="Ubicación histórica" htmlFor="rev-ubicacion" hint="Dónde se conserva al quedar obsoleta">
+                    <Input id="rev-ubicacion" maxLength={300} value={retencion.ubicacion_historica} onChange={(e) => setRetencion((r) => ({ ...r, ubicacion_historica: e.target.value }))} />
+                  </Field>
+                  <Field label="Regla de conservación" htmlFor="rev-conservacion">
+                    <Input id="rev-conservacion" maxLength={300} value={retencion.regla_conservacion} onChange={(e) => setRetencion((r) => ({ ...r, regla_conservacion: e.target.value }))} />
+                  </Field>
+                </FormGrid>
+              </>
+            )}
+          </MasOpciones>
         </div>
       </ValidacionAmbito>
-    </Sheet>
+    </VentanaFormulario>
   );
 }
 
@@ -192,11 +191,10 @@ export function ArchivoDialog({ revision, maxMb, onClose }: { revision: Revision
     }
   };
   return (
-    <Dialog
-      open
+    <VentanaFormulario
       onOpenChange={(o) => !o && !guardando && onClose()}
       title={`Archivo de la revisión ${revision.numero}`}
-      description="Mientras la revisión está en borrador puedes cargar o sustituir sus archivos; el anterior se conserva en el historial."
+      description="En borrador puedes cargar o sustituir sus archivos; el anterior se conserva."
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={guardando}>
@@ -229,7 +227,7 @@ export function ArchivoDialog({ revision, maxMb, onClose }: { revision: Revision
           </CampoValidado>
         </div>
       </ValidacionAmbito>
-    </Dialog>
+    </VentanaFormulario>
   );
 }
 
@@ -267,12 +265,10 @@ export function RegistrarVigenteDialog({ doc, revision, onClose }: { doc: FichaD
     }
   };
   return (
-    <Dialog
-      open
+    <VentanaFormulario
       onOpenChange={(o) => !o && !guardando && onClose()}
       title={`Registrar vigente · ${doc.clave} rev. ${revision.numero}`}
-      description="Carga inicial de un documento que ya estaba autorizado fuera de la plataforma. Se te pedirá tu contraseña."
-      size="lg"
+      description="Carga inicial de un documento ya autorizado fuera de la plataforma. Se te pedirá tu contraseña."
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={guardando}>
@@ -286,25 +282,27 @@ export function RegistrarVigenteDialog({ doc, revision, onClose }: { doc: FichaD
     >
       <ValidacionAmbito v={v}>
         <div className="flex flex-col gap-4">
-          <Callout tone="info" title="Solo para la carga inicial">
-            Las revisiones siguientes pasan por revisión, autorización y publicación. Elaborador: {revision.elaborador_nombre || "—"} · Revisor: {revision.revisor_nombre || "—"} · Autorizador: {revision.autorizador_nombre || "—"}.
-          </Callout>
-          <FormGrid cols={3}>
-            <Field label="Fecha de emisión" htmlFor="rev-emision" required>
-              <DateInput id="rev-emision" value={fechas.fecha_emision} onChange={(x) => setFechas((f) => ({ ...f, fecha_emision: x }))} />
-            </Field>
-            <Field label="Fecha de vigencia" htmlFor="rev-vigencia" hint="Si la dejas vacía, la de emisión">
-              <DateInput id="rev-vigencia" value={fechas.fecha_vigencia} onChange={(x) => setFechas((f) => ({ ...f, fecha_vigencia: x }))} />
-            </Field>
-            <Field label="Próxima revisión" htmlFor="rev-proxima">
-              <DateInput id="rev-proxima" value={fechas.fecha_proxima_revision} onChange={(x) => setFechas((f) => ({ ...f, fecha_proxima_revision: x }))} />
-            </Field>
-          </FormGrid>
-          <Field label="Comentario" htmlFor="rev-comentario" hint="Por ejemplo, dónde está la autorización original">
-            <Textarea id="rev-comentario" rows={2} value={comentario} onChange={(e) => setComentario(e.target.value)} />
+          <p className="text-[12.5px] text-ink-3">
+            Solo para la carga inicial. Elaborador: {revision.elaborador_nombre || "—"} · Revisor: {revision.revisor_nombre || "—"} · Autorizador: {revision.autorizador_nombre || "—"}.
+          </p>
+          <Field label="Fecha de emisión" htmlFor="rev-emision" required>
+            <DateInput id="rev-emision" value={fechas.fecha_emision} onChange={(x) => setFechas((f) => ({ ...f, fecha_emision: x }))} />
           </Field>
+          <MasOpciones llenos={conDato(fechas.fecha_vigencia, fechas.fecha_proxima_revision, comentario)}>
+            <FormGrid>
+              <Field label="Fecha de vigencia" htmlFor="rev-vigencia" hint="Si la dejas vacía, la de emisión">
+                <DateInput id="rev-vigencia" value={fechas.fecha_vigencia} onChange={(x) => setFechas((f) => ({ ...f, fecha_vigencia: x }))} />
+              </Field>
+              <Field label="Próxima revisión" htmlFor="rev-proxima">
+                <DateInput id="rev-proxima" value={fechas.fecha_proxima_revision} onChange={(x) => setFechas((f) => ({ ...f, fecha_proxima_revision: x }))} />
+              </Field>
+            </FormGrid>
+            <Field label="Comentario" htmlFor="rev-comentario" hint="Por ejemplo, dónde está la autorización original">
+              <Textarea id="rev-comentario" rows={2} value={comentario} onChange={(e) => setComentario(e.target.value)} />
+            </Field>
+          </MasOpciones>
         </div>
       </ValidacionAmbito>
-    </Dialog>
+    </VentanaFormulario>
   );
 }

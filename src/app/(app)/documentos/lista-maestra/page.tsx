@@ -2,14 +2,17 @@
 
 import { useRouter } from "next/navigation";
 import { Fragment, Suspense, useState } from "react";
-import { FilePdf, ListChecks, LockKey } from "@phosphor-icons/react";
-import { ExternoEtiqueta, RequireDocumentos, RutaDocumentos, useCatalogos } from "@/components/features/documentos/comun";
+import { ArrowSquareOut, FilePdf, ListChecks, LockKey } from "@phosphor-icons/react";
+import { EstadoDocumentoEtiqueta, ExternoEtiqueta, RequireDocumentos, RutaDocumentos, useCatalogos } from "@/components/features/documentos/comun";
+import { ICONO_ESTADO } from "@/components/features/documentos/iconos";
+import { ActionMenu } from "@/components/ui/Overlay";
 import { PageBody } from "@/components/shell/AppShell";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
 import { FilterMenu, type FilterGroup } from "@/components/ui/FilterMenu";
 import { PageHeader, SearchInput, Toolbar } from "@/components/ui/PageHeader";
 import { Badge, EmptyState, ErrorState, Skeleton } from "@/components/ui/Primitives";
+import type { CSSProperties } from "react";
 import { Table, TableShell, TBody, Td, Th, THead, Tr } from "@/components/ui/Table";
 import { API_BASE_URL, getJsonAuth } from "@/lib/client/api";
 import { verPdf } from "@/lib/client/files";
@@ -63,7 +66,6 @@ export default function ListaMaestraPage() {
   );
 }
 
-const TONO_ESTADO: Record<string, "success" | "warning" | "neutral" | "danger"> = { vigente: "success", en_elaboracion: "neutral", obsoleto: "danger" };
 
 function ListaMaestra() {
   const { token } = useSession();
@@ -106,6 +108,8 @@ function ListaMaestra() {
     { key: "origen", label: "Origen", value: origen, defaultValue: "", onChange: setOrigen, options: [{ value: "", label: "Todos" }, { value: "interno", label: "Internos" }, { value: "externo", label: "Externos" }] },
   ];
   const grupos = data ? [...new Set(data.items.map((x) => x.area_codigo))] : [];
+  // Entrada escalonada de los renglones (en el orden en que se ven).
+  let indice = 0;
   const pdf = () => verPdf(`${API_BASE_URL}/sgc/lista-maestra/pdf?${consulta()}`, `Lista-Maestra-FX-GCL-MD-${hoyLocal()}.pdf`, "Lista Maestra de Documentos FX-GCL-MD");
   return (
     <PageBody>
@@ -114,7 +118,7 @@ function ListaMaestra() {
         <PageHeader
           title="Lista Maestra de Documentos"
           eyebrow="FX-GCL-MD"
-          description="Documentos controlados por gestión, con su revisión vigente, la revisión en curso y sus responsables."
+          description="Documentos controlados por gestión, con su revisión y sus responsables."
           actions={
             data?.puede.exportar ? (
               <Button icon={<FilePdf size={16} />} onClick={pdf} data-testid="lm-pdf">
@@ -139,26 +143,19 @@ function ListaMaestra() {
         <Skeleton className="h-[360px] rounded-card" />
       ) : !data.items.length ? (
         <div className="rounded-card bg-surface shadow-card" data-testid="lm-vacio">
-          <EmptyState icon={<ListChecks size={22} weight="duotone" />} title="Sin documentos con estos filtros" description="Quita algún filtro o cambia la búsqueda." />
+          <EmptyState icon={<ListChecks size={22} weight="duotone" />} title="Nada coincide" description="Quita algún filtro o cambia la búsqueda." />
         </div>
       ) : (
         <TableShell>
-          <Table className="min-w-[1320px] text-[13px]" data-testid="lm-tabla">
+          <Table className="min-w-[980px] text-[13px]" data-testid="lm-tabla">
             <THead>
               <tr>
-                <Th>Clave</Th>
-                <Th>Título</Th>
-                <Th>Tipo</Th>
-                <Th>Origen</Th>
+                <Th>Documento</Th>
                 <Th>Revisión</Th>
                 <Th>Estado</Th>
-                <Th>Propietario</Th>
-                <Th>Elaboró</Th>
-                <Th>Revisó</Th>
-                <Th>Autorizó</Th>
-                <Th>Emisión</Th>
-                <Th>Vigencia</Th>
-                <Th>Próx. revisión</Th>
+                <Th>Responsables</Th>
+                <Th>Fechas</Th>
+                <Th aria-label="Acciones" />
               </tr>
             </THead>
             <TBody>
@@ -167,38 +164,78 @@ function ListaMaestra() {
                 return (
                   <Fragment key={g}>
                     <tr data-testid="lm-area" data-area={g}>
-                      <td colSpan={13} className="p-0">
+                      <td colSpan={6} className="p-0">
                         <span className="flex items-center gap-2 border-l-[6px] bg-surface-2 px-4 py-2 text-[12.5px] font-semibold text-ink" style={{ borderLeftColor: filas[0].area_color }}>
                           <span className="code">{g}</span>
                           <span className="font-medium text-ink-2">{filas[0].area_nombre}</span>
-                          <span className="ml-auto font-normal text-ink-3">{filas.length}</span>
+                          <span className="tnum ml-auto font-normal text-ink-3">{filas.length}</span>
                         </span>
                       </td>
                     </tr>
                     {filas.map((x) => (
-                      <Tr key={x.id} interactive onClick={() => router.push(`/documentos/${x.id}`)} data-testid="lm-fila" data-clave={x.clave}>
-                        <Td className="whitespace-nowrap">
-                          <span className="code text-[12.5px] font-semibold text-ink-2">{x.clave}</span>
-                        </Td>
-                        <Td className="min-w-[220px] max-w-[320px]">
-                          <span className="break-words font-medium text-ink">{x.titulo}</span>
-                        </Td>
-                        <Td muted>{x.tipo_nombre}</Td>
-                        <Td>{x.origen === "externo" ? <ExternoEtiqueta /> : <span className="text-ink-3">Interno</span>}</Td>
-                        <Td className="whitespace-nowrap">{x.revision || "—"}</Td>
-                        <Td className="min-w-[150px]">
-                          <span className="flex flex-col items-start gap-1">
-                            <Badge tone={x.pendiente_revision ? "warning" : TONO_ESTADO[x.estado] || "neutral"}>{x.estado_etiqueta}</Badge>
-                            {x.en_curso ? <span className="text-[12px] text-ink-2" data-testid="lm-en-curso">{x.en_curso}</span> : null}
+                      <Tr key={x.id} interactive onClick={() => router.push(`/documentos/${x.id}`)} data-testid="lm-fila" data-clave={x.clave} className="entrada-escalonada" style={{ ["--i" as string]: indice++ } as CSSProperties}>
+                        <Td className="min-w-[280px] max-w-[420px]">
+                          <span className="flex flex-col gap-0.5">
+                            <span className="flex flex-wrap items-center gap-2">
+                              <span className="code text-[12.5px] font-semibold text-ink-2">{x.clave}</span>
+                              {x.origen === "externo" ? <ExternoEtiqueta /> : null}
+                            </span>
+                            <span className="break-words font-medium text-ink">{x.titulo}</span>
+                            <span className="text-[12px] text-ink-3">{x.tipo_nombre}</span>
                           </span>
                         </Td>
-                        <Td muted className="min-w-[140px]">{x.propietario || "—"}</Td>
-                        <Td muted className="min-w-[140px]">{x.elaborador || "—"}</Td>
-                        <Td muted className="min-w-[140px]">{x.revisor || "—"}</Td>
-                        <Td muted className="min-w-[140px]">{x.autorizador || "—"}</Td>
-                        <Td className="tnum whitespace-nowrap">{formatearFecha(x.emision)}</Td>
-                        <Td className="tnum whitespace-nowrap">{formatearFecha(x.vigencia)}</Td>
-                        <Td className="tnum whitespace-nowrap">{formatearFecha(x.proxima_revision)}</Td>
+                        <Td className="min-w-[130px]">
+                          <span className="flex flex-col gap-0.5">
+                            <span className="whitespace-nowrap">{x.revision || "—"}</span>
+                            {x.en_curso ? <span className="text-[12px] text-ink-3" data-testid="lm-en-curso">{x.en_curso}</span> : null}
+                          </span>
+                        </Td>
+                        <Td className="min-w-[150px]">
+                          <span className="flex flex-col items-start gap-1">
+                            <EstadoDocumentoEtiqueta estado={x.estado} />
+                            {x.pendiente_revision ? (
+                              <Badge tone="warning" className="gap-1">
+                                <ICONO_ESTADO.pendiente size={12} weight="bold" aria-hidden="true" /> Pendiente de revisión
+                              </Badge>
+                            ) : null}
+                          </span>
+                        </Td>
+                        <Td className="min-w-[200px]">
+                          <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-[12.5px]">
+                            {[
+                              ["Propietario", x.propietario],
+                              ["Elaboró", x.elaborador],
+                              ["Revisó", x.revisor],
+                              ["Autorizó", x.autorizador],
+                            ]
+                              .filter(([, v]) => v)
+                              .map(([k, v]) => (
+                                <Fragment key={k}>
+                                  <dt className="text-ink-4">{k}</dt>
+                                  <dd className="truncate text-ink-2" title={String(v)}>{v}</dd>
+                                </Fragment>
+                              ))}
+                          </dl>
+                        </Td>
+                        <Td className="min-w-[170px]">
+                          <dl className="tnum grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-[12.5px]">
+                            {[
+                              ["Emisión", x.emision],
+                              ["Vigencia", x.vigencia],
+                              ["Próx. revisión", x.proxima_revision],
+                            ]
+                              .filter(([, v]) => v)
+                              .map(([k, v]) => (
+                                <Fragment key={k}>
+                                  <dt className="text-ink-4">{k}</dt>
+                                  <dd className="whitespace-nowrap text-ink-2">{formatearFecha(v)}</dd>
+                                </Fragment>
+                              ))}
+                          </dl>
+                        </Td>
+                        <Td className="w-[52px]" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                          <ActionMenu items={[{ label: "Abrir ficha", icon: <ArrowSquareOut size={16} weight="bold" />, onSelect: () => router.push(`/documentos/${x.id}`) }]} label={`Más acciones de ${x.clave}`} />
+                        </Td>
                       </Tr>
                     ))}
                   </Fragment>

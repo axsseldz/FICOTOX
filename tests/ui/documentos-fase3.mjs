@@ -108,6 +108,7 @@ try {
     await page.locator("#ext-area").selectOption("TC");
     await page.locator("#ext-tipo").selectOption("R");
     await page.locator("#ext-version").fill("2009");
+    await page.getByRole("dialog").getByRole("button", { name: "Más opciones" }).click();
     await page.locator("#ext-enlace").fill("https://www.dof.gob.mx");
     await page.locator("#ext-responsable").selectOption(String(id.ricardo));
     await page.getByTestId("ext-guardar").click();
@@ -223,8 +224,9 @@ try {
       await page.getByTestId("sgc-distribucion").waitFor();
       check("tableta: ficha con distribución sin desbordes", await sinDesborde(page));
       await page.goto(`${BASE}/documentos/bandeja`);
-      await page.getByTestId("bandeja-lecturas").waitFor();
-      check("tableta: bandeja con lecturas sin desbordes", await sinDesborde(page));
+      // Los grupos vacíos no se muestran: basta con que la bandeja termine de cargar.
+      await page.locator('[data-testid="bandeja-grupo"], [data-testid="bandeja-lecturas"], [data-testid="bandeja-vacia"]').first().waitFor();
+      check("tableta: bandeja sin desbordes", await sinDesborde(page));
     },
     { colorScheme: "dark", viewport: { width: 820, height: 1180 } },
   );

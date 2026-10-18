@@ -7,7 +7,6 @@ import { CheckCircle, FloppyDisk, WarningCircle } from "@phosphor-icons/react";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
 import { Field, FormGrid, Input, Select, Textarea } from "@/components/ui/Field";
-import { Sheet } from "@/components/ui/Overlay";
 import { CampoValidado, useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
 import { API_BASE_URL, sendFormAuthProgress, sendJsonAuth } from "@/lib/client/api";
 import { msg, type Problema } from "@/lib/client/mensajes";
@@ -16,6 +15,7 @@ import { extensionDe, fmtBytes } from "@/lib/shared/adjuntos";
 import { CONFIDENCIALIDADES, ORIGENES, TIPOS_ARCHIVO_SGC, MOTIVO_MIN_SGC, normalizarClave, validarClave, validarIdentificadorExterno } from "@/lib/shared/documentos";
 import type { AccionDocumental } from "@/lib/shared/permisos";
 import type { Catalogos, FichaDocumento, Persona } from "./comun";
+import { conDato, MasOpciones, VentanaFormulario } from "./VentanaFormulario";
 
 /*
  * Nueva ficha (documento_crear_ficha): metadatos con catalogos, clave FX
@@ -172,11 +172,11 @@ export function FichaSheet({ open, onClose, catalogos, editar, areaInicial, tipo
   };
 
   return (
-    <Sheet
+    <VentanaFormulario
       open={open}
       onOpenChange={(o) => !o && cerrar()}
-      title={editar ? `Editar metadatos · ${editar.clave}` : "Nueva ficha de documento"}
-      description={editar ? "Los cambios quedan en la bitácora con sus valores de antes y de después." : "Registra la clave FX autorizada por Mejora Continua y el archivo inicial; queda como revisión en borrador."}
+      title={editar ? `Editar metadatos · ${editar.clave}` : "Nueva ficha"}
+      description={editar ? "Los cambios quedan en la bitácora." : "Clave FX autorizada y archivo inicial; queda como revisión en borrador."}
       size="lg"
       footer={
         <>
@@ -212,23 +212,8 @@ export function FichaSheet({ open, onClose, catalogos, editar, areaInicial, tipo
                 ))}
               </Select>
             </Field>
-            <Field label={externo ? "Identificador del emisor" : "Clave FX"} htmlFor="ficha-clave" required hint={datos.clave && !clave.problema ? `Se registrará como ${clave.clave}` : externo ? "Por ejemplo NMX-EC-17025-IMNC-2018" : "Formato FX-[Área][Tipo]-[ID], p. ej. FX-TCF-GMR; manuales rectores: FX-MC o FX-MO"}>
+            <Field label={externo ? "Identificador del emisor" : "Clave FX"} htmlFor="ficha-clave" required hint={datos.clave && !clave.problema ? `Se registrará como ${clave.clave}` : externo ? "Por ejemplo NMX-EC-17025-IMNC-2018" : "Formato FX-[Área][Tipo]-[ID], p. ej. FX-TCF-GMR"}>
               <Input id="ficha-clave" mono maxLength={80} value={datos.clave} onChange={(e) => cambiar({ clave: e.target.value })} onBlur={() => datos.clave && cambiar({ clave: normalizarClave(datos.clave) })} placeholder="FX-GCP-CD" autoComplete="off" />
-            </Field>
-            <Field label="Origen" htmlFor="ficha-origen" hint={editar ? "El origen no cambia" : "Los externos se registran en «Documentos externos»"}>
-              <Select id="ficha-origen" value={datos.origen} disabled onChange={(e) => cambiar({ origen: e.target.value })}>
-                {ORIGENES.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Título completo" htmlFor="ficha-titulo" required className="sm:col-span-2">
-              <Input id="ficha-titulo" maxLength={300} value={datos.titulo} onChange={(e) => cambiar({ titulo: e.target.value })} />
-            </Field>
-            <Field label="Proceso o subproceso" htmlFor="ficha-proceso">
-              <Input id="ficha-proceso" maxLength={200} value={datos.proceso} onChange={(e) => cambiar({ proceso: e.target.value })} />
             </Field>
             <Field label="Confidencialidad" htmlFor="ficha-confidencialidad" required hint={CONFIDENCIALIDADES.find((c) => c.value === datos.confidencialidad)?.descripcion}>
               <Select id="ficha-confidencialidad" value={datos.confidencialidad} onChange={(e) => cambiar({ confidencialidad: e.target.value })}>
@@ -239,40 +224,62 @@ export function FichaSheet({ open, onClose, catalogos, editar, areaInicial, tipo
                 ))}
               </Select>
             </Field>
-            <Field label="Propietario del documento" htmlFor="ficha-propietario">
-              <Select id="ficha-propietario" value={datos.propietario_id} onChange={(e) => cambiar({ propietario_id: e.target.value })}>
-                <option value="">Sin asignar</option>
-                {personas.map((p) => (
-                  <option key={p.id} value={String(p.id)}>
-                    {p.nombre}
-                  </option>
-                ))}
-              </Select>
+            <Field label="Título completo" htmlFor="ficha-titulo" required className="sm:col-span-2">
+              <Input id="ficha-titulo" maxLength={300} value={datos.titulo} onChange={(e) => cambiar({ titulo: e.target.value })} />
             </Field>
-            <Field label="Palabras clave" htmlFor="ficha-palabras" hint="Separadas por coma">
-              <Input id="ficha-palabras" maxLength={600} value={datos.palabras_clave} onChange={(e) => cambiar({ palabras_clave: e.target.value })} />
-            </Field>
+            {editar ? null : (
+              <Field label="Número de revisión" htmlFor="ficha-numero" required hint="Para documentos existentes, su revisión actual">
+                <Input id="ficha-numero" inputMode="numeric" maxLength={3} value={numero} onChange={(e) => setNumero(e.target.value)} />
+              </Field>
+            )}
           </FormGrid>
 
-          {editar ? (
-            <Field label="Motivo del cambio" htmlFor="ficha-motivo" required>
-              <Textarea id="ficha-motivo" rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
-            </Field>
-          ) : (
-            <>
-              <section className="flex flex-col gap-3" aria-labelledby="ficha-rev-titulo">
-                <h3 id="ficha-rev-titulo" className="text-[14px] font-semibold text-ink">
-                  Revisión inicial en borrador
-                </h3>
+          {editar ? null : (
+            <CampoValidado id="ficha-archivos" className="flex flex-col gap-2">
+              <p className="text-[13px] text-ink-2">Archivo inicial: al menos uno, hasta {maxMb} MB.</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {archivo("pdf", pdf, setPdf)}
+                {archivo("fuente", fuente, setFuente)}
+              </div>
+            </CampoValidado>
+          )}
+
+          <MasOpciones llenos={conDato(datos.proceso, datos.propietario_id, datos.palabras_clave, ...(editar ? [] : [descripcion, resp.elaborador_id, resp.revisor_id, resp.autorizador_id]))}>
+            <FormGrid>
+              <Field label="Proceso o subproceso" htmlFor="ficha-proceso">
+                <Input id="ficha-proceso" maxLength={200} value={datos.proceso} onChange={(e) => cambiar({ proceso: e.target.value })} />
+              </Field>
+              <Field label="Propietario del documento" htmlFor="ficha-propietario">
+                <Select id="ficha-propietario" value={datos.propietario_id} onChange={(e) => cambiar({ propietario_id: e.target.value })}>
+                  <option value="">Sin asignar</option>
+                  {personas.map((p) => (
+                    <option key={p.id} value={String(p.id)}>
+                      {p.nombre}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Palabras clave" htmlFor="ficha-palabras" hint="Separadas por coma">
+                <Input id="ficha-palabras" maxLength={600} value={datos.palabras_clave} onChange={(e) => cambiar({ palabras_clave: e.target.value })} />
+              </Field>
+              <Field label="Origen" htmlFor="ficha-origen" hint={editar ? "El origen no cambia" : "Los externos se registran en «Externos»"}>
+                <Select id="ficha-origen" value={datos.origen} disabled onChange={(e) => cambiar({ origen: e.target.value })}>
+                  {ORIGENES.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </FormGrid>
+            {editar ? null : (
+              <>
                 <FormGrid>
-                  <Field label="Número de revisión" htmlFor="ficha-numero" required hint="Para documentos existentes, su revisión actual">
-                    <Input id="ficha-numero" inputMode="numeric" maxLength={3} value={numero} onChange={(e) => setNumero(e.target.value)} />
-                  </Field>
                   <Field label="Motivo del cambio" htmlFor="ficha-motivo-cambio">
                     <Input id="ficha-motivo-cambio" maxLength={400} value={motivoCambio} onChange={(e) => setMotivoCambio(e.target.value)} />
                   </Field>
-                  <Field label="Descripción breve del cambio" htmlFor="ficha-descripcion" className="sm:col-span-2">
-                    <Textarea id="ficha-descripcion" rows={2} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
+                  <Field label="Descripción breve del cambio" htmlFor="ficha-descripcion">
+                    <Input id="ficha-descripcion" maxLength={600} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
                   </Field>
                 </FormGrid>
                 <FormGrid cols={3}>
@@ -280,18 +287,17 @@ export function FichaSheet({ open, onClose, catalogos, editar, areaInicial, tipo
                   {persona("revisor_id", "Revisor", "documento_revisar", "ficha-revisor")}
                   {persona("autorizador_id", "Autorizador", "documento_autorizar", "ficha-autorizador")}
                 </FormGrid>
-              </section>
-              <CampoValidado id="ficha-archivos" className="flex flex-col gap-2">
-                <p className="text-[13px] text-ink-2">Archivo inicial: al menos uno. Hasta {maxMb} MB por archivo.</p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {archivo("pdf", pdf, setPdf)}
-                  {archivo("fuente", fuente, setFuente)}
-                </div>
-              </CampoValidado>
-            </>
-          )}
+              </>
+            )}
+          </MasOpciones>
+
+          {editar ? (
+            <Field label="Motivo del cambio" htmlFor="ficha-motivo" required>
+              <Textarea id="ficha-motivo" rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+            </Field>
+          ) : null}
         </div>
       </ValidacionAmbito>
-    </Sheet>
+    </VentanaFormulario>
   );
 }

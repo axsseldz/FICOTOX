@@ -1,13 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { use, useEffect, useState, type ReactNode } from "react";
+import { Suspense, use, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { ClockCounterClockwise, FilePdf, Info, ListBullets, Prohibit, UsersThree, Warning, type Icon } from "@phosphor-icons/react";
 import { AcuseLectura, AgregarDialog, SeccionDistribucion, useAcusarLectura } from "@/components/features/documentos/Distribucion";
 import { EditarExternoDialog, NuevaVersionExternoDialog, SeguimientoExterno, VerificarExternoDialog } from "@/components/features/documentos/Externos";
 import { ConfidencialidadEtiqueta, EstadoDocumentoEtiqueta, ExternoEtiqueta, EstadoRevisionEtiqueta, IconoArea, ProximaRevisionEtiqueta, RequireDocumentos, RutaDocumentos, useCatalogos, type Archivo, type FichaDocumento, type Puede, type Revision } from "@/components/features/documentos/comun";
 import { FichaSheet } from "@/components/features/documentos/FichaSheet";
+import { ConfirmacionCheck } from "@/components/features/documentos/Confirmacion";
 import { ICONO_ACCION, ICONO_ESTADO } from "@/components/features/documentos/iconos";
 import { ArchivoDialog, RegistrarVigenteDialog, RevisionSheet } from "@/components/features/documentos/RevisionSheets";
 import { DecisionDialog, ObsoletarDialog, OPCIONES_AUTORIZADOR, OPCIONES_RENOVACION_AUTORIZADOR, OPCIONES_RENOVACION_REVISOR, OPCIONES_REVISOR, PublicarDialog, ReasignarDialog, RenovarDialog } from "@/components/features/documentos/FlujoDialogs";
@@ -22,6 +23,7 @@ import { ActionMenu, useConfirm, type MenuItem } from "@/components/ui/Overlay";
 import { PestanasDeslizantes } from "@/components/ui/PestanasDeslizantes";
 import { Badge, EmptyState, ErrorState, Skeleton } from "@/components/ui/Primitives";
 import { API_BASE_URL, getJsonAuth, sendJsonAuth } from "@/lib/client/api";
+import { useInitialParam } from "@/lib/client/hooks";
 import { explicarError } from "@/lib/client/mensajes";
 import { urlArchivoSgc } from "@/lib/client/pdf";
 import { invalidate, useResource } from "@/lib/client/store";
@@ -46,7 +48,9 @@ export default function FichaDocumentoPage({ params }: { params: Promise<{ id: s
   const { id } = use(params);
   return (
     <RequireDocumentos>
-      <Ficha id={id} />
+      <Suspense fallback={<Skeleton className="h-[480px] rounded-card" />}>
+        <Ficha id={id} />
+      </Suspense>
     </RequireDocumentos>
   );
 }
@@ -87,6 +91,10 @@ function Ficha({ id }: { id: string }) {
   const [externo, setExterno] = useState<"verificar" | "version" | "editar" | null>(null);
   const [agregarLectura, setAgregarLectura] = useState(false);
   const [pestana, setPestana] = useState<Pestana | null>(null);
+  // Desde la Bandeja (?accion=sgc-revisar…): abre la ventana de esa accion al cargar, si la persona puede.
+  // Con la navegacion del cliente la URL se actualiza despues del primer render: se lee de los parametros de Next.
+  const accionInicial = useInitialParam("accion");
+  const [accionPedida, setAccionPedida] = useState<string | null>(accionInicial || null);
   const recurso = useResource<FichaDocumento>(["sgc", `sgc:${id}`], async () => (await getJsonAuth(`${API_BASE_URL}/sgc/documentos/${encodeURIComponent(id)}`, token)) as unknown as FichaDocumento, { enabled: !!token });
   const data = recurso.data;
   const { acusar, enviando: acusando } = useAcusarLectura(data?.distribucion ?? null);
@@ -224,6 +232,7 @@ function Ficha({ id }: { id: string }) {
     : [];
   const deBitacora: Accion[] = verAuditoria ? [{ id: "sgc-ver-auditoria", etiqueta: "Ver en Auditoría", icono: ICONO_ACCION.auditoria, puede: SI, onSelect: () => router.push(`/auditoria?buscar=${encodeURIComponent(item.clave)}&area=documentos&periodo=todo`) }] : [];
   // En cada grupo, primero lo que la persona puede hacer; despues lo deshabilitado (con su motivo).
+  const todas = [...flujo, ...deRevision, ...deExterno, ...deDocumento];
   const grupos = [otrasFlujo, deRevision, deExterno, deDocumento, deArchivos, deBitacora].filter((g) => g.length).map((g) => [...g.filter((a) => a.puede.ok), ...g.filter((a) => !a.puede.ok)]);
   const menu: MenuItem[] = grupos.flatMap((g, gi) =>
     g.map((a, i) => ({
@@ -285,6 +294,8 @@ function Ficha({ id }: { id: string }) {
       </header>
 
       <Avisos item={item} vigente={vigente} enCurso={enCurso} diagnostico={data.solo_diagnostico} />
+      {accionPedida ? <AbrirAccion accion={todas.find((a) => a.id === accionPedida && a.puede.ok) || null} onHecho={() => setAccionPedida(null)} /> : null}
+      <ConfirmacionCheck />
 
       <section aria-label="Revisión vigente" data-testid="sgc-vigente" className="flex flex-col gap-3">
         {vigente ? (
@@ -390,6 +401,20 @@ function Ficha({ id }: { id: string }) {
       {agregarLectura && dist ? <AgregarDialog revisionId={dist.revision_id} numero={dist.numero} catalogos={catalogos.data} onClose={() => setAgregarLectura(false)} /> : null}
     </PageBody>
   );
+}
+
+/* Abre una sola vez la accion pedida por la URL y quita el parametro (al recargar no se repite). */
+function AbrirAccion({ accion, onHecho }: { accion: Accion | null; onHecho: () => void }) {
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("accion");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+    accion?.onSelect();
+    onHecho();
+    // Solo al montar: la accion se toma con los datos ya cargados.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
 }
 
 /* Franja de avisos: una sola, delgada, con un renglon por aviso (icono + texto; el color nunca es la unica senal). */

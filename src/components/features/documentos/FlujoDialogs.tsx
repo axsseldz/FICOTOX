@@ -3,12 +3,11 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { ArrowsClockwise, Prohibit, SealCheck, UserSwitch } from "@phosphor-icons/react";
-import { Callout, ChoiceCard } from "@/components/features/samples/FormLayout";
+import { ChoiceCard } from "@/components/features/samples/FormLayout";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
 import { DateInput } from "@/components/ui/DateInput";
 import { Field, FormGrid, Select, Switch, Textarea } from "@/components/ui/Field";
-import { Dialog } from "@/components/ui/Overlay";
 import { useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
 import { API_BASE_URL, sendJsonAuth } from "@/lib/client/api";
 import { type Problema } from "@/lib/client/mensajes";
@@ -18,7 +17,9 @@ import { hoyLocal } from "@/lib/shared/fechas";
 import type { AccionDocumental } from "@/lib/shared/permisos";
 import type { Catalogos, Distribucion, FichaDocumento, Revision } from "./comun";
 import { opcionesPersonas } from "./FichaSheet";
+import { confirmarConCheck } from "./Confirmacion";
 import { cuerpoDestinatarios, destinatariosVacios, SelectorDestinatarios, type Destinatarios } from "./Distribucion";
+import { conDato, MasOpciones, VentanaFormulario } from "./VentanaFormulario";
 
 /*
  * Dialogos del flujo de aprobacion (Fase 2). El servidor decide (papel
@@ -48,6 +49,7 @@ export function DecisionDialog({ titulo, descripcion, url, opciones, onClose }: 
     setGuardando(true);
     try {
       await enviar(url, token, { decision, comentario: comentario.trim() }, "Decisión registrada");
+      if (decision === "autorizar") confirmarConCheck(/renovaciones/.test(url) ? "Renovación autorizada" : "Autorizada");
       onClose();
     } catch (err) {
       v.errorServidor(err, { comentario: "decision-comentario", decision: "decision-comentario" });
@@ -56,8 +58,7 @@ export function DecisionDialog({ titulo, descripcion, url, opciones, onClose }: 
     }
   };
   return (
-    <Dialog
-      open
+    <VentanaFormulario
       onOpenChange={(o) => !o && !guardando && onClose()}
       title={titulo}
       description={descripcion}
@@ -85,7 +86,7 @@ export function DecisionDialog({ titulo, descripcion, url, opciones, onClose }: 
           </Field>
         </div>
       </ValidacionAmbito>
-    </Dialog>
+    </VentanaFormulario>
   );
 }
 
@@ -139,6 +140,7 @@ export function PublicarDialog({ doc, revision, catalogos, distribucionAnterior,
     setGuardando(true);
     try {
       await enviar(`${API_BASE_URL}/sgc/revisiones/${revision.id}/publicar`, token, { fecha_emision: emision, fecha_vigencia: vigencia, fecha_proxima_revision: proxima, comentario: comentario.trim(), ...(definir ? { distribucion: cuerpoDestinatarios(dest) } : {}) }, "Publicada");
+      confirmarConCheck("Publicada");
       onClose();
     } catch (err) {
       v.errorServidor(err, { fecha_emision: "pub-emision", fecha_vigencia: "pub-vigencia", fecha_proxima_revision: "pub-proxima", roles: "pub-destinatarios", usuarios: "pub-destinatarios" });
@@ -147,11 +149,10 @@ export function PublicarDialog({ doc, revision, catalogos, distribucionAnterior,
     }
   };
   return (
-    <Dialog
-      open
+    <VentanaFormulario
       onOpenChange={(o) => !o && !guardando && onClose()}
       title={`Publicar ${doc.clave} rev. ${revision.numero}`}
-      description="La revisión queda vigente y la anterior pasa a obsoleta en la misma operación. Se te pedirá tu contraseña."
+      description="Queda vigente y la anterior pasa a obsoleta. Se te pedirá tu contraseña."
       size="lg"
       footer={
         <>
@@ -166,43 +167,45 @@ export function PublicarDialog({ doc, revision, catalogos, distribucionAnterior,
     >
       <ValidacionAmbito v={v}>
         <div className="flex flex-col gap-4">
-          <FormGrid cols={3}>
-            <Field label="Fecha de emisión" htmlFor="pub-emision" required>
-              <DateInput
-                id="pub-emision"
-                value={emision}
-                onChange={(x) => {
-                  setEmision(x);
-                  if (x && !tocada) setProxima(sumarAnios(x, ANIOS_PROXIMA_REVISION));
-                }}
-              />
-            </Field>
-            <Field label="Fecha de vigencia" htmlFor="pub-vigencia">
-              <DateInput id="pub-vigencia" value={vigencia} onChange={setVigencia} />
-            </Field>
-            <Field label="Próxima revisión" htmlFor="pub-proxima" hint={`Por omisión, emisión + ${ANIOS_PROXIMA_REVISION} años`}>
-              <DateInput
-                id="pub-proxima"
-                value={proxima}
-                onChange={(x) => {
-                  setProxima(x);
-                  setTocada(true);
-                }}
-              />
-            </Field>
-          </FormGrid>
-          <Field label="Comentario (opcional)" htmlFor="pub-comentario">
-            <Textarea id="pub-comentario" rows={2} value={comentario} onChange={(e) => setComentario(e.target.value)} />
+          <Field label="Fecha de emisión" htmlFor="pub-emision" required>
+            <DateInput
+              id="pub-emision"
+              value={emision}
+              onChange={(x) => {
+                setEmision(x);
+                if (x && !tocada) setProxima(sumarAnios(x, ANIOS_PROXIMA_REVISION));
+              }}
+            />
           </Field>
+          <MasOpciones llenos={conDato(comentario)} etiqueta="Más opciones (vigencia, próxima revisión y comentario)">
+            <FormGrid>
+              <Field label="Fecha de vigencia" htmlFor="pub-vigencia">
+                <DateInput id="pub-vigencia" value={vigencia} onChange={setVigencia} />
+              </Field>
+              <Field label="Próxima revisión" htmlFor="pub-proxima" hint={`Por omisión, emisión + ${ANIOS_PROXIMA_REVISION} años`}>
+                <DateInput
+                  id="pub-proxima"
+                  value={proxima}
+                  onChange={(x) => {
+                    setProxima(x);
+                    setTocada(true);
+                  }}
+                />
+              </Field>
+            </FormGrid>
+            <Field label="Comentario" htmlFor="pub-comentario">
+              <Textarea id="pub-comentario" rows={2} value={comentario} onChange={(e) => setComentario(e.target.value)} />
+            </Field>
+          </MasOpciones>
           {administra ? (
             <div className="flex flex-col gap-3 border-t border-line pt-4" data-testid="pub-distribucion">
               <Switch checked={definir} onCheckedChange={setDefinir} label="Definir la distribución" description={conservable ? "Si no la defines, se conserva la de la revisión anterior (con acuses de lectura nuevos)." : "Destinatarios por rol o por persona, punto de uso y si requieren confirmar la lectura."} />
-              {definir ? <SelectorDestinatarios valor={dest} onChange={setDest} catalogos={catalogos} prefijo="pub" /> : null}
+              {definir ? <SelectorDestinatarios valor={dest} onChange={setDest} catalogos={catalogos} prefijo="pub" plegarOpcionales /> : null}
             </div>
           ) : null}
         </div>
       </ValidacionAmbito>
-    </Dialog>
+    </VentanaFormulario>
   );
 }
 
@@ -252,11 +255,10 @@ export function ReasignarDialog({ revision, catalogos, onClose }: { revision: Re
     }
   };
   return (
-    <Dialog
-      open
+    <VentanaFormulario
       onOpenChange={(o) => !o && !guardando && onClose()}
       title={`Reasignar responsables · revisión ${revision.numero}`}
-      description="Solo actúa quien queda asignado. Elaborador, revisor y autorizador deben ser tres personas distintas."
+      description="Tres personas distintas; solo actúa quien queda asignado."
       size="lg"
       footer={
         <>
@@ -276,15 +278,17 @@ export function ReasignarDialog({ revision, catalogos, onClose }: { revision: Re
             <SelectPersona id="rea-revisor" etiqueta="Revisor" valor={r.revisor_id} onChange={(x) => setR((p) => ({ ...p, revisor_id: x }))} catalogos={catalogos} accion="documento_revisar" />
             <SelectPersona id="rea-autorizador" etiqueta="Autorizador" valor={r.autorizador_id} onChange={(x) => setR((p) => ({ ...p, autorizador_id: x }))} catalogos={catalogos} accion="documento_autorizar" />
           </FormGrid>
-          <Field label="Fecha límite (opcional)" htmlFor="rea-limite">
-            <DateInput id="rea-limite" value={limite} onChange={setLimite} />
-          </Field>
           <Field label="Motivo" htmlFor="rea-motivo" required>
             <Textarea id="rea-motivo" rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
           </Field>
+          <MasOpciones llenos={conDato(limite)}>
+            <Field label="Fecha límite" htmlFor="rea-limite">
+              <DateInput id="rea-limite" value={limite} onChange={setLimite} />
+            </Field>
+          </MasOpciones>
         </div>
       </ValidacionAmbito>
-    </Dialog>
+    </VentanaFormulario>
   );
 }
 
@@ -319,12 +323,10 @@ export function RenovarDialog({ doc, catalogos, onClose }: { doc: FichaDocumento
     }
   };
   return (
-    <Dialog
-      open
+    <VentanaFormulario
       onOpenChange={(o) => !o && !guardando && onClose()}
       title={`Renovar sin cambios · ${doc.clave}`}
-      description="El revisor confirma que el documento sigue vigente y el autorizador lo autoriza con su contraseña. La misma revisión sigue vigente con una nueva fecha de próxima revisión."
-      size="lg"
+      description="La misma revisión sigue vigente con una nueva fecha de próxima revisión."
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={guardando}>
@@ -337,18 +339,24 @@ export function RenovarDialog({ doc, catalogos, onClose }: { doc: FichaDocumento
       }
     >
       <ValidacionAmbito v={v}>
-        <FormGrid>
-          <SelectPersona id="ren-revisor" etiqueta="Revisor" valor={revisor} onChange={setRevisor} catalogos={catalogos} accion="documento_revisar" />
-          <SelectPersona id="ren-autorizador" etiqueta="Autorizador" valor={autorizador} onChange={setAutorizador} catalogos={catalogos} accion="documento_autorizar" />
-          <Field label="Nueva próxima revisión" htmlFor="ren-proxima">
-            <DateInput id="ren-proxima" value={proxima} onChange={setProxima} />
-          </Field>
-          <Field label="Fecha límite (opcional)" htmlFor="ren-limite">
-            <DateInput id="ren-limite" value={limite} onChange={setLimite} />
-          </Field>
-        </FormGrid>
+        <div className="flex flex-col gap-4">
+          <FormGrid>
+            <SelectPersona id="ren-revisor" etiqueta="Revisor" valor={revisor} onChange={setRevisor} catalogos={catalogos} accion="documento_revisar" />
+            <SelectPersona id="ren-autorizador" etiqueta="Autorizador" valor={autorizador} onChange={setAutorizador} catalogos={catalogos} accion="documento_autorizar" />
+          </FormGrid>
+          <MasOpciones llenos={conDato(limite)}>
+            <FormGrid>
+              <Field label="Nueva próxima revisión" htmlFor="ren-proxima" hint={`Por omisión, hoy + ${ANIOS_PROXIMA_REVISION} años`}>
+                <DateInput id="ren-proxima" value={proxima} onChange={setProxima} />
+              </Field>
+              <Field label="Fecha límite" htmlFor="ren-limite">
+                <DateInput id="ren-limite" value={limite} onChange={setLimite} />
+              </Field>
+            </FormGrid>
+          </MasOpciones>
+        </div>
       </ValidacionAmbito>
-    </Dialog>
+    </VentanaFormulario>
   );
 }
 
@@ -372,11 +380,10 @@ export function ObsoletarDialog({ doc, onClose }: { doc: FichaDocumento["item"];
     }
   };
   return (
-    <Dialog
-      open
+    <VentanaFormulario
       onOpenChange={(o) => !o && !guardando && onClose()}
       title={`Declarar obsoleto · ${doc.clave}`}
-      description="Sin reemplazo: el documento sale de los puntos de uso y se conserva en el historial. Se te pedirá tu contraseña y lo aprueba otra persona."
+      description="Sale de los puntos de uso y se conserva en el historial. Lo aprueba otra persona; se te pedirá tu contraseña."
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={guardando}>
@@ -389,15 +396,10 @@ export function ObsoletarDialog({ doc, onClose }: { doc: FichaDocumento["item"];
       }
     >
       <ValidacionAmbito v={v}>
-        <div className="flex flex-col gap-3">
-          <Callout tone="warning" title="Requiere un segundo usuario">
-            La solicitud la aprueba una persona distinta con permiso de autorizar documentos.
-          </Callout>
-          <Field label="Motivo" htmlFor="obs-motivo" required>
-            <Textarea id="obs-motivo" rows={3} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
-          </Field>
-        </div>
+        <Field label="Motivo" htmlFor="obs-motivo" required>
+          <Textarea id="obs-motivo" rows={3} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+        </Field>
       </ValidacionAmbito>
-    </Dialog>
+    </VentanaFormulario>
   );
 }

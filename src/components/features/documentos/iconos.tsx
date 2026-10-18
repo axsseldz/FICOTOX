@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowsClockwise, BookOpenText, Briefcase, CheckCircle, Checks, ClipboardText, Clock, ClockCounterClockwise, CloudArrowUp, DownloadSimple, File, FileArrowDown, FileDashed, Flask, Handshake, Lightbulb, ListBullets, ListChecks, ListNumbers, MinusCircle, Notebook, PaperPlaneTilt, PencilLine, PencilSimple, Plus, Prohibit, Scales, Scroll, SealCheck, ShieldCheck, Signature, UsersThree, UserSwitch, Wrench, type Icon } from "@phosphor-icons/react";
+import { ArrowsClockwise, BookOpenText, FilePlus, Tray, XCircle, Briefcase, CheckCircle, Checks, ClipboardText, Clock, ClockCounterClockwise, CloudArrowUp, DownloadSimple, File, FileArrowDown, FileDashed, Flask, Handshake, Lightbulb, ListBullets, ListChecks, ListNumbers, MinusCircle, Notebook, PaperPlaneTilt, PencilLine, PencilSimple, Plus, Prohibit, Scales, Scroll, SealCheck, ShieldCheck, Signature, UsersThree, UserSwitch, Wrench, type Icon } from "@phosphor-icons/react";
 import type { IconoEstado } from "@/lib/shared/documentos";
 
 /*
@@ -68,6 +68,27 @@ export const ICONO_ACCION = {
   descargar_fuente: FileArrowDown,
   auditoria: ClockCounterClockwise,
 } satisfies Record<string, Icon>;
+
+/* Grupos de la Bandeja (tipo de tarea). */
+export const ICONO_TAREA = {
+  publicar: SealCheck,
+  autorizar: Signature,
+  revisar: ListChecks,
+  elaborar: PencilLine,
+  solicitud: FilePlus,
+  renovacion: ArrowsClockwise,
+  periodica: Clock,
+  obsolescencia: Prohibit,
+  lectura: BookOpenText,
+  vacia: Tray,
+} satisfies Record<string, Icon>;
+
+/* Estado de una solicitud. */
+export const ICONO_SOLICITUD: Record<string, Icon> = {
+  pendiente: Clock,
+  aceptada: CheckCircle,
+  rechazada: XCircle,
+};
 
 /* Respaldo para un codigo fuera del catalogo (se usa con una busqueda directa en el mapa, nunca creando el icono en el render). */
 export const ICONO_AREA_RESPALDO: Icon = Scroll;

@@ -427,6 +427,47 @@
     }
   }
 
+  /* Documentos SGC: "Más opciones" se despliega con un leve descenso; la carpeta entra suave desde el inicio (200-240 ms, solo opacidad y transform). */
+  @keyframes sgc-entra {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: none; }
+  }
+  .mas-opciones-entra {
+    animation: sgc-entra 200ms var(--ease-fluid) both;
+  }
+  @keyframes carpeta-entra {
+    from { opacity: 0; transform: translateY(8px) scale(0.99); }
+    to { opacity: 1; transform: none; }
+  }
+  .transicion-carpeta {
+    animation: carpeta-entra 240ms var(--ease-fluid) both;
+  }
+  /* Confirmacion breve (publicar, autorizar, confirmar lectura): aparece y se va sola. */
+  @keyframes confirmacion-entra {
+    0% { opacity: 0; transform: scale(0.9); }
+    18% { opacity: 1; transform: scale(1); }
+    82% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(0.98); }
+  }
+  .confirmacion-check {
+    animation: confirmacion-entra 1400ms var(--ease-fluid) both;
+  }
+  /* Avance de lecturas: la barra crece con transform (sin animar el ancho). */
+  .avance-barra {
+    transform-origin: left center;
+    transition: transform 300ms var(--ease-fluid);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mas-opciones-entra,
+    .transicion-carpeta,
+    .confirmacion-check {
+      animation: none;
+    }
+    .avance-barra {
+      transition: none;
+    }
+  }
+
   /* Documentos SGC: la miniatura del PDF aparece suave sobre el icono del tipo (sin movimiento con movimiento reducido). */
   .miniatura-entrada {
     animation: fade-in 220ms var(--ease-fluid) both;

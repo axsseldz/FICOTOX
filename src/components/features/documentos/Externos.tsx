@@ -8,7 +8,6 @@ import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
 import { DateInput } from "@/components/ui/DateInput";
 import { Field, FormGrid, Input, Select, Textarea } from "@/components/ui/Field";
-import { Dialog, Sheet } from "@/components/ui/Overlay";
 import { CampoValidado, useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
 import { API_BASE_URL, sendFormAuth, sendJsonAuth } from "@/lib/client/api";
 import { type Problema } from "@/lib/client/mensajes";
@@ -16,6 +15,7 @@ import { invalidate } from "@/lib/client/store";
 import { CONFIDENCIALIDADES, enlaceValido, MOTIVO_MIN_SGC, normalizarClave, validarIdentificadorExterno } from "@/lib/shared/documentos";
 import { formatearFecha, hoyLocal, sumarDias } from "@/lib/shared/fechas";
 import type { Catalogos, DatosExterno } from "./comun";
+import { conDato, MasOpciones, VentanaFormulario } from "./VentanaFormulario";
 
 /*
  * Documentos externos (Fase 3, CA-10): normas, guias y documentos
@@ -32,7 +32,7 @@ function CampoPdf({ id, onChange }: { id: string; onChange: (f: File | null) => 
   return (
     <CampoValidado id={id} className="flex flex-col gap-1.5">
       <label htmlFor={`${id}-input`} className="text-[13px] font-medium text-ink">
-        PDF (opcional, solo si hay derechos de uso)
+        PDF (solo si hay derechos de uso)
       </label>
       <input id={`${id}-input`} type="file" accept=".pdf,application/pdf" onChange={(e) => onChange(e.target.files?.[0] || null)} className="text-[13px] text-ink-2 file:mr-3 file:rounded-[8px] file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-[13px] file:font-medium file:text-ink file:shadow-card" />
     </CampoValidado>
@@ -83,11 +83,10 @@ export function RegistrarExternoSheet({ catalogos, onClose }: { catalogos: Catal
     }
   };
   return (
-    <Sheet
-      open
+    <VentanaFormulario
       onOpenChange={(o) => !o && !guardando && onClose()}
-      title="Registrar documento externo"
-      description="Normas, guías y documentos regulatorios. Quedan vigentes sin pasar por elaboración, revisión ni autorización. Se te pedirá tu contraseña."
+      title="Registrar externo"
+      description="Normas, guías y documentos regulatorios; quedan vigentes sin flujo de aprobación. Se te pedirá tu contraseña."
       size="lg"
       footer={
         <>
@@ -135,18 +134,6 @@ export function RegistrarExternoSheet({ catalogos, onClose }: { catalogos: Catal
             <Field label="Versión o fecha de edición" htmlFor="ext-version" required>
               <Input id="ext-version" maxLength={80} value={d.version_fecha} onChange={(e) => set("version_fecha", e.target.value)} placeholder="2018" />
             </Field>
-            <Field label="Confidencialidad" htmlFor="ext-conf">
-              <Select id="ext-conf" value={d.confidencialidad} onChange={(e) => set("confidencialidad", e.target.value)}>
-                {CONFIDENCIALIDADES.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Enlace de consulta" htmlFor="ext-enlace" className="sm:col-span-2">
-              <Input id="ext-enlace" type="url" value={d.enlace} onChange={(e) => set("enlace", e.target.value)} placeholder="https://" />
-            </Field>
             <Field label="Responsable de seguimiento" htmlFor="ext-responsable" required>
               <Select id="ext-responsable" value={d.responsable_id} onChange={(e) => set("responsable_id", e.target.value)}>
                 <option value="">Elige</option>
@@ -157,23 +144,39 @@ export function RegistrarExternoSheet({ catalogos, onClose }: { catalogos: Catal
                 ))}
               </Select>
             </Field>
-            <Field label="Palabras clave" htmlFor="ext-palabras" hint="Separadas por coma">
-              <Input id="ext-palabras" value={d.palabras_clave} onChange={(e) => set("palabras_clave", e.target.value)} />
-            </Field>
-            <Field label="Última verificación de vigencia" htmlFor="ext-ultima">
-              <DateInput id="ext-ultima" value={d.ultima_verificacion} onChange={(x) => set("ultima_verificacion", x)} />
-            </Field>
             <Field label="Próxima revisión" htmlFor="ext-proxima" required>
               <DateInput id="ext-proxima" value={d.proxima_revision} onChange={(x) => set("proxima_revision", x)} />
             </Field>
           </FormGrid>
-          <CampoPdf id="ext-pdf" onChange={setPdf} />
-          <Field label="Comentario" htmlFor="ext-comentario">
-            <Textarea id="ext-comentario" rows={2} value={d.comentario} onChange={(e) => set("comentario", e.target.value)} />
-          </Field>
+          <MasOpciones llenos={conDato(d.enlace, d.palabras_clave, d.comentario, pdf, d.confidencialidad !== "uso_interno" ? d.confidencialidad : "")}>
+            <FormGrid>
+              <Field label="Enlace de consulta" htmlFor="ext-enlace" className="sm:col-span-2">
+                <Input id="ext-enlace" type="url" value={d.enlace} onChange={(e) => set("enlace", e.target.value)} placeholder="https://" />
+              </Field>
+              <Field label="Confidencialidad" htmlFor="ext-conf">
+                <Select id="ext-conf" value={d.confidencialidad} onChange={(e) => set("confidencialidad", e.target.value)}>
+                  {CONFIDENCIALIDADES.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Última verificación de vigencia" htmlFor="ext-ultima">
+                <DateInput id="ext-ultima" value={d.ultima_verificacion} onChange={(x) => set("ultima_verificacion", x)} />
+              </Field>
+              <Field label="Palabras clave" htmlFor="ext-palabras" hint="Separadas por coma" className="sm:col-span-2">
+                <Input id="ext-palabras" value={d.palabras_clave} onChange={(e) => set("palabras_clave", e.target.value)} />
+              </Field>
+            </FormGrid>
+            <CampoPdf id="ext-pdf" onChange={setPdf} />
+            <Field label="Comentario" htmlFor="ext-comentario">
+              <Textarea id="ext-comentario" rows={2} value={d.comentario} onChange={(e) => set("comentario", e.target.value)} />
+            </Field>
+          </MasOpciones>
         </div>
       </ValidacionAmbito>
-    </Sheet>
+    </VentanaFormulario>
   );
 }
 
@@ -206,11 +209,10 @@ export function VerificarExternoDialog({ docId, clave, onClose }: { docId: numbe
     }
   };
   return (
-    <Dialog
-      open
+    <VentanaFormulario
       onOpenChange={(o) => !o && !guardando && onClose()}
       title={`Verificar la vigencia de ${clave}`}
-      description="Confirma que la versión registrada sigue vigente con el emisor. Si ya hay una nueva versión, regístrala en su lugar."
+      description="Confirma que la versión registrada sigue vigente; si hay una nueva, regístrala en su lugar."
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={guardando}>
@@ -232,7 +234,7 @@ export function VerificarExternoDialog({ docId, clave, onClose }: { docId: numbe
           </Field>
         </div>
       </ValidacionAmbito>
-    </Dialog>
+    </VentanaFormulario>
   );
 }
 
@@ -276,12 +278,10 @@ export function NuevaVersionExternoDialog({ docId, clave, ext, onClose }: { docI
     }
   };
   return (
-    <Dialog
-      open
+    <VentanaFormulario
       onOpenChange={(o) => !o && !guardando && onClose()}
       title={`Nueva versión de ${clave}`}
-      description={`La nueva versión queda vigente y la ${ext.version_fecha || "anterior"} pasa a obsoleta, conservada en el historial. Se te pedirá tu contraseña.`}
-      size="lg"
+      description={`Queda vigente y la ${ext.version_fecha || "anterior"} pasa a obsoleta. Se te pedirá tu contraseña.`}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={guardando}>
@@ -302,17 +302,19 @@ export function NuevaVersionExternoDialog({ docId, clave, ext, onClose }: { docI
             <Field label="Próxima revisión" htmlFor="nv-proxima" required>
               <DateInput id="nv-proxima" value={proxima} onChange={setProxima} />
             </Field>
-            <Field label="Enlace de consulta" htmlFor="nv-enlace" className="sm:col-span-2">
+          </FormGrid>
+          <MasOpciones llenos={conDato(enlace !== (ext.enlace || "") ? enlace : "", comentario, pdf)}>
+            <Field label="Enlace de consulta" htmlFor="nv-enlace">
               <Input id="nv-enlace" type="url" value={enlace} onChange={(e) => setEnlace(e.target.value)} />
             </Field>
-          </FormGrid>
-          <CampoPdf id="nv-pdf" onChange={setPdf} />
-          <Field label="Comentario" htmlFor="nv-comentario">
-            <Textarea id="nv-comentario" rows={2} value={comentario} onChange={(e) => setComentario(e.target.value)} />
-          </Field>
+            <CampoPdf id="nv-pdf" onChange={setPdf} />
+            <Field label="Comentario" htmlFor="nv-comentario">
+              <Textarea id="nv-comentario" rows={2} value={comentario} onChange={(e) => setComentario(e.target.value)} />
+            </Field>
+          </MasOpciones>
         </div>
       </ValidacionAmbito>
-    </Dialog>
+    </VentanaFormulario>
   );
 }
 
@@ -349,10 +351,10 @@ export function EditarExternoDialog({ docId, ext, catalogos, onClose }: { docId:
     }
   };
   return (
-    <Dialog
-      open
+    <VentanaFormulario
       onOpenChange={(o) => !o && !guardando && onClose()}
       title="Datos de seguimiento"
+      description="Los cambios quedan en la bitácora con su motivo."
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={guardando}>
@@ -369,9 +371,6 @@ export function EditarExternoDialog({ docId, ext, catalogos, onClose }: { docId:
           <Field label="Emisor o fuente" htmlFor="ee-fuente" required>
             <Input id="ee-fuente" value={fuente} onChange={(e) => setFuente(e.target.value)} />
           </Field>
-          <Field label="Enlace de consulta" htmlFor="ee-enlace">
-            <Input id="ee-enlace" type="url" value={enlace} onChange={(e) => setEnlace(e.target.value)} />
-          </Field>
           <Field label="Responsable de seguimiento" htmlFor="ee-responsable" required>
             <Select id="ee-responsable" value={responsable} onChange={(e) => setResponsable(e.target.value)}>
               <option value="">Elige</option>
@@ -385,9 +384,14 @@ export function EditarExternoDialog({ docId, ext, catalogos, onClose }: { docId:
           <Field label="Motivo" htmlFor="ee-motivo" required>
             <Textarea id="ee-motivo" rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
           </Field>
+          <MasOpciones llenos={conDato(enlace)}>
+            <Field label="Enlace de consulta" htmlFor="ee-enlace">
+              <Input id="ee-enlace" type="url" value={enlace} onChange={(e) => setEnlace(e.target.value)} />
+            </Field>
+          </MasOpciones>
         </div>
       </ValidacionAmbito>
-    </Dialog>
+    </VentanaFormulario>
   );
 }
 
