@@ -122,7 +122,7 @@ export default function AyudaPage() {
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <nav aria-label="Índice" className="lg:sticky lg:top-6 lg:self-start">
+        <nav aria-label="Índice" className="min-w-0 lg:sticky lg:top-6 lg:self-start">
           <ol className="scroll-thin flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
             {SECTIONS.map((section) => {
               const current = section.anchor === active;
@@ -146,13 +146,13 @@ export default function AyudaPage() {
                   <b>Empieza por el buscador del Inicio.</b> Escribe un folio, un reactivo, un equipo o lo que quieras hacer («nueva recepción», «informes por revisar») y te lleva ahí. Desde cualquier pantalla: <Kbd>{mod}</Kbd> <Kbd>K</Kbd>.
                 </>,
                 <>
-                  <b>El Inicio te dice qué toca.</b> «En curso» muestra cada muestra con su etapa y un botón con el siguiente paso; «Avisos» lo que conviene atender (stock bajo, calibraciones, firmas pendientes). Pasa el cursor para ver el detalle.
+                  <b>El Inicio te dice qué toca.</b> Bajo el saludo aparecen tus pendientes más urgentes (por autorizar, stock bajo, calibraciones, informes por liberar o enviar…); cada uno abre su lista ya filtrada. La campana avisa de lo nuevo que te toca.
                 </>,
                 <>
                   <b>Cada formato se llena paso a paso.</b> La guía de la izquierda marca en verde las secciones completas; no se puede guardar sin la información mínima. Con «Todo» ves el formato completo.
                 </>,
                 <>
-                  <b>Nada se borra.</b> Si algo se capturó mal, se anula con motivo (y se puede restaurar). Así el expediente siempre cuenta la historia completa.
+                  <b>Nada se borra.</b> Si algo se capturó mal, se anula con motivo (y se puede restaurar). Fuera de borrador, la anulación la aprueba una segunda persona en «Por autorizar». Así el expediente siempre cuenta la historia completa.
                 </>,
               ]}
             />
@@ -170,7 +170,7 @@ export default function AyudaPage() {
                 <b>Registros por su contenido:</b> el solicitante de una recepción, el ID interno de una muestra, el nombre o lote de un reactivo, la marca de un equipo, el técnico de un mantenimiento.
               </li>
               <li>
-                <b>Acciones:</b> «nueva» lista todo lo que puedes crear; «nueva extracción ASP» abre directo ese formato.
+                <b>Acciones:</b> «nueva» lista todo lo que puedes crear; «nueva extracción ASP» abre directo ese formato; «reponer metanol» abre «Registrar movimiento» de ese reactivo.
               </li>
               <li>
                 <b>Vistas por estado:</b> «stock bajo», «por revisar», «calibración», «mantenimientos vencidos», «enviados».
@@ -180,7 +180,7 @@ export default function AyudaPage() {
               </li>
             </ul>
             <p>
-              Con las fichas <b>Todo · Muestras · Informes · Inventario · Acciones</b> acotas los resultados (o pulsa <Kbd>Tab</Kbd>). Sin escribir nada, el buscador ofrece lo último que abriste, lo que puedes crear y a dónde ir.
+              Los resultados llegan agrupados (muestras, informes, inventario, acciones…) y, si hay más, «Ver todos en…» abre la lista completa ya filtrada. Sin escribir nada, el buscador muestra lo último que buscaste o abriste; puedes quitar uno o borrarlos todos.
             </p>
           </Section>
 
@@ -200,12 +200,12 @@ export default function AyudaPage() {
                   <b>Análisis (A).</b> Resultados por muestra, controles de calidad, equipo y condiciones. Después se <b>revisa</b> y se <b>aprueba</b>.
                 </>,
                 <>
-                  <b>Informe (IR).</b> Se elabora con los análisis aprobados, se revisa, se <b>autoriza</b> (genera el PDF definitivo) y se <b>entrega</b>. Al final se registra la <b>disposición final</b> de los remanentes en la recepción y la muestra queda cerrada.
+                  <b>Informe (IR).</b> Se elabora con los análisis aprobados, se revisa, se <b>autoriza</b>, se <b>libera</b> (genera el PDF final) y se <b>envía</b> al cliente. Al final se registra la <b>disposición final</b> de los remanentes en la recepción y la muestra queda cerrada.
                 </>,
               ]}
             />
             <p>
-              Los estados avanzan solos: la recepción pasa a <b>En proceso</b> al procesarla, a <b>Analizada</b> al aprobar el análisis, a <b>Informada</b> al autorizar el informe y a <b>Cerrada</b> con la disposición final. Desde la fila de una recepción, procesamiento o extracción puedes saltar a la etapa siguiente con el folio ya vinculado.
+              Los estados avanzan solos: la recepción pasa por <b>En procesamiento</b>, <b>En extracción</b>, <b>En análisis</b>, <b>En revisión técnica</b>, <b>Validada</b>, <b>Informe elaborado</b> y <b>Liberada</b>, y queda <b>Cerrada</b> con la disposición final. Desde la fila de una recepción, procesamiento o extracción puedes saltar a la etapa siguiente con el folio ya vinculado.
             </p>
           </Section>
 
@@ -240,7 +240,7 @@ export default function AyudaPage() {
                   Registra los controles de calidad (blanco, material de referencia, duplicado) y presiona <b>Registrar análisis</b>.
                 </>,
                 <>
-                  <b>Marcar revisado</b> y luego <b>Aprobar</b> (permisos de revisar y aprobar ensayos). Cualquier persona con ese permiso puede hacerlo, aunque haya capturado el registro. Si tienes varios roles que lo permiten, el sistema te pregunta con qué cargo actúas. Un análisis aprobado ya no se edita: si está mal, se anula y se captura otro.
+                  <b>Marcar revisado</b> y luego <b>Aprobar</b> (permisos de revisar y aprobar ensayos). Quien elaboró o editó el análisis no puede revisarlo ni aprobarlo; revisor y aprobador sí pueden ser la misma persona. Si tienes varios roles que lo permiten, el sistema te pregunta con qué cargo actúas. Un análisis aprobado ya no se edita: si está mal, se corrige con una <b>enmienda</b> (nueva versión con el mismo folio).
                 </>,
               ]}
             />
@@ -253,13 +253,13 @@ export default function AyudaPage() {
                   <b>Crear:</b> elige la recepción; se cargan cliente, ítems ensayados y los análisis aprobados. Revisa las declaraciones (alcance, regla de decisión, desviaciones) y crea el borrador. {can("informes", "C") ? <Go href="/informes/nuevo">Nuevo informe</Go> : null}
                 </>,
                 <>
-                  <b>Marcar revisado</b> y <b>Autorizar</b> con firma: los resultados quedan congelados y se genera el PDF definitivo con su huella SHA-256.
+                  <b>Marcar revisado</b> y <b>Autorizar</b> con firma. Quien elaboró el informe o alguno de sus análisis no lo revisa ni lo autoriza.
                 </>,
                 <>
-                  <b>Registrar entrega:</b> fecha, medio y a quién se entregó.
+                  <b>Liberar:</b> los resultados quedan congelados y se genera el PDF final con su huella SHA-256. Después, <b>Registrar envío</b> (fecha, medio y destinatario) o «Enviar desde la plataforma» si el correo está configurado.
                 </>,
                 <>
-                  <b>Enmienda:</b> si hay que corregir un informe ya autorizado, se crea la versión siguiente (v2, v3…) y la anterior queda como «sustituida», con su PDF marcado sin validez.
+                  <b>Enmienda:</b> si hay que corregir un informe ya autorizado o liberado, se crea la versión siguiente (v2, v3…) y la anterior queda como «sustituida», con su PDF marcado sin validez.
                 </>,
               ]}
             />
@@ -291,7 +291,7 @@ export default function AyudaPage() {
           <Section anchor="documentos" title="Documentos SGC" lead="Los documentos controlados del laboratorio, en seis carpetas por gestión (el color es de la gestión, nunca del estado).">
             <ul className="flex flex-col gap-2">
               <li>
-                <b>Consultar:</b> en <b>Calidad › Documentos SGC › Explorar</b> busca por clave FX, título o palabra clave; la revisión vigente se lee en el visor. Descargada o impresa es una copia no controlada.
+                <b>Consultar:</b> en <b>Documentos SGC › Documentos</b> busca por clave FX, título o palabra clave, o entra a la carpeta de su gestión; la revisión vigente se lee en el visor. Descargada o impresa es una copia no controlada.
               </li>
               <li>
                 <b>Proponer un cambio:</b> «Nueva solicitud» (o «Proponer cambio» en la ficha) con la justificación. Mejora Continua la acepta y asigna elaborador, revisor y autorizador: tres personas distintas.
@@ -300,7 +300,7 @@ export default function AyudaPage() {
                 <b>Elaborar, revisar y autorizar:</b> lo que te toca aparece en la <b>Bandeja</b> y en la campana. El elaborador carga el PDF y lo envía (desde ahí el archivo ya no cambia); el revisor acepta o devuelve con comentarios; el autorizador autoriza con su contraseña y Mejora Continua publica: la anterior queda obsoleta.
               </li>
               <li>
-                <b>Confirmar lectura:</b> en «Lecturas pendientes» pulsa «Leer», revisa el PDF y confirma «Leí y comprendí»; queda ligado a ti y a esa revisión.
+                <b>Confirmar lectura:</b> en la Bandeja, «Lecturas pendientes», pulsa «Leer», revisa el PDF y confirma «Leí y comprendí»; queda ligado a ti y a esa revisión.
               </li>
               <li>
                 <b>Lista Maestra y externos:</b> la Lista Maestra FX-GCL-MD se filtra y se abre en PDF en el visor; las normas externas avisan cuando se acerca su próxima revisión.
@@ -321,7 +321,7 @@ export default function AyudaPage() {
                 <b>No se puede anular</b> una etapa que ya tiene etapas posteriores (una recepción con procesamiento): primero se anulan esas.
               </li>
               <li>
-                <b>Análisis aprobado o informe autorizado:</b> el análisis se anula y se captura otro; el informe se corrige con una <b>enmienda</b>.
+                <b>Análisis aprobado o informe autorizado:</b> se corrigen con una <b>enmienda</b> (nueva versión que sustituye a la anterior al aprobarse o autorizarse). Anularlos, como cualquier anulación fuera de borrador, queda en «Por autorizar» hasta que otra persona lo apruebe.
               </li>
             </ul>
             <Tip tone="warn">Un registro anulado, cerrado, aprobado o autorizado se abre en solo lectura. Si el botón de guardar no aparece, esa es la razón.</Tip>
@@ -337,10 +337,6 @@ export default function AyudaPage() {
                 <Kbd>↑</Kbd> <Kbd>↓</Kbd> <Kbd>↵</Kbd>
               </dt>
               <dd>Moverse por los resultados y abrir.</dd>
-              <dt className="flex items-center gap-1">
-                <Kbd>Tab</Kbd>
-              </dt>
-              <dd>Con los resultados abiertos, cambia el ámbito del buscador (Todo, Muestras, Informes, Inventario, Acciones). <Kbd>Shift</Kbd> <Kbd>Tab</Kbd> sale del buscador.</dd>
               <dt className="flex items-center gap-1">
                 <Kbd>Esc</Kbd>
               </dt>
