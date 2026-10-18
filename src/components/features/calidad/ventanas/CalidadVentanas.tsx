@@ -262,14 +262,18 @@ function FichaIncidencia({ id, onCerrar }: { id: number; onCerrar: () => void })
 export function NcVentana({ ids, indice, onIndice, onCerrar, etiquetas = ["NC anterior", "NC siguiente"] }: { ids: number[]; indice: number | null; onIndice: (i: number) => void; onCerrar: () => void; etiquetas?: [string, string] }) {
   const id = indice !== null ? ids[indice] : undefined;
   const nav = useMover(ids, indice, onIndice);
+  // El visor de PDF va sobre la plataforma y no puede quedar encima de una ventana modal (retiene el foco y los
+  // clics): mientras se lee el PDF de esta NC la ventana se oculta y vuelve al cerrar el visor (alCerrar de verPdf).
+  const [leyendo, setLeyendo] = useState<number | null>(null);
+  const visible = id !== undefined && leyendo !== id;
   return (
-    <VentanaCentrada amplia abierta={id !== undefined} onCerrar={onCerrar} onMover={nav.mover} puedeAnterior={nav.puedeAnterior} puedeSiguiente={nav.puedeSiguiente} etiquetaAnterior={etiquetas[0]} etiquetaSiguiente={etiquetas[1]}>
-      {id !== undefined ? <FichaNc key={`${indice}-${id}`} id={id} onCerrar={onCerrar} /> : <VentanaTitulo className="sr-only">No conformidad</VentanaTitulo>}
+    <VentanaCentrada amplia abierta={visible} onCerrar={onCerrar} onMover={nav.mover} puedeAnterior={nav.puedeAnterior} puedeSiguiente={nav.puedeSiguiente} etiquetaAnterior={etiquetas[0]} etiquetaSiguiente={etiquetas[1]}>
+      {visible ? <FichaNc key={`${indice}-${id}`} id={id} onCerrar={onCerrar} onLeyendo={setLeyendo} /> : <VentanaTitulo className="sr-only">No conformidad</VentanaTitulo>}
     </VentanaCentrada>
   );
 }
 
-function FichaNc({ id, onCerrar }: { id: number; onCerrar: () => void }) {
+function FichaNc({ id, onCerrar, onLeyendo }: { id: number; onCerrar: () => void; onLeyendo: (id: number | null) => void }) {
   const router = useRouter();
   const { prompt, enviar } = useAccionCalidad();
   const { item, error, cargar } = useRegistro(`/calidad/nc/${id}`);
@@ -291,7 +295,10 @@ function FichaNc({ id, onCerrar }: { id: number; onCerrar: () => void }) {
     const motivo = await prompt({ critico: true, tone: "danger", title: `Anular ${item.folio}`, description: "La NC deja de contar, pero se conserva. La anulación la autoriza otra persona con permiso para anular en calidad.", confirmLabel: "Solicitar anulación" });
     if (motivo && (await enviar("POST", `/calidad/nc/${id}/anular`, { motivo }))) await cargar();
   };
-  const pdf = () => verPdf(`${API_BASE_URL}/calidad/nc/${id}/pdf`, `${String(item.folio).replace(" ", "-")}.pdf`, String(item.folio));
+  const pdf = () => {
+    onLeyendo(id);
+    verPdf(`${API_BASE_URL}/calidad/nc/${id}/pdf`, `${String(item.folio).replace(" ", "-")}.pdf`, String(item.folio), () => onLeyendo(null));
+  };
   let paso = 0;
   return (
     <div className="flex flex-col gap-6" data-nc-ventana={id}>
