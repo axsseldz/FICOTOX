@@ -146,8 +146,3 @@ globalThis.fetch = async (input, init = {}) => {
   const status = res.status === 202 ? (data.solicitud.tipo === "asignar_rol" ? 201 : 200) : res.status;
   return new Response(JSON.stringify(cuerpo), { status, headers: { "Content-Type": "application/json" } });
 };
-
-/* Para suites que obtienen el token por otra via. */
-export function recordarPassword(token, password) {
-  if (token && password) passwords.set(token, password);
-}
