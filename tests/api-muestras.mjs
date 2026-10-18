@@ -75,8 +75,13 @@ let flujo = null;
   const P = await api("POST", "/samples/processing", procesamiento(R, id), tL);
   estados.push(await estadoR(R));
   check("asignado, el Analista crea el procesamiento (201)", P.status === 201, `${P.status} ${P.data?.message}`);
-  const E = (await api("POST", "/samples/extraction", extraccion(P.data?.id, id), tL)).data?.id;
+  const E = (await api("POST", "/samples/extraction", extraccion(P.data?.id, id, { folio_procesamiento_num: 99999 }), tL)).data?.id;
   estados.push(await estadoR(R));
+  // El folio de la etapa anterior lo fija el servidor desde el registro vinculado (aqui no se manda, o se manda mal).
+  const fR = (await api("GET", `/samples/reception/${R}`, undefined, QA)).data?.item?.folio_num;
+  const fichaP = (await api("GET", `/samples/processing/${P.data?.id}`, undefined, QA)).data?.item;
+  const fichaE = (await api("GET", `/samples/extraction/${E}`, undefined, QA)).data?.item;
+  check("el folio vinculado sale del registro de origen (procesamiento ← recepción, extracción ← procesamiento)", fR != null && Number(fichaP?.folio_recepcion_num) === Number(fR) && Number(fichaE?.folio_procesamiento_num) === Number(fichaP?.folio_num), `P.R=${fichaP?.folio_recepcion_num} R=${fR} E.P=${fichaE?.folio_procesamiento_num} P=${fichaP?.folio_num}`);
   const A = (await api("POST", "/samples/analysis", analisis(E, id), tL)).data?.id;
   estados.push(await estadoR(R));
   const enviar = await api("POST", `/samples/analysis/${A}/enviar-revision`, {}, tL);
