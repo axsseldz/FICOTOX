@@ -337,7 +337,8 @@ export function Dropdown({ trigger, items, align = "end", label, header }: { tri
           collisionPadding={12}
           className="scroll-thin max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto bg-popover border border-line z-[var(--z-popover)] min-w-[220px] origin-[var(--radix-dropdown-menu-content-transform-origin)] rounded-[14px] p-1.5 shadow-pop data-[state=open]:animate-materialize"
         >
-          {header ? <div className="px-2.5 pt-1.5 pb-2 text-[12px] text-ink-3">{header}</div> : null}
+          {/* El encabezado (nombre del registro) pasa de linea en vez de ensanchar el menu. */}
+          {header ? <div className="max-w-[320px] px-2.5 pt-1.5 pb-2 text-[12px] break-words text-ink-3">{header}</div> : null}
           {items.map((item, index) => {
             const tone = item.tone || "neutral";
             return (
@@ -372,6 +373,8 @@ export function Dropdown({ trigger, items, align = "end", label, header }: { tri
 
 /* Un solo boton "⋯" por fila que agrupa todas las acciones (abrir, editar, avanzar de etapa, anular...). */
 export function ActionMenu({ items, header, label = "Acciones" }: { items: MenuItem[]; header?: ReactNode; label?: string }) {
+  // Sin acciones (p. ej. un rol de solo lectura) no se muestra un menu vacio.
+  if (!items.length) return null;
   return (
     <Dropdown
       label={label}

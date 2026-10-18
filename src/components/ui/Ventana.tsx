@@ -65,7 +65,7 @@ export function DatosRapidos({ datos }: { datos: DatoRapido[] }) {
               {d.icono}
             </span>
             <div className="flex min-w-0 flex-col">
-              <dt className="whitespace-nowrap text-[11.5px] text-ink-3">{d.etiqueta}</dt>
+              <dt className="text-[11.5px] leading-tight break-words text-ink-3">{d.etiqueta}</dt>
               <dd className="break-words text-[14.5px] leading-snug font-semibold text-ink">{d.valor}</dd>
             </div>
           </div>
