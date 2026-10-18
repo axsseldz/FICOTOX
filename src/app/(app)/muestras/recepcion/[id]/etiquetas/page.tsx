@@ -173,7 +173,7 @@ function Etiquetas({ id }: { id: string }) {
         </div>
         {data?.items.length ? (
           <p className="tnum text-[13px] text-ink-3" data-resumen-etiquetas>
-            {data.items.length} {data.items.length === 1 ? "muestra" : "muestras"} × {copias} {copias === 1 ? "copia" : "copias"} = {data.items.length * copias} etiquetas · {hojas.length} {hojas.length === 1 ? "hoja" : "hojas"} carta
+            {data.items.length} {data.items.length === 1 ? "muestra" : "muestras"} × {copias} {copias === 1 ? "copia" : "copias"} = {data.items.length * copias} {data.items.length * copias === 1 ? "etiqueta" : "etiquetas"} · {hojas.length} {hojas.length === 1 ? "hoja" : "hojas"} carta
           </p>
         ) : null}
       </div>
