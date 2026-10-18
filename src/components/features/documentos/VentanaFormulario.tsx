@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Dialog as RadixDialog } from "radix-ui";
 import { CaretDown, X } from "@phosphor-icons/react";
 import { IconButton } from "@/components/ui/Button";
@@ -14,6 +14,52 @@ import { cn } from "@/components/ui/cn";
  * confirmar, igual que siempre). En pantallas angostas ocupa toda la pantalla.
  * La animacion respeta prefers-reduced-motion (globals.css).
  */
+
+/*
+ * Salida animada aunque quien la usa la desmonte al cerrar (todas se montan
+ * con una condicion y se quitan al cerrar, al cancelar o al guardar): al
+ * desmontarse de verdad se deja una copia inerte del velo y de la ventana
+ * (sin ids, sin roles y oculta a lectores de pantalla) que hace la misma
+ * animacion de cierre de Radix (data-state="closed") y se quita al terminar.
+ * Con movimiento reducido no se deja copia.
+ */
+function salidaAnimada(velo: HTMLElement | undefined, capa: HTMLElement | undefined) {
+  if (!velo || !capa || !velo.isConnected || !capa.isConnected) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const copias = [velo, capa].map((original) => {
+    const copia = original.cloneNode(true) as HTMLElement;
+    // Lo escrito en los campos (la copia solo trae los atributos).
+    const campos = original.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select");
+    copia.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select").forEach((el, i) => {
+      const fuente = campos[i];
+      if (!fuente) return;
+      if (el instanceof HTMLInputElement && fuente instanceof HTMLInputElement && (el.type === "checkbox" || el.type === "radio")) el.checked = fuente.checked;
+      else if (el.type !== "file") el.value = fuente.value;
+    });
+    for (const el of [copia, ...Array.from(copia.querySelectorAll<HTMLElement>("*"))]) {
+      for (const a of ["id", "name", "role", "data-testid", "tabindex", "aria-labelledby", "aria-describedby", "aria-modal", "aria-controls"]) el.removeAttribute(a);
+      if (el.getAttribute("data-state") === "open") el.setAttribute("data-state", "closed");
+    }
+    copia.setAttribute("aria-hidden", "true");
+    copia.setAttribute("inert", "");
+    copia.style.pointerEvents = "none";
+    return copia;
+  });
+  // Solo si la ventana se quito de verdad (en desarrollo, StrictMode desmonta y vuelve a montar sin quitarla).
+  queueMicrotask(() => {
+    if (velo.isConnected || capa.isConnected) return;
+    for (const copia of copias) document.body.appendChild(copia);
+    const ventana = copias[1].querySelector<HTMLElement>("[data-state]") || copias[1];
+    let quitada = false;
+    const quitar = () => {
+      if (quitada) return;
+      quitada = true;
+      copias.forEach((c) => c.remove());
+    };
+    ventana.addEventListener("animationend", quitar, { once: true });
+    window.setTimeout(quitar, 600);
+  });
+}
 
 const ANCHO = { sm: "sm:max-w-[440px]", md: "sm:max-w-[560px]", lg: "sm:max-w-[680px]", xl: "sm:max-w-[820px]" } as const;
 
@@ -34,11 +80,27 @@ export function VentanaFormulario({
   footer?: ReactNode;
   size?: keyof typeof ANCHO;
 }) {
+  const nodos = useRef<{ velo?: HTMLElement; capa?: HTMLElement }>({});
+  useLayoutEffect(() => {
+    const n = nodos.current;
+    return () => salidaAnimada(n.velo, n.capa);
+  }, []);
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-[var(--z-ventana)] bg-deep/45 backdrop-blur-md data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out" />
-        <div className="pointer-events-none fixed inset-0 z-[var(--z-ventana)] flex items-stretch justify-center sm:items-center sm:p-6">
+        <RadixDialog.Overlay
+          ref={(el) => {
+            if (el) nodos.current.velo = el;
+          }}
+          className="fixed inset-0 z-[var(--z-ventana)] bg-deep/45 backdrop-blur-md data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out"
+        />
+        <div
+          ref={(el) => {
+            if (el) nodos.current.capa = el;
+          }}
+          data-state={open ? "open" : "closed"}
+          className="capa-ventana pointer-events-none fixed inset-0 z-[var(--z-ventana)] flex items-stretch justify-center sm:items-center sm:p-6"
+        >
           <RadixDialog.Content
             data-testid="ventana-formulario"
             className={cn(

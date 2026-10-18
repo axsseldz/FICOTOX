@@ -333,11 +333,19 @@
     display: none !important;
   }
 
+  /*
+   * Movimiento reducido: las animaciones terminan al instante (siguen disparando
+   * animationend, del que dependen las ventanas de Radix para desmontarse) y las
+   * transiciones no se crean (con 0.01 ms cada elemento, cuyo transition-property
+   * por omision es "all", generaba una transicion por cada propiedad que cambiara).
+   */
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
+      animation-delay: 0s !important;
       animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
+      transition-duration: 0s !important;
+      transition-delay: 0s !important;
       scroll-behavior: auto !important;
     }
   }
@@ -366,6 +374,19 @@
     .group:hover .avatar-al-pasar .avatar-arte {
       animation: none;
     }
+  }
+
+  /*
+   * Capa que centra una ventana de Radix (VentanaCentrada, Dialog, VentanaFormulario).
+   * Radix monta cada hijo del Portal con su propia presencia: sin animacion propia,
+   * esta capa se quitaba al instante al cerrar y la ventana no alcanzaba a hacer su
+   * salida (pop-out). Se "retiene" lo mismo que dura la salida, sin cambiar nada visible.
+   */
+  @keyframes retener {
+    from, to { opacity: 1; }
+  }
+  .capa-ventana[data-state="closed"] {
+    animation: retener 160ms linear both;
   }
 
   /* Entrada escalonada de listas: cada elemento con --i (0, 1, 2…), maximo ~12 pasos. */

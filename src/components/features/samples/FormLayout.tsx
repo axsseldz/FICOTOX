@@ -270,7 +270,7 @@ export function FormPage({ backHref, backLabel, code, title, status, statusTone 
             {evaluated > 0 ? (
               <div className="mt-3 hidden px-2 lg:block">
                 <div className="h-1 w-full overflow-hidden rounded-full bg-surface-3">
-                  <div className="h-full rounded-full bg-success transition-[width] duration-500 ease-[var(--ease-spring)]" style={{ width: `${Math.round((done / evaluated) * 100)}%` }} />
+                  <div className="h-full w-full rounded-full bg-success transition-[translate] duration-500 ease-[var(--ease-spring)]" style={{ translate: `${Math.round((done / evaluated) * 100) - 100}% 0` }} />
                 </div>
                 <p className="tnum mt-1.5 text-[12px] text-ink-3">
                   {done} de {evaluated} secciones completas

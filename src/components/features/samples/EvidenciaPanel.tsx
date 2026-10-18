@@ -277,7 +277,7 @@ export function AdjuntosPanel({ registroId, base, token, onResumen, clave = "mue
             {progreso !== null ? (
               <div className="flex min-w-0 flex-1 items-center gap-3" aria-live="polite">
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progreso * 100)} aria-label="Avance de la carga">
-                  <div className="h-full rounded-full bg-brand transition-[width]" style={{ width: `${Math.round(progreso * 100)}%` }} />
+                  <div className="h-full w-full rounded-full bg-brand transition-[translate]" style={{ translate: `${Math.round(progreso * 100) - 100}% 0` }} />
                 </div>
                 <span className="tnum text-[12.5px] text-ink-3">{Math.round(progreso * 100)}%</span>
               </div>

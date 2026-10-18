@@ -151,7 +151,7 @@ function Carpeta({ area }: { area: Area & { conteos: Conteos } }) {
       data-testid="sgc-carpeta"
       data-area={area.codigo}
       aria-label={`${area.codigo}, ${area.nombre}: ${c.total} documentos`}
-      className="press group relative flex h-full overflow-hidden rounded-card bg-surface shadow-card transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-raised focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+      className="press group relative flex h-full overflow-hidden rounded-card bg-surface shadow-card transition-[box-shadow,transform,translate] duration-200 hover:-translate-y-0.5 hover:shadow-raised focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none motion-reduce:transition-none motion-reduce:hover:translate-y-0"
     >
       {/* Banda lateral con el color del area (el estado nunca se expresa con este color). */}
       <span className="w-1.5 shrink-0" style={{ backgroundColor: area.color }} aria-hidden="true" />

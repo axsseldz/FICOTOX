@@ -220,7 +220,7 @@ function Tarjeta({ doc, area, tipo, onAbrir, onKeyDown }: { doc: DocLista; area:
       onKeyDown={onKeyDown}
       data-testid="sgc-tarjeta"
       data-clave={doc.clave}
-      className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-card bg-surface shadow-card transition-[box-shadow,transform] duration-200 ease-[var(--ease-fluid)] hover:-translate-y-0.5 hover:shadow-raised focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+      className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-card bg-surface shadow-card transition-[box-shadow,transform,translate] duration-200 ease-[var(--ease-fluid)] hover:-translate-y-0.5 hover:shadow-raised focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none motion-reduce:transition-none motion-reduce:hover:translate-y-0"
     >
       <div className="relative">
         <MiniaturaDocumento doc={doc} className="aspect-[4/3] w-full border-b border-line" />

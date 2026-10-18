@@ -171,11 +171,11 @@ export default function LoginPage() {
             aria-busy={submitting || undefined}
             className="press relative mt-1 flex h-12 w-full items-center justify-center overflow-hidden rounded-[12px] bg-brand text-[15px] font-semibold text-on-accent shadow-[0_8px_20px_-10px_rgba(15,122,149,0.6)] hover:bg-brand-strong focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none disabled:cursor-default disabled:hover:bg-brand"
           >
-            <span className={cn("flex items-center gap-2 transition-[opacity,transform] duration-200 ease-[var(--ease-spring)]", submitting || saliendo ? "-translate-y-2 opacity-0" : "opacity-100")}>
+            <span className={cn("flex items-center gap-2 transition-[opacity,translate] duration-200 ease-[var(--ease-spring)]", submitting || saliendo ? "-translate-y-2 opacity-0" : "opacity-100")}>
               Entrar <ArrowRight size={16} weight="bold" aria-hidden="true" />
             </span>
-            <span aria-hidden={!(submitting || saliendo)} className={cn("absolute inset-0 flex items-center justify-center transition-[opacity,transform] duration-200 ease-[var(--ease-spring)]", submitting || saliendo ? "opacity-100" : "translate-y-2 opacity-0")}>
-              <CircleNotch size={20} weight="bold" className="animate-spin" />
+            <span aria-hidden={!(submitting || saliendo)} className={cn("absolute inset-0 flex items-center justify-center transition-[opacity,translate] duration-200 ease-[var(--ease-spring)]", submitting || saliendo ? "opacity-100" : "translate-y-2 opacity-0")}>
+              <CircleNotch size={20} weight="bold" className={submitting || saliendo ? "animate-spin" : undefined} />
               <span className="sr-only">Entrando…</span>
             </span>
           </button>

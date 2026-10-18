@@ -287,8 +287,8 @@ export function SeccionDistribucion({ dist, catalogos, obsoleto, sinAgregar = fa
         {dist.avance.total ? (
           <span className="flex items-center gap-2" data-testid="dist-avance" data-porcentaje={dist.avance.porcentaje ?? ""}>
             <span className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-3" aria-hidden="true">
-              {/* La barra crece con transform (scaleX) y el numero cuenta al cambiar; sin movimiento con movimiento reducido. */}
-              <span className="avance-barra block h-full w-full rounded-full bg-brand" style={{ transform: `scaleX(${(dist.avance.porcentaje || 0) / 100})` }} />
+              {/* La barra avanza con transform (se recorre dentro del riel, sin deformar sus extremos redondeados) y el numero cuenta al cambiar; sin movimiento con movimiento reducido. */}
+              <span className="avance-barra block h-full w-full rounded-full bg-brand" style={{ transform: `translateX(${(dist.avance.porcentaje || 0) - 100}%)` }} />
             </span>
             <span aria-hidden="true">
               <Conteo valor={dist.avance.leidos} duracion={300} /> de {dist.avance.total} leídas (<Conteo valor={dist.avance.porcentaje || 0} duracion={300} /> %)
