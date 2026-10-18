@@ -114,7 +114,7 @@ export function ListaCuadricula<T>({
                   >
                     {valores.map((valor, k) => (
                       <div key={columnas[k]?.clave || k} className={cn("min-w-0 break-words md:pr-4", k > 0 && columnas[k]?.ocultaEnTarjeta && "hidden md:block")}>
-                        {k > 0 ? <span className="mb-0.5 block text-[11px] text-ink-4 md:hidden">{columnas[k]?.titulo}</span> : null}
+                        {k > 0 ? <span className="mb-0.5 block text-[11px] text-ink-3 md:hidden">{columnas[k]?.titulo}</span> : null}
                         {valor}
                       </div>
                     ))}

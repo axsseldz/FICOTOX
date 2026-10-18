@@ -157,7 +157,7 @@ export function MasOpciones({ children, llenos = 0, etiqueta = "Más opciones", 
         aria-expanded={abierta}
         aria-controls={id}
         onClick={() => setAbierta((v) => !v)}
-        className="press flex items-center gap-2 self-start rounded-[8px] px-1 py-1 text-[13px] font-medium text-brand-strong hover:text-brand focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none"
+        className="press flex items-center gap-2 self-start rounded-[8px] px-1 py-1 text-left text-[13px] font-medium text-brand-strong hover:text-brand focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none"
       >
         <CaretDown size={13} weight="bold" className={cn("transition-transform duration-200 motion-reduce:transition-none", abierta && "rotate-180")} aria-hidden="true" />
         {etiqueta}

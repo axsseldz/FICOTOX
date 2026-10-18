@@ -833,7 +833,7 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
         onPointerLeave={() => setSobreBarra(false)}
         onFocus={mostrarBarra}
         className={cn(
-          "absolute bottom-4 left-1/2 z-20 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-[18px] border border-line/70 bg-surface/85 px-2 py-1 sm:rounded-full text-ink-2 shadow-card backdrop-blur-md transition-[opacity,translate] duration-200 motion-reduce:transition-none",
+          "absolute inset-x-0 bottom-4 z-20 mx-auto flex w-fit max-w-[calc(100%-1.5rem)] flex-wrap items-center justify-center gap-1 rounded-[18px] border border-line/70 bg-surface/85 px-2 py-1 sm:rounded-full text-ink-2 shadow-card backdrop-blur-md transition-[opacity,translate] duration-200 motion-reduce:transition-none",
           barra ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0",
         )}
         data-testid="visor-barra"

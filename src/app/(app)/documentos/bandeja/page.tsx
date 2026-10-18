@@ -155,7 +155,7 @@ function Renglon({ t, tipo, area, icono: Icono, i, testid, recordatorio }: { t: 
           <Icono size={16} weight="duotone" />
         </span>
       )}
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <div className="flex min-w-0 flex-[1_1_12rem] flex-col gap-0.5">
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
           {t.clave_documento ? <span className="code text-[12.5px] font-semibold text-ink-2">{t.clave_documento}</span> : null}
           {t.revision !== null ? <span className="tnum text-[12px] text-ink-3">Rev. {t.revision}</span> : null}

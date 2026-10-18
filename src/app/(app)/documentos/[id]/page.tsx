@@ -462,7 +462,7 @@ function Lista({ datos, columnas = 2 }: { datos: Array<[string, ReactNode]>; col
     <dl className={cn("grid gap-x-6 gap-y-3", columnas === 3 ? "sm:grid-cols-3" : columnas === 2 ? "sm:grid-cols-2" : "")}>
       {llenos.map(([etiqueta, valor]) => (
         <div key={etiqueta} className="flex min-w-0 flex-col gap-0.5">
-          <dt className="text-[11.5px] font-medium uppercase tracking-wide text-ink-4">{etiqueta}</dt>
+          <dt className="text-[11.5px] font-medium uppercase tracking-wide text-ink-3">{etiqueta}</dt>
           <dd className="break-words text-[13.5px] text-ink">{valor}</dd>
         </div>
       ))}
