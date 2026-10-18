@@ -63,6 +63,7 @@ export function FirmanteSelect({
   nombre,
   disabled = false,
   porOmisionSesion = true,
+  nuevo = false,
 }: {
   id: string;
   title: string;
@@ -73,6 +74,8 @@ export function FirmanteSelect({
   nombre?: string;
   disabled?: boolean;
   porOmisionSesion?: boolean;
+  /* Formato nuevo (aun sin guardar): su nombre prellenado con el de la sesion se liga a la cuenta. */
+  nuevo?: boolean;
 }) {
   const { user } = useSession();
   const cuentas = useCuentasActivas();
@@ -81,10 +84,11 @@ export function FirmanteSelect({
 
   // Por omision firma la persona de la sesion (solo en formatos nuevos o sin firmante). Los formatos nuevos
   // prellenan el nombre con el de la sesion: ese nombre tambien se liga a su cuenta (si no, la firma quedaba sin cuenta).
+  // Un registro guardado con solo el nombre no se liga a nadie, aunque quien edita se llame igual.
   useEffect(() => {
     if (disabled || !porOmisionSesion || value.usuario_id || !yo || !cuentas.length) return;
     const propia = cuentas.find((c) => c.id === yo) || null;
-    if (!propia || (nombre && nombre.trim() && nombre.trim() !== propia.nombre.trim())) return;
+    if (!propia || (nombre && nombre.trim() && (!nuevo || nombre.trim() !== propia.nombre.trim()))) return;
     onChange({ usuario_id: yo }, propia);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cuentas.length, yo, disabled]);

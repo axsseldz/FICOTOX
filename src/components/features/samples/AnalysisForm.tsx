@@ -526,7 +526,7 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
       tail={
         <>
         <FormCard id="sec-personal" title="Analista" description="Quién realizó el análisis.">
-          <PersonCard title="Analista" firmante={analistaCuenta} onFirmante={setAnalistaCuenta} name={form.analista} onName={(v) => patch({ analista: v })} signature={form.analistaFirma} onSignature={(v) => patch({ analistaFirma: v })} />
+          <PersonCard title="Analista" nuevo={!editing} firmante={analistaCuenta} onFirmante={setAnalistaCuenta} name={form.analista} onName={(v) => patch({ analista: v })} signature={form.analistaFirma} onSignature={(v) => patch({ analistaFirma: v })} />
         </FormCard>
 
         <FormCard id="sec-revision" title="Revisión y aprobación" description="Una segunda persona revisa; otra distinta aprueba. Solo los análisis aprobados pueden reportarse.">

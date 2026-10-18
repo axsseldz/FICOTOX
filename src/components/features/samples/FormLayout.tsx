@@ -502,7 +502,7 @@ const slug = (text: string) => text.toLowerCase().normalize("NFD").replace(/[\u0
 /* id del selector de una PersonCard ("persona-<titulo>"); la firma es "<id>-firma". */
 export const personaId = (title: string) => `persona-${slug(title)}`;
 
-export function PersonCard({ title, name, onName, cargo, onCargo, signature, onSignature, disabled = false, requires = "muestras", firmante, onFirmante, firmanteSesion = true }: { title: string; name: string; onName: (v: string) => void; cargo?: string; onCargo?: (v: string) => void; signature: string; onSignature: (v: string) => void; disabled?: boolean; requires?: PersonaCapacidad; /* Fase 5: firma ligada a una cuenta activa (con contrasena si no es la sesion). */ firmante?: FirmanteState; onFirmante?: (v: FirmanteState) => void; firmanteSesion?: boolean }) {
+export function PersonCard({ title, name, onName, cargo, onCargo, signature, onSignature, disabled = false, requires = "muestras", firmante, onFirmante, firmanteSesion = true, nuevo = false }: { title: string; name: string; onName: (v: string) => void; cargo?: string; onCargo?: (v: string) => void; signature: string; onSignature: (v: string) => void; disabled?: boolean; requires?: PersonaCapacidad; /* Fase 5: firma ligada a una cuenta activa (con contrasena si no es la sesion). */ firmante?: FirmanteState; onFirmante?: (v: FirmanteState) => void; firmanteSesion?: boolean; /* Formato aun sin guardar (el nombre prellenado de la sesion se liga a su cuenta). */ nuevo?: boolean }) {
   const id = `persona-${slug(title)}`;
   return (
     <div className="on-panel grid gap-4 rounded-[12px] bg-surface-2 p-4 ring-1 ring-line md:grid-cols-[minmax(0,1fr)_300px]">
@@ -519,6 +519,7 @@ export function PersonCard({ title, name, onName, cargo, onCargo, signature, onS
                 nombre={name}
                 disabled={disabled}
                 porOmisionSesion={firmanteSesion}
+                nuevo={nuevo}
                 onChange={(value, cuenta) => {
                   onFirmante(value);
                   onName(cuenta?.nombre || "");
