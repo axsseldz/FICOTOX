@@ -172,7 +172,7 @@ const entendido = async (page) => {
   await page.getByRole("button", { name: "Entendido" }).waitFor({ state: "detached" }).catch(() => {});
 };
 const filaLista = (page, texto) => page.locator("tbody tr").filter({ hasText: texto }).first();
-const sinAcceso = (page) => page.getByText(/Sin acceso a esta sección|No se pudo cargar|no encontrad|no está asignada|No tienes permiso/i).first().waitFor();
+const sinAcceso = (page) => page.getByText(/Sin acceso a esta sección|no encontrad|no está asignada|No tienes permiso/i).first().waitFor();
 /* Espera (sondeando) a que se cumpla una condición del servidor; devuelve el último valor. */
 const esperar = async (fn, ms = 20_000) => {
   const inicio = Date.now();
@@ -436,17 +436,37 @@ async function muestras() {
     check("b) asignada: el analista ya la ve (API 200)", (await api("GET", `/samples/reception/${E.recepcionId}`, undefined, t.luis)).status === 200);
   });
 
-  /* ---------- Procesamiento con supervisor distinto (API, como la interfaz: firma con contraseña) ---------- */
-  await bloque("b) procesamiento", async () => {
+  /* ---------- Procesamiento con supervisor distinto: negativos por la API y el registro en su formato ---------- */
+  await bloque("b) procesamiento (negativos)", async () => {
     const base = { recepcion_id: E.recepcionId, muestra_tipo: "unica", id_interno: ID_INT, fecha_procesamiento: hoy(), hora_procesamiento: "10:15", tipo_organismo: ["bivalvos"], parte_organismo: ["cuerpo_completo"], resguardo: { entregado_extraccion: true } };
     const mismo = await api("POST", "/samples/processing", { ...base, firmantes: { proceso: { usuario_id: id.luis }, superviso: { usuario_id: id.luis } } }, t.luis);
     check("h) segregación: quien procesó no puede firmar como supervisor (rechazado)", mismo.status >= 400 && mismo.status < 500, `${mismo.status} ${mismo.data?.message}`);
     const mala = await api("POST", "/samples/processing", { ...base, firmantes: { proceso: { usuario_id: id.luis }, superviso: { usuario_id: id.ricardo, password: "no-es-la-contrasena" } } }, t.luis);
     check("h) firma del supervisor con contraseña incorrecta → 401 y no se guarda", mala.status === 401, `${mala.status} ${mala.data?.codigo}`);
-    const p = await api("POST", "/samples/processing", { ...base, firmantes: { proceso: { usuario_id: id.luis }, superviso: { usuario_id: id.ricardo, password: pwd("ricardo") } } }, t.luis);
-    E.procesamientoId = p.data?.id;
-    const item = (await api("GET", `/samples/processing/${E.procesamientoId}`, undefined, t.luis)).data?.item;
-    check("b) procesamiento por el analista con supervisor distinto (firma confirmada con su contraseña)", p.status === 201 && Number(item?.superviso_usuario_id) === id.ricardo && Number(item?.proceso_usuario_id) === id.luis, `${p.status} ${p.data?.message} sup=${item?.superviso_usuario_id}`);
+  });
+  await paso("luis", "b) procesamiento en pantalla", async (page) => {
+    await page.goto(`${BASE}/muestras/procesamiento/nuevo?recepcion=${E.recepcionId}`);
+    await mostrarTodo(page);
+    await page.locator("#p-id").waitFor();
+    if (!(await page.inputValue("#p-id")).trim()) await page.fill("#p-id", ID_INT);
+    await page.getByRole("radio", { name: /^Bivalvos/ }).check();
+    await page.getByRole("checkbox", { name: /^Cuerpo completo/ }).check();
+    await page.getByRole("checkbox", { name: /Seleccionar los organismos de mayor talla/ }).check();
+    await page.getByRole("checkbox", { name: /^Entregado para extracción/ }).check();
+    // Quien supervisó: otra persona, que confirma su firma con su contraseña en la misma pantalla.
+    await page.locator("#persona-quien-superviso").selectOption({ label: "Ricardo Medina Flores" });
+    await page.locator("#firma-password").fill(pwd("ricardo"));
+    await page.getByRole("button", { name: "Confirmar firma" }).click();
+    await page.locator("#firma-password").waitFor({ state: "detached" });
+    await page.getByRole("button", { name: "Registrar procesamiento" }).click();
+    // Si algún insumo o equipo pide confirmación, se guarda de todos modos (no es lo que se prueba aquí).
+    const deTodos = page.getByRole("button", { name: "Guardar de todos modos" });
+    await Promise.race([page.waitForURL((u) => u.pathname === "/muestras/procesamiento"), deTodos.waitFor().then(() => deTodos.click())]);
+    await page.waitForURL((u) => u.pathname === "/muestras/procesamiento");
+    const lista = (await api("GET", `/samples/processing?search=${encodeURIComponent(ID_INT)}`, undefined, t.luis)).data?.items || [];
+    E.procesamientoId = lista.find((x) => Number(x.recepcion_id) === E.recepcionId)?.id;
+    const item = E.procesamientoId ? (await api("GET", `/samples/processing/${E.procesamientoId}`, undefined, t.luis)).data?.item : null;
+    check("b) procesamiento registrado en pantalla por el analista con supervisor distinto (firma confirmada con su contraseña)", !!item && Number(item.superviso_usuario_id) === id.ricardo && Number(item.proceso_usuario_id) === id.luis, `id=${E.procesamientoId} sup=${item?.superviso_usuario_id} proc=${item?.proceso_usuario_id}`);
   });
   if (!E.procesamientoId) return;
 
@@ -491,6 +511,9 @@ async function muestras() {
     await page.waitForURL((url) => url.pathname === "/muestras/analisis");
     E.analisisId = fila("SELECT id FROM muestras_analisis WHERE extraccion_id = ? ORDER BY id DESC LIMIT 1", E.extraccionId)?.id;
     check("b) análisis registrado en pantalla por el analista", !!E.analisisId && (await estadoA())?.estado === "registrado", `${E.analisisId}`);
+    // La firma del analista (prellenada con la sesión) queda ligada a su cuenta.
+    const firmaA = fila("SELECT analista_usuario_id FROM muestras_analisis WHERE id = ?", E.analisisId);
+    check("b) la firma del analista queda ligada a su cuenta", Number(firmaA?.analista_usuario_id) === id.luis, JSON.stringify(firmaA));
 
     await abrirAnalisis(page);
     await page.locator("[data-evidencia]").waitFor();
@@ -1094,11 +1117,15 @@ async function respaldos() {
   const NOTA = `E2E ${stamp}`;
   await paso("jorge", "f) respaldo y prueba de restauración", async (page) => {
     await page.goto(`${BASE}/calidad/respaldos`);
+    const cuantos = async () => ((await api("GET", "/respaldos", undefined, t.jorge)).data?.respaldos || []).length;
+    const antes = await cuantos();
     await page.locator("[data-crear-respaldo]").click();
     await page.locator("#respaldo-etiqueta").fill(NOTA);
     await page.getByRole("dialog").getByRole("button", { name: "Crear respaldo", exact: true }).click();
     await page.locator('[data-validacion="faltan"]').waitFor();
-    check("h) crear respaldo sin contraseña: no se crea (se pide)", true);
+    // Sin contraseña: la pantalla la pide, la API responde 401 y no aparece ningún respaldo nuevo.
+    const sinPwd = await api("POST", "/respaldos", { etiqueta: `${NOTA} sin contraseña` }, t.jorge, { "X-Sin-Reauth-Auto": "1" });
+    check("h) crear respaldo sin contraseña: la pantalla la pide, la API → 401 y no se crea", sinPwd.status === 401 && (await cuantos()) === antes, `${sinPwd.status} ${sinPwd.data?.codigo} · ${antes} → ${await cuantos()}`);
     await entendido(page);
     await page.locator("#respaldo-password").fill(pwd("jorge"));
     await page.getByRole("dialog").getByRole("button", { name: "Crear respaldo", exact: true }).click();
