@@ -108,7 +108,11 @@ let flujo = null;
 {
   const { id, E } = flujo;
   const A = (await api("POST", "/samples/analysis", analisis(E, id), tL)).data?.id;
-  const folio = (await api("GET", `/samples/analysis/${A}`, undefined, QA)).data?.item?.folio_num;
+  const ficha = (await api("GET", `/samples/analysis/${A}`, undefined, QA)).data?.item;
+  const folio = ficha?.folio_num;
+  // La ficha trae el folio de la recepcion para la cadena (antes solo la lista lo unia).
+  const folioR = (await api("GET", `/samples/reception/${flujo.R}`, undefined, QA)).data?.item?.folio_num;
+  check("la ficha del analisis trae el folio de su recepcion (cadena R → P → E)", folioR != null && Number(ficha?.folio_recepcion_num) === Number(folioR), `${ficha?.folio_recepcion_num} vs ${folioR}`);
   await api("POST", `/samples/analysis/${A}/enviar-revision`, {}, tL);
   const editar = await api("PUT", `/samples/analysis/${A}`, { ...analisis(E, id), folio_num: folio, observaciones: "Cambio tras enviar" }, tL);
   check("un analisis enviado a revision no se edita (409)", editar.status === 409, `${editar.status} ${editar.data?.message}`);
