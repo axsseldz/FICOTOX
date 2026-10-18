@@ -274,7 +274,7 @@ async function cargarPendiente(s: Session, params: Record<string, string | strin
   }
   if (fila.estado !== "pendiente") throw new HttpError(409, { message: `La solicitud #${fila.id} ya está ${fila.estado}` });
   // Accion retirada del catalogo: no se aprueba ni se rechaza (quien la pidio aun puede cancelarla).
-  if (!permitirRetirada && !TIPOS_SOLICITUD.includes(fila.tipo)) throw new HttpError(410, { message: "Esa acción se retiró del catálogo (Calidad › Documentos ahora es la Biblioteca); la solicitud ya no se puede resolver y vencerá sola", codigo: "retirado" });
+  if (!permitirRetirada && !TIPOS_SOLICITUD.includes(fila.tipo)) throw new HttpError(410, { message: "Esa acción se retiró del catálogo; la solicitud ya no se puede resolver y vencerá sola", codigo: "retirado" });
   return fila;
 }
 

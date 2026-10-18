@@ -809,9 +809,8 @@ export async function pdfNc({ request, s, params }: RouteContext): Promise<Respo
 /* ---------- Propuesta de cambio documental (retirada) ---------- */
 
 /*
- * POST /api/calidad/nc/:id/propuesta-documental — retirado. Con la Biblioteca
- * (decision confirmada del laboratorio) ya no hay propuestas ni flujo de
- * control documental: "requiere cambio documental" queda como bandera con nota
+ * POST /api/calidad/nc/:id/propuesta-documental — retirado junto con el flujo
+ * anterior de control documental: "requiere cambio documental" queda como bandera con nota
  * en la NC. Las NC que ya apuntan a una propuesta la conservan en solo lectura.
  */
 export async function proponerCambioDocumental(): Promise<Response> {

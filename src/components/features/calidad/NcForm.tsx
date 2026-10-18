@@ -935,7 +935,7 @@ function Verificar({ item, bloqueo, onExcepcion }: { item: ApiRecord; bloqueo: s
 /* ---------- 7. Propuesta documental anterior (solo lectura) ---------- */
 
 /*
- * Desde la Biblioteca (y ahora con Documentos SGC) ya no se crean
+ * Desde la NC ya no se crean
  * propuestas de cambio documental: "requiere cambio documental" es solo una
  * bandera. Si la NC ya apuntaba a una propuesta del flujo anterior, se muestra
  * en solo lectura (titulo y estado), sin enlace a la pantalla retirada.

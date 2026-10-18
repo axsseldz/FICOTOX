@@ -42,12 +42,6 @@ export const urlArchivoSgc = (archivoId: number | string, modo: "ver" | "descarg
 /* URL del PDF final de un informe para el visor (en linea, sin bitacora). */
 export const urlPdfInforme = (informeId: number | string) => `${API_BASE_URL}/informes/${informeId}/pdf?modo=ver`;
 
-/* PDF desde bytes (archivo elegido para subir). */
-export async function abrirPdfBytes(datos: ArrayBuffer): Promise<PdfDocumento> {
-  const pdfjs = await cargarPdfjs();
-  return pdfjs.getDocument({ data: new Uint8Array(datos.slice(0)), ...PDF_OPCIONES }).promise;
-}
-
 /* Miniatura de la primera pagina como data URL (PNG), del ancho pedido en px CSS. */
 export async function miniaturaPrimeraPagina(pdf: PdfDocumento, ancho = 220): Promise<string> {
   const pagina = await pdf.getPage(1);

@@ -38,7 +38,7 @@ export const ACCIONES_CRITICAS: Record<TipoSolicitud, AccionCritica> = {
   decision_recepcion: { tipo: "decision_recepcion", etiqueta: "Decisión de la recepción", pendiente: "Decisión solicitada", aprueba: { modulo: "muestras", accion: "A" }, descripcion: "Rechazar una recepción o aceptarla con desviación. Si quien la registra ya tiene muestras:A, se aplica directo (con reautenticación)." },
   cambiar_folio: { tipo: "cambiar_folio", etiqueta: "Cambio de folio", pendiente: "Cambio de folio solicitado", aprueba: { modulo: "muestras", accion: "A" }, descripcion: "Cambiar el folio de una recepción ya creada (el campo deja de ser editable)." },
   reabrir_recepcion: { tipo: "reabrir_recepcion", etiqueta: "Reabrir recepción", pendiente: "Reapertura solicitada", aprueba: { modulo: "muestras", accion: "A" }, descripcion: "Reabrir una recepción cerrada o rechazada: vuelve al estado previo." },
-  // "obsoletar_documento" (Fase 7) se retiro: Calidad › Documentos es ahora la Biblioteca (decision del laboratorio). Ver ACCIONES_RETIRADAS.
+  // "obsoletar_documento" (Fase 7, flujo anterior) se retiro; Documentos SGC usa "obsoletar_documento_sgc". Ver ACCIONES_RETIRADAS.
   // Fase 11: anular una incidencia o una no conformidad (calidad:AN pide, otra persona con calidad:AN aprueba).
   anular_calidad: { tipo: "anular_calidad", etiqueta: "Anular incidencia o NC", pendiente: "Anulación solicitada", aprueba: { modulo: "calidad", accion: "AN" }, descripcion: "Anular una incidencia o una no conformidad. Una incidencia escalada solo se anula si su NC está anulada." },
   // Documentos SGC (Fase 2): declarar obsoleto un documento sin reemplazo. Lo pide Mejora Continua (documento_obsoletar); lo aprueba otra persona con documento_autorizar.

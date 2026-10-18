@@ -961,16 +961,3 @@ export async function archivoSgc({ request, s, params }: RouteContext): Promise<
   }
   return new Response(new Uint8Array(bytes), { status: 200, headers: { ...encabezados, "Content-Length": String(bytes.length) } });
 }
-
-/* ---------- Busqueda global ---------- */
-
-/* Documentos visibles para el buscador (los restringidos y confidenciales solo para quien los puede ver). */
-export async function documentosParaBusqueda(s: Session, user: CurrentUser): Promise<Row[]> {
-  let a: AccesoSgc;
-  try {
-    a = await acceso(s, user);
-  } catch {
-    return [];
-  }
-  return (await documentosVisibles(s, a)).map(serializarLista);
-}

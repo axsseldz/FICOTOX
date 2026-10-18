@@ -137,7 +137,6 @@ export const MIME_SGC: Record<string, string> = {
   xls: "application/vnd.ms-excel",
   pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 };
-export const DOCUMENTOS_MAX_MB_DEFAULT = 50;
 export const MOTIVO_MIN_SGC = 5;
 
 /* ---------- Flujo (Fase 2) ---------- */
@@ -162,8 +161,6 @@ export function pendienteDeRevision(fechaProxima: unknown, hoy: string): boolean
   const limite = new Date(Date.UTC(y, m - 1, d + DIAS_AVISO_REVISION)).toISOString().slice(0, 10);
   return String(fechaProxima).slice(0, 10) <= limite;
 }
-
-export const PAPELES = { elaborador: "Elaborador", revisor: "Revisor", autorizador: "Autorizador", publicador: "Mejora Continua", solicitante: "Solicitante" } as const;
 
 export const ESTADOS_SOLICITUD_SGC: Record<string, { etiqueta: string; tono: TonoEstado }> = {
   pendiente: { etiqueta: "Pendiente", tono: "warning" },

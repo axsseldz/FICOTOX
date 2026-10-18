@@ -1,9 +1,7 @@
 /*
- * Documentos SGC (Fase 7) — RETIRADO. Por decision confirmada del laboratorio,
- * Calidad › Documentos funciona como biblioteca de consulta (modules/biblioteca.ts)
- * y reemplaza el flujo de control documental de la seccion 6 de la
- * especificacion (revision, aprobacion, lista maestra, distribucion y acuse de
- * lectura, propuestas). Sus escrituras responden 410 (ver src/lib/server/retirado.ts).
+ * Flujo anterior de control documental (Fase 7) — RETIRADO; el control
+ * documental vigente es Documentos SGC (modules/sgc). Sus escrituras responden
+ * 410 (ver src/lib/server/retirado.ts).
  *
  * Aqui solo queda la lectura que siguen usando el historial y las incidencias
  * de los documentos anteriores (sus tablas se conservan sin uso).
@@ -19,7 +17,7 @@ export async function distribucionDe(s: Session, documentoId: number): Promise<R
 }
 
 /*
- * Alcance "autorizados" de documentos:V (Estudiante). En la biblioteca limita a
+ * Alcance "autorizados" de documentos:V (Estudiante). En la Biblioteca (retirada) limitaba a
  * los documentos visibles para todos o para su rol; sobre los documentos del
  * flujo anterior (solo lectura) conserva su regla: vigentes que le fueron distribuidos.
  */

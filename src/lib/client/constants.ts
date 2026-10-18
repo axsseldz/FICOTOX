@@ -1,18 +1,6 @@
 
 /* Catalogos y metadatos de la interfaz; los de recepcion salen del formato oficial (src/lib/shared/sgc.ts). */
 
-export const IMPORT_COLUMNS = [
-  "producto",
-  "marca",
-  "proveedor",
-  "catalogo_parte_cas",
-  "fecha_ingreso",
-  "tamano_capacidad",
-  "contenedor",
-  "piezas",
-  "cantidad_por_pieza",
-] as const;
-
 export interface ReactivoTypeConfig {
   value: string;
   label: string;
@@ -93,17 +81,6 @@ export const REACTIVO_FIELD_META: Record<string, ReactivoFieldMeta> = {
   descripcion: { label: "Descripción", textarea: true, wide: true, hint: "Dimensiones y partícula." },
   nuevo_usado: { label: "Condición", options: ["Nueva", "Usada"] },
   metodo: { label: "Método", options: ["PSP", "DSP", "ASP", "Otro"] },
-};
-
-export const REACTIVO_SHEET_TYPE_LABELS: Record<string, string> = {
-  acidos: "Ácidos",
-  alcoholes_solventes: "Alcoholes y solventes orgánicos",
-  compuestos_amonio: "Compuestos de Amonio",
-  compuestos_sodio: "Compuestos de Sodio",
-  estandares_preparados: "Estándares preparados",
-  materiales_referencia: "Materiales de Referencia",
-  miscelaneos: "Misceláneos",
-  columnas_cromatograficas: "Columnas cromatográficas",
 };
 
 /* Nombres cortos para las listas (el nombre completo queda en el tooltip y en la ventana); no cambian los datos guardados. */

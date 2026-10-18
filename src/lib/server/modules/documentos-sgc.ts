@@ -1,8 +1,7 @@
 /*
- * Documentos SGC (Fase 7) — RETIRADO. Calidad › Documentos es ahora la
- * Biblioteca (modules/biblioteca.ts), por decision confirmada del laboratorio.
- * La migracion 13 copio a la biblioteca los documentos con archivo (con su
- * SHA-256); las tablas documentos_sgc, distribucion_documento y
+ * Flujo anterior de control documental (Fase 7) — RETIRADO; el vigente es
+ * Documentos SGC (modules/sgc). La migracion 13 copio a la Biblioteca (tambien
+ * retirada) los documentos con archivo (con su SHA-256); las tablas documentos_sgc, distribucion_documento y
  * propuestas_documento se conservan sin uso y en solo lectura. Aqui queda solo
  * la lectura de un documento anterior y de su archivo (historial); las demas
  * rutas responden 410.

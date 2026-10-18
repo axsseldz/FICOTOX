@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Inter } from "next/font/google";
-import Script from "next/script";
 import { Toaster } from "sonner";
 import { Providers } from "./providers";
 import { COLORES_BARRA, SCRIPT_TEMA } from "@/lib/shared/tema";
@@ -65,7 +64,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             },
           }}
         />
-        <Script src="/vendor/xlsx/xlsx.full.min.js" strategy="afterInteractive" />
       </body>
     </html>
   );

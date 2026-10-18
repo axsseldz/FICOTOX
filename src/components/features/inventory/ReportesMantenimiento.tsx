@@ -13,7 +13,7 @@ import type { ApiRecord } from "@/lib/client/types";
 
 /*
  * Reportes de mantenimiento en PDF (modulo equipos). Antes vivian en una
- * pestaña de Documentos SGC; al convertirse Documentos en la Biblioteca pasan
+ * pestaña del flujo anterior de documentos; desde su retiro viven
  * aqui, junto a los mantenimientos que los generan. Misma API (/api/documents).
  */
 const COLUMNAS: ColumnaLista[] = [

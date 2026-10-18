@@ -3,7 +3,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { BellRinging, BookOpenText, CheckCircle, Clock, MapPin, Plus, Trash, UsersThree } from "@phosphor-icons/react";
-import { Callout } from "@/components/features/samples/FormLayout";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
@@ -370,9 +369,4 @@ function Boton({ puede, onClick, cargando }: { puede: Puede; onClick: () => void
       {!puede.ok && puede.motivo ? <span className={cn("text-[11.5px] text-ink-3")}>{puede.motivo}</span> : null}
     </span>
   );
-}
-
-/* Aviso informativo cuando la persona no ve la lista completa. */
-export function AvisoDistribucionParcial() {
-  return <Callout tone="info" title="Distribución">Ves el punto de uso y tu propia lectura; la lista por persona la consulta Mejora Continua.</Callout>;
 }
