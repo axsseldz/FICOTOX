@@ -305,7 +305,7 @@ function UsuariosContent() {
         propsFila={(item) => ({ "data-usuario": String(item.id) })}
         vacio={{ icono: <Users size={20} />, titulo: "Sin usuarios", descripcion: filtrando ? "No hay personas con estos filtros." : "Crea la primera cuenta de acceso." }}
       />
-      {resource.data && rows.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-4">{rows.length === 1 ? "1 persona" : `${fmt(rows.length)} personas`}</p> : null}
+      {resource.data && rows.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-3">{rows.length === 1 ? "1 persona" : `${fmt(rows.length)} personas`}</p> : null}
 
       <UsuarioVentana usuarios={rows} todos={items} indice={indice} onIndice={setAbierta} onCerrar={cerrar} onDesbloquear={desbloquear} onAbrirPersona={abrirPersona} />
 
@@ -387,18 +387,18 @@ function celdasUsuario(item: ApiRecord, todos: ApiRecord[], yo: boolean) {
         {estado.label}
       </Badge>
       {temporal && item.vigente_hasta ? (
-        <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-ink-3">
-          Hasta {formatearFecha(item.vigente_hasta)}
+        <span className="flex flex-col items-start gap-0.5 text-[12px] text-ink-3">
+          <span>Hasta {formatearFecha(item.vigente_hasta)}</span>
           {item.supervisor_nombre ? (
             <span className="inline-flex items-center gap-1">
-              · <Avatar name={supervisor?.nombre || item.supervisor_nombre} email={supervisor?.email} avatar={supervisor?.avatar} size="xs" className="h-4 w-4" /> supervisa {String(item.supervisor_nombre).split(" ")[0]}
+              <Avatar name={supervisor?.nombre || item.supervisor_nombre} email={supervisor?.email} avatar={supervisor?.avatar} size="xs" className="h-4 w-4" /> supervisa {String(item.supervisor_nombre).split(" ")[0]}
             </span>
           ) : null}
         </span>
       ) : null}
     </span>,
     <span key="a" className="text-[13px] text-ink-2" title={item.ultimo_acceso ? `Último acceso: ${formatearFechaHora(item.ultimo_acceso)}` : undefined}>
-      {item.ultimo_acceso ? haceCuantoCorto(item.ultimo_acceso) : <span className="text-ink-4">Nunca</span>}
+      {item.ultimo_acceso ? haceCuantoCorto(item.ultimo_acceso) : <span className="text-ink-3">Nunca</span>}
     </span>,
     autorizaciones ? (
       <span key="z" className="inline-flex items-center gap-1 rounded-full bg-brand-faint px-2 py-0.5 text-[12px] font-medium text-brand-strong">
