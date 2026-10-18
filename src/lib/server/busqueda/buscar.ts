@@ -153,7 +153,9 @@ function enResultado(h: Hit): ResultadoBusqueda {
 
 const comparar = (a: Puntuado, b: Puntuado) => a.tier - b.tier || a.puntaje - b.puntaje || a.hit.orden - b.hit.orden;
 
-/* "reponer metanol" → "Reponer <reactivo>" (abre la reposición de ese reactivo o consumible). */
+/* "reponer metanol" → "Registrar movimiento de <reactivo>" (abre el registro de movimiento de ese reactivo o consumible; la clave y el parámetro siguen siendo "reponer"). */
+export const tituloRegistrarMovimiento = (titulo: string) => `Registrar movimiento de ${titulo}`;
+
 function accionesDeReposicion(hits: Hit[], q: string, recientes: Set<string>, auth: Autorizacion): Hit[] {
   const terminos = q.split(/[\s,;]+/).filter(Boolean);
   const verbo = terminos.findIndex((t) => /^(repon|reposicion|abastec|rellen)/.test(t));
@@ -168,7 +170,7 @@ function accionesDeReposicion(hits: Hit[], q: string, recientes: Set<string>, au
     .map(({ hit: h }) => {
       const id = h.clave.slice(h.clave.indexOf("-") + 1);
       const ruta = h.tipo === "reactivo" ? "reactivos" : "consumibles";
-      return { ...h, clave: `accion:reponer:${h.clave}`, tipo: "accion" as const, grupo: "acciones" as const, titulo: `Reponer ${h.titulo}`, etiqueta: "Acción", href: `/inventario/${ruta}?reponer=${id}`, mono: false, folio: undefined, exactos: undefined, lista: undefined };
+      return { ...h, clave: `accion:reponer:${h.clave}`, tipo: "accion" as const, grupo: "acciones" as const, titulo: tituloRegistrarMovimiento(h.titulo), etiqueta: "Acción", href: `/inventario/${ruta}?reponer=${id}`, mono: false, folio: undefined, exactos: undefined, lista: undefined };
     });
 }
 
