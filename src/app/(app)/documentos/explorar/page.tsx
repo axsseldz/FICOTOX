@@ -12,6 +12,7 @@ import { PageBody } from "@/components/shell/AppShell";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
+import { DateInput } from "@/components/ui/DateInput";
 import { FilterMenu, type FilterGroup } from "@/components/ui/FilterMenu";
 import { Dropdown } from "@/components/ui/Overlay";
 import { PageHeader, SearchInput, Toolbar } from "@/components/ui/PageHeader";
@@ -23,7 +24,7 @@ import { ESTADO_REVISION } from "@/lib/shared/documentos";
 
 /*
  * Carpeta de documentos: ruta corta "Documentos › Gestión › Tipo", buscador y
- * un solo boton "Filtros" (tipo, estado, origen y obsoletos con permiso), el
+ * un solo boton "Filtros" (tipo, estado, origen, propietario, fecha de emision y obsoletos con permiso), el
  * orden en un menu pequeño y los documentos como tarjetas con la miniatura de
  * la primera pagina del PDF vigente. El servidor devuelve solo lo que la
  * persona puede ver.
@@ -62,6 +63,11 @@ function Explorador() {
   const [tipo, setTipo] = useState(useInitialParam("tipo").toUpperCase());
   const [estado, setEstado] = useState(useInitialParam("estado"));
   const [origen, setOrigen] = useState(useInitialParam("origen"));
+  // Especificacion 5 (busqueda y filtros): tambien por responsable (propietario) y por fecha de emision.
+  const [propietario, setPropietario] = useState("");
+  const [periodo, setPeriodo] = useState("todo");
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
   const [orden, setOrden] = useState("clave");
   const [obsoletos, setObsoletos] = useState(false);
   const [solicitud, setSolicitud] = useState(false);
@@ -83,11 +89,15 @@ function Explorador() {
     "sgc",
     async () => {
       const q = new URLSearchParams({ search: debounced.trim(), orden });
-      for (const [k, val] of Object.entries({ area, tipo, estado, origen })) if (val) q.set(k, val);
+      for (const [k, val] of Object.entries({ area, tipo, estado, origen, propietario })) if (val) q.set(k, val);
       if (obsoletos) q.set("obsoletos", "1");
+      if (periodo === "rango") {
+        if (desde) q.set("desde", desde);
+        if (hasta) q.set("hasta", hasta);
+      }
       return (await getJsonAuth(`${API_BASE_URL}/sgc/documentos?${q.toString()}`, token)) as unknown as Respuesta;
     },
-    { enabled: !!token, deps: [debounced, area, tipo, estado, origen, orden, obsoletos] },
+    { enabled: !!token, deps: [debounced, area, tipo, estado, origen, propietario, periodo, desde, hasta, orden, obsoletos] },
   );
   const data = recurso.data;
   const items = data?.items || [];
@@ -116,8 +126,33 @@ function Explorador() {
       ],
     },
     { key: "origen", label: "Origen", value: origen, defaultValue: "", onChange: setOrigen, options: [{ value: "", label: "Todos" }, { value: "interno", label: "Internos" }, { value: "externo", label: "Externos" }] },
+    { key: "propietario", label: "Propietario", value: propietario, defaultValue: "", onChange: setPropietario, options: [{ value: "", label: "Todos" }, ...(data?.propietarios || []).map((p) => ({ value: String(p.id), label: p.nombre }))] },
+    {
+      key: "periodo",
+      label: "Fecha de emisión",
+      value: periodo,
+      defaultValue: "todo",
+      onChange: setPeriodo,
+      options: [
+        { value: "todo", label: "Cualquiera" },
+        { value: "rango", label: "Personalizado" },
+      ],
+      extra:
+        periodo === "rango" ? (
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex flex-col gap-1 text-[12px] text-ink-3">
+              Desde
+              <DateInput id="sgc-desde" small value={desde} onChange={setDesde} aria-label="Desde" />
+            </label>
+            <label className="flex flex-col gap-1 text-[12px] text-ink-3">
+              Hasta
+              <DateInput id="sgc-hasta" small value={hasta} onChange={setHasta} aria-label="Hasta" />
+            </label>
+          </div>
+        ) : undefined,
+    },
   ];
-  const filtrado = !!(debounced.trim() || tipo || estado || origen || (!areaSel && area));
+  const filtrado = !!(debounced.trim() || tipo || estado || origen || propietario || periodo !== "todo" || (!areaSel && area));
   const abrir = (doc: DocLista) => router.push(`/documentos/${doc.id}`);
   const tecla = (doc: DocLista) => (event: KeyboardEvent) => {
     if (event.key === "Enter" || event.key === " ") {

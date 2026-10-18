@@ -151,6 +151,25 @@ try {
     check("tarjeta: marca «Externo»", (await tarjeta(page, `NOM-${stamp}-SSA1`).getByTestId("etiqueta-externo").count()) === 1);
     check("carpeta: sin vista de tabla", (await page.getByRole("button", { name: "Ver en tabla" }).count()) === 0 && (await page.getByTestId("sgc-fila").count()) === 0);
     check("carpeta: filtros en un solo botón «Filtros»", (await page.getByRole("button", { name: /^Filtros/ }).count()) === 1);
+    // Especificación §5 (búsqueda y filtros): también por responsable (propietario) y por fecha de emisión.
+    const nTarjetas = await page.getByTestId("sgc-tarjeta").count();
+    await page.getByRole("button", { name: /^Filtros/ }).click();
+    const grupoPropietario = page.locator('section[aria-label="Propietario"]');
+    const grupoFecha = page.locator('section[aria-label="Fecha de emisión"]');
+    await grupoFecha.waitFor();
+    check("carpeta: «Filtros» incluye propietario y fecha de emisión", (await grupoPropietario.count()) === 1 && (await grupoPropietario.getByRole("switch").count()) >= 1);
+    await grupoFecha.getByRole("switch", { name: "Personalizado" }).click();
+    await page.locator("#sgc-desde").waitFor();
+    await page.locator("#sgc-desde").pressSequentially("01012099");
+    await page.locator("#sgc-desde").blur();
+    await page.keyboard.press("Escape");
+    await page.getByTestId("sgc-vacio").waitFor();
+    check("carpeta: el filtro por fecha de emisión se aplica (desde 2099: nada coincide)", /Nada coincide/.test(await page.getByTestId("sgc-vacio").innerText()));
+    await page.getByRole("button", { name: /^Filtros/ }).click();
+    await grupoFecha.getByRole("switch", { name: "Personalizado" }).click();
+    await page.keyboard.press("Escape");
+    await page.getByTestId("sgc-tarjeta").first().waitFor();
+    check("carpeta: al quitar el filtro de fecha vuelven las tarjetas", (await page.getByTestId("sgc-tarjeta").count()) === nTarjetas, `${await page.getByTestId("sgc-tarjeta").count()} vs ${nTarjetas}`);
     // Orden en un menú pequeño.
     await page.getByTestId("sgc-ordenar").click();
     await page.getByRole("menuitem", { name: "Título A–Z" }).click();
