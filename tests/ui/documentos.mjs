@@ -86,7 +86,8 @@ try {
       const desplegar = page.getByRole("button", { name: "Desplegar Documentos SGC" });
       if (await desplegar.count()) await desplegar.click();
       await page.locator('aside[aria-label="Navegación principal"] a', { hasText: "Lista Maestra" }).first().waitFor();
-      const subitems = (await page.locator('aside[aria-label="Navegación principal"] a').allInnerTexts()).map((x) => x.trim());
+      // Cada subitem puede llevar un contador (p. ej. tareas de la Bandeja): se compara solo el nombre.
+      const subitems = (await page.locator('aside[aria-label="Navegación principal"] a').allInnerTexts()).map((x) => x.split("\n")[0].trim());
       check("menú: Documentos SGC con subitems Documentos, Bandeja, Solicitudes, Externos y Lista Maestra", ["Documentos", "Bandeja", "Solicitudes", "Externos", "Lista Maestra"].every((x) => subitems.includes(x)), subitems.join("|"));
 
       await page.locator('[data-testid="sgc-carpeta"][data-area="TC"]').click();
