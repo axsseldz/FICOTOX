@@ -82,8 +82,7 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
         <RadixDialog.Overlay className={OVERLAY_CLASS} />
-        {/* capa-ventana: la capa que centra se queda mientras el dialogo hace su animacion de salida (globals.css). */}
-        <div data-state={open ? "open" : "closed"} className="capa-ventana fixed inset-0 z-[var(--z-ventana)] flex items-end justify-center p-3 sm:items-center sm:p-6">
+        <div className="fixed inset-0 z-[var(--z-ventana)] flex items-end justify-center p-3 sm:items-center sm:p-6">
           <RadixDialog.Content
             className={cn(
               "flex max-h-full w-full flex-col overflow-hidden rounded-panel bg-surface-elevated shadow-panel outline-none",

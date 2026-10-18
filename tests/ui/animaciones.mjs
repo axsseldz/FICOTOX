@@ -11,7 +11,7 @@
  * - ficha: etiqueta de estado, pestañas deslizantes, barra del visor (aparece y se oculta con
  *   opacidad y translate), menú ⋯ y confirmación con check que se dibuja y se va sola;
  * - ventanas: VentanaFormulario (entrada; al cerrar se desmonta sin dejar restos), «Más opciones»,
- *   VentanaCentrada (la salida conserva su contenido) y el diálogo de confirmación;
+ *   VentanaCentrada y el diálogo de confirmación (entran animadas y al cerrar se quitan por completo);
  * - pantalla de acceso: entrada, olas, sacudida con contraseña errónea;
  * - solo se animan opacity y transform (keyframes de toda la hoja y transiciones en pantalla, salvo
  *   los pliegues que el usuario abre: menú lateral y acordeones); sin saltos de diseño al cargar;
@@ -329,7 +329,8 @@ try {
     await marca.waitFor();
     const check1 = await animaciones(page, '[data-testid="confirmacion-check"], [data-testid="confirmacion-check"] .trazo-dibujado');
     check("confirmación: aparece y se va con confirmacion-entra, y el check se dibuja (trazo)", check1.some((a) => a.nombre === "confirmacion-entra" && a.props.every((p) => ["opacity", "transform"].includes(p))) && check1.filter((a) => a.nombre === "trazo").length === 2);
-    check("diálogo de confirmación: sale con pop-out", await esperarEvento(page, () => window.__ev.some((e) => e.tipo === "animationstart" && e.nombre === "pop-out")));
+    // Las ventanas se quitan al cerrar sin retener su capa (retenerla cerraba el menú ⋯ que se abría justo después).
+    check("diálogo de confirmación: al confirmar se quita por completo", await esperarEvento(page, () => !document.querySelector('[role="alertdialog"], [role="dialog"]')));
     await marca.waitFor({ state: "detached", timeout: 8000 });
     check("confirmación: se va sola", true);
   });
@@ -375,7 +376,7 @@ try {
     await page.getByRole("tab", { name: "Todas" }).or(page.getByRole("radio", { name: "Todas" })).first().click();
     await entrada(page, "solicitudes: renglones", '[data-testid="sgc-solicitud"]');
     disenoEnPantallas.push(...(await transicionesDeDiseno(page)));
-    // VentanaCentrada (detalle): entra, y al salir conserva su contenido.
+    // VentanaCentrada (detalle): entra con su animación y al cerrar se quita por completo.
     const fila = page.getByTestId("sgc-solicitud").filter({ hasText: `FX-TCI-L${stamp}` }).first();
     await fila.locator("button").first().click();
     await page.getByTestId("sgc-solicitud-detalle").waitFor();
@@ -383,12 +384,8 @@ try {
     check("ventana centrada: entra con pop-in y termina visible", det.some((a) => a.nombre === "pop-in") && (await terminan(page, '[role="dialog"]')) && (await enReposo(page, '[role="dialog"]')));
     await limpiar(page);
     await page.keyboard.press("Escape");
-    const saliendo = await page.waitForFunction(() => {
-      const d = document.querySelector('[role="dialog"][data-state="closed"]');
-      return d ? { texto: (d.textContent || "").length, nombre: getComputedStyle(d).animationName } : false;
-    }, null, { polling: "raf", timeout: 5000 }).then((h) => h.jsonValue(), () => null);
-    check("ventana centrada: sale con pop-out sin vaciarse", !!saliendo && saliendo.nombre === "pop-out" && saliendo.texto > 40, JSON.stringify(saliendo));
     await page.getByTestId("sgc-solicitud-detalle").waitFor({ state: "detached" });
+    check("ventana centrada: al cerrar se quita por completo (sin velo)", (await page.locator('[role="dialog"]').count()) === 0);
     // VentanaFormulario: entrada, «Más opciones» y cierre (la ventana se desmonta al cerrar).
     await page.getByTestId("sgc-nueva-solicitud").click();
     const ventana = page.getByTestId("ventana-formulario");
@@ -404,7 +401,7 @@ try {
     await page.keyboard.press("Escape");
     await ventana.waitFor({ state: "detached" });
     // Quien la usa la desmonta al cerrar: se quita sin dejar restos (velo ni ventana) y la página queda usable.
-    await page.waitForFunction(() => !document.querySelector('[data-testid="ventana-formulario"], .capa-ventana'), null, { timeout: 5000 });
+    await page.waitForFunction(() => !document.querySelector('[data-testid="ventana-formulario"], [role="dialog"]'), null, { timeout: 5000 });
     check("formulario en ventana: al cerrar se quita por completo (sin velo ni capa)", (await page.getByTestId("ventana-formulario").count()) === 0 && (await page.locator("body > [inert]").count()) === 0 && (await page.getByTestId("sgc-nueva-solicitud").isEnabled()));
 
     await page.goto(`${BASE}/documentos/externos`);
@@ -473,7 +470,7 @@ try {
       await page.keyboard.press("Escape");
       await page.getByTestId("ventana-formulario").waitFor({ state: "detached" });
       await page.waitForTimeout(300);
-      check("reduced-motion: al cerrar la ventana no queda nada en pantalla", (await page.locator('[data-testid="ventana-formulario"], .capa-ventana').count()) === 0 && (await page.locator("body > [inert]").count()) === 0);
+      check("reduced-motion: al cerrar la ventana no queda nada en pantalla", (await page.locator('[data-testid="ventana-formulario"], [role="dialog"]').count()) === 0 && (await page.locator("body > [inert]").count()) === 0);
       await page.goto(`${BASE}/documentos/${L2.id}`);
       await page.locator('[data-testid="sgc-visor"] canvas').first().waitFor({ timeout: 60_000 });
       vivas = await todoQuieto(page);

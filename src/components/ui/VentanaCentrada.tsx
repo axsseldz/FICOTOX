@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Dialog as RadixDialog } from "radix-ui";
 import { CaretDown, CaretUp, X } from "@phosphor-icons/react";
 import { IconButton } from "./Button";
@@ -14,10 +14,6 @@ import { cn } from "./cn";
  * animacion respeta prefers-reduced-motion (globals.css).
  *
  * El contenido debe incluir un <VentanaTitulo> (titulo accesible).
- *
- * Al cerrarse se sigue mostrando el ultimo contenido mientras dura la
- * animacion de salida (quien la usa suele pasar `null` al cerrar, y la ventana
- * se encogia vacia antes de irse).
  */
 export function VentanaCentrada({
   abierta,
@@ -48,15 +44,11 @@ export function VentanaCentrada({
   barra?: ReactNode;
   children: ReactNode;
 }) {
-  const [ultimo, setUltimo] = useState<ReactNode>(children);
-  if (abierta && ultimo !== children) setUltimo(children);
-  const contenido = abierta ? children : ultimo;
   return (
     <RadixDialog.Root open={abierta} onOpenChange={(open) => !open && onCerrar()}>
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="fixed inset-0 z-[var(--z-ventana)] bg-deep/45 backdrop-blur-md data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out" />
-        {/* capa-ventana: la capa que centra se queda mientras la ventana hace su animacion de salida (globals.css). */}
-        <div data-state={abierta ? "open" : "closed"} className="capa-ventana pointer-events-none fixed inset-0 z-[var(--z-ventana)] flex items-stretch justify-center sm:items-center sm:p-6">
+        <div className="pointer-events-none fixed inset-0 z-[var(--z-ventana)] flex items-stretch justify-center sm:items-center sm:p-6">
           <RadixDialog.Content
             aria-describedby={undefined}
             onKeyDown={(event) => {
@@ -94,7 +86,7 @@ export function VentanaCentrada({
                 </IconButton>
               </RadixDialog.Close>
             </div>
-            <div className="scroll-thin flex-1 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">{contenido}</div>
+            <div className="scroll-thin flex-1 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">{children}</div>
           </RadixDialog.Content>
         </div>
       </RadixDialog.Portal>

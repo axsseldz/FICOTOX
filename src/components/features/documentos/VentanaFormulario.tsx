@@ -38,11 +38,7 @@ export function VentanaFormulario({
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="fixed inset-0 z-[var(--z-ventana)] bg-deep/45 backdrop-blur-md data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out" />
-        {/* capa-ventana: si la ventana se cierra sin desmontarse, la capa se queda mientras hace su salida (globals.css). */}
-        <div
-          data-state={open ? "open" : "closed"}
-          className="capa-ventana pointer-events-none fixed inset-0 z-[var(--z-ventana)] flex items-stretch justify-center sm:items-center sm:p-6"
-        >
+        <div className="pointer-events-none fixed inset-0 z-[var(--z-ventana)] flex items-stretch justify-center sm:items-center sm:p-6">
           <RadixDialog.Content
             data-testid="ventana-formulario"
             className={cn(
