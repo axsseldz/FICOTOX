@@ -89,20 +89,20 @@ export default function LoginPage() {
 
   const revisarMayusculas = (event: KeyboardEvent<HTMLInputElement>) => setMayusculas(event.getModifierState?.("CapsLock") ?? false);
 
-  const fieldClass = "h-12 rounded-[12px] bg-surface-2/70 text-[15px] hover:border-line-strong focus:bg-surface";
+  const fieldClass = "h-12 rounded-box bg-surface-2/70 text-md hover:border-line-strong focus:bg-surface";
 
   return (
     <PantallaAcceso saliendo={saliendo}>
       <TarjetaAcceso niega={niega} saliendo={saliendo}>
         <div className="flex flex-col gap-1">
-          <h1 id="login-title" className="text-[26px] font-bold tracking-[-0.03em] text-ink">
+          <h1 id="login-title" className="text-3xl font-bold tracking-tight text-ink">
             Bienvenido
           </h1>
-          <p className="text-[14.5px] text-ink-2">Inicia sesión con tu cuenta del laboratorio</p>
+          <p className="text-base text-ink-2">Inicia sesión con tu cuenta del laboratorio</p>
         </div>
 
         {aviso ? (
-          <p role="status" className="mt-5 rounded-[12px] bg-warning-soft px-3.5 py-2.5 text-[13px] text-warning-text">
+          <p role="status" className="mt-5 rounded-box bg-warning-soft px-3.5 py-2.5 text-sm text-warning-text">
             {aviso}
           </p>
         ) : null}
@@ -151,14 +151,14 @@ export default function LoginPage() {
             />
           </Field>
           {mayusculas ? (
-            <p id="login-mayus" className="-mt-2 flex items-center gap-1.5 text-[12.5px] text-warning-text animate-rise-in motion-reduce:animate-none">
+            <p id="login-mayus" className="-mt-2 flex items-center gap-1.5 text-xs text-warning-text animate-rise-in motion-reduce:animate-none">
               <WarningCircle size={14} weight="fill" aria-hidden="true" /> Bloq Mayús está activado
             </p>
           ) : null}
 
           <div aria-live="assertive" aria-atomic="true">
             {error ? (
-              <p role="alert" className="flex items-start gap-2 rounded-[12px] bg-danger-soft px-3.5 py-2.5 text-[13px] text-danger-text animate-rise-in motion-reduce:animate-none">
+              <p role="alert" className="flex items-start gap-2 rounded-box bg-danger-soft px-3.5 py-2.5 text-sm text-danger-text animate-rise-in motion-reduce:animate-none">
                 <WarningCircle size={16} weight="fill" className="mt-px shrink-0" aria-hidden="true" />
                 {error}
               </p>
@@ -169,7 +169,7 @@ export default function LoginPage() {
             type="submit"
             disabled={submitting || saliendo}
             aria-busy={submitting || undefined}
-            className="press relative mt-1 flex h-12 w-full items-center justify-center overflow-hidden rounded-[12px] bg-brand text-[15px] font-semibold text-on-accent shadow-[0_8px_20px_-10px_rgba(15,122,149,0.6)] hover:bg-brand-strong focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none disabled:cursor-default disabled:hover:bg-brand"
+            className="press relative mt-1 flex h-12 w-full items-center justify-center overflow-hidden rounded-box bg-brand text-md font-semibold text-on-accent shadow-accent hover:bg-brand-strong disabled:cursor-default disabled:hover:bg-brand"
           >
             <span className={cn("flex items-center gap-2 transition-[opacity,translate] duration-200 ease-[var(--ease-spring)]", submitting || saliendo ? "-translate-y-2 opacity-0" : "opacity-100")}>
               Entrar <ArrowRight size={16} weight="bold" aria-hidden="true" />

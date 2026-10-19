@@ -103,7 +103,7 @@ function FichaRol({ id, editar, onEditar, onCerrar }: { id: number; editar: bool
   let paso = 0;
   const seccion = (titulo: string, contenido: ReactNode) => (
     <section className="entrada-escalonada flex flex-col gap-2.5" style={{ ["--i" as string]: paso++ }}>
-      <h3 className="text-[13px] font-semibold tracking-[-0.005em] text-ink-2">{titulo}</h3>
+      <h3 className="text-sm font-semibold tracking-snug text-ink-2">{titulo}</h3>
       {contenido}
     </section>
   );
@@ -121,9 +121,9 @@ function FichaRol({ id, editar, onEditar, onCerrar }: { id: number; editar: bool
             {role.es_sistemico ? <Badge tone="neutral">Del sistema</Badge> : null}
           </>
         }
-        subtitulo={<span className="text-[14.5px] leading-[1.5] text-ink-2">{desc.proposito}</span>}
+        subtitulo={<span className="text-base leading-normal text-ink-2">{desc.proposito}</span>}
       >
-        {role.descripcion && !desc.delCatalogo ? <p className="text-[13.5px] text-ink-3">{String(role.descripcion)}</p> : null}
+        {role.descripcion && !desc.delCatalogo ? <p className="text-sm text-ink-3">{String(role.descripcion)}</p> : null}
       </VentanaEncabezado>
 
       {editar && puedeEditar ? (
@@ -143,7 +143,7 @@ function FichaRol({ id, editar, onEditar, onCerrar }: { id: number; editar: bool
           {responsabilidades.length
             ? seccion(
                 "Responsabilidades del puesto",
-                <ul className="flex flex-col gap-1.5 text-[14px] leading-[1.5] text-ink">
+                <ul className="flex flex-col gap-1.5 text-base leading-normal text-ink">
                   {responsabilidades.map((r) => (
                     <li key={r} className="flex gap-2.5">
                       <CheckCircle size={17} weight="duotone" className="mt-0.5 shrink-0 text-success" aria-hidden="true" />
@@ -157,7 +157,7 @@ function FichaRol({ id, editar, onEditar, onCerrar }: { id: number; editar: bool
           {desc.noPuede.length
             ? seccion(
                 "Lo que no puede hacer",
-                <ul className="flex flex-col gap-1.5 text-[14px] leading-[1.5] text-ink">
+                <ul className="flex flex-col gap-1.5 text-base leading-normal text-ink">
                   {desc.noPuede.map((r) => (
                     <li key={r} className="flex gap-2.5">
                       <Prohibit size={17} className="mt-0.5 shrink-0 text-ink-4" aria-hidden="true" />
@@ -173,12 +173,12 @@ function FichaRol({ id, editar, onEditar, onCerrar }: { id: number; editar: bool
             areas.length ? (
               <ul className="grid gap-2 sm:grid-cols-2">
                 {areas.map((a) => (
-                  <li key={a.clave} className="flex gap-3 rounded-[14px] bg-surface-2 px-3.5 py-3 ring-1 ring-line transition-shadow duration-200 hover:shadow-raised">
+                  <li key={a.clave} className="flex gap-3 rounded-card bg-surface-2 px-3.5 py-3 ring-1 ring-line transition-shadow duration-200 hover:shadow-raised">
                     <IconoArea clave={a.clave} />
                     <div className="flex min-w-0 flex-col gap-0.5">
-                      <span className="text-[13.5px] font-semibold text-ink">{a.area}</span>
+                      <span className="text-sm font-semibold text-ink">{a.area}</span>
                       {a.frases.map((f) => (
-                        <span key={f} className="text-[13px] leading-[1.45] text-ink-2">
+                        <span key={f} className="text-sm leading-normal text-ink-2">
                           {f}.
                         </span>
                       ))}
@@ -187,14 +187,14 @@ function FichaRol({ id, editar, onEditar, onCerrar }: { id: number; editar: bool
                 ))}
               </ul>
             ) : (
-              <p className="text-[14px] text-ink-3">Este rol todavía no tiene permisos: quien lo tenga no verá nada.</p>
+              <p className="text-base text-ink-3">Este rol todavía no tiene permisos: quien lo tenga no verá nada.</p>
             ),
           )}
 
           {reglas.length
             ? seccion(
                 "Reglas importantes",
-                <ul className="flex flex-col gap-1.5 rounded-[14px] bg-warning-soft/50 px-4 py-3 text-[13.5px] leading-[1.5] text-ink ring-1 ring-warning/15">
+                <ul className="flex flex-col gap-1.5 rounded-card bg-warning-soft/50 px-4 py-3 text-sm leading-normal text-ink ring-1 ring-warning/15">
                   {reglas.map((r) => (
                     <li key={r} className="flex gap-2.5">
                       <Info size={16} weight="duotone" className="mt-0.5 shrink-0 text-warning-text" aria-hidden="true" />
@@ -217,7 +217,7 @@ function FichaRol({ id, editar, onEditar, onCerrar }: { id: number; editar: bool
                         onCerrar();
                         router.push(`/administracion/usuarios?abrir=${encodeURIComponent(String(u.id))}`);
                       }}
-                      className="press group inline-flex items-center gap-2 rounded-full bg-surface py-1 pr-3.5 pl-1 text-[13.5px] text-ink shadow-card ring-1 ring-line transition-shadow duration-200 hover:shadow-raised focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none"
+                      className="press group inline-flex items-center gap-2 rounded-full bg-surface py-1 pr-3.5 pl-1 text-sm text-ink shadow-card ring-1 ring-line transition-shadow duration-200 hover:shadow-raised"
                     >
                       <Avatar name={u.nombre} email={u.email} avatar={u.avatar} size="sm" animado="al-pasar" />
                       {String(u.nombre || u.email)}
@@ -226,7 +226,7 @@ function FichaRol({ id, editar, onEditar, onCerrar }: { id: number; editar: bool
                 ))}
               </ul>
             ) : (
-              <p className="text-[14px] text-ink-3">Nadie tiene este rol.</p>
+              <p className="text-base text-ink-3">Nadie tiene este rol.</p>
             ),
           )}
 
@@ -309,12 +309,12 @@ function EditorPermisos({ role, iniciales, onCancelar, onGuardado }: { role: Api
     <ValidacionAmbito v={v}>
       <div className="flex flex-col gap-4">
         <div>
-          <h3 className="text-[15px] font-semibold text-ink">Editar permisos</h3>
-          <p className="text-[13px] text-ink-3">Marca qué puede hacer el rol en cada área y hasta dónde. Crear, editar, revisar, aprobar y anular incluyen ver; administrar lo incluye todo. Lo que no se marca, no se concede.</p>
+          <h3 className="text-md font-semibold text-ink">Editar permisos</h3>
+          <p className="text-sm text-ink-3">Marca qué puede hacer el rol en cada área y hasta dónde. Crear, editar, revisar, aprobar y anular incluyen ver; administrar lo incluye todo. Lo que no se marca, no se concede.</p>
         </div>
-        <div className="overflow-x-auto rounded-[14px] ring-1 ring-line">
-          <table className="w-full min-w-[900px] text-[13px]">
-            <thead className="bg-surface-2/70 text-[12px] text-ink-3">
+        <div className="overflow-x-auto rounded-card ring-1 ring-line">
+          <table className="w-full min-w-[900px] text-sm">
+            <thead className="bg-surface-2/70 text-xs text-ink-3">
               <tr>
                 <th className="h-9 px-3 text-left font-medium">Área</th>
                 {ACCION_KEYS.map((accion) => (
@@ -329,7 +329,7 @@ function EditorPermisos({ role, iniciales, onCancelar, onGuardado }: { role: Api
                 <tr key={area.clave} className="align-top hover:bg-surface-2/40">
                   <td className="px-3 py-2">
                     <div className="font-medium text-ink">{area.nombre}</div>
-                    <div className="text-[11.5px] text-ink-3">{area.detalle}</div>
+                    <div className="text-2xs text-ink-3">{area.detalle}</div>
                   </td>
                   {ACCION_KEYS.map((accion) => {
                     if (area.acciones && !area.acciones.includes(accion)) return <td key={accion} className="px-1 py-2" />;
@@ -340,7 +340,7 @@ function EditorPermisos({ role, iniciales, onCancelar, onGuardado }: { role: Api
                         <div className="flex flex-col items-center gap-1">
                           <Checkbox className="inline-flex" aria-label={nombre} checked={!!alcance} onChange={(event) => toggle(area.clave, accion, event.target.checked)} />
                           {alcance ? (
-                            <select aria-label={`Hasta dónde: ${nombre}`} value={alcance} onChange={(event) => setAlcance(area.clave, accion, event.target.value)} className="w-[104px] rounded-[6px] border border-line bg-surface px-1 py-0.5 text-[11px] text-ink-2">
+                            <select aria-label={`Hasta dónde: ${nombre}`} value={alcance} onChange={(event) => setAlcance(area.clave, accion, event.target.value)} className="w-[104px] rounded-sm border border-line bg-surface px-1 py-0.5 text-2xs text-ink-2 hover:border-line-strong focus:border-focus focus:outline-none">
                               {ALCANCES.filter((a) => !area.soloTotal || a.clave === "total").map((a) => (
                                 <option key={a.clave} value={a.clave}>
                                   {ALCANCES_LEGIBLES[a.clave]?.opcion || a.nombre}
@@ -357,12 +357,12 @@ function EditorPermisos({ role, iniciales, onCancelar, onGuardado }: { role: Api
             </tbody>
           </table>
         </div>
-        <section className="flex flex-col gap-3 rounded-[14px] p-4 ring-1 ring-line" data-testid="permisos-documentales" aria-labelledby="permisos-documentales-titulo">
+        <section className="flex flex-col gap-3 rounded-card p-4 ring-1 ring-line" data-testid="permisos-documentales" aria-labelledby="permisos-documentales-titulo">
           <div>
-            <h4 id="permisos-documentales-titulo" className="text-[14px] font-semibold text-ink">
+            <h4 id="permisos-documentales-titulo" className="text-base font-semibold text-ink">
               Documentos SGC · acciones documentales
             </h4>
-            <p className="text-[12.5px] text-ink-3">El rol habilita cada acción; sobre cada revisión actúa solo quien está asignado como elaborador, revisor o autorizador. Estas acciones no tienen alcance.</p>
+            <p className="text-xs text-ink-3">El rol habilita cada acción; sobre cada revisión actúa solo quien está asignado como elaborador, revisor o autorizador. Estas acciones no tienen alcance.</p>
           </div>
           <div className="grid gap-x-4 gap-y-2.5 sm:grid-cols-2">
             {ACCIONES_DOCUMENTALES.map((a) => (

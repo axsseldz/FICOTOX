@@ -48,6 +48,11 @@
   --color-bloom: #d0672f;
   --color-bloom-soft: #fbe9dd;
 
+  /* Indicador de foco (campos: borde; botones y demás: contorno solo con teclado). Nunca brillo ni sombra. */
+  --color-focus: #0f7a95;
+  /* Perilla blanca de interruptores (igual en claro y oscuro). */
+  --color-knob: #ffffff;
+
   /* Superficies especiales: barra lateral y lienzo claro del acceso */
   --color-sidebar: #f7f8fa;
   /* Texto sobre un relleno de color (botón primario, insignia roja, renglón resaltado) */
@@ -63,14 +68,58 @@
   --color-papel: #ffffff;
   --color-tinta: #0b1f2a;
 
-  /* Fondos profundos (login, tooltips) */
+  /* Fondos profundos (login, tooltips) y el texto que va sobre ellos */
+  --color-on-deep: #ffffff;
   --color-deep: #081a24;
   --color-deep-2: #0c3a4a;
 
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", var(--font-inter), "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, var(--font-geist-mono), Consolas, monospace;
 
+  /*
+   * Escala tipográfica (única): no se usan tamaños sueltos (text-[13px]).
+   * 2xs etiquetas mínimas y contadores · xs ayudas, metadatos y cabeceras de
+   * tabla · sm texto de tablas, botones, etiquetas de campo · base texto de
+   * lectura y campos · md resaltado · lg-6xl títulos y cifras. El interlineado
+   * se hereda (1.5 en el cuerpo) o se fija con leading-tight/snug/normal/relaxed.
+   */
+  --text-*: initial;
+  --text-2xs: 11px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 20px;
+  --text-3xl: 24px;
+  --text-4xl: 28px;
+  --text-5xl: 34px;
+  --text-6xl: 40px;
+
+  --leading-tight: 1.25;
+  --leading-snug: 1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+
+  --tracking-display: -0.03em;
+  --tracking-tight: -0.025em;
+  --tracking-snug: -0.01em;
+  --tracking-wide: 0.04em;
+  --tracking-widest: 0.08em;
+
+  /*
+   * Radios (únicos): xs miniaturas y teclas · sm esqueletos y piezas internas ·
+   * control botones chicos, botones de icono, opciones de menú · field campos,
+   * botones medianos y grandes, controles segmentados · box avisos y recuadros
+   * dentro de una tarjeta · card tarjetas y tablas · panel ventanas y hojas.
+   */
+  --radius-*: initial;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
   --radius-control: 8px;
+  --radius-field: 10px;
+  --radius-box: 12px;
   --radius-card: 14px;
   --radius-panel: 18px;
 
@@ -78,7 +127,17 @@
   --shadow-raised: 0 0 0 1px rgba(16, 32, 43, 0.05), 0 2px 6px rgba(16, 32, 43, 0.05), 0 12px 32px -16px rgba(16, 32, 43, 0.18);
   --shadow-panel: 0 0 0 1px rgba(16, 32, 43, 0.06), 0 8px 24px -8px rgba(16, 32, 43, 0.18), 0 32px 80px -24px rgba(16, 32, 43, 0.35);
   --shadow-pop: 0 0 0 1px rgba(16, 32, 43, 0.06), 0 6px 16px -6px rgba(16, 32, 43, 0.16), 0 16px 40px -16px rgba(16, 32, 43, 0.25);
-  --shadow-focus: 0 0 0 4px rgba(15, 122, 149, 0.22);
+  /* Botón primario: brillo interior y sombra corta del acento. Sombra lateral de la columna fija de las tablas. */
+  --shadow-accent: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 1px 2px rgba(11, 95, 117, 0.25);
+  --shadow-sticky: -10px 0 12px -12px rgba(16, 32, 43, 0.35);
+  /* Perilla del interruptor y de controles deslizantes. */
+  --shadow-knob: 0 1px 3px rgba(0, 0, 0, 0.25);
+  /* Páginas del visor PDF y su silueta; velo del recorte de la foto de perfil. */
+  --shadow-paper: 0 1px 3px rgba(16, 32, 43, 0.18), 0 8px 24px -12px rgba(16, 32, 43, 0.25);
+  --shadow-paper-sm: 0 1px 3px rgba(16, 32, 43, 0.18);
+  --shadow-recorte: 0 0 0 9999px rgba(8, 26, 36, 0.55);
+  /* Logotipo sobre el panel océano del acceso. */
+  --drop-shadow-marca: 0 16px 28px rgba(0, 20, 30, 0.35);
 
   /* Curvas: salida tipo resorte (sin rebote) y su espejo para cerrar */
   --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
@@ -200,6 +259,7 @@
       --color-brand-faint: #112832;
       --color-brand-soft-hover: #1a4253;
       --color-on-accent: #04161d;
+      --color-focus: #42abc6;
 
       /* Estados y categorías con la misma intensidad: fondo tenue del tono y texto más claro */
       /* Poco saturados: fondo con baja opacidad del tono sobre la superficie y texto del mismo tono, más claro y apagado. */
@@ -228,7 +288,8 @@
       --shadow-raised: 0 0 0 1px rgba(255, 255, 255, 0.075), 0 10px 28px -16px rgba(0, 0, 0, 0.6);
       --shadow-panel: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 24px 64px -24px rgba(0, 0, 0, 0.7);
       --shadow-pop: 0 0 0 1px rgba(255, 255, 255, 0.085), 0 16px 40px -18px rgba(0, 0, 0, 0.65);
-      --shadow-focus: 0 0 0 4px rgba(66, 171, 198, 0.28);
+      --shadow-accent: none;
+      --shadow-sticky: -10px 0 12px -12px rgba(0, 0, 0, 0.6);
     }
   }
 
@@ -265,8 +326,8 @@
     background: var(--color-canvas);
     color: var(--color-ink);
     font-family: var(--font-sans);
-    font-size: 14px;
-    line-height: 1.5;
+    font-size: var(--text-base);
+    line-height: var(--leading-normal);
     font-feature-settings: "cv11", "ss01";
   }
 
@@ -291,31 +352,39 @@
     cursor: pointer;
   }
 
+  /*
+   * Foco (único en toda la plataforma):
+   * - botones, enlaces, tarjetas, pestañas, casillas: contorno de 2 px del color
+   *   de foco, separado 2 px, solo con teclado (:focus-visible); sin sombra;
+   * - campos de texto: solo el borde cambia al color de foco (ver más abajo).
+   */
   :focus-visible {
-    outline: 2px solid var(--color-brand);
+    outline: 2px solid var(--color-focus);
     outline-offset: 2px;
   }
-  /* Elementos con el estilo de selección (barra lateral, resultados): nunca un contorno brillante; solo con teclado, un borde interior sutil. */
+  /* Filas y opciones que llenan su contenedor (barra lateral, resultados, renglones de lista: .seleccion o .foco-interior): el mismo indicador de 2 px, pero por dentro para que no lo recorte el contenedor; solo con teclado. */
   .seleccion:focus {
     outline: none;
   }
-  .seleccion:focus-visible {
+  .seleccion:focus-visible,
+  .foco-interior:focus-visible {
     outline: none;
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-brand) 45%, transparent);
+    box-shadow: inset 0 0 0 2px var(--color-focus);
   }
-  /* Dentro de menús y popovers: la opción enfocada usa el fondo tenue; el foco de teclado es un borde interior sutil, nunca un contorno azul. */
+  /* Dentro de menús y popovers: la opción enfocada usa el fondo tenue; el foco de teclado es el mismo borde interior de 2 px. */
   [data-radix-popper-content-wrapper] :focus {
     outline: none;
   }
-  [data-radix-popper-content-wrapper] :focus-visible {
+  /* Los campos de texto dentro de un popover conservan su foco de borde (sin anillo). */
+  [data-radix-popper-content-wrapper] :focus-visible:not(input, textarea, select) {
     outline: none;
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-brand) 45%, transparent);
+    box-shadow: inset 0 0 0 2px var(--color-focus);
   }
 
-  /* Campos de texto: al enfocar solo cambia el color del borde (lo pone cada
-     control); sin contorno, anillo ni resplandor. El indicador de foco con
-     contorno queda para botones y controles que no son de texto, y solo con
-     teclado (:focus-visible). */
+  /* Campos de texto: al enfocar solo cambia el color del borde a --color-focus
+     (lo pone cada control con focus:border-focus); sin contorno, anillo ni
+     resplandor, con ratón y con teclado. El borde de 1 px del color de foco
+     contrasta más de 3:1 con el campo (WCAG 2.4.7 y 1.4.11). */
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):is(:focus, :focus-visible),
   textarea:is(:focus, :focus-visible),
   select:is(:focus, :focus-visible),
@@ -493,40 +562,41 @@
   }
 
   /* Títulos grandes: tracking negativo y leading apretado, misma familia. */
+  /* Encabezados: title-1 título de página · title-2 ventanas y secciones grandes · title-3 tarjetas y secciones · eyebrow antetítulo. */
   .display {
     font-weight: 700;
-    letter-spacing: -0.03em;
+    letter-spacing: var(--tracking-display);
     line-height: 1.05;
   }
   .title-1 {
-    font-size: 28px;
+    font-size: var(--text-4xl);
     font-weight: 700;
-    letter-spacing: -0.025em;
+    letter-spacing: var(--tracking-tight);
     line-height: 1.15;
   }
   .title-2 {
-    font-size: 20px;
+    font-size: var(--text-2xl);
     font-weight: 600;
     letter-spacing: -0.02em;
     line-height: 1.2;
   }
   .title-3 {
-    font-size: 16px;
+    font-size: var(--text-lg);
     font-weight: 600;
-    letter-spacing: -0.012em;
+    letter-spacing: var(--tracking-snug);
     line-height: 1.3;
   }
   .eyebrow {
-    font-size: 11.5px;
+    font-size: var(--text-2xs);
     font-weight: 600;
-    letter-spacing: 0.04em;
+    letter-spacing: var(--tracking-wide);
     text-transform: uppercase;
   }
 
   .code {
     font-family: var(--font-mono);
     font-size: 0.92em;
-    letter-spacing: -0.01em;
+    letter-spacing: var(--tracking-snug);
   }
 
   /* Formato en solo lectura: los controles desactivados se leen como texto, sin el aspecto de "prohibido". */

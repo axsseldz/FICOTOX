@@ -126,7 +126,7 @@ function Externos() {
         />
       </div>
       <Toolbar>
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por identificador, título o emisor" className="w-full md:w-[360px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por identificador, título o emisor" className="min-w-0 flex-1 md:w-[360px] md:flex-none" />
         <FilterMenu groups={groups} toggles={data?.puede.ver_obsoletos ? [{ key: "obsoletos", label: "Mostrar obsoletos", description: "Versiones retiradas, solo para consulta histórica", checked: obsoletos, onChange: setObsoletos }] : []} />
       </Toolbar>
       {/* Ancho de las acciones del renglon: solo icono en tableta, con texto desde xl (encabezados y renglones alineados). */}
@@ -164,21 +164,21 @@ function Externos() {
               <span key="d" className="flex min-w-0 items-start gap-3">
                 <IconoArea area={a} size="sm" />
                 <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="code break-all text-[12.5px] font-semibold text-ink-2">{x.clave}</span>
-                  <span className="break-words text-[14px] font-semibold leading-snug text-ink">{x.titulo}</span>
-                  <span className="text-[12px] text-ink-3">
+                  <span className="code break-all text-xs font-semibold text-ink-2">{x.clave}</span>
+                  <span className="break-words text-base font-semibold leading-snug text-ink">{x.titulo}</span>
+                  <span className="text-xs text-ink-3">
                     {a.codigo} · {nombreTipo(cat?.tipos, x.tipo_codigo)}
                   </span>
                 </span>
               </span>,
-              <span key="o" className="flex flex-col text-[13px] text-ink-2">
+              <span key="o" className="flex flex-col text-sm text-ink-2">
                 <span>{x.fuente || "—"}</span>
-                <span className="text-[12px] text-ink-3">Versión {x.version_fecha || "—"}</span>
+                <span className="text-xs text-ink-3">Versión {x.version_fecha || "—"}</span>
               </span>,
-              x.responsable_nombre ? <span key="r" className="text-[13px] text-ink-2">{x.responsable_nombre}</span> : <SinDato key="r" />,
-              <span key="p" className="flex flex-col text-[13px] text-ink-2">
+              x.responsable_nombre ? <span key="r" className="text-sm text-ink-2">{x.responsable_nombre}</span> : <SinDato key="r" />,
+              <span key="p" className="flex flex-col text-sm text-ink-2">
                 <span className="tnum">{formatearFecha(x.proxima_revision)}</span>
-                {x.ultima_verificacion ? <span className="text-[12px] text-ink-3">Verificado {formatearFecha(x.ultima_verificacion)}</span> : null}
+                {x.ultima_verificacion ? <span className="text-xs text-ink-3">Verificado {formatearFecha(x.ultima_verificacion)}</span> : null}
               </span>,
               <span key="e" className="flex flex-wrap items-center gap-1.5">
                 <EstadoDocumentoEtiqueta estado={x.estado} />

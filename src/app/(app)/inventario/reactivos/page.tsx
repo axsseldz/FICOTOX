@@ -39,17 +39,17 @@ function celdasReactivo(item: ApiRecord) {
     <span key="p" className={inactive ? "flex min-w-0 items-center gap-3 opacity-60" : "flex min-w-0 items-center gap-3"}>
       <IconoCategoria categoria={item.tipo_reactivo || item.categoria} />
       <span className="flex min-w-0 flex-col">
-        <span className="text-[14.5px] leading-tight font-semibold text-ink">
+        <span className="text-base leading-tight font-semibold text-ink">
           {formatReactivoName(item)}
           {inactive ? <Badge tone="danger" className="ml-2 align-middle">Baja</Badge> : null}
         </span>
-        <span className="text-[12.5px] text-ink-3">{[getReactivoTypeLabel(item.tipo_reactivo || item.categoria), item.marca].filter(Boolean).join(" · ")}</span>
+        <span className="text-xs text-ink-3">{[getReactivoTypeLabel(item.tipo_reactivo || item.categoria), item.marca].filter(Boolean).join(" · ")}</span>
       </span>
     </span>,
-    <span key="u" className="text-[13.5px] text-ink-2">{getReactivoLocation(item) === "-" ? <span className="text-ink-4">—</span> : getReactivoLocation(item)}</span>,
-    esColumna ? <span key="c" className="text-[13px] text-ink-4">—</span> : Number(item.caducidad_indefinida) === 1 ? <span key="c" className="text-[13.5px] text-ink-2">Indefinida</span> : <Caducidad key="c" value={expiryOf(item)} />,
+    <span key="u" className="text-sm text-ink-2">{getReactivoLocation(item) === "-" ? <span className="text-ink-4">—</span> : getReactivoLocation(item)}</span>,
+    esColumna ? <span key="c" className="text-sm text-ink-4">—</span> : Number(item.caducidad_indefinida) === 1 ? <span key="c" className="text-sm text-ink-2">Indefinida</span> : <Caducidad key="c" value={expiryOf(item)} />,
     esColumna ? (
-      <span key="e" className="text-[13px] text-ink-3">{[item.lote ? `Lote ${item.lote}` : null, item.nuevo_usado].filter(Boolean).join(" · ") || "Sin existencias"}</span>
+      <span key="e" className="text-sm text-ink-3">{[item.lote ? `Lote ${item.lote}` : null, item.nuevo_usado].filter(Boolean).join(" · ") || "Sin existencias"}</span>
     ) : (
       <StockMeter key="e" current={stock.current} max={stock.max} min={stock.min} unit={stock.unit} low={stock.low} />
     ),
@@ -231,7 +231,7 @@ function ReactivosContent() {
           </>
         }
       >
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre, lote, CAS o catálogo" className="w-full md:w-[340px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre, lote, CAS o catálogo" className="min-w-0 flex-1 md:w-[340px] md:flex-none" />
         <FilterMenu groups={groups} toggles={toggles} gruposFinales={ordenar} vistaAlFinal />
       </Toolbar>
 
@@ -259,7 +259,7 @@ function ReactivosContent() {
           accion: canCreate && !search && filter === "todos" ? <Button onClick={() => modal.open(null)}>Nuevo reactivo</Button> : undefined,
         }}
       />
-      {items && visible.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-3">{visible.length === 1 ? "1 reactivo" : `${fmt(visible.length)} reactivos`}</p> : null}
+      {items && visible.length ? <p className="tnum mt-2 px-1 text-xs text-ink-3">{visible.length === 1 ? "1 reactivo" : `${fmt(visible.length)} reactivos`}</p> : null}
 
       <InsumoVentana
         tipo="reactivo"

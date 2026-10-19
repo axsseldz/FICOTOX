@@ -267,12 +267,12 @@ function Ficha({ id }: { id: string }) {
           <div className="flex min-w-0 flex-[1_1_14rem] items-center gap-3.5">
             <IconoArea area={item.area} />
             <div className="flex min-w-0 flex-col gap-1">
-              <span className="code text-[12.5px] font-semibold text-ink-2" data-testid="sgc-clave">
+              <span className="code text-xs font-semibold text-ink-2" data-testid="sgc-clave">
                 {item.clave}
               </span>
-              <h1 className="break-words text-[18px] font-semibold leading-snug tracking-[-0.01em] text-ink">{item.titulo}</h1>
+              <h1 className="break-words text-xl font-semibold leading-snug tracking-snug text-ink">{item.titulo}</h1>
               <div className="flex flex-wrap items-center gap-1.5">
-                {vigente ? <span className="tnum text-[12.5px] font-medium text-ink-2">{item.origen === "externo" && vigente.version_externa ? `Versión ${vigente.version_externa}` : `Rev. ${vigente.numero}`}</span> : null}
+                {vigente ? <span className="tnum text-xs font-medium text-ink-2">{item.origen === "externo" && vigente.version_externa ? `Versión ${vigente.version_externa}` : `Rev. ${vigente.numero}`}</span> : null}
                 <span className="transicion-estado inline-flex" key={item.estado}>
                   <EstadoDocumentoEtiqueta estado={item.estado} />
                 </span>
@@ -288,7 +288,7 @@ function Ficha({ id }: { id: string }) {
                   {principal.etiqueta}
                 </Button>
               ) : null}
-              {menu.length ? <ActionMenu items={menu} label="Más acciones" /> : null}
+              {menu.length ? <ActionMenu items={menu} label="Más acciones" size="lg" /> : null}
             </div>
           ) : null}
         </div>
@@ -357,19 +357,19 @@ function Ficha({ id }: { id: string }) {
             ) : null}
             {data.historial ? (
               <details className="group/historial rounded-card bg-surface shadow-card" data-testid="sgc-historial">
-                <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3.5 text-[14px] font-semibold text-ink focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+                <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3.5 text-base font-semibold text-ink [&::-webkit-details-marker]:hidden">
                   <ListBullets size={16} weight="bold" className="text-ink-3" aria-hidden="true" />
                   Historial de revisiones
                   <span className="tnum font-normal text-ink-3">({revisiones.length})</span>
-                  <span className="ml-auto text-[12px] font-normal text-ink-3 group-open/historial:hidden">Mostrar</span>
-                  <span className="ml-auto hidden text-[12px] font-normal text-ink-3 group-open/historial:inline">Ocultar</span>
+                  <span className="ml-auto text-xs font-normal text-ink-3 group-open/historial:hidden">Mostrar</span>
+                  <span className="ml-auto hidden text-xs font-normal text-ink-3 group-open/historial:inline">Ocultar</span>
                 </summary>
                 <div className="border-t border-line px-5 pt-2 pb-4">
                   <Historial revisiones={revisiones} onDescargar={descargar} />
                 </div>
               </details>
             ) : data.revisiones_ocultas > 0 ? (
-              <p className="text-[12.5px] text-ink-3">Hay {data.revisiones_ocultas} revisión(es) más en el historial; consultarlas requiere el permiso de consultar el histórico.</p>
+              <p className="text-xs text-ink-3">Hay {data.revisiones_ocultas} revisión(es) más en el historial; consultarlas requiere el permiso de consultar el histórico.</p>
             ) : null}
           </div>
         ) : null}
@@ -430,9 +430,9 @@ function Avisos({ item, vigente, enCurso, diagnostico }: { item: FichaDocumento[
   if (!avisos.length) return null;
   const color = { danger: "text-danger-text", warning: "text-warning-text", info: "text-brand-strong" };
   return (
-    <div role="status" className="flex flex-col divide-y divide-line overflow-hidden rounded-[12px] bg-surface ring-1 ring-line" data-testid="sgc-avisos">
+    <div role="status" className="flex flex-col divide-y divide-line overflow-hidden rounded-box bg-surface ring-1 ring-line" data-testid="sgc-avisos">
       {avisos.map((a) => (
-        <p key={a.clave} className="flex items-start gap-2 px-3.5 py-2 text-[13px] leading-snug text-ink-2" data-testid={a.testid}>
+        <p key={a.clave} className="flex items-start gap-2 px-3.5 py-2 text-sm leading-snug text-ink-2" data-testid={a.testid}>
           <a.icono size={15} weight="bold" className={cn("mt-px shrink-0", color[a.tono])} aria-hidden="true" />
           <span>
             <b className="font-semibold text-ink">{a.titulo}.</b> {a.texto}
@@ -447,7 +447,7 @@ function Tarjeta({ titulo, accion, testid, children }: { titulo: string; accion?
   return (
     <section className="flex flex-col gap-3 rounded-card bg-surface p-5 shadow-card" data-testid={testid} aria-label={titulo}>
       <header className="flex items-center gap-2">
-        <h2 className="text-[14.5px] font-semibold text-ink">{titulo}</h2>
+        <h2 className="text-base font-semibold text-ink">{titulo}</h2>
         {accion ? <span className="ml-auto">{accion}</span> : null}
       </header>
       {children}
@@ -463,8 +463,8 @@ function Lista({ datos, columnas = 2 }: { datos: Array<[string, ReactNode]>; col
     <dl className={cn("grid gap-x-6 gap-y-3", columnas === 3 ? "sm:grid-cols-3" : columnas === 2 ? "sm:grid-cols-2" : "")}>
       {llenos.map(([etiqueta, valor]) => (
         <div key={etiqueta} className="flex min-w-0 flex-col gap-0.5">
-          <dt className="text-[11.5px] font-medium uppercase tracking-wide text-ink-3">{etiqueta}</dt>
-          <dd className="break-words text-[13.5px] text-ink">{valor}</dd>
+          <dt className="text-xs text-ink-3">{etiqueta}</dt>
+          <dd className="break-words text-base text-ink">{valor}</dd>
         </div>
       ))}
     </dl>
@@ -523,10 +523,10 @@ function Detalles({ data, vigente, enCurso }: { data: FichaDocumento; vigente: R
 
 function ArchivoFila({ a, abrir, onDescargar }: { a: Archivo; abrir: boolean; onDescargar: (a: Archivo) => void }) {
   return (
-    <li className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[10px] px-3 py-2 ring-1 ring-line", a.reemplazado_en ? "bg-surface-2/60 text-ink-3" : "bg-surface-2")} data-testid="sgc-archivo" data-tipo={a.tipo}>
-      <span className="text-[12px] font-semibold text-ink-2">{a.tipo === "pdf" ? "PDF de consulta" : "Archivo fuente"}</span>
-      <span className="min-w-0 flex-1 break-all text-[13px] text-ink">{a.nombre_original}</span>
-      <span className="tnum text-[12px] text-ink-3" title={a.sha256}>
+    <li className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 rounded-field px-3 py-2 ring-1 ring-line", a.reemplazado_en ? "bg-surface-2/60 text-ink-3" : "bg-surface-2")} data-testid="sgc-archivo" data-tipo={a.tipo}>
+      <span className="text-xs font-semibold text-ink-2">{a.tipo === "pdf" ? "PDF de consulta" : "Archivo fuente"}</span>
+      <span className="min-w-0 flex-1 break-all text-sm text-ink">{a.nombre_original}</span>
+      <span className="tnum text-xs text-ink-3" title={a.sha256}>
         {fmtBytes(a.tamano_bytes)} · SHA-256 {huellaCorta(a.sha256)}
       </span>
       {a.reemplazado_en ? <Badge tone="neutral">Sustituido {formatearFecha(a.reemplazado_en)}</Badge> : null}
@@ -546,7 +546,7 @@ function RevisionEnCurso({ revision: r, onDescargar }: { revision: Revision; onD
   return (
     <div className="flex flex-col gap-4">
       {r.fecha_limite || r.estado !== "borrador" ? (
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-3">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3">
           {r.fecha_limite ? (
             <span className={cn(vencida && "font-semibold text-danger-text")} data-testid="sgc-fecha-limite">
               Fecha límite: {formatearFecha(r.fecha_limite)}
@@ -567,7 +567,7 @@ function RevisionEnCurso({ revision: r, onDescargar }: { revision: Revision; onD
         ]}
       />
       <div className="flex flex-col gap-2">
-        <h3 className="text-[13px] font-semibold text-ink">Archivos</h3>
+        <h3 className="text-sm font-semibold text-ink">Archivos</h3>
         {activos.length ? (
           <ul className="flex flex-col gap-2">
             {activos.map((a) => (
@@ -575,10 +575,10 @@ function RevisionEnCurso({ revision: r, onDescargar }: { revision: Revision; onD
             ))}
           </ul>
         ) : (
-          <p className="text-[13px] text-ink-3">Todavía no tiene archivos.</p>
+          <p className="text-sm text-ink-3">Todavía no tiene archivos.</p>
         )}
         {reemplazados.length ? (
-          <details className="text-[13px] text-ink-3">
+          <details className="text-sm text-ink-3">
             <summary className="cursor-pointer">Archivos sustituidos ({reemplazados.length})</summary>
             <ul className="mt-2 flex flex-col gap-2">
               {reemplazados.map((a) => (
@@ -600,18 +600,18 @@ function LineaTiempo({ pasos }: { pasos: Revision["linea_tiempo"] }) {
   if (!pasos?.length) return null;
   return (
     <section aria-label="Línea de tiempo" className="flex flex-col gap-2" data-testid="sgc-linea-tiempo">
-      <h3 className="text-[13px] font-semibold text-ink">Línea de tiempo</h3>
+      <h3 className="text-sm font-semibold text-ink">Línea de tiempo</h3>
       <ol className="relative flex flex-col gap-3 border-l border-line pl-4">
         {pasos.map((p) => (
           <li key={p.id} className="relative" data-accion={p.accion}>
             <span className={cn("absolute top-1.5 -left-[21px] h-2.5 w-2.5 rounded-full ring-2 ring-surface", /rechazar/.test(p.accion) ? "bg-danger" : /devolver/.test(p.accion) ? "bg-warning" : /publicar|autorizar$|registrar_vigente|renovacion_autorizar/.test(p.accion) ? "bg-success" : "bg-brand")} aria-hidden="true" />
-            <p className="text-[13.5px] text-ink">
+            <p className="text-sm text-ink">
               <span className="font-medium">{ACCION_FLUJO[p.accion] || p.accion}</span>
               {p.usuario_nombre ? ` · ${p.usuario_nombre}` : ""}
               {p.papel ? <span className="text-ink-3"> ({PAPEL[p.papel] || p.papel}{p.cargo ? `, ${p.cargo}` : ""})</span> : null}
             </p>
-            <p className="text-[12px] text-ink-3">{formatearFechaHora(p.fecha)}</p>
-            {p.comentario ? <p className="mt-0.5 whitespace-pre-line text-[13px] text-ink-2">«{p.comentario}»</p> : null}
+            <p className="text-xs text-ink-3">{formatearFechaHora(p.fecha)}</p>
+            {p.comentario ? <p className="mt-0.5 whitespace-pre-line text-sm text-ink-2">«{p.comentario}»</p> : null}
           </li>
         ))}
       </ol>
@@ -620,11 +620,11 @@ function LineaTiempo({ pasos }: { pasos: Revision["linea_tiempo"] }) {
 }
 
 function Historial({ revisiones, onDescargar }: { revisiones: Revision[]; onDescargar: (a: Archivo) => void }) {
-  if (!revisiones.length) return <p className="text-[13px] text-ink-3">Sin revisiones.</p>;
+  if (!revisiones.length) return <p className="text-sm text-ink-3">Sin revisiones.</p>;
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[640px] text-[13px]">
-        <thead className="text-left text-[12px] text-ink-3">
+      <table className="w-full min-w-[640px] text-sm">
+        <thead className="text-left text-xs text-ink-3">
           <tr className="border-b border-line">
             <th className="py-2 pr-3 font-medium">Revisión</th>
             <th className="py-2 pr-3 font-medium">Estado</th>
@@ -641,14 +641,14 @@ function Historial({ revisiones, onDescargar }: { revisiones: Revision[]; onDesc
               <tr key={r.id} className="align-top" data-testid="sgc-historial-fila" data-numero={r.numero} data-estado={r.estado}>
                 <td className="tnum py-2 pr-3 font-semibold text-ink">
                   {r.numero}
-                  {r.version_externa ? <span className="block text-[11.5px] font-normal text-ink-3">Versión {r.version_externa}</span> : null}
+                  {r.version_externa ? <span className="block text-2xs font-normal text-ink-3">Versión {r.version_externa}</span> : null}
                 </td>
                 <td className="py-2 pr-3">
                   <EstadoRevisionEtiqueta estado={r.estado} />
-                  {r.origen_registro === "carga_inicial" ? <span className="mt-1 block text-[11.5px] text-ink-3">Carga inicial</span> : null}
-                  {r.renovada_en ? <span className="mt-1 block text-[11.5px] text-success-text">Renovado {formatearFecha(r.renovada_en)}</span> : null}
+                  {r.origen_registro === "carga_inicial" ? <span className="mt-1 block text-2xs text-ink-3">Carga inicial</span> : null}
+                  {r.renovada_en ? <span className="mt-1 block text-2xs text-success-text">Renovado {formatearFecha(r.renovada_en)}</span> : null}
                   {r.linea_tiempo?.length ? (
-                    <details className="mt-1 text-[12px] text-ink-3">
+                    <details className="mt-1 text-xs text-ink-3">
                       <summary className="cursor-pointer">Línea de tiempo</summary>
                       <div className="mt-2 min-w-[260px]">
                         <LineaTiempo pasos={r.linea_tiempo} />

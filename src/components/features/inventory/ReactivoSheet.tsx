@@ -204,7 +204,7 @@ export function ReactivoSheet({ open, item, onClose }: { open: boolean; item: Ap
         )}
         {config && !esColumna ? (
           <FormSection title="3. Existencia" description="El total inicial se calcula (capacidad × piezas). La existencia actual sale de los movimientos y no se escribe a mano: usa Registrar movimiento para anotar entradas, salidas, consumos o ajustes por conteo.">
-            <div className="flex flex-wrap gap-x-8 gap-y-2 text-[14px]">
+            <div className="flex flex-wrap gap-x-8 gap-y-2 text-base">
               <p className="text-ink-2">
                 Total inicial: <b className="tnum text-ink">{total !== null ? `${fmt(total)} ${unidadTotal}`.trim() : "—"}</b>
               </p>

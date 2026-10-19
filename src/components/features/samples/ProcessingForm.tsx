@@ -617,7 +617,7 @@ export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord |
       <FormCard id="sec-organismo" title="Organismo" description="Tipo de organismo y parte a procesar.">
         <div className="grid gap-6 lg:grid-cols-2">
           <CampoValidado id="p-organismo" className="flex flex-col gap-2">
-            <p className="text-[13px] font-medium text-ink-2">Tipo de organismo</p>
+            <p className="text-sm font-medium text-ink-2">Tipo de organismo</p>
             {(
               [
                 ["bivalvos", "Bivalvos", "Moluscos: lavado, desconche, drenado y molienda."],
@@ -635,7 +635,7 @@ export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord |
             ) : null}
           </CampoValidado>
           <CampoValidado id="p-partes" className="flex flex-col gap-2">
-            <p className="text-[13px] font-medium text-ink-2">Parte del organismo</p>
+            <p className="text-sm font-medium text-ink-2">Parte del organismo</p>
             {PARTES.map(([value, label]) => (
               <ChoiceCard key={value} checked={form.partes.includes(value)} onChange={(checked) => patch({ partes: checked ? [...form.partes.filter((v) => v !== value), value] : form.partes.filter((v) => v !== value) })} label={label} />
             ))}

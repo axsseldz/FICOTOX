@@ -78,8 +78,8 @@ function Baja({ item }: { item: ApiRecord }) {
   if (Number(item.activo ?? 1) !== 0) return null;
   return (
     <VentanaTarjeta className="bg-danger-soft/50 ring-danger/15">
-      <p className="text-[14px] font-medium text-ink">Dado de baja{item.baja_en ? ` el ${formatearFecha(item.baja_en)}` : ""}</p>
-      {item.baja_motivo ? <p className="mt-0.5 text-[13.5px] text-ink-2">Motivo: {String(item.baja_motivo)}</p> : null}
+      <p className="text-base font-medium text-ink">Dado de baja{item.baja_en ? ` el ${formatearFecha(item.baja_en)}` : ""}</p>
+      {item.baja_motivo ? <p className="mt-0.5 text-sm text-ink-2">Motivo: {String(item.baja_motivo)}</p> : null}
     </VentanaTarjeta>
   );
 }
@@ -91,16 +91,16 @@ function TarjetaExistencia({ actual, maximo, minimo, unidad, baja, vacia, nota }
     <VentanaSeccion titulo="Existencia" i={1}>
       <VentanaTarjeta className="flex flex-col gap-3 px-5 py-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
-          <p className={`tnum text-[30px] leading-none font-semibold tracking-[-0.02em] ${tono}`}>
+          <p className={`tnum text-4xl leading-none font-semibold tracking-tight ${tono}`}>
             {actual !== null ? fmt(actual) : "—"}
-            <span className="ml-1.5 text-[15px] font-medium text-ink-3">{unidad}</span>
+            <span className="ml-1.5 text-md font-medium text-ink-3">{unidad}</span>
           </p>
           <Badge tone={vacia ? "danger" : baja ? "warning" : "success"} dot>
             {vacia ? "Sin existencia" : baja ? "Existencia baja" : "Existencia suficiente"}
           </Badge>
         </div>
-        {actual !== null ? <StockMeter size="lg" current={actual} max={maximo ?? undefined} min={minimo ?? undefined} unit={unidad} low={baja} label={nota} /> : <p className="text-[13.5px] text-ink-3">Todavía no se registra la cantidad.</p>}
-        <div className="flex flex-wrap gap-x-5 gap-y-1 text-[12.5px] text-ink-3">
+        {actual !== null ? <StockMeter size="lg" current={actual} max={maximo ?? undefined} min={minimo ?? undefined} unit={unidad} low={baja} label={nota} /> : <p className="text-sm text-ink-3">Todavía no se registra la cantidad.</p>}
+        <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-3">
           {minimo ? <span>Mínimo: {conUnidad(minimo, unidad)}</span> : null}
           {maximo ? <span>Máximo: {conUnidad(maximo, unidad)}</span> : null}
         </div>
@@ -161,7 +161,7 @@ function FichaReactivo({ item, acciones }: { item: ApiRecord; acciones: Acciones
             )}
             {item.descripcion || item.observaciones ? (
               <VentanaSeccion titulo="Notas" i={2}>
-                <VentanaTarjeta className="flex flex-col gap-2 text-[13.5px] text-ink-2">
+                <VentanaTarjeta className="flex flex-col gap-2 text-sm text-ink-2">
                   {item.descripcion ? <p className="break-words whitespace-pre-line"><b className="font-medium text-ink">Descripción:</b> {String(item.descripcion)}</p> : null}
                   {item.observaciones ? <p className="break-words whitespace-pre-line"><b className="font-medium text-ink">Observaciones:</b> {String(item.observaciones)}</p> : null}
                 </VentanaTarjeta>
@@ -240,7 +240,7 @@ function FichaConsumible({ item, acciones }: { item: ApiRecord; acciones: Accion
             </VentanaSeccion>
             {item.observaciones ? (
               <VentanaSeccion titulo="Observaciones" i={2}>
-                <VentanaTarjeta className="text-[13.5px] break-words whitespace-pre-line text-ink-2">{String(item.observaciones)}</VentanaTarjeta>
+                <VentanaTarjeta className="text-sm break-words whitespace-pre-line text-ink-2">{String(item.observaciones)}</VentanaTarjeta>
               </VentanaSeccion>
             ) : null}
             <VentanaSeccion titulo="Incidencias" i={3}>

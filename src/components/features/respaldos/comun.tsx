@@ -61,7 +61,7 @@ export function InsigniaVerificacion({ verificacion }: { verificacion: { resulta
 /* Marca discreta del respaldo que la retención nunca borra. */
 export function MarcaProtegido() {
   return (
-    <span className="inline-flex items-center gap-1 text-[11.5px] text-ink-3" title="La limpieza automática nunca lo borra: es el último que se comprobó que se puede recuperar.">
+    <span className="inline-flex items-center gap-1 text-2xs text-ink-3" title="La limpieza automática nunca lo borra: es el último que se comprobó que se puede recuperar.">
       <ShieldCheck size={13} weight="duotone" aria-hidden="true" /> Se conserva siempre
     </span>
   );

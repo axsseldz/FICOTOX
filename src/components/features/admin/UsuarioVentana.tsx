@@ -14,7 +14,7 @@ import { DateInput } from "@/components/ui/DateInput";
 import { Field, FormGrid, Select, Textarea } from "@/components/ui/Field";
 import { Dialog, usePrompt } from "@/components/ui/Overlay";
 import { PestanasDeslizantes } from "@/components/ui/PestanasDeslizantes";
-import { Avatar, Badge, Skeleton, type Tone } from "@/components/ui/Primitives";
+import { Avatar, Badge, Skeleton, type Tone, Correo } from "@/components/ui/Primitives";
 import { cn } from "@/components/ui/cn";
 import { VentanaCentrada, VentanaTitulo } from "@/components/ui/VentanaCentrada";
 import { useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
@@ -146,7 +146,7 @@ function FichaUsuario({ base, todos, onDesbloquear, onAbrirPersona }: { base: Ap
         titulo={
           <>
             {String(item.nombre || item.email || "Sin nombre")}
-            {esPropia ? <span className="ml-1.5 text-[13px] font-normal text-ink-3">(tú)</span> : null}
+            {esPropia ? <span className="ml-1.5 text-sm font-normal text-ink-3">(tú)</span> : null}
           </>
         }
         insignia={
@@ -154,7 +154,7 @@ function FichaUsuario({ base, todos, onDesbloquear, onAbrirPersona }: { base: Ap
             {estado.label}
           </Badge>
         }
-        subtitulo={<span className="break-all">{String(item.email || "")}</span>}
+        subtitulo={<Correo valor={item.email} />}
       >
         {roles.length ? (
           <div className="flex flex-wrap gap-1.5" aria-label="Roles vigentes">
@@ -211,9 +211,9 @@ function FichaUsuario({ base, todos, onDesbloquear, onAbrirPersona }: { base: Ap
                   ))}
                 </ul>
               ) : (
-                <p className="rounded-[14px] bg-surface-2 px-4 py-3.5 text-[13.5px] text-ink-3 ring-1 ring-line">No tiene roles vigentes: puede entrar, pero no ve nada.</p>
+                <p className="rounded-card bg-surface-2 px-4 py-3.5 text-sm text-ink-3 ring-1 ring-line">No tiene roles vigentes: puede entrar, pero no ve nada.</p>
               )}
-              {canAdmin && esPropia ? <p className="text-[13px] text-ink-3">Nadie puede asignarse ni quitarse roles a sí mismo: pídelo a otra persona que administre usuarios.</p> : null}
+              {canAdmin && esPropia ? <p className="text-sm text-ink-3">Nadie puede asignarse ni quitarse roles a sí mismo: pídelo a otra persona que administre usuarios.</p> : null}
               {canAdmin && !esPropia ? (
                 <div>
                   <Button size="sm" icon={<Plus size={14} weight="bold" />} onClick={() => setAsignar(true)}>
@@ -222,8 +222,8 @@ function FichaUsuario({ base, todos, onDesbloquear, onAbrirPersona }: { base: Ap
                 </div>
               ) : null}
               {anteriores.length ? (
-                <details className="group/hist rounded-[14px] bg-surface-2 ring-1 ring-line">
-                  <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-[13.5px] font-medium text-ink-2 [&::-webkit-details-marker]:hidden">
+                <details className="group/hist rounded-card bg-surface-2 ring-1 ring-line">
+                  <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-sm font-medium text-ink-2 [&::-webkit-details-marker]:hidden">
                     Historial de roles ({anteriores.length})
                     <span aria-hidden="true" className="text-ink-4 transition-transform duration-200 ease-[var(--ease-spring)] group-open/hist:rotate-180">
                       ▾
@@ -248,17 +248,17 @@ function FichaUsuario({ base, todos, onDesbloquear, onAbrirPersona }: { base: Ap
         lateral={
           <>
             <TarjetaLateral icono={temporal ? <Hourglass size={15} weight="duotone" /> : <UserCircleCheck size={15} weight="duotone" />} titulo="Cuenta" tono={item.cuenta_vigente === false && item.activo ? "warning" : "neutral"} i={0}>
-              <p className="text-[14.5px] font-medium text-ink">{temporal ? "Cuenta temporal" : "Cuenta permanente"}</p>
-              <p className="text-[13.5px] text-ink-2">
+              <p className="text-base font-medium text-ink">{temporal ? "Cuenta temporal" : "Cuenta permanente"}</p>
+              <p className="text-sm text-ink-2">
                 {item.vigente_hasta ? `Puede entrar ${item.vigente_desde ? `del ${formatearFecha(item.vigente_desde)} ` : ""}hasta el ${formatearFecha(item.vigente_hasta)}` : "Sin fecha de fin"}
                 {item.vigente_hasta && quedan(item.vigente_hasta) ? <span className="text-ink-3"> · {quedan(item.vigente_hasta)}</span> : null}
               </p>
               {item.vigente_hasta ? <BarraVigencia desde={item.vigente_desde || item.creado_en} hasta={item.vigente_hasta} /> : null}
-              {item.cuenta_vigente === false && item.activo ? <p className="text-[13px] text-warning-text">Está fuera de su vigencia: no puede entrar.</p> : null}
+              {item.cuenta_vigente === false && item.activo ? <p className="text-sm text-warning-text">Está fuera de su vigencia: no puede entrar.</p> : null}
             </TarjetaLateral>
             <TarjetaLateral icono={<Key size={15} weight="duotone" />} titulo="Acceso" tono={!item.tiene_password ? "warning" : "neutral"} i={1}>
               <DatoLateral etiqueta="Último acceso">{item.ultimo_acceso ? `${formatearFechaHora(item.ultimo_acceso)}` : "Nunca ha entrado"}</DatoLateral>
-              {!item.tiene_password ? <p className="text-[13px] text-warning-text">Todavía no tiene contraseña para entrar.</p> : Number(item.debe_cambiar_password) ? <p className="text-[13px] text-ink-3">Debe elegir una contraseña nueva al entrar.</p> : <p className="text-[13px] text-ink-3">Ya tiene contraseña.</p>}
+              {!item.tiene_password ? <p className="text-sm text-warning-text">Todavía no tiene contraseña para entrar.</p> : Number(item.debe_cambiar_password) ? <p className="text-sm text-ink-3">Debe elegir una contraseña nueva al entrar.</p> : <p className="text-sm text-ink-3">Ya tiene contraseña.</p>}
             </TarjetaLateral>
             {temporal || item.supervisor_id ? (
               <TarjetaLateral icono={<Eye size={15} weight="duotone" />} titulo="Supervisor" i={2}>
@@ -266,16 +266,16 @@ function FichaUsuario({ base, todos, onDesbloquear, onAbrirPersona }: { base: Ap
                   <button
                     type="button"
                     onClick={() => onAbrirPersona(Number(item.supervisor_id))}
-                    className="press group flex items-center gap-3 rounded-[12px] bg-surface px-3 py-2.5 text-left shadow-card ring-1 ring-line transition-shadow duration-200 hover:shadow-raised focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none"
+                    className="press group flex items-center gap-3 rounded-box bg-surface px-3 py-2.5 text-left shadow-card ring-1 ring-line transition-shadow duration-200 hover:shadow-raised"
                   >
                     <Avatar name={supervisor?.nombre || item.supervisor_nombre} email={supervisor?.email} avatar={supervisor?.avatar} size="md" animado="al-pasar" />
                     <span className="flex min-w-0 flex-col">
-                      <span className="break-words text-[14px] font-medium text-ink">{String(item.supervisor_nombre || supervisor?.nombre || "Supervisor")}</span>
-                      <span className="text-[12.5px] text-ink-3">Da el visto bueno a lo que registra · ver su información</span>
+                      <span className="break-words text-base font-medium text-ink">{String(item.supervisor_nombre || supervisor?.nombre || "Supervisor")}</span>
+                      <span className="text-xs text-ink-3">Da el visto bueno a lo que registra · ver su información</span>
                     </span>
                   </button>
                 ) : (
-                  <p className="text-[13.5px] text-ink-3">Sin supervisor asignado.</p>
+                  <p className="text-sm text-ink-3">Sin supervisor asignado.</p>
                 )}
               </TarjetaLateral>
             ) : null}
@@ -298,17 +298,17 @@ function TarjetaRol({ a, i, onRevocar }: { a: ApiRecord; i: number; onRevocar?: 
   const desc = descripcionDeRol({ rol: a.rol, rol_clave: a.rol_clave });
   const activa = a.estado === "vigente" || a.estado === "futuro";
   return (
-    <li className={cn("entrada-escalonada flex flex-col gap-2.5 rounded-[14px] bg-surface px-4 py-3.5 ring-1 ring-line transition-shadow duration-200", activa ? "shadow-card hover:shadow-raised" : "opacity-80")} style={{ ["--i" as string]: i }} data-asignacion={String(a.id)}>
+    <li className={cn("entrada-escalonada flex flex-col gap-2.5 rounded-card bg-surface px-4 py-3.5 ring-1 ring-line transition-shadow duration-200", activa ? "shadow-card hover:shadow-raised" : "opacity-80")} style={{ ["--i" as string]: i }} data-asignacion={String(a.id)}>
       <div className="flex items-start gap-3">
         <IconoRol icono={desc.icono} />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[14.5px] font-semibold text-ink">{String(a.rol || "Rol")}</span>
+            <span className="text-base font-semibold text-ink">{String(a.rol || "Rol")}</span>
             <Badge tone={estado.tone} dot>
               {estado.label}
             </Badge>
           </div>
-          <p className="text-[13px] text-ink-2">{desc.proposito}</p>
+          <p className="text-sm text-ink-2">{desc.proposito}</p>
         </div>
         {onRevocar ? (
           <Button size="sm" variant="secondary" icon={<Prohibit size={14} />} onClick={onRevocar}>
@@ -317,7 +317,7 @@ function TarjetaRol({ a, i, onRevocar }: { a: ApiRecord; i: number; onRevocar?: 
         ) : null}
       </div>
       <div className="flex flex-col gap-1.5 pl-[52px]">
-        <p className="text-[12.5px] text-ink-3">
+        <p className="text-xs text-ink-3">
           Desde el {formatearFecha(a.vigente_desde)}
           {a.vigente_hasta ? ` hasta el ${formatearFecha(a.vigente_hasta)}` : ", sin fecha de fin"}
           {activa && a.vigente_hasta && quedan(a.vigente_hasta) ? ` · ${quedan(a.vigente_hasta)}` : ""}
@@ -325,7 +325,7 @@ function TarjetaRol({ a, i, onRevocar }: { a: ApiRecord; i: number; onRevocar?: 
         </p>
         {activa && a.vigente_hasta ? <BarraVigencia desde={a.vigente_desde} hasta={a.vigente_hasta} /> : null}
         {a.revocado_en ? (
-          <p className="text-[12.5px] text-danger">
+          <p className="text-xs text-danger">
             Revocado el {formatearFecha(a.revocado_en)}
             {a.revocado_por_nombre ? ` por ${String(a.revocado_por_nombre)}` : ""}
             {a.motivo_revocacion ? `: ${String(a.motivo_revocacion)}` : ""}
@@ -406,10 +406,9 @@ function AsignarRolDialog({ usuarioId, nombre, onCerrar, onListo }: { usuarioId:
             </Select>
           </Field>
           {elegido ? (
-            <p className="flex items-start gap-2 rounded-[12px] bg-brand-faint px-3 py-2.5 text-[13px] text-ink-2 sm:col-span-2">
-              <ShieldCheck size={16} weight="duotone" className="mt-0.5 shrink-0 text-brand" />
+            <Callout icon={<ShieldCheck size={18} weight="duotone" />} className="sm:col-span-2">
               {descripcionDeRol(elegido).proposito}
-            </p>
+            </Callout>
           ) : null}
           <Field label="Motivo" htmlFor="u-asignar-motivo" required className="sm:col-span-2">
             <Textarea id="u-asignar-motivo" rows={2} maxLength={300} value={nueva.motivo} onChange={(event) => setNueva((prev) => ({ ...prev, motivo: event.target.value }))} placeholder="Ej. Cambio de funciones" />

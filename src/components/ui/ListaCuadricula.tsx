@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, HTMLAttributes, ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from "react";
 import { cn } from "./cn";
 import { EmptyState, ErrorState, Skeleton } from "./Primitives";
 
@@ -13,7 +13,15 @@ import { EmptyState, ErrorState, Skeleton } from "./Primitives";
  * angostas cada renglon pasa a tarjeta con la misma jerarquia (la primera
  * columna arriba y las demas debajo, con su etiqueta). Nada se recorta: el
  * texto largo pasa de linea dentro de su columna.
+ *
+ * Cuadricula o tarjeta se decide por el ANCHO DISPONIBLE de la lista (no por
+ * el de la ventana): si la suma de los minimos de las columnas no cabe (tableta,
+ * laptop con la barra lateral abierta), se muestran tarjetas; asi ninguna
+ * columna queda cortada fuera de la vista.
  */
+
+/* Minimo en px de una pista ("minmax(220px,1.3fr)" -> 220, "140px" -> 140, "1fr" o var(...) -> 120). */
+const minimoPista = (pista: string): number => Number(/(\d+(?:\.\d+)?)px/.exec(pista)?.[1] ?? 120);
 
 export interface ColumnaLista {
   clave: string;
@@ -63,8 +71,22 @@ export function ListaCuadricula<T>({
 }) {
   const pistas = `${columnas.map((c) => c.ancho).join(" ")} ${anchoExtremo}`;
   const estilo = { ["--cols" as string]: pistas } as CSSProperties;
+  // Suma de minimos + sangria de la primera columna y separacion entre columnas.
+  const minimo = columnas.reduce((total, c) => total + minimoPista(c.ancho) + 16, 20) + minimoPista(anchoExtremo);
+  const caja = useRef<HTMLDivElement>(null);
+  const [cuadricula, setCuadricula] = useState(false);
+  useLayoutEffect(() => {
+    const el = caja.current;
+    if (!el) return;
+    const medir = () => setCuadricula(el.clientWidth >= minimo);
+    medir();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(medir);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [minimo]);
   return (
-    <div className="overflow-hidden rounded-card bg-surface shadow-card" aria-label={etiqueta} role="region">
+    <div ref={caja} className="overflow-hidden rounded-card bg-surface shadow-card" aria-label={etiqueta} role="region" data-cuadricula={cuadricula ? "si" : "no"}>
       {error ? (
         <ErrorState message={error} onRetry={onReintentar} />
       ) : cargando || !filas ? (
@@ -85,9 +107,9 @@ export function ListaCuadricula<T>({
         <EmptyState icon={vacio.icono} title={vacio.titulo} description={vacio.descripcion} action={vacio.accion} />
       ) : (
         <>
-          <div className="hidden border-b border-line bg-surface-2/60 md:grid md:grid-cols-[var(--cols)]" style={estilo} aria-hidden="true">
+          <div className={cn("border-b border-line bg-surface-2/60", cuadricula ? "grid grid-cols-[var(--cols)]" : "hidden")} style={estilo} aria-hidden="true">
             {columnas.map((c, i) => (
-              <span key={c.clave} className={cn("py-2 text-[12px] font-medium text-ink-3", i === 0 ? "pl-5" : "pl-0")}>
+              <span key={c.clave} className={cn("py-2 text-xs font-medium text-ink-3", i === 0 ? "pl-5" : "pl-0")}>
                 {c.titulo}
               </span>
             ))}
@@ -101,7 +123,7 @@ export function ListaCuadricula<T>({
               return (
                 <li
                   key={clave(fila)}
-                  className={cn("entrada-escalonada group grid grid-cols-[minmax(0,1fr)_auto] items-start transition-colors duration-200 hover:bg-surface-2/70 md:grid-cols-[var(--cols)] md:items-center", esActiva && "bg-brand-faint hover:bg-brand-faint", tenue && "[&>button]:opacity-60")}
+                  className={cn("entrada-escalonada group grid transition-colors duration-200 hover:bg-surface-2/70", cuadricula ? "grid-cols-[var(--cols)] items-center" : "grid-cols-[minmax(0,1fr)_auto] items-start", esActiva && "bg-brand-faint hover:bg-brand-faint", tenue && "[&>button]:opacity-60")}
                   style={{ ...estilo, ["--i" as string]: i } as CSSProperties}
                   {...propsFila?.(fila)}
                 >
@@ -109,17 +131,17 @@ export function ListaCuadricula<T>({
                     type="button"
                     onClick={() => onAbrir(fila, i)}
                     aria-haspopup="dialog"
-                    className="flex min-w-0 flex-col gap-2.5 py-4 pr-2 pl-4 text-left outline-none focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_srgb,var(--color-brand)_45%,transparent)] sm:pl-5 md:col-[span_var(--span)_/_span_var(--span)] md:grid md:grid-cols-subgrid md:items-center md:gap-0 md:py-3.5 md:pr-0"
+                    className={cn("min-w-0 text-left foco-interior", cuadricula ? "col-[span_var(--span)_/_span_var(--span)] grid grid-cols-subgrid items-center py-3.5 pl-5" : "flex flex-col gap-2.5 py-4 pr-2 pl-4 sm:pl-5")}
                     style={{ ["--span" as string]: columnas.length } as CSSProperties}
                   >
                     {valores.map((valor, k) => (
-                      <div key={columnas[k]?.clave || k} className={cn("min-w-0 break-words md:pr-4", k > 0 && columnas[k]?.ocultaEnTarjeta && "hidden md:block")}>
-                        {k > 0 ? <span className="mb-0.5 block text-[11px] text-ink-3 md:hidden">{columnas[k]?.titulo}</span> : null}
+                      <div key={columnas[k]?.clave || k} className={cn("min-w-0 break-words", cuadricula && "pr-4", !cuadricula && k > 0 && columnas[k]?.ocultaEnTarjeta && "hidden")}>
+                        {k > 0 && !cuadricula ? <span className="mb-0.5 block text-2xs text-ink-3">{columnas[k]?.titulo}</span> : null}
                         {valor}
                       </div>
                     ))}
                   </button>
-                  <div className="flex items-center justify-end gap-1 py-4 pr-2 md:py-0">{extremo?.(fila)}</div>
+                  <div className={cn("flex items-center justify-end gap-1 pr-2", !cuadricula && "py-4")}>{extremo?.(fila)}</div>
                 </li>
               );
             })}

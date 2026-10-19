@@ -156,13 +156,13 @@ export function FichaSheet({ open, onClose, catalogos, editar, areaInicial, tipo
     const def = TIPOS_ARCHIVO_SGC.find((t) => t.value === tipo)!;
     const problema = archivoProblema(valor, tipo);
     return (
-      <div className="flex flex-col gap-1.5 rounded-[12px] bg-surface-2 p-3 ring-1 ring-line">
-        <label htmlFor={`ficha-archivo-${tipo}`} className="text-[13px] font-medium text-ink">
+      <div className="flex flex-col gap-1.5 rounded-box bg-surface-2 p-3 ring-1 ring-line">
+        <label htmlFor={`ficha-archivo-${tipo}`} className="text-sm font-medium text-ink">
           {def.label} <span className="font-normal text-ink-3">({def.extensiones.map((e) => `.${e}`).join(", ")})</span>
         </label>
-        <input id={`ficha-archivo-${tipo}`} type="file" accept={def.extensiones.map((e) => `.${e}`).join(",")} onChange={(e) => set(e.target.files?.[0] || null)} className="text-[13px] text-ink-2 file:mr-3 file:rounded-[8px] file:border-0 file:bg-surface file:px-3 file:py-1.5 file:text-[13px] file:font-medium file:text-ink file:shadow-card" />
+        <input id={`ficha-archivo-${tipo}`} type="file" accept={def.extensiones.map((e) => `.${e}`).join(",")} onChange={(e) => set(e.target.files?.[0] || null)} className="text-sm text-ink-2 file:mr-3 file:rounded-control file:border-0 file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink file:shadow-card" />
         {valor ? (
-          <p className={problema ? "flex items-center gap-1 text-[12.5px] text-danger-text" : "flex items-center gap-1 text-[12.5px] text-ink-3"}>
+          <p className={problema ? "flex items-center gap-1 text-xs text-danger-text" : "flex items-center gap-1 text-xs text-ink-3"}>
             {problema ? <WarningCircle size={14} weight="bold" aria-hidden="true" /> : <CheckCircle size={14} weight="bold" className="text-success" aria-hidden="true" />}
             {problema || `${valor.name} · ${fmtBytes(valor.size)}`}
           </p>
@@ -236,7 +236,7 @@ export function FichaSheet({ open, onClose, catalogos, editar, areaInicial, tipo
 
           {editar ? null : (
             <CampoValidado id="ficha-archivos" className="flex flex-col gap-2">
-              <p className="text-[13px] text-ink-2">Archivo inicial: al menos uno, hasta {maxMb} MB.</p>
+              <p className="text-sm text-ink-2">Archivo inicial: al menos uno, hasta {maxMb} MB.</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 {archivo("pdf", pdf, setPdf)}
                 {archivo("fuente", fuente, setFuente)}

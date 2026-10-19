@@ -42,7 +42,7 @@ export function SelectorModoPerfil({ modo, onModo }: { modo: ModoPerfil; onModo:
           role="radio"
           aria-checked={modo === o.valor}
           onClick={() => onModo(o.valor)}
-          className={cn("press inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition-colors", modo === o.valor ? "bg-surface text-ink shadow-card" : "text-ink-3 hover:text-ink")}
+          className={cn("press inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition-colors", modo === o.valor ? "bg-surface text-ink shadow-card" : "text-ink-3 hover:text-ink")}
         >
           {o.icono}
           {o.label}
@@ -103,7 +103,7 @@ export function PanelFoto({ onCambio }: { onCambio: () => Promise<void> }) {
         }}
         onDragLeave={() => setSobre(false)}
         onDrop={soltar}
-        className={cn("flex flex-col items-center gap-3 rounded-[16px] border-2 border-dashed px-4 py-5 text-center transition-colors duration-200", sobre ? "border-brand bg-brand-faint" : "border-line-strong bg-surface-2/60")}
+        className={cn("flex flex-col items-center gap-3 rounded-card border-2 border-dashed px-4 py-5 text-center transition-colors duration-200", sobre ? "border-brand bg-brand-faint" : "border-line-strong bg-surface-2/60")}
       >
         {user?.foto && actual ? (
           // eslint-disable-next-line @next/next/no-img-element -- blob: de la foto pedida con sesion
@@ -113,8 +113,8 @@ export function PanelFoto({ onCambio }: { onCambio: () => Promise<void> }) {
             <Camera size={28} weight="duotone" />
           </span>
         )}
-        <p className="text-[13px] text-ink-2">{user?.foto ? "Arrastra otra foto aquí para cambiarla" : "Arrastra una foto aquí o súbela"}</p>
-        <p className="text-[12px] text-ink-3">JPG, PNG o WEBP · hasta {MAX_MB} MB</p>
+        <p className="text-sm text-ink-2">{user?.foto ? "Arrastra otra foto aquí para cambiarla" : "Arrastra una foto aquí o súbela"}</p>
+        <p className="text-xs text-ink-3">JPG, PNG o WEBP · hasta {MAX_MB} MB</p>
         <div className="flex flex-wrap justify-center gap-2">
           <Button size="sm" icon={<UploadSimple size={14} />} onClick={() => entrada.current?.click()}>
             {user?.foto ? "Cambiar foto" : "Subir foto"}
@@ -278,7 +278,7 @@ function Recortador({ archivo, onCerrar, onGuardado }: { archivo: File; onCerrar
                 if (e.key === "+" || e.key === "=") cambiarZoom(zoom + 0.1);
                 if (e.key === "-") cambiarZoom(zoom - 0.1);
               }}
-              className="relative cursor-grab touch-none overflow-hidden rounded-[16px] bg-surface-3 outline-none select-none focus-visible:shadow-[var(--shadow-focus)] active:cursor-grabbing"
+              className="relative cursor-grab touch-none overflow-hidden rounded-card bg-surface-3 select-none active:cursor-grabbing"
               style={{ width: VISTA, height: VISTA }}
             >
               {/* Imagen oculta que sirve para medir y recortar. */}
@@ -286,7 +286,7 @@ function Recortador({ archivo, onCerrar, onGuardado }: { archivo: File; onCerrar
               <img ref={imgRef} src={src} alt="" className="hidden" onLoad={(e) => setNat({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} />
               {imagen(VISTA)}
               {/* Circulo: lo de fuera queda oscurecido. */}
-              <span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-full shadow-[0_0_0_9999px_rgba(8,26,36,0.55)] ring-2 ring-white/80" />
+              <span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-full shadow-recorte ring-2 ring-knob/80" />
             </div>
             <label className="flex w-full items-center gap-2 text-ink-3">
               <MagnifyingGlassMinus size={16} aria-hidden="true" />
@@ -297,11 +297,11 @@ function Recortador({ archivo, onCerrar, onGuardado }: { archivo: File; onCerrar
           <div className="flex items-center gap-4 sm:flex-col sm:pt-6">
             <span className="flex flex-col items-center gap-1.5">
               <span className="relative block h-24 w-24 overflow-hidden rounded-full bg-surface-3 shadow-card">{imagen(96)}</span>
-              <span className="text-[11.5px] text-ink-3">En ventanas</span>
+              <span className="text-2xs text-ink-3">En ventanas</span>
             </span>
             <span className="flex flex-col items-center gap-1.5">
               <span className="relative block h-8 w-8 overflow-hidden rounded-full bg-surface-3 shadow-card">{imagen(32)}</span>
-              <span className="text-[11.5px] text-ink-3">En listas</span>
+              <span className="text-2xs text-ink-3">En listas</span>
             </span>
           </div>
         </div>

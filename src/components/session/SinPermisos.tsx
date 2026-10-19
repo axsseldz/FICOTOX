@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { LockKey, Question, SignOut } from "@phosphor-icons/react";
 import { BrandMark } from "@/components/shell/Brand";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonClass } from "@/components/ui/Button";
 import { useSession } from "./SessionProvider";
 
 /*
@@ -22,12 +22,12 @@ export function SinPermisos() {
         </span>
         <div className="flex flex-col gap-1">
           <h1 className="title-2 text-ink">Sin permisos asignados</h1>
-          <p className="text-[13.5px] text-ink-3">
+          <p className="text-sm text-ink-3">
             {user?.nombre || user?.email ? <span className="font-medium text-ink-2">{user?.nombre || user?.email}</span> : "Tu cuenta"} no tiene roles vigentes en FICOTOX. Pide a la administración del sistema que te asigne un rol.
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-center gap-2">
-          <Link href="/ayuda" className="press inline-flex h-9 items-center gap-1.5 rounded-[9px] px-3 text-[13px] text-ink-2 hover:bg-surface-2">
+          <Link href="/ayuda" className={buttonClass({ variant: "ghost" })}>
             <Question size={16} /> Ayuda
           </Link>
           <Button variant="secondary" icon={<SignOut size={16} />} onClick={logout}>

@@ -20,8 +20,8 @@ export function FiguraPersona({ id, email, nombre, size = "sm", conNombre = fals
     <span className={cn("inline-flex min-w-0 items-center gap-2", className)}>
       {figura}
       <span className="flex min-w-0 flex-col">
-        <span className="break-words text-[13.5px] leading-tight text-ink">{nombreVisible || "—"}</span>
-        {subtitulo ? <span className="text-[12px] text-ink-3">{subtitulo}</span> : null}
+        <span className="break-words text-sm leading-tight text-ink">{nombreVisible || "—"}</span>
+        {subtitulo ? <span className="text-xs text-ink-3">{subtitulo}</span> : null}
       </span>
     </span>
   );

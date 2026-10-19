@@ -323,10 +323,10 @@ function PantallaRestaurando() {
     <div role="alertdialog" aria-modal="true" aria-labelledby="restaurando-titulo" data-restaurando className="fixed inset-0 z-[1000] flex items-center justify-center bg-canvas/95 px-4 backdrop-blur-sm">
       <div className="flex max-w-sm flex-col items-center gap-4 text-center">
         <CircleNotch size={36} className="animate-spin text-brand motion-reduce:animate-none" aria-hidden="true" />
-        <h1 id="restaurando-titulo" className="text-[20px] font-semibold text-ink">
+        <h1 id="restaurando-titulo" className="text-2xl font-semibold text-ink">
           Restaurando la plataforma, vuelve en un momento
         </h1>
-        <p className="text-[14px] leading-[1.5] text-ink-3">Se está recuperando la información desde un respaldo. Al terminar tendrás que volver a iniciar sesión.</p>
+        <p className="text-base leading-normal text-ink-3">Se está recuperando la información desde un respaldo. Al terminar tendrás que volver a iniciar sesión.</p>
       </div>
     </div>
   );

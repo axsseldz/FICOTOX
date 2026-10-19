@@ -104,10 +104,10 @@ export function RevisionSheet({ doc, revision, catalogos, onClose }: { doc: Fich
             <Textarea id="rev-motivo" rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
           </Field>
           <section className="flex flex-col gap-2" aria-labelledby="rev-resp-titulo">
-            <h3 id="rev-resp-titulo" className="text-[13.5px] font-semibold text-ink">
+            <h3 id="rev-resp-titulo" className="text-sm font-semibold text-ink">
               Responsables
             </h3>
-            {!puedeAsignar ? <p className="text-[12.5px] text-ink-3">Solo Mejora Continua asigna a los responsables.</p> : null}
+            {!puedeAsignar ? <p className="text-xs text-ink-3">Solo Mejora Continua asigna a los responsables.</p> : null}
             <FormGrid cols={3}>
               {persona("elaborador_id", "Elaborador", "documento_elaborar", "rev-elaborador")}
               {persona("revisor_id", "Revisor", "documento_revisar", "rev-revisor")}
@@ -218,12 +218,12 @@ export function ArchivoDialog({ revision, maxMb, onClose }: { revision: Revision
             </Select>
           </Field>
           {actual ? (
-            <p className="text-[12.5px] text-ink-3">
+            <p className="text-xs text-ink-3">
               Sustituye a «{actual.nombre_original}» ({fmtBytes(actual.tamano_bytes)}), que se conserva.
             </p>
           ) : null}
           <CampoValidado id="archivo-sgc">
-            <input type="file" aria-label="Elegir archivo" accept={def.extensiones.map((e) => `.${e}`).join(",")} onChange={(e) => setArchivo(e.target.files?.[0] || null)} className="text-[13px] text-ink-2 file:mr-3 file:rounded-[8px] file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-[13px] file:font-medium file:text-ink file:shadow-card" />
+            <input type="file" aria-label="Elegir archivo" accept={def.extensiones.map((e) => `.${e}`).join(",")} onChange={(e) => setArchivo(e.target.files?.[0] || null)} className="text-sm text-ink-2 file:mr-3 file:rounded-control file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink file:shadow-card" />
           </CampoValidado>
         </div>
       </ValidacionAmbito>
@@ -282,7 +282,7 @@ export function RegistrarVigenteDialog({ doc, revision, onClose }: { doc: FichaD
     >
       <ValidacionAmbito v={v}>
         <div className="flex flex-col gap-4">
-          <p className="text-[12.5px] text-ink-3">
+          <p className="text-xs text-ink-3">
             Solo para la carga inicial. Elaborador: {revision.elaborador_nombre || "—"} · Revisor: {revision.revisor_nombre || "—"} · Autorizador: {revision.autorizador_nombre || "—"}.
           </p>
           <Field label="Fecha de emisión" htmlFor="rev-emision" required>

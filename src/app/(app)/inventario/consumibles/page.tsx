@@ -40,14 +40,14 @@ function celdasConsumible(item: ApiRecord) {
     <span key="p" className={inactive ? "flex min-w-0 items-center gap-3 opacity-60" : "flex min-w-0 items-center gap-3"}>
       <IconoConsumible producto={item.producto} />
       <span className="flex min-w-0 flex-col">
-        <span className="text-[14.5px] leading-tight font-semibold text-ink">
+        <span className="text-base leading-tight font-semibold text-ink">
           {String(item.producto || "—")}
           {inactive ? <Badge tone="danger" className="ml-2 align-middle">Baja</Badge> : null}
         </span>
-        <span className="text-[12.5px] text-ink-3">{[item.marca, item.tamano_capacidad || item.contenedor].filter(Boolean).join(" · ") || "Sin marca"}</span>
+        <span className="text-xs text-ink-3">{[item.marca, item.tamano_capacidad || item.contenedor].filter(Boolean).join(" · ") || "Sin marca"}</span>
       </span>
     </span>,
-    <span key="u" className="text-[13.5px] text-ink-2">{ubicacion ? String(ubicacion) : <span className="text-ink-4">—</span>}</span>,
+    <span key="u" className="text-sm text-ink-2">{ubicacion ? String(ubicacion) : <span className="text-ink-4">—</span>}</span>,
     <Caducidad key="c" value={item.caducidad} />,
     <StockMeter key="e" current={pieces} max={max} min={minimo} unit="unidades" low={pieces <= minimo} />,
   ];
@@ -212,7 +212,7 @@ function ConsumiblesContent() {
           </>
         }
       >
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre o marca" className="w-full md:w-[340px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre o marca" className="min-w-0 flex-1 md:w-[340px] md:flex-none" />
         <FilterMenu groups={groups} toggles={toggles} gruposFinales={ordenar} vistaAlFinal />
       </Toolbar>
 
@@ -240,7 +240,7 @@ function ConsumiblesContent() {
           accion: canCreate && !search && filter === "todos" ? <Button onClick={() => modal.open(null)}>Nuevo consumible</Button> : undefined,
         }}
       />
-      {items && visible.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-3">{visible.length === 1 ? "1 consumible" : `${fmt(visible.length)} consumibles`}</p> : null}
+      {items && visible.length ? <p className="tnum mt-2 px-1 text-xs text-ink-3">{visible.length === 1 ? "1 consumible" : `${fmt(visible.length)} consumibles`}</p> : null}
 
       <InsumoVentana
         tipo="consumible"

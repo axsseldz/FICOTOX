@@ -27,7 +27,7 @@ function MiniVista({ tema }: { tema: "claro" | "oscuro" }) {
       </span>
       <span className="flex flex-1 flex-col gap-1.5 p-2">
         <span className="h-1.5 w-1/2 rounded-full" style={{ background: c.texto }} />
-        <span className="flex flex-1 flex-col gap-1 rounded-[5px] p-1.5" style={{ background: c.tarjeta, boxShadow: `0 0 0 1px ${c.linea}` }}>
+        <span className="flex flex-1 flex-col gap-1 rounded-xs p-1.5" style={{ background: c.tarjeta, boxShadow: `0 0 0 1px ${c.linea}` }}>
           <span className="h-1 w-full rounded-full" style={{ background: c.tenue }} />
           <span className="h-1 w-4/5 rounded-full" style={{ background: c.tenue }} />
           <span className="mt-auto h-2 w-8 rounded-full" style={{ background: c.acento }} />
@@ -57,9 +57,9 @@ export function SelectorTema() {
             role="radio"
             aria-checked={activa}
             onClick={() => elegirTema(o.valor, token)}
-            className={cn("press group flex flex-col gap-2 rounded-card p-1.5 text-left ring-1 transition-shadow duration-200 hover:shadow-raised focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none", activa ? "ring-2 ring-brand" : "ring-line")}
+            className={cn("press group flex flex-col gap-2 rounded-card p-1.5 text-left ring-1 transition-shadow duration-200 hover:shadow-raised", activa ? "ring-2 ring-brand" : "ring-line")}
           >
-            <span className="relative block aspect-[4/3] w-full overflow-hidden rounded-[10px]">
+            <span className="relative block aspect-[4/3] w-full overflow-hidden rounded-field">
               {o.valor === "auto" ? (
                 <span className="absolute inset-0 flex">
                   <span className="w-1/2 overflow-hidden">
@@ -82,7 +82,7 @@ export function SelectorTema() {
                 </span>
               ) : null}
             </span>
-            <span className={cn("px-1 pb-0.5 text-[13px] font-medium", activa ? "text-brand-strong" : "text-ink-2")}>{o.label}</span>
+            <span className={cn("px-1 pb-0.5 text-sm font-medium", activa ? "text-brand-strong" : "text-ink-2")}>{o.label}</span>
           </button>
         );
       })}

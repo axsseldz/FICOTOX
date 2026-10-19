@@ -197,11 +197,11 @@ function AuditoriaContent() {
       extra:
         periodo === "rango" ? (
           <div className="grid grid-cols-2 gap-2">
-            <label className="flex flex-col gap-1 text-[12px] text-ink-3">
+            <label className="flex flex-col gap-1 text-xs text-ink-3">
               Desde
               <DateInput id="aud-desde" small value={desdeRango} onChange={setDesdeRango} aria-label="Desde" />
             </label>
-            <label className="flex flex-col gap-1 text-[12px] text-ink-3">
+            <label className="flex flex-col gap-1 text-xs text-ink-3">
               Hasta
               <DateInput id="aud-hasta" small value={hastaRango} onChange={setHastaRango} aria-label="Hasta" />
             </label>
@@ -228,7 +228,7 @@ function AuditoriaContent() {
       ) : null}
 
       <Toolbar>
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por folio, persona o motivo" className="w-full md:w-[340px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por folio, persona o motivo" className="min-w-0 flex-1 md:w-[340px] md:flex-none" />
         <FilterMenu groups={groups} toggles={toggles} vistaAlFinal />
       </Toolbar>
 
@@ -248,7 +248,7 @@ function AuditoriaContent() {
         )}
       </div>
       {registros && grupos.length ? (
-        <p className="tnum mt-2 px-1 text-[12px] text-ink-3" data-audit-resumen>
+        <p className="tnum mt-2 px-1 text-xs text-ink-3" data-audit-resumen>
           {fmt(registros.length)}
           {hayMas ? "+" : ""} {registros.length === 1 ? "actividad" : "actividades"}
         </p>

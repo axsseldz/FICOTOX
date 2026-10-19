@@ -32,9 +32,9 @@ export function LineaEtapas({ etapas, actual, anulada = false, variante = "horiz
               {i < lista.length - 1 ? <span aria-hidden="true" className={cn("absolute top-7 bottom-0 left-[13px] w-0.5", hecha ? "bg-brand/40" : "bg-line")} /> : null}
               <Marca indice={i} hecha={hecha} actual={esActual} />
               <div className="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
-                <span className={cn("text-[14px] font-semibold", hecha || esActual ? "text-ink" : "text-ink-3")}>
+                <span className={cn("text-base font-semibold", hecha || esActual ? "text-ink" : "text-ink-3")}>
                   {e.titulo}
-                  {esActual ? <span className="ml-2 text-[12px] font-medium text-brand-strong">Etapa actual</span> : null}
+                  {esActual ? <span className="ml-2 text-xs font-medium text-brand-strong">Etapa actual</span> : null}
                 </span>
                 {e.detalle}
               </div>
@@ -53,7 +53,7 @@ export function LineaEtapas({ etapas, actual, anulada = false, variante = "horiz
           <li key={e.clave} className="relative flex items-center gap-2.5 sm:flex-1 sm:flex-col sm:items-center sm:gap-1.5 sm:text-center" aria-current={esActual ? "step" : undefined}>
             {i > 0 ? <span aria-hidden="true" className={cn("absolute top-3.5 right-1/2 hidden h-0.5 w-full -translate-y-1/2 sm:block", hecha || esActual ? "bg-brand/50" : "bg-line")} /> : null}
             <Marca indice={i} hecha={hecha} actual={esActual} />
-            <span className={cn("text-[12.5px] leading-tight", esActual ? "font-semibold text-ink" : hecha ? "text-ink-2" : "text-ink-4")}>{e.titulo}</span>
+            <span className={cn("text-xs leading-tight", esActual ? "font-semibold text-ink" : hecha ? "text-ink-2" : "text-ink-4")}>{e.titulo}</span>
           </li>
         );
       })}
@@ -66,8 +66,8 @@ function Marca({ indice, hecha, actual }: { indice: number; hecha: boolean; actu
     <span
       aria-hidden="true"
       className={cn(
-        "relative z-[1] flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ring-4 ring-surface transition-colors duration-300",
-        hecha ? "bg-brand text-on-accent" : actual ? "bg-brand-soft text-brand-strong shadow-[0_0_0_2px_var(--color-brand)]" : "bg-surface-3 text-ink-4",
+        "relative z-[1] flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ring-4 ring-surface transition-colors duration-300",
+        hecha ? "bg-brand text-on-accent" : actual ? "bg-brand-soft text-brand-strong ring-2 ring-brand" : "bg-surface-3 text-ink-4",
       )}
     >
       {hecha ? <Check size={13} weight="bold" /> : indice + 1}

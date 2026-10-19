@@ -5,6 +5,7 @@ import { Dialog as RadixDialog, DropdownMenu as RadixDropdown, Tooltip as RadixT
 import { DotsThreeCircle, X } from "@phosphor-icons/react";
 import { Button, IconButton } from "./Button";
 import { cn } from "./cn";
+import { DESCRIPCION_VENTANA, TITULO_VENTANA, VELO_VENTANA } from "./capas";
 import { Field, Textarea } from "./Field";
 import { useValidacion, ValidacionAmbito } from "./Validacion";
 import { msg, type Problema } from "@/lib/client/mensajes";
@@ -17,8 +18,7 @@ import { armarCargo, armarReauth } from "@/lib/client/api";
  * y animaciones CSS por data-state.
  */
 
-/* Velo: oscurece y empuja el fondo hacia atras para enfocar la tarea. */
-const OVERLAY_CLASS = "fixed inset-0 z-[var(--z-ventana)] bg-deep/35 backdrop-blur-[3px] data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out";
+export { DESCRIPCION_VENTANA, TITULO_VENTANA, VELO_VENTANA };
 
 export interface SheetProps {
   open: boolean;
@@ -36,7 +36,7 @@ export function Sheet({ open, onOpenChange, title, description, children, footer
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className={OVERLAY_CLASS} />
+        <RadixDialog.Overlay className={VELO_VENTANA} />
         <RadixDialog.Content
           className={cn(
             "fixed inset-y-0 right-0 z-[var(--z-ventana)] flex w-full flex-col bg-surface-elevated shadow-panel outline-none sm:inset-y-3 sm:right-3 sm:rounded-panel",
@@ -46,8 +46,8 @@ export function Sheet({ open, onOpenChange, title, description, children, footer
         >
           <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4 sm:px-6">
             <div className="flex min-w-0 flex-col gap-0.5">
-              <RadixDialog.Title className="title-2 text-ink">{title}</RadixDialog.Title>
-              {description ? <RadixDialog.Description className="text-[13px] text-ink-3">{description}</RadixDialog.Description> : <RadixDialog.Description className="sr-only">{title}</RadixDialog.Description>}
+              <RadixDialog.Title className={TITULO_VENTANA}>{title}</RadixDialog.Title>
+              {description ? <RadixDialog.Description className={DESCRIPCION_VENTANA}>{description}</RadixDialog.Description> : <RadixDialog.Description className="sr-only">{title}</RadixDialog.Description>}
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {headerExtra}
@@ -81,7 +81,7 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className={OVERLAY_CLASS} />
+        <RadixDialog.Overlay className={VELO_VENTANA} />
         <div className="fixed inset-0 z-[var(--z-ventana)] flex items-end justify-center p-3 sm:items-center sm:p-6">
           <RadixDialog.Content
             className={cn(
@@ -92,8 +92,8 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
           >
             <header className="flex items-start justify-between gap-4 px-5 pt-5 pb-3">
               <div className="flex min-w-0 flex-col gap-1">
-                <RadixDialog.Title className="title-2 text-ink">{title}</RadixDialog.Title>
-                {description ? <RadixDialog.Description className="text-[13.5px] text-ink-2">{description}</RadixDialog.Description> : <RadixDialog.Description className="sr-only">{title}</RadixDialog.Description>}
+                <RadixDialog.Title className={TITULO_VENTANA}>{title}</RadixDialog.Title>
+                {description ? <RadixDialog.Description className={DESCRIPCION_VENTANA}>{description}</RadixDialog.Description> : <RadixDialog.Description className="sr-only">{title}</RadixDialog.Description>}
               </div>
               <RadixDialog.Close asChild>
                 <IconButton label="Cerrar">
@@ -335,10 +335,10 @@ export function Dropdown({ trigger, items, align = "end", label, header }: { tri
           align={align}
           sideOffset={6}
           collisionPadding={12}
-          className="scroll-thin max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto bg-popover border border-line z-[var(--z-popover)] min-w-[220px] origin-[var(--radix-dropdown-menu-content-transform-origin)] rounded-[14px] p-1.5 shadow-pop data-[state=open]:animate-materialize"
+          className="scroll-thin max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto bg-popover border border-line z-[var(--z-popover)] min-w-[220px] origin-[var(--radix-dropdown-menu-content-transform-origin)] rounded-card p-1.5 shadow-pop data-[state=open]:animate-materialize"
         >
           {/* El encabezado (nombre del registro) pasa de linea en vez de ensanchar el menu. */}
-          {header ? <div className="max-w-[320px] px-2.5 pt-1.5 pb-2 text-[12px] break-words text-ink-3">{header}</div> : null}
+          {header ? <div className="max-w-[320px] px-2.5 pt-1.5 pb-2 text-xs break-words text-ink-3">{header}</div> : null}
           {items.map((item, index) => {
             const tone = item.tone || "neutral";
             return (
@@ -349,15 +349,15 @@ export function Dropdown({ trigger, items, align = "end", label, header }: { tri
                   onSelect={() => item.onSelect?.()}
                   data-testid={item.testid}
                   className={cn(
-                    "group flex cursor-pointer select-none items-center gap-3 rounded-[9px] px-2 py-1.5 text-[13.5px] outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45",
+                    "group flex cursor-pointer select-none items-center gap-3 rounded-field px-2 py-1.5 text-sm outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45",
                     tone === "danger" ? "text-danger data-[highlighted]:bg-danger-soft" : "text-ink data-[highlighted]:bg-surface-3",
                   )}
                 >
-                  {item.icon ? <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] transition-colors", ITEM_ICON_TONE[tone])}>{item.icon}</span> : null}
+                  {item.icon ? <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-control transition-colors", ITEM_ICON_TONE[tone])}>{item.icon}</span> : null}
                   <span className="flex min-w-0 flex-col leading-tight">
                     <span className="truncate font-medium">{item.label}</span>
                     {/* Deshabilitada: la linea secundaria es el motivo y se lee completa. */}
-                    {item.description ? <span className={cn("text-[11.5px] text-ink-3", item.disabled ? "max-w-[280px] whitespace-normal" : "truncate")}>{item.description}</span> : null}
+                    {item.description ? <span className={cn("text-2xs text-ink-3", item.disabled ? "max-w-[280px] whitespace-normal" : "truncate")}>{item.description}</span> : null}
                   </span>
                 </RadixDropdown.Item>
               </div>
@@ -372,7 +372,8 @@ export function Dropdown({ trigger, items, align = "end", label, header }: { tri
 /* ---------- Menu de acciones de una fila ---------- */
 
 /* Un solo boton "⋯" por fila que agrupa todas las acciones (abrir, editar, avanzar de etapa, anular...). */
-export function ActionMenu({ items, header, label = "Acciones" }: { items: MenuItem[]; header?: ReactNode; label?: string }) {
+/* `size="lg"`: en encabezados, junto a botones medianos (misma altura de 40 px). */
+export function ActionMenu({ items, header, label = "Acciones", size = "md" }: { items: MenuItem[]; header?: ReactNode; label?: string; size?: "md" | "lg" }) {
   // Sin acciones (p. ej. un rol de solo lectura) no se muestra un menu vacio.
   if (!items.length) return null;
   return (
@@ -380,7 +381,7 @@ export function ActionMenu({ items, header, label = "Acciones" }: { items: MenuI
       label={label}
       header={header}
       trigger={
-        <IconButton label={label} className="text-ink-3 hover:bg-surface-3 hover:text-ink data-[state=open]:bg-surface-3 data-[state=open]:text-ink">
+        <IconButton label={label} size={size} className="text-ink-3 hover:bg-surface-3 hover:text-ink data-[state=open]:bg-surface-3 data-[state=open]:text-ink">
           <DotsThreeCircle size={22} weight="regular" />
         </IconButton>
       }
@@ -400,7 +401,7 @@ export function Tooltip({ content, children, side = "top" }: { content: ReactNod
     <RadixTooltip.Root>
       <RadixTooltip.Trigger asChild>{children}</RadixTooltip.Trigger>
       <RadixTooltip.Portal>
-        <RadixTooltip.Content side={side} sideOffset={6} className="bg-popover border border-line z-[var(--z-popover)] max-w-xs rounded-[8px] px-2.5 py-1.5 text-[12.5px] text-ink shadow-pop data-[state=delayed-open]:animate-menu-in">
+        <RadixTooltip.Content side={side} sideOffset={6} className="bg-popover border border-line z-[var(--z-popover)] max-w-xs rounded-control px-2.5 py-1.5 text-xs text-ink shadow-pop data-[state=delayed-open]:animate-menu-in">
           {content}
         </RadixTooltip.Content>
       </RadixTooltip.Portal>

@@ -128,21 +128,21 @@ function MovimientosContent() {
       <span key="i" className="flex min-w-0 items-center gap-3">
         <IconoMovimientoInsumo m={item} />
         <span className="flex min-w-0 flex-col">
-          <span className="text-[14.5px] leading-tight font-semibold text-ink">{nombreInsumo(item)}</span>
-          <span className="text-[12.5px] text-ink-3">
+          <span className="text-base leading-tight font-semibold text-ink">{nombreInsumo(item)}</span>
+          <span className="text-xs text-ink-3">
             {tipoMovimiento(item)} · {item.tabla_origen === "reactivos" ? "Reactivo" : item.tabla_origen === "consumibles" ? "Consumible" : "Insumo"}
           </span>
         </span>
       </span>,
-      <span key="c" className={entrada ? "text-[14px] font-semibold text-success-text" : "text-[14px] font-semibold text-warning-text"}>
+      <span key="c" className={entrada ? "text-base font-semibold text-success-text" : "text-base font-semibold text-warning-text"}>
         {entrada ? "+" : "−"}
         {fmt(cantidadMovimiento(item))}
-        {item.unidad ? <span className="ml-1 text-[12px] font-normal">{String(item.unidad)}</span> : null}
+        {item.unidad ? <span className="ml-1 text-xs font-normal">{String(item.unidad)}</span> : null}
       </span>,
-      <span key="m" className="text-[13.5px] text-ink-2">{origen.texto}</span>,
-      <span key="w" className="flex flex-col text-[13px] text-ink-2" title={`Capturado: ${formatearFechaHora(item.fecha_hora)}`}>
+      <span key="m" className="text-sm text-ink-2">{origen.texto}</span>,
+      <span key="w" className="flex flex-col text-sm text-ink-2" title={`Capturado: ${formatearFechaHora(item.fecha_hora)}`}>
         {formatearFechaCorta(fechaDelMovimiento(item).fecha)}
-        {fechaDelMovimiento(item).distinta ? <span className="text-[11.5px] text-ink-3">Capturado el {formatearFechaCorta(fechaDelMovimiento(item).captura)}</span> : null}
+        {fechaDelMovimiento(item).distinta ? <span className="text-2xs text-ink-3">Capturado el {formatearFechaCorta(fechaDelMovimiento(item).captura)}</span> : null}
       </span>,
     ];
   };
@@ -154,13 +154,13 @@ function MovimientosContent() {
       <Toolbar
         end={
           resource.data ? (
-            <p className="tnum text-[12.5px] text-ink-3">
+            <p className="tnum text-xs text-ink-3">
               Hoy <span className="font-medium text-ink">{fmt(summary.hoy || 0)}</span> · Esta semana <span className="font-medium text-ink">{fmt(summary.semana || 0)}</span> · Este mes <span className="font-medium text-ink">{fmt(summary.mes || 0)}</span>
             </p>
           ) : null
         }
       >
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por insumo, referencia o motivo" className="w-full md:w-[340px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por insumo, referencia o motivo" className="min-w-0 flex-1 md:w-[340px] md:flex-none" />
         <FilterMenu groups={groups} gruposFinales={ordenar} />
       </Toolbar>
 
@@ -178,7 +178,7 @@ function MovimientosContent() {
         propsFila={(item) => ({ "data-movimiento": String(item.id) })}
         vacio={{ icono: <ArrowsLeftRight size={20} />, titulo: "Sin movimientos", descripcion: filtrando ? "No hay movimientos con ese filtro." : "Aquí aparecerán las entradas, salidas, consumos y ajustes de inventario." }}
       />
-      {resource.data && rows.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-3">{rows.length === 1 ? "1 movimiento" : `${fmt(rows.length)} movimientos`}</p> : null}
+      {resource.data && rows.length ? <p className="tnum mt-2 px-1 text-xs text-ink-3">{rows.length === 1 ? "1 movimiento" : `${fmt(rows.length)} movimientos`}</p> : null}
 
       <MovimientoVentana items={rows} indice={abierta !== null && abierta < rows.length ? abierta : null} onIndice={setAbierta} onCerrar={() => setAbierta(null)} />
     </PageBody>

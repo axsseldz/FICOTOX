@@ -79,7 +79,7 @@ export function WeightTable({ rows, columns, compact = false, linked, onChange }
                   {row.esBlanco || compact ? (
                     <span className="code px-1 font-medium">{row.id || "-"}</span>
                   ) : (
-                    <input className={cn(inputClass, "font-mono text-[12.5px]")} value={row.id} onChange={(event) => updateId(row, event.target.value)} placeholder="A25-001" aria-label="ID de la muestra" />
+                    <input className={cn(inputClass, "font-mono text-xs")} value={row.id} onChange={(event) => updateId(row, event.target.value)} placeholder="A25-001" aria-label="ID de la muestra" />
                   )}
                 </td>
                 {!compact ? (
@@ -110,7 +110,7 @@ export function WeightTable({ rows, columns, compact = false, linked, onChange }
                   </td>
                 ))}
                 <td className={formTd}>
-                  {compact ? <span className="code px-1 text-[12.5px] text-ink-2">{row.replica || "-"}</span> : <input className={cn(inputClass, "font-mono text-[12.5px]")} value={row.replica} onChange={(event) => update(row.key, { replica: event.target.value })} aria-label={`Réplica de ${row.id || "la muestra"}`} />}
+                  {compact ? <span className="code px-1 text-xs text-ink-2">{row.replica || "-"}</span> : <input className={cn(inputClass, "font-mono text-xs")} value={row.replica} onChange={(event) => update(row.key, { replica: event.target.value })} aria-label={`Réplica de ${row.id || "la muestra"}`} />}
                 </td>
                 {columns.map((column) => (
                   <td key={column.replica} className={formTd}>

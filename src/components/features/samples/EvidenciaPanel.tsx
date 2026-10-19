@@ -250,12 +250,12 @@ export function AdjuntosPanel({ registroId, base, token, onResumen, clave = "mue
             }}
             onDragLeave={() => setArrastrando(false)}
             onDrop={soltar}
-            className={cn("flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[14px] border border-dashed px-4 py-6 text-center transition-colors", arrastrando ? "border-brand bg-brand-soft" : "border-line-strong bg-surface-2 hover:bg-surface-3")}
+            className={cn("flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-card border border-dashed px-4 py-6 text-center transition-colors", arrastrando ? "border-brand bg-brand-soft" : "border-line-strong bg-surface-2 hover:bg-surface-3")}
             data-zona-carga
           >
             <UploadSimple size={22} className="text-ink-3" />
-            <span className="text-[14px] font-medium text-ink">{archivo ? archivo.name : "Arrastra el archivo aquí o elígelo"}</span>
-            <span className="text-[12.5px] text-ink-3">{archivo ? fmtBytes(archivo.size) : `PDF, imagen (PNG, JPG, TIF), CSV, TXT, Excel, ZIP o CDF · hasta ${maxMb} MB`}</span>
+            <span className="text-base font-medium text-ink">{archivo ? archivo.name : "Arrastra el archivo aquí o elígelo"}</span>
+            <span className="text-xs text-ink-3">{archivo ? fmtBytes(archivo.size) : `PDF, imagen (PNG, JPG, TIF), CSV, TXT, Excel, ZIP o CDF · hasta ${maxMb} MB`}</span>
             <input ref={inputRef} id={`evidencia-archivo-${analisisId}`} type="file" accept={ACCEPT} className="sr-only" onChange={(event) => elegir(event.target.files?.[0] || null)} aria-label="Archivo de evidencia" />
           </label>
           </CampoValidado>
@@ -279,7 +279,7 @@ export function AdjuntosPanel({ registroId, base, token, onResumen, clave = "mue
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progreso * 100)} aria-label="Avance de la carga">
                   <div className="h-full w-full rounded-full bg-brand transition-[translate]" style={{ translate: `${Math.round(progreso * 100) - 100}% 0` }} />
                 </div>
-                <span className="tnum text-[12.5px] text-ink-3">{Math.round(progreso * 100)}%</span>
+                <span className="tnum text-xs text-ink-3">{Math.round(progreso * 100)}%</span>
               </div>
             ) : null}
             <Button icon={<Paperclip size={16} />} onClick={subir} loading={progreso !== null}>
@@ -288,11 +288,11 @@ export function AdjuntosPanel({ registroId, base, token, onResumen, clave = "mue
           </div>
         </div>
       ) : edicion.motivo && !cargando ? (
-        <p className="whitespace-pre-line text-[13px] text-ink-3">{edicion.motivo}</p>
+        <p className="whitespace-pre-line text-sm text-ink-3">{edicion.motivo}</p>
       ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="text-[13px] text-ink-2">
+        <span className="text-sm text-ink-2">
           {vigentes.length} vigente{vigentes.length === 1 ? "" : "s"}
           {anulados ? ` · ${anulados} anulado${anulados === 1 ? "" : "s"}` : ""}
         </span>
@@ -307,13 +307,13 @@ export function AdjuntosPanel({ registroId, base, token, onResumen, clave = "mue
             const Icono = ICONO[String(a.tipo_evidencia)] || File;
             const alterado = a.integridad && a.integridad !== "ok";
             return (
-              <li key={String(a.id)} data-adjunto={String(a.id)} className={cn("on-panel flex flex-wrap items-center gap-3 rounded-[12px] bg-surface-2 p-3 ring-1 ring-line", !a.vigente && "opacity-70")}>
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-surface text-ink-2 ring-1 ring-line">
+              <li key={String(a.id)} data-adjunto={String(a.id)} className={cn("on-panel flex flex-wrap items-center gap-3 rounded-box bg-surface-2 p-3 ring-1 ring-line", !a.vigente && "opacity-70")}>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-field bg-surface text-ink-2 ring-1 ring-line">
                   <Icono size={18} />
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="min-w-0 whitespace-pre-line break-words text-[14px] font-medium text-ink">{String(a.descripcion)}</span>
+                    <span className="min-w-0 whitespace-pre-line break-words text-base font-medium text-ink">{String(a.descripcion)}</span>
                     <Badge tone="neutral">{TIPO_EVIDENCIA_LABEL[String(a.tipo_evidencia)] || String(a.tipo_evidencia)}</Badge>
                     {a.heredado_de ? <Badge tone="brand">Heredado de v{String(a.heredado_de_version || 1)}</Badge> : null}
                     {a.vigente ? null : <Badge tone="danger">Anulado</Badge>}
@@ -323,15 +323,15 @@ export function AdjuntosPanel({ registroId, base, token, onResumen, clave = "mue
                       </Badge>
                     ) : null}
                   </div>
-                  <span className="truncate text-[12.5px] text-ink-3">
+                  <span className="break-words text-xs text-ink-3">
                     {String(a.nombre_original)} · {fmtBytes(Number(a.tamano_bytes))} · {String(a.subido_por_nombre || "—")} · {formatearFechaHora(a.subido_en)} ·{" "}
-                    <Tooltip content={<span className="font-mono text-[11.5px] break-all">SHA-256 {String(a.sha256)}</span>}>
+                    <Tooltip content={<span className="font-mono text-2xs break-all">SHA-256 {String(a.sha256)}</span>}>
                       <span className="font-mono" tabIndex={0}>
                         {huellaCorta(a.sha256)}
                       </span>
                     </Tooltip>
                   </span>
-                  {!a.vigente && a.motivo_anulacion ? <span className="whitespace-pre-line text-[12.5px] text-danger">Anulado por {String(a.anulado_por_nombre || "—")}: {String(a.motivo_anulacion)}</span> : null}
+                  {!a.vigente && a.motivo_anulacion ? <span className="whitespace-pre-line text-xs text-danger">Anulado por {String(a.anulado_por_nombre || "—")}: {String(a.motivo_anulacion)}</span> : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {VISTA_PREVIA.has(String(a.extension)) ? (
@@ -357,10 +357,10 @@ export function AdjuntosPanel({ registroId, base, token, onResumen, clave = "mue
       <Sheet open={!!vista} onOpenChange={(open) => !open && setVista(null)} title={vista ? String(vista.item.descripcion) : ""} description={vista ? `${String(vista.item.nombre_original)} · SHA-256 ${huellaCorta(vista.item.sha256)}` : undefined} size="xl">
         {vista ? (
           vista.tipo === "pdf" ? (
-            <iframe title={String(vista.item.descripcion)} src={vista.url} className="h-[78vh] w-full rounded-[10px] ring-1 ring-line" />
+            <iframe title={String(vista.item.descripcion)} src={vista.url} className="h-[78vh] w-full rounded-field ring-1 ring-line" />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={vista.url} alt={String(vista.item.descripcion)} className="mx-auto max-h-[78vh] max-w-full rounded-[10px] ring-1 ring-line" />
+            <img src={vista.url} alt={String(vista.item.descripcion)} className="mx-auto max-h-[78vh] max-w-full rounded-field ring-1 ring-line" />
           )
         ) : null}
       </Sheet>

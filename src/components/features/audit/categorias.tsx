@@ -147,7 +147,7 @@ const ICONO_CATEGORIA: Record<Categoria, ReactNode> = {
 /* Icono redondo y suave de la actividad, con el color de su tipo. */
 export function EntryIcon({ entry, size = "md" }: { entry: HumanEntry; size?: "sm" | "md" | "lg" }) {
   const categoria = categoriaDe(entry);
-  const dim = { sm: "h-9 w-9 text-[16px]", md: "h-10 w-10 text-[17px]", lg: "h-16 w-16 text-[28px]" }[size];
+  const dim = { sm: "h-9 w-9 text-lg", md: "h-10 w-10 text-lg", lg: "h-16 w-16 text-4xl" }[size];
   const alerta = entry.verb === "alerta_integridad" || entry.verb === "login_fallido";
   return (
     <span aria-hidden="true" className={cn("flex shrink-0 items-center justify-center rounded-full [&>svg]:h-[1em] [&>svg]:w-[1em]", dim, alerta ? "bg-danger-soft text-danger" : TONO[categoria])}>
@@ -186,7 +186,7 @@ const ICONO_AREA: Record<string, ReactNode> = {
 
 export function IconoArea({ entidad, className }: { entidad?: string; className?: string }) {
   return (
-    <span aria-hidden="true" className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-surface text-[18px] text-brand-strong shadow-card [&>svg]:h-[1em] [&>svg]:w-[1em]", className)}>
+    <span aria-hidden="true" className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-field bg-surface text-xl text-brand-strong shadow-card [&>svg]:h-[1em] [&>svg]:w-[1em]", className)}>
       {ICONO_AREA[String(entidad || "")] || <Gear weight="duotone" />}
     </span>
   );

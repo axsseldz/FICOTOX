@@ -155,16 +155,16 @@ export function DateInput({ id, value, onChange, disabled, readOnly, required, i
             setAbierto(true);
           }
         }}
-        className={cn(controlBase, small ? "h-8 text-[13px]" : "h-10 text-[14px]", "tnum pr-9", (invalid || mal) && "border-danger focus:border-danger")}
+        className={cn(controlBase, small ? "h-8 text-sm" : "h-10 text-base", "tnum pr-9", (invalid || mal) && "border-danger focus:border-danger")}
       />
       <RadixPopover.Root open={abierto} onOpenChange={setAbierto}>
         <RadixPopover.Trigger asChild>
-          <button type="button" disabled={bloqueado} aria-label="Abrir calendario" aria-haspopup="dialog" className={cn("press absolute inset-y-0 right-1.5 my-auto flex h-7 w-7 items-center justify-center rounded-[8px] text-ink-3 hover:bg-surface-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50", small && "h-6 w-6")}>
+          <button type="button" disabled={bloqueado} aria-label="Abrir calendario" aria-haspopup="dialog" className={cn("press absolute inset-y-0 right-1.5 my-auto flex h-7 w-7 items-center justify-center rounded-control text-ink-3 hover:bg-surface-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50", small && "h-6 w-6")}>
             <CalendarBlank size={small ? 14 : 16} />
           </button>
         </RadixPopover.Trigger>
         <RadixPopover.Portal>
-          <RadixPopover.Content align="end" sideOffset={6} collisionPadding={12} onOpenAutoFocus={(event) => event.preventDefault()} className="bg-popover border border-line z-[var(--z-popover)] origin-[var(--radix-popover-content-transform-origin)] rounded-[16px] p-3 shadow-panel outline-none data-[state=open]:animate-materialize data-[state=closed]:animate-dematerialize">
+          <RadixPopover.Content align="end" sideOffset={6} collisionPadding={12} onOpenAutoFocus={(event) => event.preventDefault()} className="bg-popover border border-line z-[var(--z-popover)] origin-[var(--radix-popover-content-transform-origin)] rounded-card p-3 shadow-pop outline-none data-[state=open]:animate-materialize data-[state=closed]:animate-dematerialize">
             {abierto ? <Calendario valor={valor} min={min} max={max} onElegir={elegir} onCerrar={() => setAbierto(false)} /> : null}
           </RadixPopover.Content>
         </RadixPopover.Portal>
@@ -220,18 +220,18 @@ function Calendario({ valor, min, max, onElegir, onCerrar }: { valor: string; mi
   for (let d = 1; d <= diasDelMes(anio, mes); d += 1) celdas.push(`${anio}-${dos(mes)}-${dos(d)}`);
   while (celdas.length % 7) celdas.push(null);
 
-  const boton = "press flex h-8 w-8 items-center justify-center rounded-[8px] text-[13px] tnum";
+  const boton = "press flex h-8 w-8 items-center justify-center rounded-control text-sm tnum";
   return (
     <div className="flex w-[268px] flex-col gap-2" role="dialog" aria-label="Calendario">
       <div className="flex items-center justify-between gap-1">
         <button type="button" onClick={() => setFoco(sumarMeses(foco, -1))} aria-label="Mes anterior" className={cn(boton, "text-ink-3 hover:bg-surface-3 hover:text-ink")}>
           <CaretLeft size={14} weight="bold" />
         </button>
-        <div className="flex items-center gap-1 text-[13.5px] font-medium text-ink">
-          <button type="button" onClick={() => setVista(vista === "meses" ? "dias" : "meses")} className="press rounded-[8px] px-2 py-1 capitalize hover:bg-surface-3" aria-label="Elegir mes">
+        <div className="flex items-center gap-1 text-sm font-medium text-ink">
+          <button type="button" onClick={() => setVista(vista === "meses" ? "dias" : "meses")} className="press rounded-control px-2 py-1 capitalize hover:bg-surface-3" aria-label="Elegir mes">
             {MESES[mes - 1]}
           </button>
-          <button type="button" onClick={() => setVista(vista === "anios" ? "dias" : "anios")} className="press rounded-[8px] px-2 py-1 tnum hover:bg-surface-3" aria-label="Elegir año">
+          <button type="button" onClick={() => setVista(vista === "anios" ? "dias" : "anios")} className="press rounded-control px-2 py-1 tnum hover:bg-surface-3" aria-label="Elegir año">
             {anio}
           </button>
         </div>
@@ -242,7 +242,7 @@ function Calendario({ valor, min, max, onElegir, onCerrar }: { valor: string; mi
       {vista === "meses" ? (
         <div className="grid grid-cols-3 gap-1" role="listbox" aria-label="Meses">
           {MESES.map((nombre, i) => (
-            <button key={nombre} type="button" role="option" aria-selected={i + 1 === mes} onClick={() => { setFoco(`${anio}-${dos(i + 1)}-${dos(Math.min(partes(foco)[2], diasDelMes(anio, i + 1)))}`); setVista("dias"); }} className={cn("press rounded-[8px] px-2 py-1.5 text-[13px] capitalize hover:bg-surface-3", i + 1 === mes && "bg-brand-faint text-brand")}>
+            <button key={nombre} type="button" role="option" aria-selected={i + 1 === mes} onClick={() => { setFoco(`${anio}-${dos(i + 1)}-${dos(Math.min(partes(foco)[2], diasDelMes(anio, i + 1)))}`); setVista("dias"); }} className={cn("press rounded-control px-2 py-1.5 text-sm capitalize hover:bg-surface-3", i + 1 === mes && "bg-brand-faint text-brand")}>
               {nombre.slice(0, 3)}
             </button>
           ))}
@@ -250,7 +250,7 @@ function Calendario({ valor, min, max, onElegir, onCerrar }: { valor: string; mi
       ) : vista === "anios" ? (
         <div className="grid max-h-[212px] grid-cols-4 gap-1 overflow-y-auto" role="listbox" aria-label="Años">
           {Array.from({ length: 41 }, (_, i) => anio - 20 + i).map((a) => (
-            <button key={a} type="button" role="option" aria-selected={a === anio} onClick={() => { setFoco(`${a}-${dos(mes)}-${dos(Math.min(partes(foco)[2], diasDelMes(a, mes)))}`); setVista("dias"); }} className={cn("press rounded-[8px] px-2 py-1.5 text-[13px] tnum hover:bg-surface-3", a === anio && "bg-brand-faint text-brand")}>
+            <button key={a} type="button" role="option" aria-selected={a === anio} onClick={() => { setFoco(`${a}-${dos(mes)}-${dos(Math.min(partes(foco)[2], diasDelMes(a, mes)))}`); setVista("dias"); }} className={cn("press rounded-control px-2 py-1.5 text-sm tnum hover:bg-surface-3", a === anio && "bg-brand-faint text-brand")}>
               {a}
             </button>
           ))}
@@ -259,7 +259,7 @@ function Calendario({ valor, min, max, onElegir, onCerrar }: { valor: string; mi
         <div ref={rejilla} role="grid" aria-label={`${MESES[mes - 1]} de ${anio}`} onKeyDown={teclado}>
           <div role="row" className="grid grid-cols-7">
             {DIAS.map((d, i) => (
-              <span key={d} role="columnheader" aria-label={DIAS_LARGOS[i]} className="flex h-7 items-center justify-center text-[11.5px] font-medium uppercase text-ink-4">
+              <span key={d} role="columnheader" aria-label={DIAS_LARGOS[i]} className="flex h-7 items-center justify-center text-2xs font-medium uppercase text-ink-4">
                 {d}
               </span>
             ))}
@@ -291,11 +291,11 @@ function Calendario({ valor, min, max, onElegir, onCerrar }: { valor: string; mi
           ))}
         </div>
       )}
-      <div className="flex items-center justify-between border-t border-line pt-2 text-[12.5px]">
-        <button type="button" onClick={() => !fuera(hoy) && onElegir(hoy)} className="press rounded-[8px] px-2 py-1 text-brand hover:bg-brand-faint">
+      <div className="flex items-center justify-between border-t border-line pt-2 text-xs">
+        <button type="button" onClick={() => !fuera(hoy) && onElegir(hoy)} className="press rounded-control px-2 py-1 text-brand hover:bg-brand-faint">
           Hoy
         </button>
-        <button type="button" onClick={() => onElegir("")} className="press rounded-[8px] px-2 py-1 text-ink-3 hover:bg-surface-3">
+        <button type="button" onClick={() => onElegir("")} className="press rounded-control px-2 py-1 text-ink-3 hover:bg-surface-3">
           Borrar
         </button>
       </div>

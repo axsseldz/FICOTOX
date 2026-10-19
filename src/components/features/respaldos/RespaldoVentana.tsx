@@ -42,7 +42,7 @@ export function ActaContenido({ archivo }: { archivo: string }) {
   return (
     <div className="flex flex-col gap-5" data-acta>
       <VentanaEncabezado
-        figura={<span aria-hidden="true" className={`flex h-14 w-14 items-center justify-center rounded-[16px] ${aprobada ? "bg-success-soft text-success-text" : "bg-danger-soft text-danger"}`}>{aprobada ? <CheckCircle size={30} weight="duotone" /> : <XCircle size={30} weight="duotone" />}</span>}
+        figura={<span aria-hidden="true" className={`flex h-14 w-14 items-center justify-center rounded-card ${aprobada ? "bg-success-soft text-success-text" : "bg-danger-soft text-danger"}`}>{aprobada ? <CheckCircle size={30} weight="duotone" /> : <XCircle size={30} weight="duotone" />}</span>}
         titulo="Prueba de restauración"
         insignia={aprobada ? <Badge tone="success" dot>Salió bien</Badge> : <Badge tone="danger" dot>Encontró problemas</Badge>}
         subtitulo={`${fmtDateTime(item.fecha)} · ${item.modo === "real" ? "Restauración real" : "Hecha en una copia aparte, sin tocar la plataforma"}`}
@@ -60,14 +60,14 @@ export function ActaContenido({ archivo }: { archivo: string }) {
       <VentanaSeccion titulo="Qué se comprobó" i={1}>
         <ul className="flex flex-col gap-2" aria-label="Verificaciones">
           {((item.verificaciones || []) as ApiRecord[]).map((v) => (
-            <li key={String(v.n)} className="flex items-start gap-3 rounded-[12px] bg-surface-2 px-3.5 py-2.5 ring-1 ring-line" data-verificacion={v.ok ? "ok" : "mal"}>
+            <li key={String(v.n)} className="flex items-start gap-3 rounded-box bg-surface-2 px-3.5 py-2.5 ring-1 ring-line" data-verificacion={v.ok ? "ok" : "mal"}>
               <span aria-hidden="true" className={v.ok ? "mt-0.5 text-success-text" : "mt-0.5 text-danger"}>{v.ok ? <CheckCircle size={20} weight="fill" /> : <XCircle size={20} weight="fill" />}</span>
               <span className="flex min-w-0 flex-col">
-                <span className="text-[14px] font-medium text-ink">
+                <span className="text-base font-medium text-ink">
                   <span className="sr-only">{v.ok ? "Bien: " : "Mal: "}</span>
                   {String(v.titulo)}
                 </span>
-                <span className="text-[13px] leading-[1.45] text-ink-3">{String(v.frase)}</span>
+                <span className="text-sm leading-normal text-ink-3">{String(v.frase)}</span>
               </span>
             </li>
           ))}
@@ -98,7 +98,7 @@ function FichaRespaldo({ id, puedeGestionar, ocupado, onProbar, onRestaurar, onA
   return (
     <div className="flex flex-col gap-5" data-respaldo={id}>
       <VentanaEncabezado
-        figura={<span aria-hidden="true" className={`flex h-14 w-14 items-center justify-center rounded-[16px] ${danado ? "bg-danger-soft text-danger" : "bg-brand-soft text-brand-strong"}`}>{danado ? <WarningCircle size={30} weight="duotone" /> : <Database size={30} weight="duotone" />}</span>}
+        figura={<span aria-hidden="true" className={`flex h-14 w-14 items-center justify-center rounded-card ${danado ? "bg-danger-soft text-danger" : "bg-brand-soft text-brand-strong"}`}>{danado ? <WarningCircle size={30} weight="duotone" /> : <Database size={30} weight="duotone" />}</span>}
         titulo={fmtDateTime(item.creado_en)}
         insignia={danado ? <Badge tone="danger" dot>Dañado</Badge> : <InsigniaVerificacion verificacion={item.verificacion} />}
         subtitulo={
@@ -128,7 +128,7 @@ function FichaRespaldo({ id, puedeGestionar, ocupado, onProbar, onRestaurar, onA
 
           <VentanaSeccion titulo="Qué contiene" i={1}>
             <VentanaTarjeta>
-              <ul className="flex flex-col gap-2 text-[14px] text-ink">
+              <ul className="flex flex-col gap-2 text-base text-ink">
                 <li>
                   {((contenido.registros || []) as ApiRecord[]).length
                     ? ((contenido.registros || []) as ApiRecord[]).map((r) => `${Number(r.cantidad).toLocaleString("es-MX")} ${String(r.texto)}`).join(", ")
@@ -146,7 +146,7 @@ function FichaRespaldo({ id, puedeGestionar, ocupado, onProbar, onRestaurar, onA
                 </li>
                 <li>Registro de actividad con {Number(contenido.bitacora_entradas || 0).toLocaleString("es-MX")} {Number(contenido.bitacora_entradas) === 1 ? "entrada" : "entradas"}.</li>
               </ul>
-              {!item.incluye_llave ? <p className="mt-2 text-[12.5px] text-ink-3">Este respaldo no trae la llave del registro de actividad: para probarlo o recuperarlo hace falta la copia guardada aparte.</p> : null}
+              {!item.incluye_llave ? <p className="mt-2 text-xs text-ink-3">Este respaldo no trae la llave del registro de actividad: para probarlo o recuperarlo hace falta la copia guardada aparte.</p> : null}
             </VentanaTarjeta>
           </VentanaSeccion>
 
@@ -159,24 +159,24 @@ function FichaRespaldo({ id, puedeGestionar, ocupado, onProbar, onRestaurar, onA
                       type="button"
                       onClick={() => onAbrirActa(String(p.archivo))}
                       aria-haspopup="dialog"
-                      className="press flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-[12px] bg-surface-2 px-3.5 py-2.5 text-left ring-1 ring-line hover:bg-surface-3/70"
+                      className="press flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-box bg-surface-2 px-3.5 py-2.5 text-left ring-1 ring-line hover:bg-surface-3/70"
                       data-prueba={String(p.archivo)}
                     >
-                      <span className="text-[14px] font-medium text-ink">{fmtDateTime(p.fecha)}</span>
-                      <span className="text-[13px] text-ink-3">{String(p.responsable || "—")}</span>
-                      <span className="text-[13px] text-ink-3">{Math.max(1, Math.round(Number(p.duracion_ms || 0) / 1000))} s</span>
+                      <span className="text-base font-medium text-ink">{fmtDateTime(p.fecha)}</span>
+                      <span className="text-sm text-ink-3">{String(p.responsable || "—")}</span>
+                      <span className="text-sm text-ink-3">{Math.max(1, Math.round(Number(p.duracion_ms || 0) / 1000))} s</span>
                       <span className="ml-auto">{p.resultado === "aprobada" ? <Badge tone="success" dot>Salió bien</Badge> : <Badge tone="danger" dot>Encontró problemas</Badge>}</span>
                     </button>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-[13.5px] text-ink-3">Todavía no se ha probado recuperar este respaldo.{puedeGestionar ? " Usa «Probar restauración» para comprobar que sirve." : ""}</p>
+              <p className="text-sm text-ink-3">Todavía no se ha probado recuperar este respaldo.{puedeGestionar ? " Usa «Probar restauración» para comprobar que sirve." : ""}</p>
             )}
           </VentanaSeccion>
 
           <VentanaSeccion titulo="Recuperar la plataforma" i={3}>
-            <p className="text-[13.5px] leading-[1.5] text-ink-3">El administrador técnico puede pedir «Restaurar este respaldo». Se restaura cuando otra persona con autoridad (Responsable General) lo aprueba; antes se guarda un respaldo «Previo a restauración» y se pierde lo registrado después de la fecha de este respaldo.</p>
+            <p className="text-sm leading-normal text-ink-3">El administrador técnico puede pedir «Restaurar este respaldo». Se restaura cuando otra persona con autoridad (Responsable General) lo aprueba; antes se guarda un respaldo «Previo a restauración» y se pierde lo registrado después de la fecha de este respaldo.</p>
           </VentanaSeccion>
         </>
       )}
@@ -189,7 +189,7 @@ function FichaRespaldo({ id, puedeGestionar, ocupado, onProbar, onRestaurar, onA
           <Button variant="secondary" icon={<ClockCounterClockwise size={16} />} onClick={() => onRestaurar(id)} disabled={ocupado} title={ocupado ? FRASE_OCUPADO : undefined} data-restaurar-respaldo>
             Restaurar este respaldo
           </Button>
-          {ocupado ? <span className="text-[13px] text-ink-3">{FRASE_OCUPADO}</span> : <span className="text-[13px] text-ink-3">Se hace en una copia aparte y no toca la plataforma.</span>}
+          {ocupado ? <span className="text-sm text-ink-3">{FRASE_OCUPADO}</span> : <span className="text-sm text-ink-3">Se hace en una copia aparte y no toca la plataforma.</span>}
         </VentanaAcciones>
       ) : null}
     </div>

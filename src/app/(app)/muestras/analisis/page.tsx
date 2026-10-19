@@ -10,7 +10,7 @@ import { FolioChip, StateBadge, SolicitudBadge, SupervisionBadge } from "@/compo
 import { RequireModule } from "@/components/session/RequireModule";
 import { useSession } from "@/components/session/SessionProvider";
 import { useAnulacion } from "@/components/features/samples/useAnulacion";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonClass } from "@/components/ui/Button";
 import { FilterChips, FilterMenu, type FilterGroup, type FilterToggle } from "@/components/ui/FilterMenu";
 import { ActionMenu, type MenuItem } from "@/components/ui/Overlay";
 import { SearchInput, Toolbar } from "@/components/ui/PageHeader";
@@ -128,13 +128,13 @@ function AnalisisList() {
       <Toolbar
         end={
           canCreate ? (
-            <Link href="/muestras/analisis/nuevo" className="press inline-flex h-9 items-center gap-2 rounded-[9px] bg-brand px-3.5 text-[13.5px] font-medium text-on-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] hover:bg-brand-strong">
+            <Link href="/muestras/analisis/nuevo" className={buttonClass()}>
               <Plus size={16} weight="bold" /> Nuevo análisis
             </Link>
           ) : null
         }
       >
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por folio, solicitante, ID o analista" className="w-full md:w-[340px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por folio, solicitante, ID o analista" className="min-w-0 flex-1 md:w-[340px] md:flex-none" />
         <FilterMenu groups={groups} toggles={toggles} />
         <FilterChips groups={groups} toggles={toggles} />
         {recepcionId ? <Badge tone="brand">Recepción #{recepcionId}</Badge> : null}
@@ -182,7 +182,7 @@ function AnalisisList() {
                         {item.folio_recepcion_num ? <FolioChip type="R" num={item.folio_recepcion_num} /> : null}
                         {item.folio_extraccion_num ? <FolioChip type={String(item.tipo_extraccion || "E-A")} num={item.folio_extraccion_num} /> : null}
                       </div>
-                      {item.recepcion_id_interno ? <p className="mt-1.5 max-w-[240px] truncate text-[12px] text-ink-3" title={String(item.recepcion_id_interno)}>{item.recepcion_id_interno}</p> : null}
+                      {item.recepcion_id_interno ? <p className="mt-1.5 max-w-[240px] truncate text-xs text-ink-3" title={String(item.recepcion_id_interno)}>{item.recepcion_id_interno}</p> : null}
                     </Td>
                     <Td muted className={COL_FECHA}>
                       {fmtDate(item.fecha_analisis)}

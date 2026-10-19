@@ -89,13 +89,13 @@ function FichaEquipo({ item, estado, acciones }: { item: ApiRecord; estado: Esta
       />
       {inactivo ? (
         <VentanaTarjeta className="bg-danger-soft/50 ring-danger/15">
-          <p className="text-[14px] font-medium text-ink">Dado de baja{item.baja_en ? ` el ${formatearFecha(item.baja_en)}` : ""}</p>
-          {item.baja_motivo ? <p className="mt-0.5 text-[13.5px] text-ink-2">Motivo: {String(item.baja_motivo)}</p> : null}
+          <p className="text-base font-medium text-ink">Dado de baja{item.baja_en ? ` el ${formatearFecha(item.baja_en)}` : ""}</p>
+          {item.baja_motivo ? <p className="mt-0.5 text-sm text-ink-2">Motivo: {String(item.baja_motivo)}</p> : null}
         </VentanaTarjeta>
       ) : null}
       {estado.detail ? (
         <VentanaTarjeta className={estado.detailTone === "danger" ? "bg-danger-soft/50 ring-danger/15" : "bg-warning-soft/50 ring-warning/15"}>
-          <p className="text-[14px] text-ink">Pendiente: {estado.detail}</p>
+          <p className="text-base text-ink">Pendiente: {estado.detail}</p>
         </VentanaTarjeta>
       ) : null}
       <ColumnasVentana
@@ -113,25 +113,25 @@ function FichaEquipo({ item, estado, acciones }: { item: ApiRecord; estado: Esta
                       <li key={String(m.id)} className="entrada-escalonada relative flex gap-3 pb-3 last:pb-0" style={{ ["--i" as string]: i }}>
                         {i < historial.length - 1 ? <span aria-hidden="true" className="absolute top-10 bottom-0 left-5 w-0.5 bg-line" /> : null}
                         <IconoMantenimiento tipo={m.tipo} vencido={m.estado === "vencido"} />
-                        <div className="flex min-w-0 flex-1 flex-col gap-0.5 rounded-[12px] bg-surface px-3.5 py-2.5 ring-1 ring-line transition-shadow duration-200 hover:shadow-raised">
+                        <div className="flex min-w-0 flex-1 flex-col gap-0.5 rounded-box bg-surface px-3.5 py-2.5 ring-1 ring-line transition-shadow duration-200 hover:shadow-raised">
                           <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="text-[14px] font-medium text-ink">{tipo.label}</span>
+                            <span className="text-base font-medium text-ink">{tipo.label}</span>
                             <Badge tone={est.tone} dot>
                               {est.label}
                             </Badge>
                           </div>
-                          <span className="text-[13px] text-ink-3">
+                          <span className="text-sm text-ink-3">
                             {m.fecha_realizado ? `Realizado el ${formatearFechaCorta(m.fecha_realizado)}` : `Programado para el ${formatearFechaCorta(m.fecha_programada)}`}
                             {m.tecnico_proveedor ? ` · ${String(m.tecnico_proveedor)}` : ""}
                           </span>
-                          {m.observaciones ? <span className="text-[12.5px] text-ink-2">{String(m.observaciones)}</span> : null}
+                          {m.observaciones ? <span className="text-xs text-ink-2">{String(m.observaciones)}</span> : null}
                         </div>
                       </li>
                     );
                   })}
                 </ol>
               ) : (
-                <p className="text-[13.5px] text-ink-3">Todavía no tiene mantenimientos registrados.</p>
+                <p className="text-sm text-ink-3">Todavía no tiene mantenimientos registrados.</p>
               )}
             </VentanaSeccion>
             <VentanaSeccion titulo="Incidencias" i={2}>
@@ -146,7 +146,7 @@ function FichaEquipo({ item, estado, acciones }: { item: ApiRecord; estado: Esta
               {item.modelo ? <DatoLateral etiqueta="Modelo">{String(item.modelo)}</DatoLateral> : null}
               {item.numero_serie ? <DatoLateral etiqueta="Número de serie">{String(item.numero_serie)}</DatoLateral> : null}
               {item.creado_en ? <DatoLateral etiqueta="Registrado el">{formatearFecha(item.creado_en)}</DatoLateral> : null}
-              {!item.marca && !item.modelo && !item.numero_serie ? <p className="text-[13.5px] text-ink-3">Sin marca, modelo ni número de serie registrados.</p> : null}
+              {!item.marca && !item.modelo && !item.numero_serie ? <p className="text-sm text-ink-3">Sin marca, modelo ni número de serie registrados.</p> : null}
             </TarjetaLateral>
             <TarjetaLateral icono={<Ruler size={15} weight="duotone" />} titulo="Calibración" tono={cal?.tono || "neutral"} i={1}>
               <DatoLateral etiqueta="Próxima calibración">{cal ? `${formatearFecha(item.fecha_prox_calibracion)}${cal.detalle ? ` · ${cal.detalle}` : ""}` : "Sin fecha programada"}</DatoLateral>
@@ -157,8 +157,8 @@ function FichaEquipo({ item, estado, acciones }: { item: ApiRecord; estado: Esta
               <DatoLateral etiqueta="Clave de bitácora">{item.clave_bitacora ? `${String(item.clave_bitacora)}${item.ultimo_folio_bitacora ? ` · último folio ${String(item.ultimo_folio_bitacora)}` : ""}` : "Sin clave"}</DatoLateral>
             </TarjetaLateral>
             <TarjetaLateral icono={<UserCircle size={15} weight="duotone" />} titulo="Responsable" i={3}>
-              {item.responsable || item.id_responsable ? <FiguraPersona id={item.id_responsable} nombre={item.responsable} size="md" conNombre subtitulo="Responsable del equipo" animado="siempre" /> : <p className="text-[13.5px] text-ink-3">Sin responsable asignado.</p>}
-              <p className="text-[12.5px] text-ink-3">Quién puede usarlo se registra en las autorizaciones FX-THF-AP de cada persona (Administración › Usuarios).</p>
+              {item.responsable || item.id_responsable ? <FiguraPersona id={item.id_responsable} nombre={item.responsable} size="md" conNombre subtitulo="Responsable del equipo" animado="siempre" /> : <p className="text-sm text-ink-3">Sin responsable asignado.</p>}
+              <p className="text-xs text-ink-3">Quién puede usarlo se registra en las autorizaciones FX-THF-AP de cada persona (Administración › Usuarios).</p>
             </TarjetaLateral>
           </>
         }

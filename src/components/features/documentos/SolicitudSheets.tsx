@@ -149,7 +149,7 @@ export function SolicitudSheet({ catalogos, documento, onClose }: { catalogos: C
               </Field>
             </FormGrid>
           ) : documento ? (
-            <p className="rounded-[12px] bg-surface-2 px-3.5 py-2.5 text-[13.5px] text-ink ring-1 ring-line">
+            <p className="rounded-box bg-surface-2 px-3.5 py-2.5 text-sm text-ink ring-1 ring-line">
               Cambio a <span className="code font-semibold">{documento.clave}</span> · {documento.titulo}
             </p>
           ) : (
@@ -172,10 +172,10 @@ export function SolicitudSheet({ catalogos, documento, onClose }: { catalogos: C
               <Textarea id="sol-necesidad" rows={2} value={necesidad} onChange={(e) => setNecesidad(e.target.value)} />
             </Field>
             <CampoValidado id="sol-apoyo" className="flex flex-col gap-1.5">
-              <label htmlFor="sol-apoyo-input" className="text-[13px] font-medium text-ink">
+              <label htmlFor="sol-apoyo-input" className="text-sm font-medium text-ink">
                 Archivo de apoyo
               </label>
-              <input id="sol-apoyo-input" type="file" accept={EXT_APOYO.map((e) => `.${e}`).join(",")} onChange={(e) => setApoyo(e.target.files?.[0] || null)} className="text-[13px] text-ink-2 file:mr-3 file:rounded-[8px] file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-[13px] file:font-medium file:text-ink file:shadow-card" />
+              <input id="sol-apoyo-input" type="file" accept={EXT_APOYO.map((e) => `.${e}`).join(",")} onChange={(e) => setApoyo(e.target.files?.[0] || null)} className="text-sm text-ink-2 file:mr-3 file:rounded-control file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink file:shadow-card" />
             </CampoValidado>
           </MasOpciones>
         </div>
@@ -263,7 +263,7 @@ export function AceptarSolicitudSheet({ solicitud, catalogos, onClose }: { solic
     >
       <ValidacionAmbito v={v}>
         <div className="flex flex-col gap-5">
-          <p className="whitespace-pre-line rounded-[12px] bg-surface-2 px-3.5 py-2.5 text-[13.5px] text-ink-2 ring-1 ring-line">
+          <p className="whitespace-pre-line rounded-box bg-surface-2 px-3.5 py-2.5 text-sm text-ink-2 ring-1 ring-line">
             <span className="font-medium text-ink">Justificación:</span> {solicitud.justificacion}
           </p>
           {nuevo ? (

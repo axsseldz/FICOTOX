@@ -59,7 +59,7 @@ export function MantenimientoVentana({ items, indice, onIndice, onCerrar, puedeE
               <>
                 <VentanaSeccion titulo="Observaciones" i={1}>
                   <VentanaTarjeta>
-                    <p className="whitespace-pre-line text-[14px] text-ink">{m.observaciones ? String(m.observaciones) : "Sin observaciones."}</p>
+                    <p className="whitespace-pre-line text-base text-ink">{m.observaciones ? String(m.observaciones) : "Sin observaciones."}</p>
                   </VentanaTarjeta>
                 </VentanaSeccion>
                 <VentanaSeccion titulo="Reporte de servicio (PDF)" i={2}>
@@ -79,11 +79,11 @@ export function MantenimientoVentana({ items, indice, onIndice, onCerrar, puedeE
                   <span className="flex items-center gap-3">
                     <IconoEquipo nombre={m.equipo} />
                     <span className="flex min-w-0 flex-col">
-                      <span className="break-words text-[14px] font-medium text-ink">{String(m.equipo || "Equipo sin nombre")}</span>
-                      {m.equipo_marca || m.equipo_modelo ? <span className="text-[12.5px] text-ink-3">{[m.equipo_marca, m.equipo_modelo].filter(Boolean).join(" · ")}</span> : null}
+                      <span className="break-words text-base font-medium text-ink">{String(m.equipo || "Equipo sin nombre")}</span>
+                      {m.equipo_marca || m.equipo_modelo ? <span className="text-xs text-ink-3">{[m.equipo_marca, m.equipo_modelo].filter(Boolean).join(" · ")}</span> : null}
                     </span>
                   </span>
-                  <Link href={`/inventario/equipos?buscar=${encodeURIComponent(String(m.equipo || ""))}`} className="text-[13px] font-medium text-brand hover:underline">
+                  <Link href={`/inventario/equipos?buscar=${encodeURIComponent(String(m.equipo || ""))}`} className="text-sm font-medium text-brand hover:underline">
                     Ver el equipo
                   </Link>
                 </TarjetaLateral>
@@ -160,18 +160,18 @@ function FichaMovimiento({ m }: { m: ApiRecord }) {
       />
 
       <VentanaSeccion i={0}>
-        <div className={cn("flex flex-wrap items-center justify-between gap-4 rounded-[16px] px-5 py-4 ring-1", entrada ? "bg-success-soft/60 ring-success/20" : "bg-warning-soft/60 ring-warning/20")}>
+        <div className={cn("flex flex-wrap items-center justify-between gap-4 rounded-card px-5 py-4 ring-1", entrada ? "bg-success-soft/60 ring-success/20" : "bg-warning-soft/60 ring-warning/20")}>
           <div className="flex flex-col gap-0.5">
-            <span className="text-[12.5px] text-ink-3">{entrada ? "Entró al inventario" : "Salió del inventario"}</span>
-            <span className={cn("tnum text-[30px] leading-none font-semibold tracking-[-0.02em]", entrada ? "text-success-text" : "text-warning-text")}>
+            <span className="text-xs text-ink-3">{entrada ? "Entró al inventario" : "Salió del inventario"}</span>
+            <span className={cn("tnum text-4xl leading-none font-semibold tracking-tight", entrada ? "text-success-text" : "text-warning-text")}>
               {entrada ? "+" : "−"}
               {fmt(cantidadMovimiento(m))}
-              {m.unidad ? <span className="ml-1.5 text-[15px] font-medium">{String(m.unidad)}</span> : null}
+              {m.unidad ? <span className="ml-1.5 text-md font-medium">{String(m.unidad)}</span> : null}
             </span>
           </div>
           <div className="flex flex-col items-end gap-0.5 text-right">
-            <span className="text-[14px] font-medium text-ink">{formatearFechaCorta(fechaDelMovimiento(m).fecha)}</span>
-            <span className="text-[12.5px] text-ink-3" title={formatearFechaHora(m.fecha_hora)}>
+            <span className="text-base font-medium text-ink">{formatearFechaCorta(fechaDelMovimiento(m).fecha)}</span>
+            <span className="text-xs text-ink-3" title={formatearFechaHora(m.fecha_hora)}>
               {fechaDelMovimiento(m).distinta ? `Capturado el ${formatearFechaCorta(fechaDelMovimiento(m).captura)}` : `${formatearHora(m.fecha_hora)} · ${haceCuantoCorto(m.fecha_hora).toLowerCase()}`}
             </span>
           </div>
@@ -195,17 +195,17 @@ function FichaMovimiento({ m }: { m: ApiRecord }) {
       </VentanaSeccion>
 
       <VentanaSeccion titulo="Registro de origen" i={2}>
-        <div className="flex items-start gap-3 rounded-[14px] bg-surface-2 px-4 py-3.5 ring-1 ring-line transition-shadow duration-200 hover:shadow-raised">
+        <div className="flex items-start gap-3 rounded-card bg-surface-2 px-4 py-3.5 ring-1 ring-line transition-shadow duration-200 hover:shadow-raised">
           <IconoOrigen m={m} />
           <div className="flex min-w-0 flex-col gap-0.5">
             {origen.href ? (
-              <Link href={origen.href} className="break-words text-[14px] font-medium text-brand hover:underline">
+              <Link href={origen.href} className="break-words text-base font-medium text-brand hover:underline">
                 {origen.texto}
               </Link>
             ) : (
-              <p className="break-words text-[14px] font-medium text-ink">{origen.texto}</p>
+              <p className="break-words text-base font-medium text-ink">{origen.texto}</p>
             )}
-            <p className="text-[12.5px] text-ink-3">{origen.href ? "Se descontó al capturar ese formato." : entrada ? "Entrada registrada en el inventario." : "Movimiento registrado en el inventario."}</p>
+            <p className="text-xs text-ink-3">{origen.href ? "Se descontó al capturar ese formato." : entrada ? "Entrada registrada en el inventario." : "Movimiento registrado en el inventario."}</p>
           </div>
         </div>
       </VentanaSeccion>

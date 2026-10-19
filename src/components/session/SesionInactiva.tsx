@@ -105,7 +105,7 @@ export function SesionInactiva() {
         size="sm"
         footer={<Button onClick={seguir}>Seguir trabajando</Button>}
       >
-        <p className="text-[13px] text-ink-3">Si la sesión se cierra, podrás volver a entrar aquí mismo sin perder lo capturado.</p>
+        <p className="text-sm text-ink-3">Si la sesión se cierra, podrás volver a entrar aquí mismo sin perder lo capturado.</p>
       </Dialog>
       {locked ? <PantallaBloqueo /> : null}
     </>
@@ -133,14 +133,14 @@ function PantallaBloqueo() {
   };
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="bloqueo-titulo" className="fixed inset-0 z-[var(--z-bloqueo)] flex items-center justify-center bg-[rgba(16,32,43,0.55)] px-4 backdrop-blur-md">
-      <div className="w-full max-w-[380px] rounded-[18px] bg-surface p-6 shadow-panel ring-1 ring-line">
+    <div role="dialog" aria-modal="true" aria-labelledby="bloqueo-titulo" className="fixed inset-0 z-[var(--z-bloqueo)] flex items-center justify-center bg-deep/55 px-4 backdrop-blur-md">
+      <div className="w-full max-w-[380px] rounded-panel bg-surface p-6 shadow-panel ring-1 ring-line">
         <div className="flex flex-col items-center text-center">
           <BrandMark size={44} />
-          <h2 id="bloqueo-titulo" className="mt-4 text-[18px] font-semibold text-ink">
+          <h2 id="bloqueo-titulo" className="mt-4 text-xl font-semibold text-ink">
             Sesión cerrada por inactividad
           </h2>
-          <p className="mt-1.5 text-[13.5px] text-ink-2">Lo que estabas capturando sigue aquí. Vuelve a entrar como {user?.nombre || user?.email} para continuar.</p>
+          <p className="mt-1.5 text-sm text-ink-2">Lo que estabas capturando sigue aquí. Vuelve a entrar como {user?.nombre || user?.email} para continuar.</p>
         </div>
         <form onSubmit={entrar} className="mt-5 flex flex-col gap-3">
             <Field label="Contraseña" htmlFor="bloqueo-password" error={error || undefined}>
@@ -150,7 +150,7 @@ function PantallaBloqueo() {
               Volver a entrar
             </Button>
           </form>
-        <button type="button" onClick={logout} className="mt-4 w-full text-center text-[12.5px] text-ink-3 underline-offset-2 hover:underline">
+        <button type="button" onClick={logout} className="mt-4 w-full text-center text-xs text-ink-3 underline-offset-2 hover:underline">
           Salir (se descarta lo capturado)
         </button>
       </div>

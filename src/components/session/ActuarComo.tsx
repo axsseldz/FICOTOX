@@ -69,7 +69,7 @@ export function ActuarComoProvider({ children }: { children: ReactNode }) {
                 role="radio"
                 aria-checked={activo}
                 onClick={() => setElegido(opcion.rol_id)}
-                className={cn("press flex items-center gap-3 rounded-[12px] border px-3 py-2.5 text-left text-[14px]", activo ? "border-brand bg-brand-faint text-ink" : "border-line bg-surface text-ink-2 hover:bg-surface-2")}
+                className={cn("press flex items-center gap-3 rounded-box border px-3 py-2.5 text-left text-base", activo ? "border-brand bg-brand-faint text-ink" : "border-line bg-surface text-ink-2 hover:bg-surface-2")}
               >
                 <IdentificationBadge size={18} weight="duotone" className={activo ? "text-brand" : "text-ink-3"} />
                 <span>

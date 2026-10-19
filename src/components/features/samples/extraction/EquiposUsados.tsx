@@ -82,12 +82,12 @@ export function EquiposUsados({ rows, bitacoras, onBitacora, extras, onExtras }:
             </tbody>
         </FormTable>
       ) : (
-        <p className="rounded-[10px] border border-dashed border-line-strong px-4 py-4 text-center text-[13px] text-ink-3">Los equipos que elijas en los pasos aparecerán aquí para anotar el folio de su bitácora.</p>
+        <p className="rounded-field border border-dashed border-line-strong px-4 py-4 text-center text-sm text-ink-3">Los equipos que elijas en los pasos aparecerán aquí para anotar el folio de su bitácora.</p>
       )}
 
       {extras.length ? (
         <div className="flex flex-col gap-2">
-          <p className="text-[12.5px] font-medium text-ink-3">Otros equipos utilizados</p>
+          <p className="text-xs font-medium text-ink-3">Otros equipos utilizados</p>
           {extras.map((row) => (
             <div key={row.key} className="grid grid-cols-[minmax(0,1fr)_36px] items-start gap-2 sm:grid-cols-[minmax(0,1fr)_220px_36px]">
               {/* En móvil el buscador ocupa toda la fila; uso y quitar bajan a la segunda. */}

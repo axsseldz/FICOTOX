@@ -172,7 +172,7 @@ function Etiquetas({ id }: { id: string }) {
           </Field>
         </div>
         {data?.items.length ? (
-          <p className="tnum text-[13px] text-ink-3" data-resumen-etiquetas>
+          <p className="tnum text-sm text-ink-3" data-resumen-etiquetas>
             {data.items.length} {data.items.length === 1 ? "muestra" : "muestras"} × {copias} {copias === 1 ? "copia" : "copias"} = {data.items.length * copias} {data.items.length * copias === 1 ? "etiqueta" : "etiquetas"} · {hojas.length} {hojas.length === 1 ? "hoja" : "hojas"} carta
           </p>
         ) : null}
@@ -181,7 +181,7 @@ function Etiquetas({ id }: { id: string }) {
       {!data ? (
         <Skeleton className="mt-4 h-[120px] w-full" />
       ) : data.items.length === 0 ? (
-        <p className="no-imprimir mt-4 text-[13px] text-ink-3">La recepción no tiene muestras capturadas.</p>
+        <p className="no-imprimir mt-4 text-sm text-ink-3">La recepción no tiene muestras capturadas.</p>
       ) : (
         <div className="etiquetas-vista mt-4">
           <div id="etiquetas-impresion" data-tamano={tamano}>

@@ -73,7 +73,7 @@ export function InsumoSearch({ tipo, value, onChange, placeholder = "Buscar insu
     onChange(ref, label);
   };
 
-  const base = "mt-1.5 flex items-start gap-1.5 text-[12px] leading-snug";
+  const base = "mt-1.5 flex items-start gap-1.5 text-xs leading-snug";
 
   const equipoBadge = () => {
     if (tipo !== "equipo" || !selected) return null;
@@ -200,9 +200,9 @@ export function InsumoSearch({ tipo, value, onChange, placeholder = "Buscar insu
         ) : null}
       </div>
       {open ? (
-        <div ref={listRef} id={listId} role="listbox" className="scroll-thin absolute top-[calc(100%+4px)] left-0 z-[var(--z-popover)] max-h-[220px] w-full min-w-[260px] overflow-y-auto rounded-[8px] border border-line bg-popover p-1 shadow-pop">
+        <div ref={listRef} id={listId} role="listbox" className="scroll-thin absolute top-[calc(100%+4px)] left-0 z-[var(--z-popover)] max-h-[220px] w-full min-w-[260px] overflow-y-auto rounded-card border border-line bg-popover p-1.5 shadow-pop">
           {!shown.length ? (
-            <div className="px-2.5 py-2 text-[12.5px] text-ink-3">{!isInsumoCacheLoaded() ? "Cargando inventario…" : "Sin resultados"}</div>
+            <div className="px-2.5 py-2 text-xs text-ink-3">{!isInsumoCacheLoaded() ? "Cargando inventario…" : "Sin resultados"}</div>
           ) : (
             shown.map((o, index) => {
               const aside = optionAside(o);
@@ -216,10 +216,10 @@ export function InsumoSearch({ tipo, value, onChange, placeholder = "Buscar insu
                   onMouseDown={(event) => event.preventDefault()}
                   onMouseEnter={() => setActive(index)}
                   onClick={() => choose(o.ref, o.label)}
-                  className={cn("flex w-full items-center justify-between gap-3 rounded-[6px] px-2.5 py-1.5 text-left text-[13px] text-ink", index === active && "bg-brand-faint")}
+                  className={cn("flex w-full items-center justify-between gap-3 rounded-sm px-2.5 py-1.5 text-left text-sm text-ink", index === active && "bg-brand-faint")}
                 >
                   <span className="truncate">{o.label}</span>
-                  {aside ? <span className={cn("tnum shrink-0 text-[11.5px]", alert ? ALERT_TONE[alert.level] : "text-ink-3")}>{aside}</span> : null}
+                  {aside ? <span className={cn("tnum shrink-0 text-2xs", alert ? ALERT_TONE[alert.level] : "text-ink-3")}>{aside}</span> : null}
                 </button>
               );
             })
@@ -237,7 +237,7 @@ export const newInventarioRow = (tipo = "consumible", ref = "", cantidad = 1, no
 /* Filas dinamicas de "insumos utilizados" con descuento de inventario. */
 export function InventarioRows({ rows, onChange }: { rows: InventarioRow[]; onChange: (rows: InventarioRow[]) => void }) {
   const update = (key: number, patch: Partial<InventarioRow>) => onChange(rows.map((row) => (row.key === key ? { ...row, ...patch } : row)));
-  if (!rows.length) return <p className="rounded-[10px] border border-dashed border-line-strong px-4 py-4 text-center text-[13px] text-ink-3">Sin insumos adicionales. Agrega los que se usaron fuera del protocolo.</p>;
+  if (!rows.length) return <p className="rounded-field border border-dashed border-line-strong px-4 py-4 text-center text-sm text-ink-3">Sin insumos adicionales. Agrega los que se usaron fuera del protocolo.</p>;
   return (
     <div className="flex flex-col gap-2">
       {rows.map((row) => (

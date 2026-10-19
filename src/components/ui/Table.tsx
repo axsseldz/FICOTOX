@@ -12,21 +12,21 @@ export function TableShell({ children, className, footer }: { children: ReactNod
   return (
     <div className={cn("overflow-hidden rounded-card bg-surface shadow-card", className)}>
       <div className="scroll-thin overflow-x-auto">{children}</div>
-      {footer ? <div className="border-t border-line px-4 py-2.5 text-[12.5px] text-ink-3">{footer}</div> : null}
+      {footer ? <div className="border-t border-line px-4 py-2.5 text-xs text-ink-3">{footer}</div> : null}
     </div>
   );
 }
 
 export function Table({ className, children, ...rest }: HTMLAttributes<HTMLTableElement>) {
   return (
-    <table className={cn("w-full border-collapse text-left text-[13.5px] text-ink", className)} {...rest}>
+    <table className={cn("w-full border-collapse text-left text-sm text-ink", className)} {...rest}>
       {children}
     </table>
   );
 }
 
 export function THead({ children, className }: { children: ReactNode; className?: string }) {
-  return <thead className={cn("border-b border-line text-[12px] font-medium text-ink-3", className)}>{children}</thead>;
+  return <thead className={cn("border-b border-line text-xs font-medium text-ink-3", className)}>{children}</thead>;
 }
 
 export function TBody({ children, className }: { children: ReactNode; className?: string }) {
@@ -59,7 +59,7 @@ export function Tr({ className, interactive, children, onClick, onKeyDown, ...re
  * `sticky`: la columna se fija al borde derecho (acciones) para que siga a la
  * vista aunque la tabla tenga scroll horizontal en pantallas angostas.
  */
-const STICKY_END = "sticky right-0 z-[1] bg-surface shadow-[-10px_0_12px_-12px_rgba(16,32,43,0.35)]";
+const STICKY_END = "sticky right-0 z-[1] bg-surface shadow-sticky";
 
 export function Th({ className, children, align, sticky, ...rest }: ThHTMLAttributes<HTMLTableCellElement> & { align?: "left" | "right" | "center"; sticky?: boolean }) {
   return (
@@ -88,7 +88,7 @@ export function CellPrimary({ title, subtitle, mono, lineas = 1, tooltip }: { ti
   return (
     <div className="flex min-w-0 flex-col" title={completo || undefined}>
       <span className={cn(recorte, "font-medium text-ink", mono && "code")}>{title}</span>
-      {subtitle ? <span className={cn(recorte, "text-[12px] text-ink-3")}>{subtitle}</span> : null}
+      {subtitle ? <span className={cn(recorte, "text-xs text-ink-3")}>{subtitle}</span> : null}
     </div>
   );
 }

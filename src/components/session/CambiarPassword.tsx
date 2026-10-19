@@ -83,15 +83,15 @@ export function CambioPasswordObligatorio() {
       <TarjetaAcceso>
         <section aria-labelledby="cambio-titulo">
           <div className="flex flex-col gap-1">
-            <h1 id="cambio-titulo" className="text-[24px] font-bold tracking-[-0.03em] text-ink">
+            <h1 id="cambio-titulo" className="text-3xl font-bold tracking-tight text-ink">
               Cambia tu contraseña
             </h1>
-            <p className="text-[14px] text-ink-2">Entraste con una contraseña temporal (asignada al crear o restablecer tu cuenta). Antes de continuar, {user?.nombre || user?.email}, elige una nueva.</p>
+            <p className="text-base text-ink-2">Entraste con una contraseña temporal (asignada al crear o restablecer tu cuenta). Antes de continuar, {user?.nombre || user?.email}, elige una nueva.</p>
           </div>
           <div className="mt-6">
             <FormCambiarPassword submitLabel="Guardar y continuar" />
           </div>
-          <button type="button" onClick={logout} className="mt-5 w-full text-center text-[13px] text-ink-3 hover:underline">
+          <button type="button" onClick={logout} className="mt-5 w-full text-center text-sm text-ink-3 hover:underline">
             Salir
           </button>
         </section>

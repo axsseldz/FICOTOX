@@ -33,9 +33,10 @@ src/lib/server/         db.ts (conexión, sesiones, transacciones), http.ts (api
 src/lib/server/modules/ admin, auth, audit, samples/ (recepcion, procesamiento, extraccion, analisis…),
                         informes, inventory, consumables, calidad/ (incidencias, nc, automaticas…),
                         sgc/ (acceso, documentos, flujo, externos, lecturas, lista-maestra), respaldos…
+src/lib/client/         atajos.ts (Mac/Windows), tema.ts, session.ts, nav.ts…
 src/lib/shared/         código común cliente/servidor: permisos.ts, acciones-criticas.ts, segregacion.ts,
                         folios.ts, fechas.ts, audit-chain.mjs, respaldo.mjs, secretos.mjs, documentos.ts…
-src/components/         ui/ (Primitives), shell/, session/ (SessionProvider, pantalla «Restaurando»), features/
+src/components/         ui/ (Primitives, Button/boton, Field, Callout, capas, ListaCuadricula), shell/, session/ (SessionProvider, pantalla «Restaurando»), features/
 scripts/                operación (.mjs): configurar, instancia-nueva, respaldar, restaurar, migrar, actualizar,
                         verificar-instalacion, start-ficotox, detener, servicio, importar-respaldo-railway…
                         roles-catalogo.json (roles y permisos iniciales)
@@ -87,6 +88,18 @@ Cuentas de la base de prueba: `jorge.ramirez` (Administrador técnico), `patrici
 - **Llave de la bitácora:** `SECRET_KEY` (si no es el valor de desarrollo) o, si está vacía, `instance/auditoria.key` (32 bytes, creada una vez). Su huella va en `instance/llave-bitacora.huella`. Si se pierde o cambia, la bitácora ya escrita deja de verificar: se restaura la original, nunca se genera otra. Copia fuera de la computadora.
 - **Archivos** (fuera de la BD, con SHA-256 en la BD; se verifica al abrir/descargar → ok/alterado/faltante con alerta): `instance/informes/` (+ `envios/`), `evidencias/<entidad>/<id>/`, `sgc/<doc>/<rev>/<uuid>.<ext>`, `calidad/nc/`, `avatares/`, `maintenance_reports/`, heredados `biblioteca/` y `documentos_sgc/`. Escritura atómica (temporal + rename), nombre aleatorio, rutas validadas.
 - **Fechas:** fechas sin hora como texto `AAAA-MM-DD` (nunca por `new Date`); instantes en UTC ISO; se muestran en `America/Tijuana` (`src/lib/shared/fechas.ts`). MySQL fija `time_zone='+00:00'`.
+
+## Estilo de la interfaz
+
+- **Solo tokens del tema** (`src/app/globals.css`, `@theme`): colores `--color-*` (claro y oscuro), texto `text-2xs…6xl` (11, 12, 13, 14, 15, 16, 18, 20, 24, 28, 34, 40 px), `leading-tight/snug/normal/relaxed`, `tracking-display/tight/snug/wide/widest`, radios `rounded-xs` 4 · `sm` 6 · `control` 8 (botón chico, menú) · `field` 10 (campos, botón mediano) · `box` 12 (avisos, cajas internas) · `card` 14 (tarjetas, menús) · `panel` 18 (ventanas), sombras `card/raised/panel/pop/accent/sticky/knob/paper…`. Nada de `text-[13px]`, `rounded-[10px]`, hex ni `shadow-[…]` sueltos: si falta, se crea el token (claro y oscuro). Excepciones con color fijo: muestras del selector de tema, impresión de etiquetas y lienzos (firma, acceso).
+- Títulos: `.title-1/2/3`, `.display`, `.eyebrow`; datos «etiqueta arriba» con `text-xs text-ink-3` y valor en `text-base`.
+- **`cn()`** (`ui/cn.ts`) usa tailwind-merge configurado con los tokens propios: la clase que pasa quien llama gana. Al agregar un token de texto, radio, sombra, interlineado o tracking, agregarlo también ahí.
+- **Foco:** campos de texto, buscador, selectores y áreas de texto solo cambian el borde a `--color-focus` (`focus:border-focus focus:outline-none`, sin sombra ni brillo). Todo lo demás usa el contorno global `:focus-visible` (2 px `--color-focus`); filas y opciones de menú, `.seleccion`/`.foco-interior` (contorno interior). No poner `outline-none` a botones ni sombras de foco.
+- **Versión oficial de cada pieza:** `Button` (sm 32 · md 40 · lg 44 px; para enlaces `buttonClass()` de `ui/boton.ts`, que sirve también en componentes de servidor), `IconButton` (28/32/40; `ActionMenu size="lg"` junto a botones medianos), `Input/Select/Textarea` de `ui/Field` (40 px, radio `field`), `SearchInput` (píldora de 40 px; en listas `min-w-0 flex-1 md:w-[…] md:flex-none`), `Badge` (md 24 px para estados, `size="sm"` 20 px para marcas como «Opcional», `wrap` para textos largos), `Callout` de `ui/Callout.tsx` para todo aviso (info, warning, danger, success; `icon` opcional), `EmptyState`/`ErrorState`, `PageHeader` (eyebrow, título, descripción, acciones), `Correo` para mostrar correos (cortan en `@`/`.`).
+- **Ventanas:** velo, título y descripción salen de `ui/capas.ts` (`VELO_VENTANA`, `TITULO_VENTANA`, `DESCRIPCION_VENTANA`) para Sheet, Dialog, VentanaCentrada, VentanaFormulario, buscador y menú móvil. Menús y calendarios con `rounded-card` y `shadow-pop`.
+- **Listas:** `ListaCuadricula` decide columnas o tarjetas por el **ancho del contenedor** (suma de mínimos de columna), no por el breakpoint: a 820 px con menú lateral no corta columnas. Excepción: las tablas anchas de Muestras, Informes y Lista Maestra siguen en `TableShell` (desplazamiento horizontal con la columna de acciones fija y columnas que se ocultan por ancho).
+- **Atajos:** solo con `src/lib/client/atajos.ts`: se declaran neutros (`"Mod+K"`), `coincideAtajo(evento, "Mod+K")` exige Cmd en Mac y Ctrl en Windows/Linux, `useAtajo`/`<Atajo>` los escriben «⌘K» o «Ctrl+K» (primer pintado como Windows, sin desajuste de hidratación). Prueba: `tests/ui/estilos-atajos.mjs` (foco en claro/oscuro, alturas, 400/820 px, Mac y Windows).
+- Animaciones solo con `opacity`/`transform`, apagadas con `prefers-reduced-motion` (`tests/ui/animaciones.mjs`).
 
 ## Base de datos
 

@@ -53,19 +53,19 @@ function celdas(item: ApiRecord) {
   const que = describirSolicitud(item);
   return [
     <span key="q" className="flex min-w-0 flex-col gap-0.5">
-      <span className="text-[14px] leading-tight font-semibold text-ink">{String(item.etiqueta || "Solicitud")}</span>
-      {que !== String(item.etiqueta) ? <span className="text-[13px] leading-[1.45] text-ink-3">{que}</span> : null}
+      <span className="text-base leading-tight font-semibold text-ink">{String(item.etiqueta || "Solicitud")}</span>
+      {que !== String(item.etiqueta) ? <span className="text-sm leading-normal text-ink-3">{que}</span> : null}
     </span>,
-    <span key="r" className="text-[13.5px] text-ink-2">
+    <span key="r" className="text-sm text-ink-2">
       {String(item.referencia || "—")}
     </span>,
     <FiguraPersona key="p" id={item.solicitado_por} nombre={item.solicitado_nombre} conNombre subtitulo={item.solicitado_rol ? String(item.solicitado_rol) : undefined} />,
-    <span key="c" className="text-[13px] text-ink-2" title={formatearFechaHora(item.solicitado_en)}>
+    <span key="c" className="text-sm text-ink-2" title={formatearFechaHora(item.solicitado_en)}>
       {haceCuantoCorto(item.solicitado_en)}
     </span>,
     <span key="e" className="flex flex-col items-start gap-1">
       <EstadoSolicitudBadge estado={item.estado} />
-      {item.estado === "pendiente" ? <span className="text-[12px] text-ink-3">Vence {formatearFechaCorta(item.vence_en)}</span> : item.resuelto_nombre ? <span className="text-[12px] text-ink-3">{String(item.resuelto_nombre)}</span> : null}
+      {item.estado === "pendiente" ? <span className="text-xs text-ink-3">Vence {formatearFechaCorta(item.vence_en)}</span> : item.resuelto_nombre ? <span className="text-xs text-ink-3">{String(item.resuelto_nombre)}</span> : null}
     </span>,
   ];
 }

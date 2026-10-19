@@ -566,7 +566,7 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
           <Button variant="secondary" onClick={() => router.push("/muestras/analisis")}>
             {readOnly ? "Volver" : "Cancelar"}
           </Button>
-          {moreItems.length ? <ActionMenu items={moreItems} label="Más acciones" header={folioLabel} /> : null}
+          {moreItems.length ? <ActionMenu items={moreItems} label="Más acciones" size="lg" header={folioLabel} /> : null}
           {editing && estado === "registrado" && canEdit && !item?.solicitud_pendiente ? (
             faltaEvidencia ? (
               <Tooltip content="Adjunta al menos una evidencia instrumental (sección “Evidencia instrumental”) antes de enviar a revisión.">
@@ -732,7 +732,7 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
           ) : null}
         </FormGrid>
         {editing && item?.recepcion_id ? (
-          <p className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-ink-2">
+          <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-ink-2">
             Cadena: {(item as ApiRecord).folio_recepcion_num ? <FolioChip type="R" num={(item as ApiRecord).folio_recepcion_num} /> : null}
             {item.procesamiento_id ? <Link href={`/muestras/procesamiento/${item.procesamiento_id}`} className="text-brand">procesamiento</Link> : null}
             {item.extraccion_id ? <Link href={`/muestras/extraccion/${item.extraccion_id}`} className="text-brand">extracción</Link> : null}
@@ -794,9 +794,9 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
         ) : (
           <div className="flex flex-col gap-3">
             {form.resultados.map((row, index) => {
-              const cell = "flex flex-col gap-1 text-[11.5px] font-medium text-ink-3";
+              const cell = "flex flex-col gap-1 text-2xs font-medium text-ink-3";
               return (
-                <div key={row.key} className="on-panel rounded-[12px] bg-surface-2 p-3.5 ring-1 ring-line">
+                <div key={row.key} className="on-panel rounded-box bg-surface-2 p-3.5 ring-1 ring-line">
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1.1fr)_auto]">
                     <label className={cell}>
                       Muestra {index + 1}

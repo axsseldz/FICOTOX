@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Archive, CaretDown, ClockCounterClockwise, Database, Flask, Key, Plus, ShieldCheck, Warning } from "@phosphor-icons/react";
+import { Archive, CaretDown, ClockCounterClockwise, Database, Flask, Key, Plus, ShieldCheck } from "@phosphor-icons/react";
 import { ActaVentana, RespaldoVentana } from "@/components/features/respaldos/RespaldoVentana";
 import { archivosTexto, ConfirmarRespaldo, FRASE_OCUPADO, Girando, hace, InsigniaVerificacion, MarcaProtegido, mb, TIPOS_RESPALDO } from "@/components/features/respaldos/comun";
 import { Callout } from "@/components/features/samples/FormLayout";
@@ -70,8 +70,8 @@ type Orden = "recientes" | "antiguos" | "tamano";
 function Pildora({ tono, icono, children, dato }: { tono: "success" | "warning" | "danger" | "neutral"; icono: React.ReactNode; children: React.ReactNode; dato: string }) {
   const circulo = tono === "success" ? "bg-success-soft text-success-text" : tono === "neutral" ? "bg-surface-3 text-ink-3" : TONO[tono].circulo;
   return (
-    <li data-estado={dato} className="inline-flex h-8 items-center gap-2 rounded-full bg-surface pr-3 pl-1.5 text-[12.5px] text-ink-2 ring-1 ring-line">
-      <span aria-hidden="true" className={cn("flex h-5 w-5 items-center justify-center rounded-full text-[12px] [&>svg]:h-[1em] [&>svg]:w-[1em]", circulo)}>
+    <li data-estado={dato} className="inline-flex h-8 items-center gap-2 rounded-full bg-surface pr-3 pl-1.5 text-xs text-ink-2 ring-1 ring-line">
+      <span aria-hidden="true" className={cn("flex h-5 w-5 items-center justify-center rounded-full text-xs [&>svg]:h-[1em] [&>svg]:w-[1em]", circulo)}>
         {icono}
       </span>
       {children}
@@ -183,11 +183,11 @@ function Contenido() {
       extra:
         periodo === "rango" ? (
           <div className="grid grid-cols-2 gap-2">
-            <label className="flex flex-col gap-1 text-[12px] text-ink-3">
+            <label className="flex flex-col gap-1 text-xs text-ink-3">
               Desde
               <DateInput id="resp-desde" small value={desdeRango} onChange={setDesdeRango} aria-label="Desde" />
             </label>
-            <label className="flex flex-col gap-1 text-[12px] text-ink-3">
+            <label className="flex flex-col gap-1 text-xs text-ink-3">
               Hasta
               <DateInput id="resp-hasta" small value={hastaRango} onChange={setHastaRango} aria-label="Hasta" />
             </label>
@@ -271,7 +271,7 @@ function Contenido() {
           ) : null
         }
       >
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por fecha o nota" className="w-full md:w-[320px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por fecha o nota" className="min-w-0 flex-1 md:w-[320px] md:flex-none" />
         <FilterMenu groups={groups} gruposFinales={[grupoOrden]} />
       </Toolbar>
 
@@ -309,12 +309,11 @@ function Contenido() {
           titulo="Restaurar este respaldo"
           descripcion={`Respaldo del ${fmtDateTime(confirmar.creado_en)}. Se crea una solicitud: la plataforma se restaura cuando otra persona con autoridad (Responsable General) la aprueba.`}
           aviso={
-            <div role="alert" data-aviso-restaurar className="flex items-start gap-2.5 rounded-[12px] bg-danger-soft px-3.5 py-3 text-[13.5px] leading-[1.45] text-danger-text">
-              <Warning size={18} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0" />
+            <Callout tone="danger" data-aviso-restaurar>
               <span>
                 <strong className="font-semibold">Se perderá todo lo registrado después del {fmtDateTime(confirmar.creado_en)}.</strong> Antes se guarda un respaldo «Previo a restauración» para poder volver atrás, y al terminar todos vuelven a iniciar sesión.
               </span>
-            </div>
+            </Callout>
           }
           confirmar="Solicitar restauración"
           conMotivo
@@ -332,18 +331,18 @@ function celdas(r: ApiRecord) {
   const danado = r.estado === "danado";
   return [
     <span key="f" className="flex flex-col gap-0.5">
-      <span className="text-[14px] font-medium text-ink">{fmtDateTime(r.creado_en)}</span>
-      <span className="text-[12px] text-ink-3">{haceCuantoCorto(r.creado_en)}</span>
+      <span className="text-base font-medium text-ink">{fmtDateTime(r.creado_en)}</span>
+      <span className="text-xs text-ink-3">{haceCuantoCorto(r.creado_en)}</span>
     </span>,
-    <span key="t" className="flex flex-col gap-0.5 text-[13.5px] text-ink">
+    <span key="t" className="flex flex-col gap-0.5 text-sm text-ink">
       {TIPOS_RESPALDO[String(r.tipo)] || "Manual"}
-      {r.nota ? <span className="text-[12px] text-ink-3">{String(r.nota)}</span> : null}
+      {r.nota ? <span className="text-xs text-ink-3">{String(r.nota)}</span> : null}
     </span>,
-    <span key="s" className="tnum text-[13.5px] text-ink-2">{danado ? "—" : mb(r.tamano)}</span>,
-    <span key="c" className="text-[13.5px] text-ink-2">{danado ? "—" : `Base + ${archivosTexto(r.archivos)}`}</span>,
-    danado ? <span key="l" className="text-[13px] text-ink-4">—</span> : <span key="l" className="inline-flex items-center gap-1.5 text-[13px] text-ink-2"><Key size={14} weight="duotone" aria-hidden="true" />{r.incluye_llave ? "Incluida" : "No incluida"}</span>,
+    <span key="s" className="tnum text-sm text-ink-2">{danado ? "—" : mb(r.tamano)}</span>,
+    <span key="c" className="text-sm text-ink-2">{danado ? "—" : `Base + ${archivosTexto(r.archivos)}`}</span>,
+    danado ? <span key="l" className="text-sm text-ink-4">—</span> : <span key="l" className="inline-flex items-center gap-1.5 text-sm text-ink-2"><Key size={14} weight="duotone" aria-hidden="true" />{r.incluye_llave ? "Incluida" : "No incluida"}</span>,
     <span key="v" className="flex flex-col items-start gap-1">
-      {danado ? <Badge tone="danger" dot>Dañado</Badge> : r.verificacion ? <InsigniaVerificacion verificacion={r.verificacion} /> : <span className="text-[13px] text-ink-3">Sin probar</span>}
+      {danado ? <Badge tone="danger" dot>Dañado</Badge> : r.verificacion ? <InsigniaVerificacion verificacion={r.verificacion} /> : <span className="text-sm text-ink-3">Sin probar</span>}
       {r.protegido ? <MarcaProtegido /> : null}
     </span>,
   ];
@@ -356,12 +355,12 @@ function Progreso({ trabajo, resultado, onActa, onCerrar }: { trabajo: ApiRecord
   if (enCurso) {
     return (
       <div role="status" aria-live="polite" className="entrada-escalonada flex flex-col gap-3 rounded-card bg-surface px-5 py-4 shadow-card ring-1 ring-brand/15" data-progreso>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px] font-medium text-ink">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-base font-medium text-ink">
           <Girando texto={trabajo.tipo === "prueba" ? "Probando la restauración…" : "Creando el respaldo…"} />
-          <span className="text-[13px] font-normal text-ink-3">{String(trabajo.fase || "")}</span>
+          <span className="text-sm font-normal text-ink-3">{String(trabajo.fase || "")}</span>
         </div>
         {trabajo.tipo === "prueba" && pasos.length ? (
-          <ul className="flex flex-col gap-1 text-[13px] text-ink-2">
+          <ul className="flex flex-col gap-1 text-sm text-ink-2">
             {pasos.map((p) => (
               <li key={String(p.n)} className="flex items-center gap-2">
                 <span aria-hidden="true" className={p.ok ? "text-success-text" : "text-danger"}>{p.ok ? "✓" : "✗"}</span>
@@ -399,11 +398,11 @@ function Progreso({ trabajo, resultado, onActa, onCerrar }: { trabajo: ApiRecord
 function ComoRecuperar() {
   return (
     <details className="group rounded-card bg-surface px-5 py-3.5 shadow-card ring-1 ring-line" data-como-recuperar>
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[13.5px] font-medium text-ink-2 hover:text-ink">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-ink-2 hover:text-ink">
         <span>¿Cómo recuperar la plataforma desde un respaldo?</span>
         <CaretDown size={14} aria-hidden="true" className="transition-transform duration-200 group-open:rotate-180" />
       </summary>
-      <ol className="mt-3 flex list-decimal flex-col gap-1.5 pl-5 text-[13.5px] leading-[1.5] text-ink-3">
+      <ol className="mt-3 flex list-decimal flex-col gap-1.5 pl-5 text-sm leading-normal text-ink-3">
         <li>Avisa al personal: mientras se restaura, nadie puede usar la plataforma y al terminar todos vuelven a iniciar sesión.</li>
         <li>El administrador técnico elige el respaldo, usa «Restaurar este respaldo» y escribe el motivo y su contraseña.</li>
         <li>Otra persona con autoridad (Responsable General) aprueba la solicitud en «Por autorizar». Nadie aprueba la suya.</li>

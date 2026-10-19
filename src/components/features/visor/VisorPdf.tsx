@@ -5,6 +5,7 @@ import { BookOpenText, CaretDown, CaretLeft, CaretRight, CornersIn, CornersOut, 
 import { useSession } from "@/components/session/SessionProvider";
 import { IconButton } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
+import { coincideAtajo, useAtajo } from "@/lib/client/atajos";
 import { explicarError } from "@/lib/client/mensajes";
 import { abrirPdfUrl, cargarPdfjs, type PdfDocumento } from "@/lib/client/pdf";
 
@@ -15,7 +16,7 @@ import { abrirPdfUrl, cargarPdfjs, type PdfDocumento } from "@/lib/client/pdf";
  * - solo se dibujan las paginas cercanas a la vista (IntersectionObserver), con siluetas mientras cargan;
  * - capa de texto para seleccionar y buscar con resaltado; miniaturas e indice plegables (cerrados por omision);
  * - zoom: ajustar al ancho (con ancho maximo de lectura), a la pagina, 100 % o porcentajes; se recuerda por persona;
- * - teclado (flechas, RePag/AvPag, +/−, F, Ctrl+F, Esc) y tableta (pellizco, doble toque, deslizar);
+ * - teclado (flechas, RePag/AvPag, +/−, F, ⌘F en Mac o Ctrl+F, Esc) y tableta (pellizco, doble toque, deslizar);
  * - modo Lectura: el documento a pantalla completa dentro de la plataforma; Esc lo cierra;
  * - descargar e imprimir solo si la persona tiene permiso (si no, deshabilitados con el motivo).
  */
@@ -217,7 +218,7 @@ function PaginaPdf({ pdf, n, escala, base, cerca, consulta, actualK, onMarcas }:
   }, [consulta, dibujada, actualK, n, onMarcas]);
 
   return (
-    <div data-pagina={n} className="relative mx-auto bg-papel shadow-[0_1px_3px_rgba(16,32,43,0.18),0_8px_24px_-12px_rgba(16,32,43,0.25)]" style={{ width: w, height: h }}>
+    <div data-pagina={n} className="relative mx-auto bg-papel shadow-paper" style={{ width: w, height: h }}>
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
       <div ref={capaRef} className="visor-textlayer" />
       {dibujada === null ? <SilhuetaPagina className="absolute inset-0" /> : null}
@@ -269,8 +270,8 @@ function Miniatura({ pdf, n, activa, onIr }: { pdf: PdfDocumento; n: number; act
     if (activa) desplazarDentro(ref.current?.closest<HTMLElement>("[data-testid=visor-miniaturas]") ?? null, ref.current, "nearest");
   }, [activa]);
   return (
-    <button ref={ref} type="button" onClick={() => onIr(n)} aria-label={`Ir a la página ${n}`} aria-current={activa ? "page" : undefined} className={cn("press flex w-full flex-col items-center gap-1 rounded-[10px] p-1.5 text-[11.5px]", activa ? "bg-brand-faint text-brand-strong" : "text-ink-3 hover:bg-surface-3")}>
-      <span className={cn("block w-full overflow-hidden rounded-[4px] bg-papel ring-1", activa ? "ring-2 ring-brand" : "ring-line")} style={{ aspectRatio: "0.77" }}>
+    <button ref={ref} type="button" onClick={() => onIr(n)} aria-label={`Ir a la página ${n}`} aria-current={activa ? "page" : undefined} className={cn("press flex w-full flex-col items-center gap-1 rounded-field p-1.5 text-2xs", activa ? "bg-brand-faint text-brand-strong" : "text-ink-3 hover:bg-surface-3")}>
+      <span className={cn("block w-full overflow-hidden rounded-xs bg-papel ring-1", activa ? "ring-2 ring-brand" : "ring-line")} style={{ aspectRatio: "0.77" }}>
         {/* eslint-disable-next-line @next/next/no-img-element -- miniatura generada en el navegador (data URL) */}
         {url ? <img src={url} alt="" className="h-full w-full object-contain" /> : null}
       </span>
@@ -290,7 +291,7 @@ function Indice({ nodos, onIr, nivel = 0 }: { nodos: NodoIndice[]; onIr: (dest: 
     <ul className={cn("flex flex-col", nivel > 0 && "ml-3 border-l border-line pl-2")}>
       {nodos.map((nodo, i) => (
         <li key={`${nivel}-${i}`}>
-          <button type="button" onClick={() => onIr(nodo.dest)} className="press w-full rounded-[8px] px-2 py-1.5 text-left text-[12.5px] text-ink-2 hover:bg-surface-3 hover:text-ink">
+          <button type="button" onClick={() => onIr(nodo.dest)} className="press w-full rounded-control px-2 py-1.5 text-left text-xs text-ink-2 hover:bg-surface-3 hover:text-ink">
             {nodo.title || "(sin título)"}
           </button>
           {nodo.items?.length ? <Indice nodos={nodo.items} onIr={onIr} nivel={nivel + 1} /> : null}
@@ -322,6 +323,7 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
   const [panel, setPanel] = useState<"miniaturas" | "indice" | null>(null);
   const [indice, setIndice] = useState<NodoIndice[]>([]);
   const [buscando, setBuscando] = useState(false);
+  const atajoBuscar = useAtajo("Mod+F");
   const [consultaTexto, setConsultaTexto] = useState("");
   const [consulta, setConsulta] = useState("");
   const [coincidencias, setCoincidencias] = useState<Coincidencia[]>([]);
@@ -504,7 +506,7 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
     [escala],
   );
 
-  // Ctrl + rueda, pellizco, doble toque (acercar o ajustar) y deslizar entre paginas (tableta).
+  // Ctrl o Cmd + rueda (el pellizco del trackpad llega como Ctrl + rueda en todos los sistemas), pellizco, doble toque (acercar o ajustar) y deslizar entre paginas (tableta).
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -706,7 +708,7 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
 
   const teclado = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     mostrarBarra();
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+    if (coincideAtajo(e, "Mod+F")) {
       e.preventDefault();
       mostrarBarra();
       setBuscando(true);
@@ -753,15 +755,15 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
     return (
       <div className="flex h-full min-h-[320px] items-center justify-center p-6">
         <div role="alert" className="flex flex-col items-center gap-3 text-center">
-          <p className="text-[15px] font-semibold text-ink">No se pudo cargar el documento</p>
-          <p className="max-w-md text-[13px] text-ink-3">{explicarError(error, "No se pudo abrir el PDF").hacer}</p>
+          <p className="text-md font-semibold text-ink">No se pudo cargar el documento</p>
+          <p className="max-w-md text-sm text-ink-3">{explicarError(error, "No se pudo abrir el PDF").hacer}</p>
           <button
             type="button"
             onClick={() => {
               setError(null);
               setReintento((r) => r + 1);
             }}
-            className="press h-8 rounded-[8px] bg-surface px-3 text-[13px] font-medium text-ink shadow-card hover:bg-surface-2"
+            className="press h-8 rounded-control bg-surface px-3 text-sm font-medium text-ink shadow-card hover:bg-surface-2"
           >
             Reintentar
           </button>
@@ -772,7 +774,7 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
   return (
     <div
       ref={raiz}
-      className={cn("relative flex h-full min-h-0 flex-col", lectura && "fixed inset-0 z-[var(--z-ventana)] h-auto bg-black/85")}
+      className={cn("relative flex h-full min-h-0 flex-col", lectura && "fixed inset-0 z-[var(--z-ventana)] h-auto bg-deep/90")}
       data-testid="visor-pdf"
       data-lectura={lectura || undefined}
       onKeyDown={teclado}
@@ -786,10 +788,10 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
           <aside className="hidden w-[168px] shrink-0 flex-col border-r border-line bg-surface md:flex" aria-label="Páginas del documento">
             {indice.length ? (
               <div className="flex gap-1 border-b border-line p-1.5" role="tablist" aria-label="Panel lateral">
-                <button type="button" role="tab" aria-selected={panel === "miniaturas"} onClick={() => setPanel("miniaturas")} className={cn("press flex flex-1 items-center justify-center gap-1 rounded-[8px] py-1 text-[12px]", panel === "miniaturas" ? "bg-surface-3 text-ink" : "text-ink-3")}>
+                <button type="button" role="tab" aria-selected={panel === "miniaturas"} onClick={() => setPanel("miniaturas")} className={cn("press flex flex-1 items-center justify-center gap-1 rounded-control py-1 text-xs", panel === "miniaturas" ? "bg-surface-3 text-ink" : "text-ink-3")}>
                   <SquaresFour size={14} /> Páginas
                 </button>
-                <button type="button" role="tab" aria-selected={panel === "indice"} onClick={() => setPanel("indice")} className={cn("press flex flex-1 items-center justify-center gap-1 rounded-[8px] py-1 text-[12px]", panel === "indice" ? "bg-surface-3 text-ink" : "text-ink-3")}>
+                <button type="button" role="tab" aria-selected={panel === "indice"} onClick={() => setPanel("indice")} className={cn("press flex flex-1 items-center justify-center gap-1 rounded-control py-1 text-xs", panel === "indice" ? "bg-surface-3 text-ink" : "text-ink-3")}>
                   <ListBullets size={14} /> Índice
                 </button>
               </div>
@@ -807,11 +809,11 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
             </div>
           </aside>
         ) : null}
-        <div ref={scrollRef} tabIndex={0} onScroll={alDesplazar} onWheel={gesto} onTouchMove={gesto} onKeyDown={gesto} aria-label="Páginas del PDF" className={cn("scroll-thin relative min-h-0 flex-1 overflow-auto outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--color-brand)]", lectura ? "bg-transparent" : "bg-surface-3/70", nocturna && "visor-nocturna")}>
+        <div ref={scrollRef} tabIndex={0} onScroll={alDesplazar} onWheel={gesto} onTouchMove={gesto} onKeyDown={gesto} aria-label="Páginas del PDF" className={cn("scroll-thin relative min-h-0 flex-1 overflow-auto foco-interior", lectura ? "bg-transparent" : "bg-surface-3/70", nocturna && "visor-nocturna")}>
           {!pdf ? (
             // Silueta del mismo tamano y en el mismo lugar que tendra la primera pagina (hoja carta con el zoom elegido): al llegar el PDF no hay salto.
             <div className="flex min-w-max flex-col items-center gap-4 px-6 pt-5 pb-24" role="status" aria-label="Cargando el documento">
-              <div className="rounded-[4px] bg-papel shadow-[0_1px_3px_rgba(16,32,43,0.18)]" style={{ width: base.w * escala, height: base.h * escala }}>
+              <div className="rounded-xs bg-papel shadow-paper-sm" style={{ width: base.w * escala, height: base.h * escala }}>
                 <SilhuetaPagina className="h-full" />
               </div>
             </div>
@@ -833,7 +835,7 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
         onPointerLeave={() => setSobreBarra(false)}
         onFocus={mostrarBarra}
         className={cn(
-          "absolute inset-x-0 bottom-4 z-20 mx-auto flex w-fit max-w-[calc(100%-1.5rem)] flex-wrap items-center justify-center gap-1 rounded-[18px] border border-line/70 bg-surface/85 px-2 py-1 sm:rounded-full text-ink-2 shadow-card backdrop-blur-md transition-[opacity,translate] duration-200 motion-reduce:transition-none",
+          "absolute inset-x-0 bottom-4 z-20 mx-auto flex w-fit max-w-[calc(100%-1.5rem)] flex-wrap items-center justify-center gap-1 rounded-panel border border-line/70 bg-surface/85 px-2 py-1 sm:rounded-full text-ink-2 shadow-card backdrop-blur-md transition-[opacity,translate] duration-200 motion-reduce:transition-none",
           barra ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0",
         )}
         data-testid="visor-barra"
@@ -846,7 +848,7 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
         <IconButton label="Página anterior" onClick={() => irA(pagina - 1)} disabled={pagina <= 1}>
           <CaretLeft size={16} weight="bold" />
         </IconButton>
-        <label className="flex items-center gap-1 text-[13px] text-ink-2">
+        <label className="flex items-center gap-1 text-sm text-ink-2">
           <span className="sr-only">Página</span>
           <input
             data-testid="visor-pagina-actual"
@@ -861,7 +863,7 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
             }}
             onBlur={() => setPaginaTexto(null)}
             aria-label="Página actual"
-            className="tnum h-8 w-11 rounded-[8px] border border-line bg-surface-2 px-1.5 text-center text-[13px] text-ink focus:border-brand/55 focus:outline-none"
+            className="tnum h-8 w-11 rounded-control border border-line bg-surface-2 px-1.5 text-center text-sm text-ink focus:border-focus focus:outline-none"
           />
           <span className="tnum whitespace-nowrap">
             de <span data-testid="visor-total-paginas">{total || "…"}</span>
@@ -884,7 +886,7 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
             aria-expanded={menuZoom}
             aria-label="Zoom"
             title="Zoom"
-            className="press flex h-8 items-center gap-0.5 rounded-[8px] px-1.5 text-[12.5px] text-ink hover:bg-surface-3/80"
+            className="press flex h-8 items-center gap-0.5 rounded-control px-1.5 text-xs text-ink hover:bg-surface-3/80"
           >
             <span data-testid="visor-zoom" className="tnum min-w-[3.2rem] text-center">
               {porcentaje} %
@@ -892,7 +894,7 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
             <CaretDown size={11} />
           </button>
           {menuZoom ? (
-            <div role="menu" aria-label="Opciones de zoom" className="absolute bottom-full left-1/2 mb-2 flex w-44 -translate-x-1/2 flex-col rounded-[12px] border border-line bg-surface p-1 text-[13px] shadow-card">
+            <div role="menu" aria-label="Opciones de zoom" className="absolute bottom-full left-1/2 mb-2 flex w-44 -translate-x-1/2 flex-col rounded-box border border-line bg-surface p-1 text-sm shadow-card">
               {[
                 { etiqueta: "Ajustar al ancho", zoom: { modo: "ancho" } as Zoom },
                 { etiqueta: "Página completa", zoom: { modo: "pagina" } as Zoom },
@@ -906,7 +908,7 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
                     setZoom(op.zoom);
                     setMenuZoom(false);
                   }}
-                  className="press rounded-[8px] px-2.5 py-1.5 text-left text-ink-2 hover:bg-surface-3 hover:text-ink"
+                  className="press rounded-control px-2.5 py-1.5 text-left text-ink-2 hover:bg-surface-3 hover:text-ink"
                 >
                   {op.etiqueta}
                 </button>
@@ -940,9 +942,9 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
                   cerrarBusqueda();
                 }
               }}
-              className="h-8 w-32 rounded-[8px] border border-line bg-surface-2 px-2 text-[13px] text-ink focus:border-brand/55 focus:outline-none sm:w-48"
+              className="h-8 w-32 rounded-control border border-line bg-surface-2 px-2 text-sm text-ink focus:border-focus focus:outline-none sm:w-48"
             />
-            <span data-testid="visor-resultados" className="tnum min-w-[4.5rem] text-center text-[12px] text-ink-3" aria-live="polite">
+            <span data-testid="visor-resultados" className="tnum min-w-[4.5rem] text-center text-xs text-ink-3" aria-live="polite">
               {consulta ? (coincidencias.length ? `${actual + 1} de ${coincidencias.length}` : "Sin resultados") : ""}
             </span>
             <IconButton label="Coincidencia anterior" onClick={() => irCoincidencia(actual - 1)} disabled={!coincidencias.length}>
@@ -957,7 +959,7 @@ export function VisorPdf({ url, ambito, docId, acciones }: { url: string; ambito
           </div>
         ) : (
           <IconButton
-            label="Buscar en el documento (Ctrl+F)"
+            label={`Buscar en el documento (${atajoBuscar})`}
             onClick={() => {
               setBuscando(true);
               window.setTimeout(() => buscarRef.current?.focus(), 0);

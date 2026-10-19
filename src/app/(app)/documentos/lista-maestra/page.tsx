@@ -129,11 +129,11 @@ function ListaMaestra() {
         />
       </div>
       <Toolbar>
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por clave, título o propietario" className="w-full md:w-[360px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por clave, título o propietario" className="min-w-0 flex-1 md:w-[360px] md:flex-none" />
         <FilterMenu groups={groups} toggles={data?.puede.ver_obsoletos ? [{ key: "obsoletos", label: "Incluir obsoletos", description: "Documentos retirados del uso (consulta histórica)", checked: obsoletos, onChange: setObsoletos }] : []} />
       </Toolbar>
       {data ? (
-        <p className="-mt-2 text-[12.5px] text-ink-3" data-testid="lm-resumen">
+        <p className="-mt-2 text-xs text-ink-3" data-testid="lm-resumen">
           {data.items.length} documento{data.items.length === 1 ? "" : "s"} · {data.filtros}
         </p>
       ) : null}
@@ -147,7 +147,7 @@ function ListaMaestra() {
         </div>
       ) : (
         <TableShell>
-          <Table className="min-w-[980px] text-[13px]" data-testid="lm-tabla">
+          <Table className="min-w-[980px] text-sm" data-testid="lm-tabla">
             <THead>
               <tr>
                 <Th>Documento</Th>
@@ -165,7 +165,7 @@ function ListaMaestra() {
                   <Fragment key={g}>
                     <tr data-testid="lm-area" data-area={g}>
                       <td colSpan={6} className="p-0">
-                        <span className="flex items-center gap-2 border-l-[6px] bg-surface-2 px-4 py-2 text-[12.5px] font-semibold text-ink" style={{ borderLeftColor: filas[0].area_color }}>
+                        <span className="flex items-center gap-2 border-l-[6px] bg-surface-2 px-4 py-2 text-xs font-semibold text-ink" style={{ borderLeftColor: filas[0].area_color }}>
                           <span className="code">{g}</span>
                           <span className="font-medium text-ink-2">{filas[0].area_nombre}</span>
                           <span className="tnum ml-auto font-normal text-ink-3">{filas.length}</span>
@@ -177,17 +177,17 @@ function ListaMaestra() {
                         <Td className="min-w-[280px] max-w-[420px]">
                           <span className="flex flex-col gap-0.5">
                             <span className="flex flex-wrap items-center gap-2">
-                              <span className="code text-[12.5px] font-semibold text-ink-2">{x.clave}</span>
+                              <span className="code text-xs font-semibold text-ink-2">{x.clave}</span>
                               {x.origen === "externo" ? <ExternoEtiqueta /> : null}
                             </span>
                             <span className="break-words font-medium text-ink">{x.titulo}</span>
-                            <span className="text-[12px] text-ink-3">{x.tipo_nombre}</span>
+                            <span className="text-xs text-ink-3">{x.tipo_nombre}</span>
                           </span>
                         </Td>
                         <Td className="min-w-[130px]">
                           <span className="flex flex-col gap-0.5">
                             <span className="whitespace-nowrap">{x.revision || "—"}</span>
-                            {x.en_curso ? <span className="text-[12px] text-ink-3" data-testid="lm-en-curso">{x.en_curso}</span> : null}
+                            {x.en_curso ? <span className="text-xs text-ink-3" data-testid="lm-en-curso">{x.en_curso}</span> : null}
                           </span>
                         </Td>
                         <Td className="min-w-[150px]">
@@ -201,7 +201,7 @@ function ListaMaestra() {
                           </span>
                         </Td>
                         <Td className="min-w-[200px]">
-                          <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-[12.5px]">
+                          <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-xs">
                             {[
                               ["Propietario", x.propietario],
                               ["Elaboró", x.elaborador],
@@ -218,7 +218,7 @@ function ListaMaestra() {
                           </dl>
                         </Td>
                         <Td className="min-w-[170px]">
-                          <dl className="tnum grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-[12.5px]">
+                          <dl className="tnum grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-xs">
                             {[
                               ["Emisión", x.emision],
                               ["Vigencia", x.vigencia],
@@ -245,7 +245,7 @@ function ListaMaestra() {
           </Table>
         </TableShell>
       )}
-      <p className="flex items-center gap-1.5 text-[12px] text-ink-3">
+      <p className="flex items-center gap-1.5 text-xs text-ink-3">
         <LockKey size={13} aria-hidden="true" /> Solo se listan los documentos que puedes consultar.
       </p>
     </PageBody>

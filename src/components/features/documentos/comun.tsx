@@ -321,7 +321,7 @@ export function ConfidencialidadEtiqueta({ valor }: { valor: string }) {
  * reducido), con el icono del area en una insignia.
  */
 export function IconoArea({ area, size = "md", carpeta = false }: { area: Pick<Area, "codigo" | "nombre" | "color">; size?: "sm" | "md" | "lg"; carpeta?: boolean }) {
-  const caja = { sm: "h-8 w-8 rounded-[9px]", md: "h-11 w-11 rounded-[12px]", lg: "h-14 w-14 rounded-[15px]" }[size];
+  const caja = { sm: "h-8 w-8 rounded-field", md: "h-11 w-11 rounded-box", lg: "h-14 w-14 rounded-card" }[size];
   const icono = { sm: 17, md: 23, lg: 30 }[size];
   const Glifo = ICONO_AREA[area.codigo] ?? ICONO_AREA_RESPALDO;
   if (!carpeta) {
@@ -352,13 +352,13 @@ export function RutaDocumentos({ area, tipo, documento }: { area?: Pick<Area, "c
   if (documento) pasos.push({ label: documento });
   return (
     <nav aria-label="Ruta" data-testid="ruta-documentos">
-      <ol className="flex flex-wrap items-center gap-1 text-[12.5px] text-ink-3">
+      <ol className="flex flex-wrap items-center gap-1 text-xs text-ink-3">
         {pasos.map((p, i) => {
           const ultimo = i === pasos.length - 1;
           return (
             <li key={`${p.label}-${i}`} className="flex items-center gap-1">
               {p.href && !ultimo ? (
-                <Link href={p.href} className="rounded-[4px] hover:text-ink hover:underline focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none">
+                <Link href={p.href} className="rounded-xs hover:text-ink hover:underline">
                   {p.label}
                 </Link>
               ) : (

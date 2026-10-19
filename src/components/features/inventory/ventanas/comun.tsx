@@ -22,7 +22,7 @@ import { diasEntre, fechaSola, formatearFechaCorta, formatearFechaHora, hoyLocal
 /* Cuadro suave del icono: pequeño en listas, grande en la ventana. */
 function CuadroIcono({ grande, clase, children }: { grande: boolean; clase: string; children: ReactNode }) {
   return (
-    <span aria-hidden="true" className={cn("flex shrink-0 items-center justify-center", grande ? "h-16 w-16 rounded-[18px]" : "h-10 w-10 rounded-[12px]", clase)}>
+    <span aria-hidden="true" className={cn("flex shrink-0 items-center justify-center", grande ? "h-16 w-16 rounded-panel" : "h-10 w-10 rounded-box", clase)}>
       {children}
     </span>
   );
@@ -148,11 +148,11 @@ export function caducidadDe(value: unknown): { texto: string; detalle: string | 
 
 export function Caducidad({ value }: { value: unknown }) {
   const c = caducidadDe(value);
-  if (!c) return <span className="text-[13px] text-ink-4">—</span>;
+  if (!c) return <span className="text-sm text-ink-4">—</span>;
   return (
     <span className="flex flex-col">
-      <span className={cn("text-[13.5px]", c.tono === "danger" ? "font-medium text-danger" : c.tono === "warning" ? "font-medium text-warning-text" : "text-ink-2")}>{c.texto}</span>
-      {c.detalle ? <span className={cn("text-[12px]", c.tono === "danger" ? "text-danger" : "text-warning-text")}>{c.detalle}</span> : null}
+      <span className={cn("text-sm", c.tono === "danger" ? "font-medium text-danger" : c.tono === "warning" ? "font-medium text-warning-text" : "text-ink-2")}>{c.texto}</span>
+      {c.detalle ? <span className={cn("text-xs", c.tono === "danger" ? "text-danger" : "text-warning-text")}>{c.detalle}</span> : null}
     </span>
   );
 }
@@ -227,7 +227,7 @@ export function IconoOrigen({ m }: { m: ApiRecord }) {
   const ref = String(m.referencia || "");
   const icono = /^EXT-/.test(ref) ? <Flask size={18} weight="duotone" /> : /^PROC-/.test(ref) ? <TestTube size={18} weight="duotone" /> : /^(ANA|AN)-/.test(ref) ? <ChartLine size={18} weight="duotone" /> : esEntrada(m) ? <Truck size={18} weight="duotone" /> : <ArrowsLeftRight size={18} weight="duotone" />;
   return (
-    <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-surface text-brand-strong shadow-card">
+    <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-field bg-surface text-brand-strong shadow-card">
       {icono}
     </span>
   );
@@ -242,12 +242,12 @@ function useMovimientos(): { items: ApiRecord[] | null; error: string | null } {
 
 export function MovimientosRecientes({ tabla, id, unidad }: { tabla: "reactivos" | "consumibles"; id: unknown; unidad?: string }) {
   const { items, error } = useMovimientos();
-  if (error) return <p className="text-[13.5px] text-ink-3">No se pudieron cargar los movimientos.</p>;
+  if (error) return <p className="text-sm text-ink-3">No se pudieron cargar los movimientos.</p>;
   if (!items) return <Skeleton className="h-16 w-full" />;
   const propios = items.filter((m) => m.tabla_origen === tabla && Number(m.id_item) === Number(id)).slice(0, 6);
   if (!propios.length)
     return (
-      <p className="text-[13.5px] text-ink-3">
+      <p className="text-sm text-ink-3">
         Sin movimientos recientes.{" "}
         <Link href="/movimientos" className="font-medium text-brand hover:underline">
           Ver todos los movimientos
@@ -259,13 +259,13 @@ export function MovimientosRecientes({ tabla, id, unidad }: { tabla: "reactivos"
       {propios.map((m, i) => {
         const origen = origenDeMovimiento(m);
         return (
-          <li key={String(m.id)} className="entrada-escalonada flex items-start gap-3 rounded-[12px] bg-surface px-3 py-2.5 ring-1 ring-line" style={{ ["--i" as string]: i }}>
+          <li key={String(m.id)} className="entrada-escalonada flex items-start gap-3 rounded-box bg-surface px-3 py-2.5 ring-1 ring-line" style={{ ["--i" as string]: i }}>
             <IconoMovimientoInsumo m={m} />
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="text-[13.5px] font-medium text-ink">
+              <span className="text-sm font-medium text-ink">
                 {tipoMovimiento(m)} de {conUnidad(cantidadMovimiento(m), String(unidad || m.unidad || ""))}
               </span>
-              <span className="break-words text-[12.5px] text-ink-3">
+              <span className="break-words text-xs text-ink-3">
                 {origen.href ? (
                   <Link href={origen.href} className="text-brand hover:underline">
                     {origen.texto}

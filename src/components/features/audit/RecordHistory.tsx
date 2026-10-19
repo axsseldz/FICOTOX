@@ -63,8 +63,8 @@ export function RecordHistory({ entidad, entidadId, compact = false }: { entidad
     };
   }, [load]);
 
-  if (!entidadId) return <p className="text-[13px] text-ink-3">El historial aparece una vez guardado el registro.</p>;
-  if (error) return <p className="text-[13px] text-danger">{error}</p>;
+  if (!entidadId) return <p className="text-sm text-ink-3">El historial aparece una vez guardado el registro.</p>;
+  if (error) return <p className="text-sm text-danger">{error}</p>;
   if (!items) {
     return (
       <div className="flex flex-col gap-3">
@@ -77,27 +77,27 @@ export function RecordHistory({ entidad, entidadId, compact = false }: { entidad
   const lista = solicitudes || [];
   const pendientes = lista.filter((sol) => sol.estado === "pendiente");
   const resueltas = lista.filter((sol) => sol.estado !== "pendiente");
-  const texto = compact ? "text-[13px]" : "text-[13.5px]";
+  const texto = compact ? "text-sm" : "text-sm";
 
   return (
     <div className="flex flex-col gap-4">
       {lista.length ? (
         <section aria-labelledby={`${idBase}-sol`} className="flex flex-col gap-2" data-historial-solicitudes>
-          <h4 id={`${idBase}-sol`} className="flex items-center gap-2 text-[13px] font-semibold text-ink">
+          <h4 id={`${idBase}-sol`} className="flex items-center gap-2 text-sm font-semibold text-ink">
             Solicitudes de autorización
             <span className="tnum font-normal text-ink-3">· {lista.length}</span>
             {pendientes.length ? <Badge tone="warning">{pendientes.length === 1 ? "1 pendiente" : `${pendientes.length} pendientes`}</Badge> : null}
           </h4>
           <ul className={cn("flex flex-col gap-2", texto)} aria-label="Solicitudes de autorización">
             {pendientes.map((sol) => (
-              <li key={String(sol.id)} className="rounded-[12px] bg-warning-soft/60 px-3.5 py-3 ring-1 ring-warning/25" data-solicitud-estado="pendiente">
+              <li key={String(sol.id)} className="rounded-box bg-warning-soft/60 px-3.5 py-3 ring-1 ring-warning/25" data-solicitud-estado="pendiente">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-semibold text-ink">{String(sol.etiqueta)}</p>
                   <Badge tone="warning" dot>
                     {ETIQUETA_ESTADO_SOLICITUD.pendiente}
                   </Badge>
                 </div>
-                <dl className="mt-2 grid gap-x-4 gap-y-1 text-[12.5px] sm:grid-cols-[max-content_minmax(0,1fr)]">
+                <dl className="mt-2 grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[max-content_minmax(0,1fr)]">
                   <dt className="text-ink-3">Pidió</dt>
                   <dd className="text-ink">
                     {String(sol.solicitado_nombre || "Otra persona")}
@@ -111,21 +111,21 @@ export function RecordHistory({ entidad, entidadId, compact = false }: { entidad
                     {sol.vence_en ? <span className="text-ink-3"> · vence {formatearFechaHora(sol.vence_en)}</span> : null}
                   </dd>
                 </dl>
-                <p className="mt-2 text-[12px] text-ink-3">La aprueba o rechaza otra persona autorizada, desde «Por autorizar».</p>
+                <p className="mt-2 text-xs text-ink-3">La aprueba o rechaza otra persona autorizada, desde «Por autorizar».</p>
               </li>
             ))}
             {resueltas.map((sol) => (
-              <li key={String(sol.id)} className="rounded-[12px] bg-surface-2 px-3 py-2.5 ring-1 ring-line" data-solicitud-estado={String(sol.estado)}>
+              <li key={String(sol.id)} className="rounded-box bg-surface-2 px-3 py-2.5 ring-1 ring-line" data-solicitud-estado={String(sol.estado)}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-medium text-ink">{String(sol.etiqueta)}</p>
                   <Badge tone={TONO_SOLICITUD[String(sol.estado)] || "neutral"}>{ETIQUETA_ESTADO_SOLICITUD[String(sol.estado) as EstadoSolicitud] || String(sol.estado)}</Badge>
                 </div>
                 <p className="mt-0.5 whitespace-pre-line text-ink-2">Motivo: {String(sol.motivo || "—")}</p>
-                <p className="tnum mt-0.5 text-[12px] text-ink-3">
+                <p className="tnum mt-0.5 text-xs text-ink-3">
                   Pidió {String(sol.solicitado_nombre || "otra persona")}
                   {sol.solicitado_rol ? ` (${String(sol.solicitado_rol)})` : ""} · {formatearFechaHora(sol.solicitado_en)}
                 </p>
-                <p className="tnum mt-0.5 whitespace-pre-line text-[12px] text-ink-3">
+                <p className="tnum mt-0.5 whitespace-pre-line text-xs text-ink-3">
                   {sol.resuelto_nombre ? `${String(sol.resuelto_nombre)}${sol.resuelto_rol ? ` (${String(sol.resuelto_rol)})` : ""} · ` : ""}
                   {formatearFechaHora(sol.resuelto_en)}
                   {sol.motivo_resolucion ? ` · ${String(sol.motivo_resolucion)}` : ""}
@@ -142,7 +142,7 @@ export function RecordHistory({ entidad, entidadId, compact = false }: { entidad
           aria-expanded={abierta}
           aria-controls={`${idBase}-bit`}
           onClick={() => setAbierta((v) => !v)}
-          className="press -mx-2 flex items-center gap-2 rounded-[10px] px-2 py-1.5 text-left text-[13px] font-semibold text-ink hover:bg-surface-2"
+          className="press -mx-2 flex items-center gap-2 rounded-field px-2 py-1.5 text-left text-sm font-semibold text-ink hover:bg-surface-2"
         >
           <CaretRight size={13} weight="bold" className={cn("text-ink-3 transition-transform duration-200 ease-[var(--ease-spring)] motion-reduce:transition-none", abierta && "rotate-90")} />
           Actividad
@@ -152,7 +152,7 @@ export function RecordHistory({ entidad, entidadId, compact = false }: { entidad
           <div className="min-h-0 overflow-hidden">
             <div className="pt-2">
               {items.length ? (
-                <div className="overflow-hidden rounded-[14px] bg-surface ring-1 ring-line" aria-label="Actividad del registro">
+                <div className="overflow-hidden rounded-card bg-surface ring-1 ring-line" aria-label="Actividad del registro">
                   <ListaActividades grupos={grupos} seleccion={actividadAbierta} onAbrir={setActividadAbierta} />
                 </div>
               ) : (

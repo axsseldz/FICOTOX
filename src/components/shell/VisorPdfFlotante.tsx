@@ -60,7 +60,7 @@ export function VisorPdfFlotante() {
   return (
     <div role="dialog" aria-modal="true" aria-label={peticion.titulo || peticion.nombre} className="fixed inset-0 z-[var(--z-ventana)] flex flex-col bg-canvas" data-visor data-visor-pdf-flotante>
       <header className="flex items-center gap-2 border-b border-line bg-surface px-3 py-2 sm:px-4">
-        <h1 className="min-w-0 flex-1 truncate text-[15.5px] font-semibold tracking-[-0.01em] text-ink">{peticion.titulo || peticion.nombre}</h1>
+        <h1 className="min-w-0 flex-1 truncate text-md font-semibold tracking-snug text-ink">{peticion.titulo || peticion.nombre}</h1>
         <IconButton label="Cerrar" onClick={cerrar}>
           <X size={17} />
         </IconButton>

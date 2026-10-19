@@ -126,10 +126,10 @@ export function Campana({ compacta = false }: { compacta?: boolean }) {
         }}
       >
         <RadixPopover.Trigger asChild>
-          <button type="button" aria-label={total ? `Notificaciones: ${total} sin leer` : "Notificaciones"} className={cn("press relative inline-flex items-center justify-center text-ink-3 hover:bg-surface-3 hover:text-ink", compacta ? "h-9 w-full rounded-[9px]" : "h-8 w-8 rounded-[8px]")}>
+          <button type="button" aria-label={total ? `Notificaciones: ${total} sin leer` : "Notificaciones"} className={cn("press relative inline-flex items-center justify-center text-ink-3 hover:bg-surface-3 hover:text-ink", compacta ? "h-9 w-full rounded-field" : "h-8 w-8 rounded-control")}>
             <Bell size={compacta ? 18 : 17} />
             {total ? (
-              <span data-campana-contador className="absolute -top-0.5 -right-0.5 min-w-[16px] rounded-full bg-danger px-1 text-center text-[10px] leading-[16px] font-semibold text-on-accent animate-pop-in motion-reduce:animate-none">
+              <span data-campana-contador className="absolute -top-0.5 -right-0.5 min-w-[16px] rounded-full bg-danger px-1 text-center text-2xs leading-4 font-semibold text-on-accent animate-pop-in motion-reduce:animate-none">
                 {total > 99 ? "99+" : <Conteo valor={total} duracion={400} />}
               </span>
             ) : null}
@@ -142,12 +142,12 @@ export function Campana({ compacta = false }: { compacta?: boolean }) {
             side={compacta ? "right" : "bottom"}
             sideOffset={8}
             collisionPadding={12}
-            className="bg-popover border border-line z-[var(--z-popover)] flex max-h-[min(var(--radix-popover-content-available-height),620px)] w-[370px] max-w-[calc(100vw-24px)] flex-col rounded-[16px] shadow-panel outline-none data-[state=closed]:animate-dematerialize data-[state=open]:animate-materialize"
+            className="bg-popover border border-line z-[var(--z-popover)] flex max-h-[min(var(--radix-popover-content-available-height),620px)] w-[370px] max-w-[calc(100vw-24px)] flex-col rounded-card shadow-pop outline-none data-[state=closed]:animate-dematerialize data-[state=open]:animate-materialize"
           >
             <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
-              <p className="text-[14px] font-semibold text-ink">Notificaciones</p>
+              <p className="text-base font-semibold text-ink">Notificaciones</p>
               {total ? (
-                <button type="button" onClick={() => marcar(noLeidas)} className="press inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[12px] font-medium text-brand hover:bg-brand-faint hover:text-brand-strong">
+                <button type="button" onClick={() => marcar(noLeidas)} className="press inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-xs font-medium text-brand hover:bg-brand-faint hover:text-brand-strong">
                   <Checks size={14} /> Marcar todas como leídas
                 </button>
               ) : null}
@@ -155,16 +155,16 @@ export function Campana({ compacta = false }: { compacta?: boolean }) {
 
             <div className="scroll-thin min-h-0 flex-1 overflow-y-auto">
               {items === null ? (
-                <p className="px-4 py-6 text-center text-[13px] text-ink-3">Cargando…</p>
+                <p className="px-4 py-6 text-center text-sm text-ink-3">Cargando…</p>
               ) : !total ? (
                 <div className="flex flex-col items-center gap-2 px-4 py-7 text-center">
                   <MarcaDibujada className="h-12 w-12 text-success" />
-                  <p className="text-[14px] font-semibold text-ink">Estás al día</p>
+                  <p className="text-base font-semibold text-ink">Estás al día</p>
                 </div>
               ) : (
                 grupos.map(([dia, lista]) => (
                   <section key={dia} aria-label={dia}>
-                    <h3 className="px-4 pt-2.5 pb-1 text-[11.5px] font-semibold text-ink-3">{dia}</h3>
+                    <h3 className="px-4 pt-2.5 pb-1 text-2xs font-semibold text-ink-3">{dia}</h3>
                     <ul>
                       {lista.map((n) => (
                         <FilaNotificacion key={n.clave} n={n} saliendo={saliendo.has(n.clave)} onAbrir={() => abrir(n)} onMarcar={() => marcar([n])} />
@@ -176,7 +176,7 @@ export function Campana({ compacta = false }: { compacta?: boolean }) {
 
               {anteriores.length ? (
                 <div className="border-t border-line/70 py-1">
-                  <button type="button" onClick={() => setVerAnteriores((v) => !v)} aria-expanded={verAnteriores} className="w-full px-4 py-2 text-left text-[12px] font-medium text-ink-3 hover:text-ink">
+                  <button type="button" onClick={() => setVerAnteriores((v) => !v)} aria-expanded={verAnteriores} className="w-full px-4 py-2 text-left text-xs font-medium text-ink-3 hover:text-ink">
                     {verAnteriores ? "Ocultar anteriores" : `Ver anteriores (${anteriores.length})`}
                   </button>
                   {verAnteriores ? (
@@ -205,13 +205,13 @@ function FilaNotificacion({ n, leida = false, saliendo = false, onAbrir, onMarca
     <li className={cn("grid transition-[grid-template-rows,opacity] duration-300 ease-[var(--ease-spring)] motion-reduce:transition-none", saliendo ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100")}>
       <div className="group relative min-h-0 overflow-hidden">
         <button type="button" onClick={onAbrir} className={cn("flex w-full items-start gap-3 px-4 py-2.5 pr-11 text-left transition-colors duration-150 hover:bg-surface-3/70 focus-visible:bg-surface-3/70 focus-visible:outline-none", leida && "opacity-60")}>
-          <span aria-hidden="true" className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[16px] [&>svg]:h-[1em] [&>svg]:w-[1em]", leida ? "bg-surface-3 text-ink-3" : TONO[n.tono].circulo)}>
+          <span aria-hidden="true" className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg [&>svg]:h-[1em] [&>svg]:w-[1em]", leida ? "bg-surface-3 text-ink-3" : TONO[n.tono].circulo)}>
             {meta.icono}
           </span>
           <span className="flex min-w-0 flex-1 flex-col">
-            <span className="text-[13.5px] leading-snug font-medium text-ink">{n.frase}</span>
-            <span className="truncate text-[12.5px] text-ink-2">{n.registro}</span>
-            <span className="truncate text-[11.5px] text-ink-3">
+            <span className="text-sm leading-snug font-medium text-ink">{n.frase}</span>
+            <span className="truncate text-xs text-ink-2">{n.registro}</span>
+            <span className="truncate text-2xs text-ink-3">
               {/* Una fecha sola (p. ej. un vencimiento) no da "hace X": haceCuantoCorto devuelve "—" y se omite. */}
               {[n.detalle, n.cuando ? haceCuantoCorto(n.cuando) : null].filter((parte) => parte && parte !== "—").join(" · ")}
             </span>
@@ -224,7 +224,7 @@ function FilaNotificacion({ n, leida = false, saliendo = false, onAbrir, onMarca
             onClick={onMarcar}
             aria-label={`Marcar como leída: ${n.frase} ${n.registro}`}
             title="Marcar como leída"
-            className="press absolute top-1/2 right-2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-surface text-ink-3 opacity-0 shadow-card transition-opacity duration-150 group-hover:opacity-100 hover:text-brand focus-visible:opacity-100 focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none"
+            className="press absolute top-1/2 right-2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-surface text-ink-3 opacity-0 shadow-card transition-opacity duration-150 group-hover:opacity-100 hover:text-brand focus-visible:opacity-100"
           >
             <Check size={14} weight="bold" />
           </button>

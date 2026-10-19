@@ -207,11 +207,11 @@ function EquiposContent() {
       <span key="e" className={inactive ? "flex min-w-0 items-center gap-3 opacity-60" : "flex min-w-0 items-center gap-3"}>
         <IconoEquipo nombre={item.nombre} />
         <span className="flex min-w-0 flex-col">
-          <span className="text-[14.5px] leading-tight font-semibold text-ink">
+          <span className="text-base leading-tight font-semibold text-ink">
             {String(item.nombre || "—")}
             {inactive ? <Badge tone="danger" className="ml-2 align-middle">Baja</Badge> : null}
           </span>
-          <span className="text-[12.5px] text-ink-3">{item.clave_bitacora ? `Bitácora ${String(item.clave_bitacora)}` : [item.marca, item.modelo].filter(Boolean).join(" · ") || "Sin clave de bitácora"}</span>
+          <span className="text-xs text-ink-3">{item.clave_bitacora ? `Bitácora ${String(item.clave_bitacora)}` : [item.marca, item.modelo].filter(Boolean).join(" · ") || "Sin clave de bitácora"}</span>
         </span>
       </span>,
       <span key="s" className="flex flex-col items-start gap-1">
@@ -222,16 +222,16 @@ function EquiposContent() {
       <Caducidad key="c" value={item.fecha_prox_calibracion} />,
       item.mantenimiento_fecha ? (
         <span key="m" className="flex flex-col">
-          <span className={item.mantenimiento_estado === "vencido" ? "text-[13.5px] font-medium text-danger" : "text-[13.5px] text-ink-2"}>{formatearFechaCorta(item.mantenimiento_fecha)}</span>
-          <span className="text-[12px] text-ink-3">
+          <span className={item.mantenimiento_estado === "vencido" ? "text-sm font-medium text-danger" : "text-sm text-ink-2"}>{formatearFechaCorta(item.mantenimiento_fecha)}</span>
+          <span className="text-xs text-ink-3">
             {metaFor(MANTENIMIENTO_TIPOS, item.mantenimiento_tipo).label}
             {item.mantenimiento_estado === "vencido" ? " · vencido" : item.mantenimiento_estado === "en_proceso" ? " · en proceso" : ""}
           </span>
         </span>
       ) : (
-        <span key="m" className="text-[13px] text-ink-4">—</span>
+        <span key="m" className="text-sm text-ink-4">—</span>
       ),
-      item.responsable || item.id_responsable ? <FiguraPersona key="r" id={item.id_responsable} nombre={item.responsable} conNombre /> : <span key="r" className="text-[13px] text-ink-4">—</span>,
+      item.responsable || item.id_responsable ? <FiguraPersona key="r" id={item.id_responsable} nombre={item.responsable} conNombre /> : <span key="r" className="text-sm text-ink-4">—</span>,
     ];
   };
 
@@ -246,7 +246,7 @@ function EquiposContent() {
           ) : null
         }
       >
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre, marca o modelo" className="w-full md:w-[340px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre, marca o modelo" className="min-w-0 flex-1 md:w-[340px] md:flex-none" />
         <FilterMenu groups={groups} toggles={toggles} gruposFinales={ordenar} vistaAlFinal />
       </Toolbar>
 
@@ -274,7 +274,7 @@ function EquiposContent() {
           accion: canCreate && !search && filter === "todos" ? <Button onClick={() => modal.open(null)}>Nuevo equipo</Button> : undefined,
         }}
       />
-      {items && visible.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-3">{visible.length === 1 ? "1 equipo" : `${fmt(visible.length)} equipos`}</p> : null}
+      {items && visible.length ? <p className="tnum mt-2 px-1 text-xs text-ink-3">{visible.length === 1 ? "1 equipo" : `${fmt(visible.length)} equipos`}</p> : null}
 
       <EquipoVentana
         items={visible}

@@ -31,10 +31,10 @@ const unAnio = () => sumarDias(hoyLocal(), 365);
 function CampoPdf({ id, onChange }: { id: string; onChange: (f: File | null) => void }) {
   return (
     <CampoValidado id={id} className="flex flex-col gap-1.5">
-      <label htmlFor={`${id}-input`} className="text-[13px] font-medium text-ink">
+      <label htmlFor={`${id}-input`} className="text-sm font-medium text-ink">
         PDF (solo si hay derechos de uso)
       </label>
-      <input id={`${id}-input`} type="file" accept=".pdf,application/pdf" onChange={(e) => onChange(e.target.files?.[0] || null)} className="text-[13px] text-ink-2 file:mr-3 file:rounded-[8px] file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-[13px] file:font-medium file:text-ink file:shadow-card" />
+      <input id={`${id}-input`} type="file" accept=".pdf,application/pdf" onChange={(e) => onChange(e.target.files?.[0] || null)} className="text-sm text-ink-2 file:mr-3 file:rounded-control file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink file:shadow-card" />
     </CampoValidado>
   );
 }
@@ -403,8 +403,8 @@ export function SeguimientoExterno({ docId, clave, ext, catalogos, sinAcciones =
   const [editar, setEditar] = useState(false);
   const dato = (etiqueta: string, valor: React.ReactNode) => (
     <div className="flex flex-col gap-0.5">
-      <dt className="text-[11.5px] font-medium uppercase tracking-wide text-ink-4">{etiqueta}</dt>
-      <dd className="break-words text-[13.5px] text-ink">{valor || "—"}</dd>
+      <dt className="text-xs text-ink-3">{etiqueta}</dt>
+      <dd className="break-words text-sm text-ink">{valor || "—"}</dd>
     </div>
   );
   return (

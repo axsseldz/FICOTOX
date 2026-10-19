@@ -105,18 +105,18 @@ export function ReporteMantenimientoPdf({ mantenimientoId, puedeGestionar, alVer
     <div className="flex flex-col gap-3" data-reporte-mantenimiento={mantenimientoId}>
       {puedeGestionar ? <input ref={inputRef} type="file" accept="application/pdf,.pdf" className="sr-only" aria-label="Archivo PDF del reporte" data-reporte-archivo onChange={(event) => void subir(event.target.files?.[0] || null)} /> : null}
       {recurso.data && !items.length ? (
-        <p className="text-[13.5px] text-ink-3" data-reporte-vacio>
+        <p className="text-sm text-ink-3" data-reporte-vacio>
           {puedeGestionar ? "Aún no hay reporte. Usa «Adjuntar reporte PDF» para subir el reporte de servicio que entregó el proveedor o el técnico." : "Aún no hay un reporte de servicio adjunto."}
         </p>
       ) : null}
       {items.map((item) => (
-        <div key={String(item.id)} className="flex flex-wrap items-center gap-3 rounded-[14px] bg-surface-2 px-4 py-3 ring-1 ring-line" data-reporte-item={String(item.id)}>
-          <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-danger-soft text-danger">
+        <div key={String(item.id)} className="flex flex-wrap items-center gap-3 rounded-card bg-surface-2 px-4 py-3 ring-1 ring-line" data-reporte-item={String(item.id)}>
+          <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-box bg-danger-soft text-danger">
             <FilePdf size={20} weight="duotone" />
           </span>
           <span className="flex min-w-0 flex-[1_1_12rem] flex-col">
-            <span className="text-[14px] leading-tight font-semibold text-ink">{String(item.codigo || "Reporte")}</span>
-            <span className="break-words text-[12.5px] text-ink-3">
+            <span className="text-base leading-tight font-semibold text-ink">{String(item.codigo || "Reporte")}</span>
+            <span className="break-words text-xs text-ink-3">
               {[item.nombre_original ? String(item.nombre_original) : null, item.tamano_bytes ? fmtBytes(Number(item.tamano_bytes)) : null, formatearFechaCorta(item.fecha_reporte), item.sha256 ? `SHA-256 ${huellaCorta(String(item.sha256))}` : null].filter(Boolean).join(" · ")}
             </span>
           </span>

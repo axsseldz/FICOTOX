@@ -11,7 +11,7 @@ import type { ReactNode } from "react";
  */
 
 export function SinDato({ texto = "—" }: { texto?: string }) {
-  return <span className="text-[13px] text-ink-4">{texto}</span>;
+  return <span className="text-sm text-ink-4">{texto}</span>;
 }
 
 /* Figuras apiladas (maximo `max` y "+N"): asignados, autorizados, personas con un rol. */
@@ -20,7 +20,7 @@ export function FigurasApiladas({ children, total, max = 4 }: { children: ReactN
   return (
     <span className="flex -space-x-2">
       {visibles}
-      {total > max ? <span className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-3 text-[11px] font-semibold text-ink-2 ring-2 ring-surface">+{total - max}</span> : null}
+      {total > max ? <span className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-3 text-2xs font-semibold text-ink-2 ring-2 ring-surface">+{total - max}</span> : null}
     </span>
   );
 }

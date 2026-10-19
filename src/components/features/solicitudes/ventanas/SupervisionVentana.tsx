@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight, ArrowUUpLeft, ClockCounterClockwise, Eye, FolderSimple, PencilSimple, Quotes, SealCheck, UserCircle } from "@phosphor-icons/react";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonClass } from "@/components/ui/Button";
 import { FiguraPersona } from "@/components/ui/FiguraPersona";
 import { Badge } from "@/components/ui/Primitives";
 import { DatosRapidos, VentanaAcciones, VentanaCentrada, VentanaEncabezado, VentanaSeccion, VentanaTitulo } from "@/components/ui/Ventana";
@@ -48,7 +48,7 @@ function FichaSupervision({ item, acciones, onIr }: { item: ElementoSupervision;
     <div className="flex flex-col gap-5" data-supervision-ventana={`${String(item.tabla)}-${String(item.id)}`}>
       <VentanaEncabezado
         figura={
-          <span aria-hidden="true" className={pendiente ? "flex h-14 w-14 items-center justify-center rounded-[16px] bg-warning-soft text-warning-text" : "flex h-14 w-14 items-center justify-center rounded-[16px] bg-danger-soft text-danger"}>
+          <span aria-hidden="true" className={pendiente ? "flex h-14 w-14 items-center justify-center rounded-card bg-warning-soft text-warning-text" : "flex h-14 w-14 items-center justify-center rounded-card bg-danger-soft text-danger"}>
             {pendiente ? <Eye size={28} weight="duotone" /> : <ArrowUUpLeft size={28} weight="duotone" />}
           </span>
         }
@@ -70,7 +70,7 @@ function FichaSupervision({ item, acciones, onIr }: { item: ElementoSupervision;
       />
 
       <VentanaSeccion titulo="Qué pasa" i={0}>
-        <p className="text-[14.5px] leading-[1.55] text-ink">
+        <p className="text-base leading-normal text-ink">
           {pendiente
             ? `${String(item.solicitado_por || "Una persona supervisada")} capturó ${registro}. No avanza (no se cierra, no se revisa ni aprueba y no sirve de origen) hasta que des tu visto bueno o lo regreses con observaciones.`
             : `Te regresaron ${registro} con observaciones. Corrígelo en su formato; después tu supervisor volverá a revisarlo.`}
@@ -85,7 +85,7 @@ function FichaSupervision({ item, acciones, onIr }: { item: ElementoSupervision;
 
       {!pendiente && item.observaciones ? (
         <VentanaSeccion titulo="Observaciones del supervisor" i={1}>
-          <blockquote className="flex gap-2.5 rounded-[12px] bg-danger-soft/50 px-3.5 py-3 text-[14.5px] leading-[1.5] text-ink ring-1 ring-danger/15">
+          <blockquote className="flex gap-2.5 rounded-box bg-danger-soft/50 px-3.5 py-3 text-base leading-normal text-ink ring-1 ring-danger/15">
             <Quotes size={16} weight="fill" className="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
             <p className="whitespace-pre-line">{String(item.observaciones)}</p>
           </blockquote>
@@ -103,12 +103,12 @@ function FichaSupervision({ item, acciones, onIr }: { item: ElementoSupervision;
             </Button>
           </>
         ) : href ? (
-          <Link href={href} onClick={onIr} className="press inline-flex h-9 items-center gap-1.5 rounded-[9px] bg-brand px-3.5 text-[13.5px] font-medium text-on-accent hover:bg-brand-strong">
+          <Link href={href} onClick={onIr} className={buttonClass()}>
             <PencilSimple size={15} /> Corregir
           </Link>
         ) : null}
         {href ? (
-          <Link href={href} onClick={onIr} className="press inline-flex h-9 items-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-medium text-brand hover:bg-brand-faint">
+          <Link href={href} onClick={onIr} className={buttonClass({ variant: "ghost" })}>
             Abrir formato completo <ArrowRight size={14} weight="bold" />
           </Link>
         ) : null}

@@ -155,7 +155,7 @@ function ExtraccionList() {
           ) : null
         }
       >
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por folio (E-D 12), folio P o ID interno" className="w-full md:w-[340px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por folio (E-D 12), folio P o ID interno" className="min-w-0 flex-1 md:w-[340px] md:flex-none" />
         <FilterMenu groups={groups} toggles={toggles} />
         <FilterChips groups={groups} toggles={toggles} />
       </Toolbar>
@@ -200,7 +200,7 @@ function ExtraccionList() {
                     <Td className="min-w-[220px] max-w-[360px]">
                       <CellPrimary lineas={2} title={item.id_interno || "—"} subtitle={item.muestra_tipo === "lote" ? "Lote" : "Muestra única"} />
                     </Td>
-                    <Td>{item.folio_procesamiento_num ? <FolioChip type="P" num={item.folio_procesamiento_num} /> : <span className="text-[12.5px] text-ink-3">Sin vincular</span>}</Td>
+                    <Td>{item.folio_procesamiento_num ? <FolioChip type="P" num={item.folio_procesamiento_num} /> : <span className="text-xs text-ink-3">Sin vincular</span>}</Td>
                     <Td muted className={COL_FECHA}>
                       {fmtDate(item.fecha_extraccion)}
                     </Td>

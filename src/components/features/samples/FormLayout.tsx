@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, CaretDown, Check, CheckCircle, Clock, Info, ListNumbers, LockSimple, Rows, SealCheck, Warning, WarningCircle } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, CaretDown, Check, Clock, ListNumbers, LockSimple, Rows, SealCheck } from "@phosphor-icons/react";
 import { cn } from "@/components/ui/cn";
 import { CampoValidado, MensajeCampo, ValidacionAmbito, type Validacion } from "@/components/ui/Validacion";
 import { checkboxClass, radioClass } from "@/components/ui/Field";
@@ -195,14 +195,14 @@ export function FormPage({ backHref, backLabel, code, title, status, statusTone 
             </Link>
             <div className="flex min-w-0 flex-1 flex-col">
               <div className="flex min-w-0 items-center gap-2">
-                <h1 className="truncate text-[16px] font-semibold tracking-[-0.01em] text-ink">{title}</h1>
+                <h1 className="truncate text-lg font-semibold tracking-snug text-ink">{title}</h1>
                 {status ? (
                   <Badge tone={statusTone} dot>
                     {status}
                   </Badge>
                 ) : null}
               </div>
-              <p className="truncate text-[12px] text-ink-3">
+              <p className="truncate text-xs text-ink-3">
                 {backLabel} · <span className="code">{code}</span>
               </p>
             </div>
@@ -210,7 +210,7 @@ export function FormPage({ backHref, backLabel, code, title, status, statusTone 
           </div>
           {validacion && validacion.faltantes.length && !readOnly ? (
             // Mismas reglas que la guía: cada sección es un enlace a su primer campo faltante.
-            <p role="status" data-aviso-faltantes className="mx-auto flex max-w-[1184px] flex-wrap items-center gap-x-1.5 gap-y-1 px-4 pb-2.5 text-[12.5px] text-danger sm:px-8">
+            <p role="status" data-aviso-faltantes className="mx-auto flex max-w-[1184px] flex-wrap items-center gap-x-1.5 gap-y-1 px-4 pb-2.5 text-xs text-danger sm:px-8">
               <span>Falta información en:</span>
               {validacion.faltantes.map((f, i) => (
                 <span key={f.seccion}>
@@ -222,7 +222,7 @@ export function FormPage({ backHref, backLabel, code, title, status, statusTone 
               ))}
             </p>
           ) : error ? (
-            <p role="alert" className="mx-auto max-w-[1184px] px-4 pb-2.5 text-[12.5px] text-danger sm:px-8">
+            <p role="alert" className="mx-auto max-w-[1184px] px-4 pb-2.5 text-xs text-danger sm:px-8">
               {error}
             </p>
           ) : null}
@@ -257,11 +257,11 @@ export function FormPage({ backHref, backLabel, code, title, status, statusTone 
                       type="button"
                       onClick={() => open(section.id)}
                       aria-current={active ? "step" : undefined}
-                      className={cn("press flex h-9 w-full items-center gap-2.5 rounded-[9px] px-2 text-left text-[13px] transition-colors", active ? "bg-surface font-medium text-ink shadow-card" : "text-ink-3 hover:bg-surface-3/70 hover:text-ink")}
+                      className={cn("press flex h-9 w-full items-center gap-2.5 rounded-field px-2 text-left text-sm transition-colors", active ? "bg-surface font-medium text-ink shadow-card" : "text-ink-3 hover:bg-surface-3/70 hover:text-ink")}
                     >
-                      <span className={cn("tnum flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10.5px] font-semibold", section.complete ? "bg-success text-on-accent" : missing ? "bg-warning-soft text-warning-text" : active ? "bg-brand-soft text-brand-strong ring-1 ring-inset ring-brand/25" : "bg-surface-3 text-ink-3")}>{section.complete ? <Check size={11} weight="bold" /> : index + 1}</span>
+                      <span className={cn("tnum flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-2xs font-semibold", section.complete ? "bg-success text-on-accent" : missing ? "bg-warning-soft text-warning-text" : active ? "bg-brand-soft text-brand-strong ring-1 ring-inset ring-brand/25" : "bg-surface-3 text-ink-3")}>{section.complete ? <Check size={11} weight="bold" /> : index + 1}</span>
                       <span className="truncate">{section.label}</span>
-                      {section.optional ? <span className="ml-auto shrink-0 text-[10.5px] font-medium uppercase tracking-wide text-ink-3">{section.optionalLabel ? "después" : "opcional"}</span> : null}
+                      {section.optional ? <span className="ml-auto shrink-0 text-2xs font-medium uppercase tracking-wide text-ink-3">{section.optionalLabel ? "después" : "opcional"}</span> : null}
                     </button>
                   </li>
                 );
@@ -272,13 +272,13 @@ export function FormPage({ backHref, backLabel, code, title, status, statusTone 
                 <div className="h-1 w-full overflow-hidden rounded-full bg-surface-3">
                   <div className="h-full w-full rounded-full bg-success transition-[translate] duration-500 ease-[var(--ease-spring)]" style={{ translate: `${Math.round((done / evaluated) * 100) - 100}% 0` }} />
                 </div>
-                <p className="tnum mt-1.5 text-[12px] text-ink-3">
+                <p className="tnum mt-1.5 text-xs text-ink-3">
                   {done} de {evaluated} secciones completas
                 </p>
               </div>
             ) : null}
             {!readOnly ? (
-              <button type="button" onClick={toggleShowAll} className="press mt-2 inline-flex h-8 items-center gap-1.5 rounded-[8px] px-2 text-[12.5px] font-medium text-ink-3 hover:bg-surface-3 hover:text-ink lg:hidden">
+              <button type="button" onClick={toggleShowAll} className="press mt-2 inline-flex h-8 items-center gap-1.5 rounded-control px-2 text-xs font-medium text-ink-3 hover:bg-surface-3 hover:text-ink lg:hidden">
                 {showAll ? <ListNumbers size={14} /> : <Rows size={14} />}
                 {showAll ? "Paso a paso" : "Mostrar todo"}
               </button>
@@ -336,34 +336,34 @@ export function FormCard({ id, title, description, children, aside, optional }: 
 
   // Solo la sección en curso lleva el número en tinta; con todo desplegado, las demás van en gris.
   const current = !!ctx && ctx.openId === id;
-  const badge = index >= 0 ? <span className={cn("tnum flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11.5px] font-semibold", meta?.complete ? "bg-success text-on-accent" : missing ? "bg-warning-soft text-warning-text" : current ? "bg-brand-soft text-brand-strong ring-1 ring-inset ring-brand/25" : "bg-surface-3 text-ink-2")}>{meta?.complete ? <Check size={12} weight="bold" /> : index + 1}</span> : null;
+  const badge = index >= 0 ? <span className={cn("tnum flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-2xs font-semibold", meta?.complete ? "bg-success text-on-accent" : missing ? "bg-warning-soft text-warning-text" : current ? "bg-brand-soft text-brand-strong ring-1 ring-inset ring-brand/25" : "bg-surface-3 text-ink-2")}>{meta?.complete ? <Check size={12} weight="bold" /> : index + 1}</span> : null;
 
   return (
-    <section id={id} className={cn("scroll-mt-24 rounded-[16px] bg-surface shadow-card transition-[box-shadow] duration-300 sm:scroll-mt-28", current && isOpen && "shadow-raised", !isOpen && "hover:shadow-raised")} data-open={isOpen}>
+    <section id={id} className={cn("scroll-mt-24 rounded-card bg-surface shadow-card transition-[box-shadow] duration-300 sm:scroll-mt-28", current && isOpen && "shadow-raised", !isOpen && "hover:shadow-raised")} data-open={isOpen}>
       {/* Abierta: cabecera como banda propia (número, título, descripción) separada del contenido. Plegada: un botón. */}
       {isOpen ? (
-        <header className={cn("flex flex-wrap items-start gap-3 rounded-t-[16px] border-b px-5 py-4 transition-colors sm:flex-nowrap sm:px-6", current ? "border-brand/20 bg-brand-faint/60" : "border-line bg-surface-2/60")}>
+        <header className={cn("flex flex-wrap items-start gap-3 rounded-t-card border-b px-5 py-4 transition-colors sm:flex-nowrap sm:px-6", current ? "border-brand/20 bg-brand-faint/60" : "border-line bg-surface-2/60")}>
           {badge}
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink">{title}</h2>
-              {isOptional ? <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[11px] font-medium text-ink-3">{meta?.optionalLabel || "Opcional"}</span> : null}
-              {meta?.optionalNote ? <span className="text-[12px] text-ink-3">{meta.optionalNote}</span> : null}
+              <h2 className="title-3 text-ink">{title}</h2>
+              {isOptional ? <Badge size="sm">{meta?.optionalLabel || "Opcional"}</Badge> : null}
+              {meta?.optionalNote ? <span className="text-xs text-ink-3">{meta.optionalNote}</span> : null}
             </div>
-            {description ? <p className="text-[13px] leading-snug text-ink-3">{description}</p> : null}
+            {description ? <p className="text-sm leading-snug text-ink-3">{description}</p> : null}
           </div>
           {/* En móvil la acción de la sección baja a su propia línea, alineada con el título. */}
           {aside ? <div className="shrink-0 basis-full pl-9 sm:basis-auto sm:pl-0">{aside}</div> : null}
         </header>
       ) : (
-        <button type="button" onClick={() => ctx!.open(id)} aria-expanded={false} aria-controls={`${id}-contenido`} className="press flex w-full items-center gap-3 rounded-[16px] px-5 py-4 text-left sm:px-6">
+        <button type="button" onClick={() => ctx!.open(id)} aria-expanded={false} aria-controls={`${id}-contenido`} className="press flex w-full items-center gap-3 rounded-card px-5 py-4 text-left sm:px-6">
           {badge}
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="flex flex-wrap items-center gap-2">
-              <span className="text-[15px] font-semibold tracking-[-0.01em] text-ink">{title}</span>
-              {missing ? <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-medium text-warning-text">Faltan datos</span> : null}
+              <span className="title-3 text-ink">{title}</span>
+              {missing ? <Badge size="sm" tone="warning">Faltan datos</Badge> : null}
             </span>
-            {description ? <span className="truncate text-[12.5px] text-ink-3">{description}</span> : null}
+            {description ? <span className="truncate text-xs text-ink-3">{description}</span> : null}
           </span>
           <CaretDown size={16} className="shrink-0 text-ink-4" />
         </button>
@@ -376,7 +376,7 @@ export function FormCard({ id, title, description, children, aside, optional }: 
             {children}
             {stepMode && !isLast ? (
               <div className="mt-6 flex justify-end border-t border-line pt-4">
-                <button type="button" onClick={() => ctx!.next(id)} className="press inline-flex h-9 items-center gap-2 rounded-[9px] bg-surface-3 px-3.5 text-[13.5px] font-medium text-ink ring-1 ring-inset ring-line-strong/60 hover:bg-line">
+                <button type="button" onClick={() => ctx!.next(id)} className="press inline-flex h-9 items-center gap-2 rounded-field bg-surface-3 px-3.5 text-sm font-medium text-ink ring-1 ring-inset ring-line-strong/60 hover:bg-line">
                   Continuar <ArrowRight size={14} weight="bold" />
                 </button>
               </div>
@@ -392,13 +392,13 @@ export function FormCard({ id, title, description, children, aside, optional }: 
 export function FormTable({ children, minWidth = 720, className }: { children: ReactNode; minWidth?: number; className?: string }) {
   return (
     <div className={cn("scroll-thin -mx-5 overflow-x-auto px-5 sm:-mx-6 sm:px-6", className)}>
-      <table className="w-full border-separate border-spacing-0 text-[13px]" style={{ minWidth }}>
+      <table className="w-full border-separate border-spacing-0 text-sm" style={{ minWidth }}>
         {children}
       </table>
     </div>
   );
 }
-export const formTh = "h-9 whitespace-nowrap border-b border-line bg-surface-2/60 px-2 text-left text-[11.5px] font-medium text-ink-3 first:rounded-l-[8px] first:pl-3 last:rounded-r-[8px] last:pr-3";
+export const formTh = "h-9 whitespace-nowrap border-b border-line bg-surface-2/60 px-2 text-left text-2xs font-medium text-ink-3 first:rounded-l-control first:pl-3 last:rounded-r-control last:pr-3";
 export const formTd = "border-b border-line/70 px-1.5 py-1.5 align-middle first:pl-2 last:pr-2";
 
 /* Subtitulo dentro de una seccion (p. ej. "Tipo de análisis"). */
@@ -406,33 +406,16 @@ export function FieldGroup({ label, hint, children, className }: { label: ReactN
   return (
     <div className={cn("flex flex-col gap-2.5", className)}>
       <div className="flex flex-col">
-        <p className="text-[13px] font-medium text-ink-2">{label}</p>
-        {hint ? <p className="text-[12px] text-ink-3">{hint}</p> : null}
+        <p className="text-sm font-medium text-ink-2">{label}</p>
+        {hint ? <p className="text-xs text-ink-3">{hint}</p> : null}
       </div>
       {children}
     </div>
   );
 }
 
-/* Aviso dentro de un formato: un solo estilo para informacion, advertencia, error o confirmacion. */
-export function Callout({ tone = "info", title, children, className }: { tone?: "info" | "warning" | "danger" | "success"; title?: ReactNode; children: ReactNode; className?: string }) {
-  const styles = {
-    info: { wrap: "bg-brand-faint text-ink", icon: "text-brand", Icon: Info },
-    warning: { wrap: "bg-warning-soft text-ink", icon: "text-warning", Icon: Warning },
-    danger: { wrap: "bg-danger-soft text-ink", icon: "text-danger", Icon: WarningCircle },
-    success: { wrap: "bg-success-soft text-ink", icon: "text-success", Icon: CheckCircle },
-  }[tone];
-  const Icon = styles.Icon;
-  return (
-    <div className={cn("flex gap-3 rounded-[12px] px-4 py-3 text-[13px] leading-relaxed", styles.wrap, className)} role={tone === "danger" ? "alert" : "status"}>
-      <Icon size={18} weight="fill" className={cn("mt-0.5 shrink-0", styles.icon)} />
-      <div className="min-w-0">
-        {title ? <p className="font-medium">{title}</p> : null}
-        <div className={cn(title && "mt-0.5 text-ink-2")}>{children}</div>
-      </div>
-    </div>
-  );
-}
+/* El aviso oficial vive en ui/Callout; se reexporta aquí porque muchos formatos lo importan de este módulo. */
+export { Callout } from "@/components/ui/Callout";
 
 /* Fila de un paso con casilla, texto y campos adicionales alineados. */
 export function StepRow({ number, label, checked, onCheckedChange, children, disabled }: { number?: ReactNode; label: ReactNode; checked: boolean; onCheckedChange: (checked: boolean) => void; children?: ReactNode; disabled?: boolean }) {
@@ -440,7 +423,7 @@ export function StepRow({ number, label, checked, onCheckedChange, children, dis
     <div className={cn("flex flex-col gap-3 border-b border-line py-3.5 first:pt-0 last:border-b-0 last:pb-0 md:flex-row md:items-start", disabled && "opacity-60")}>
       <label className="flex flex-1 cursor-pointer items-start gap-3">
         <input type="checkbox" className={cn(checkboxClass, "mt-0.5")} checked={checked} disabled={disabled} onChange={(event) => onCheckedChange(event.target.checked)} />
-        <span className="flex gap-2.5 text-[14px] leading-snug text-ink">
+        <span className="flex gap-2.5 text-base leading-snug text-ink">
           {number !== undefined ? <span className="tnum w-5 shrink-0 text-ink-4">{number}</span> : null}
           <span className={cn(checked && "text-ink-2")}>{label}</span>
         </span>
@@ -466,7 +449,7 @@ export function ChoiceCard({ checked, onChange, label, description, type = "chec
   return (
     <label
       data-bloqueada={bloqueada ? "true" : undefined}
-      className={cn("press flex cursor-pointer items-start gap-3 rounded-[12px] border px-3.5 py-3 transition-colors", invalida ? "border-danger bg-danger-soft/40 shadow-[0_0_0_1px_var(--color-danger)]" : checked ? "border-brand bg-brand-faint shadow-[0_0_0_1px_var(--color-brand)]" : "border-line bg-surface hover:border-line-strong", disabled && "cursor-not-allowed opacity-60", bloqueada && !checked && "border-dashed bg-surface-2/60 text-ink-3")}
+      className={cn("press flex cursor-pointer items-start gap-3 rounded-box border px-3.5 py-3 transition-colors", invalida ? "border-danger bg-danger-soft/40 ring-1 ring-danger" : checked ? "border-brand bg-brand-faint ring-1 ring-brand" : "border-line bg-surface hover:border-line-strong", disabled && "cursor-not-allowed opacity-60", bloqueada && !checked && "border-dashed bg-surface-2/60 text-ink-3")}
     >
       <input
         type={type}
@@ -486,11 +469,11 @@ export function ChoiceCard({ checked, onChange, label, description, type = "chec
         }}
       />
       <span className="flex flex-col gap-0.5">
-        <span className={cn("flex items-center gap-1.5 text-[14px] font-medium", bloqueada && !checked ? "text-ink-3" : "text-ink")}>
+        <span className={cn("flex items-center gap-1.5 text-base font-medium", bloqueada && !checked ? "text-ink-3" : "text-ink")}>
           {label}
           {bloqueada ? <LockSimple size={13} weight="bold" className="text-ink-4" aria-label="No disponible por ahora" /> : null}
         </span>
-        {description ? <span className="text-[12.5px] leading-snug text-ink-3">{description}</span> : null}
+        {description ? <span className="text-xs leading-snug text-ink-3">{description}</span> : null}
       </span>
     </label>
   );
@@ -505,11 +488,11 @@ export const personaId = (title: string) => `persona-${slug(title)}`;
 export function PersonCard({ title, name, onName, cargo, onCargo, signature, onSignature, disabled = false, requires = "muestras", firmante, onFirmante, firmanteSesion = true, nuevo = false }: { title: string; name: string; onName: (v: string) => void; cargo?: string; onCargo?: (v: string) => void; signature: string; onSignature: (v: string) => void; disabled?: boolean; requires?: PersonaCapacidad; /* Fase 5: firma ligada a una cuenta activa (con contrasena si no es la sesion). */ firmante?: FirmanteState; onFirmante?: (v: FirmanteState) => void; firmanteSesion?: boolean; /* Formato aun sin guardar (el nombre prellenado de la sesion se liga a su cuenta). */ nuevo?: boolean }) {
   const id = `persona-${slug(title)}`;
   return (
-    <div className="on-panel grid gap-4 rounded-[12px] bg-surface-2 p-4 ring-1 ring-line md:grid-cols-[minmax(0,1fr)_300px]">
+    <div className="on-panel grid gap-4 rounded-box bg-surface-2 p-4 ring-1 ring-line md:grid-cols-[minmax(0,1fr)_300px]">
       <div className="flex min-w-0 flex-col gap-3">
-        <p className="text-[13.5px] font-semibold text-ink">{title}</p>
+        <p className="text-sm font-semibold text-ink">{title}</p>
         <div className="grid gap-3">
-          <label className="flex flex-col gap-1.5 text-[12.5px] font-medium text-ink-2" htmlFor={id}>
+          <label className="flex flex-col gap-1.5 text-xs font-medium text-ink-2" htmlFor={id}>
             Nombre
             {firmante && onFirmante ? (
               <FirmanteSelect
@@ -541,11 +524,11 @@ export function PersonCard({ title, name, onName, cargo, onCargo, signature, onS
             )}
           </label>
           <MensajeCampo id={id} />
-          {cargo && !(firmante && onFirmante) ? <p className="text-[12.5px] text-ink-3">Cargo: {cargo}</p> : null}
+          {cargo && !(firmante && onFirmante) ? <p className="text-xs text-ink-3">Cargo: {cargo}</p> : null}
         </div>
       </div>
       <div className="flex min-w-0 flex-col gap-1.5">
-        <span className="text-[12.5px] font-medium text-ink-2">Firma</span>
+        <span className="text-xs font-medium text-ink-2">Firma</span>
         <CampoValidado id={`${id}-firma`}>
           <SignaturePad value={signature} onChange={onSignature} disabled={disabled} label={`Firma · ${title}`} compact />
         </CampoValidado>
@@ -557,11 +540,11 @@ export function PersonCard({ title, name, onName, cargo, onCargo, signature, onS
 /* Grupo de campos dentro de una seccion (p. ej. "Blanco", "Material de referencia"). */
 export function Panel({ title, description, children, className }: { title?: ReactNode; description?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <div className={cn("on-panel flex flex-col gap-3 rounded-[12px] bg-surface-2 p-4 ring-1 ring-line", className)}>
+    <div className={cn("on-panel flex flex-col gap-3 rounded-box bg-surface-2 p-4 ring-1 ring-line", className)}>
       {title ? (
         <div className="flex flex-col gap-0.5">
-          <p className="text-[13.5px] font-semibold text-ink">{title}</p>
-          {description ? <p className="text-[12.5px] text-ink-3">{description}</p> : null}
+          <p className="text-sm font-semibold text-ink">{title}</p>
+          {description ? <p className="text-xs text-ink-3">{description}</p> : null}
         </div>
       ) : null}
       {children}
@@ -575,13 +558,13 @@ export function SignoffCard({ title, name, cargo, at, note, hint, children }: { 
   // Una fecha sin hora se muestra tal cual (dd/mm/aaaa); un instante, con hora en la zona del laboratorio.
   const when = at ? formatearFechaHora(at, "") : null;
   return (
-    <div className={cn("flex gap-3 rounded-[14px] p-4 ring-1", done ? "bg-success-soft/40 ring-success/30" : "bg-surface-2 ring-line")}>
+    <div className={cn("flex gap-3 rounded-card p-4 ring-1", done ? "bg-success-soft/40 ring-success/30" : "bg-surface-2 ring-line")}>
       <span className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", done ? "bg-success text-on-accent" : "bg-surface-3 text-ink-4")}>{done ? <SealCheck size={16} weight="fill" /> : <Clock size={16} />}</span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <p className="text-[12.5px] font-medium text-ink-3">{title}</p>
-        <p className="truncate text-[14px] font-semibold text-ink">{name ? String(name) : done ? "—" : "Pendiente"}</p>
-        <p className="tnum text-[12.5px] text-ink-3">{[cargo ? String(cargo) : null, when].filter(Boolean).join(" · ") || (done ? "" : hint || "Aún sin registrar")}</p>
-        {note ? <p className="mt-1 text-[13px] text-ink-2">{String(note)}</p> : null}
+        <p className="text-xs font-medium text-ink-3">{title}</p>
+        <p className="truncate text-base font-semibold text-ink">{name ? String(name) : done ? "—" : "Pendiente"}</p>
+        <p className="tnum text-xs text-ink-3">{[cargo ? String(cargo) : null, when].filter(Boolean).join(" · ") || (done ? "" : hint || "Aún sin registrar")}</p>
+        {note ? <p className="mt-1 text-sm text-ink-2">{String(note)}</p> : null}
         {children}
       </div>
     </div>
@@ -592,7 +575,7 @@ export function SignoffCard({ title, name, cargo, at, note, hint, children }: { 
 export function FlowSteps({ steps, current, failed }: { steps: { key: string; label: string }[]; current: string; failed?: string }) {
   const index = steps.findIndex((step) => step.key === current);
   return (
-    <ol className="flex items-center gap-1 overflow-x-auto pb-1 text-[12.5px]" aria-label="Avance del registro">
+    <ol className="flex items-center gap-1 overflow-x-auto pb-1 text-xs" aria-label="Avance del registro">
       {steps.map((step, i) => {
         const done = index >= 0 && i < index;
         const active = i === index;
@@ -614,5 +597,5 @@ export function FlowSteps({ steps, current, failed }: { steps: { key: string; la
 /* Texto largo en solo lectura: muestra el valor o un guion, sin el hueco de un textarea vacio. */
 export function ReadValue({ value, className }: { value: unknown; className?: string }) {
   const text = value === null || value === undefined ? "" : String(value).trim();
-  return <p className={cn("min-h-10 whitespace-pre-wrap rounded-[10px] bg-surface-2 px-3 py-2 text-[14px] leading-relaxed", text ? "text-ink" : "text-ink-4", className)}>{text || "—"}</p>;
+  return <p className={cn("min-h-10 whitespace-pre-wrap rounded-field bg-surface-2 px-3 py-2 text-base leading-relaxed", text ? "text-ink" : "text-ink-4", className)}>{text || "—"}</p>;
 }

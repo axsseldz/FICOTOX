@@ -49,7 +49,7 @@ export function IncidenciaFicha({ item }: { item: ApiRecord }) {
   return (
     <PageBody className="max-w-[1040px]">
       <div className="flex flex-col gap-3">
-        <Link href="/calidad/incidencias" className="press inline-flex w-fit items-center gap-1.5 rounded-[8px] text-[13px] font-medium text-ink-3 hover:text-ink">
+        <Link href="/calidad/incidencias" className="press inline-flex w-fit items-center gap-1.5 rounded-control text-sm font-medium text-ink-3 hover:text-ink">
           <ArrowLeft size={14} /> Incidencias y NC
         </Link>
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -96,7 +96,7 @@ export function IncidenciaFicha({ item }: { item: ApiRecord }) {
               <ReadValue value={item.descripcion} />
               {item.accion_inmediata ? (
                 <div className="flex flex-col gap-1.5">
-                  <p className="text-[13px] font-medium text-ink-2">Acción inmediata</p>
+                  <p className="text-sm font-medium text-ink-2">Acción inmediata</p>
                   <ReadValue value={item.accion_inmediata} />
                 </div>
               ) : null}
@@ -120,7 +120,7 @@ export function IncidenciaFicha({ item }: { item: ApiRecord }) {
                 ) : null}
               </div>
             ) : (
-              <p className="text-[13.5px] text-ink-3">{item.estado === "anulada" ? "No se evaluó." : "Pendiente: la evalúa quien revisa en calidad (Coordinación Técnica, Mejora Continua o Responsable General), nunca quien la reportó."}</p>
+              <p className="text-sm text-ink-3">{item.estado === "anulada" ? "No se evaluó." : "Pendiente: la evalúa quien revisa en calidad (Coordinación Técnica, Mejora Continua o Responsable General), nunca quien la reportó."}</p>
             )}
           </Card>
           <RecordHistory entidad="incidencias" entidadId={Number(item.id)} />
@@ -141,18 +141,18 @@ export function IncidenciaFicha({ item }: { item: ApiRecord }) {
                 {registros.map((r) => (
                   <li key={String(r.id)}>
                     {r.href ? (
-                      <Link href={String(r.href)} className="press flex items-center gap-2 rounded-[9px] px-2 py-1.5 text-[13.5px] text-ink hover:bg-surface-3/80">
+                      <Link href={String(r.href)} className="press flex items-center gap-2 rounded-field px-2 py-1.5 text-sm text-ink hover:bg-surface-3/80">
                         <LinkSimple size={14} className="text-ink-3" />
                         <span className="text-ink-3">{String(r.etiqueta)}</span> {String(r.referencia)}
                       </Link>
                     ) : (
-                      <span className="px-2 text-[13.5px]">{String(r.referencia)}</span>
+                      <span className="px-2 text-sm">{String(r.referencia)}</span>
                     )}
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-[13px] text-ink-3">Sin registros ligados.</p>
+              <p className="text-sm text-ink-3">Sin registros ligados.</p>
             )}
           </Card>
         </div>

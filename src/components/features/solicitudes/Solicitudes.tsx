@@ -240,7 +240,7 @@ export function useAccionesSolicitud(onCambio?: () => void) {
       <ValidacionAmbito v={v}>
         <div className="flex flex-col gap-4">
           {aprobando ? (
-            <p className="rounded-[10px] bg-surface-2 px-3 py-2 text-[13px] text-ink-2 ring-1 ring-line">
+            <p className="rounded-field bg-surface-2 px-3 py-2 text-sm text-ink-2 ring-1 ring-line">
               <span className="font-medium text-ink">{describirSolicitud(aprobando)}</span>
               <br />
               <span className="whitespace-pre-line">Motivo de quien la pidió: {String(aprobando.motivo || "—")}</span>
@@ -274,7 +274,7 @@ export function SolicitudDetalle({ sol, entidad, onCambio, compacto = false }: {
   const propia = Number(sol.solicitado_por) === Number(user?.id);
   return (
     <div className="flex flex-col gap-3" data-solicitud-detalle={String(sol.id || "")}>
-      <dl className={`grid gap-x-4 gap-y-1 ${compacto ? "text-[13px]" : "text-[13.5px]"} sm:grid-cols-[max-content_minmax(0,1fr)]`}>
+      <dl className={`grid gap-x-4 gap-y-1 ${compacto ? "text-sm" : "text-sm"} sm:grid-cols-[max-content_minmax(0,1fr)]`}>
         <dt className="text-ink-3">Qué se pidió</dt>
         <dd className="font-medium text-ink">{describirSolicitud(conEntidad)}</dd>
         <dt className="text-ink-3">Quién</dt>
@@ -308,7 +308,7 @@ export function SolicitudDetalle({ sol, entidad, onCambio, compacto = false }: {
           ) : null}
         </div>
       ) : (
-        <p className="text-[12.5px] text-ink-3">La aprueba o la rechaza un segundo usuario con permiso; mientras tanto el registro no se edita ni se usa como origen.</p>
+        <p className="text-xs text-ink-3">La aprueba o la rechaza un segundo usuario con permiso; mientras tanto el registro no se edita ni se usa como origen.</p>
       )}
       {acciones.dialogo}
     </div>
@@ -335,10 +335,10 @@ export function SolicitudBanner({ item, entidad, onCambio }: { item: ApiRecord |
   if (!sol || String(sol.estado || "pendiente") !== "pendiente") return null;
   return (
     <EnAvisos>
-    <section role="region" aria-label="Solicitud pendiente de autorización" data-banner-solicitud className="flex gap-3 rounded-[14px] bg-warning-soft/70 px-4 py-3.5 ring-1 ring-warning/25">
+    <section role="region" aria-label="Solicitud pendiente de autorización" data-banner-solicitud className="flex gap-3 rounded-card bg-warning-soft/70 px-4 py-3.5 ring-1 ring-warning/25">
       <Clock size={20} weight="duotone" className="mt-0.5 shrink-0 text-warning-text" aria-hidden="true" />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <p className="text-[14.5px] font-semibold text-ink">
+        <p className="text-base font-semibold text-ink">
           {String(sol.pendiente_etiqueta || "Solicitud")} · pendiente de autorización
         </p>
         <SolicitudDetalle sol={sol} entidad={entidad} onCambio={onCambio} />
@@ -434,11 +434,11 @@ export function SupervisionBanner({ item, tabla, tipo, referencia, onCambio, chi
   const x = { tabla, id: item!.id, tipo, referencia };
   return (
     <EnAvisos>
-    <section role="region" aria-label="Pendiente de tu visto bueno" data-banner-supervision className="flex gap-3 rounded-[14px] bg-warning-soft/70 px-4 py-3.5 ring-1 ring-warning/25">
+    <section role="region" aria-label="Pendiente de tu visto bueno" data-banner-supervision className="flex gap-3 rounded-card bg-warning-soft/70 px-4 py-3.5 ring-1 ring-warning/25">
       <Clock size={20} weight="duotone" className="mt-0.5 shrink-0 text-warning-text" aria-hidden="true" />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <p className="text-[14.5px] font-semibold text-ink">Pendiente de tu visto bueno</p>
-        <p className="text-[13.5px] text-ink-2">Lo capturó una persona bajo tu supervisión{item?.supervision_solicitada_en ? ` (${haceCuanto(item.supervision_solicitada_en)})` : ""}. No avanza hasta que des el visto bueno o lo regreses con observaciones.</p>
+        <p className="text-base font-semibold text-ink">Pendiente de tu visto bueno</p>
+        <p className="text-sm text-ink-2">Lo capturó una persona bajo tu supervisión{item?.supervision_solicitada_en ? ` (${haceCuanto(item.supervision_solicitada_en)})` : ""}. No avanza hasta que des el visto bueno o lo regreses con observaciones.</p>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" icon={<SealCheck size={15} />} onClick={() => acciones.vistoBueno(x)}>
             Dar visto bueno
@@ -475,7 +475,7 @@ export function FranjaPendientes({ entidades, grupo }: { entidades: string[]; gr
   return (
     <div className="mb-3 flex flex-col gap-1.5" data-franja-pendientes>
       {nSol ? (
-        <Link href={`/solicitudes?modulo=${grupo}`} className="press flex items-center gap-2 rounded-[12px] bg-warning-soft/60 px-3.5 py-2.5 text-[13.5px] text-ink ring-1 ring-warning/20 hover:bg-warning-soft">
+        <Link href={`/solicitudes?modulo=${grupo}`} className="press flex items-center gap-2 rounded-box bg-warning-soft/60 px-3.5 py-2.5 text-sm text-ink ring-1 ring-warning/20 hover:bg-warning-soft">
           <Clock size={16} weight="duotone" className="shrink-0 text-warning-text" aria-hidden="true" />
           <span className="min-w-0 flex-1">
             <span className="tnum font-semibold">{nSol}</span> {nSol === 1 ? "solicitud espera tu autorización" : "solicitudes esperan tu autorización"}
@@ -486,7 +486,7 @@ export function FranjaPendientes({ entidades, grupo }: { entidades: string[]; gr
         </Link>
       ) : null}
       {nSup ? (
-        <Link href="/supervision" className="press flex items-center gap-2 rounded-[12px] bg-brand-faint px-3.5 py-2.5 text-[13.5px] text-ink ring-1 ring-brand/15 hover:bg-brand-soft/60">
+        <Link href="/supervision" className="press flex items-center gap-2 rounded-box bg-brand-faint px-3.5 py-2.5 text-sm text-ink ring-1 ring-brand/15 hover:bg-brand-soft/60">
           <SealCheck size={16} weight="duotone" className="shrink-0 text-brand" aria-hidden="true" />
           <span className="min-w-0 flex-1">
             <span className="tnum font-semibold">{nSup}</span> {nSup === 1 ? "registro espera tu visto bueno" : "registros esperan tu visto bueno"}
