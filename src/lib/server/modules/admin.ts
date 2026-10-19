@@ -181,9 +181,24 @@ export async function updateRole({ request, s, params }: RouteContext): Promise<
   }
 
   if (cambiaPermisos) await exigirReauth(s, request, user, "usuarios:permisos");
+
+  /*
+   * R8: ampliar lo que concede un rol (permisos nuevos o reactivarlo) es una
+   * accion critica, como asignar roles: lo nuevo queda en solicitud para un
+   * segundo usuario con usuarios:A. Lo que se quita (y el nombre o la
+   * descripcion) se aplica de inmediato, con reautenticacion y bitacora.
+   */
+  const claveFila = (f: { modulo: string; accion: string; alcance: string }) => `${f.modulo}:${f.accion}:${f.alcance}`;
+  const antesClaves = new Set(permisosAntes.map(claveFila));
+  const nuevasClaves = new Set(data.permisos.map(claveFila));
+  const agregadas = data.permisos.filter((f) => !antesClaves.has(claveFila(f)));
+  const reactiva = Number(antes.activo) === 0 && data.activo === 1;
+  const permisosInmediatos = agregadas.length || reactiva ? permisosAntes.filter((f) => nuevasClaves.has(claveFila(f))) : data.permisos;
+  const activoInmediato = reactiva ? 0 : data.activo;
+
   const adminsAntes = await countActiveAdministrators(s);
-  await s.execute("UPDATE roles SET nombre = :nombre, descripcion = :descripcion, activo = :activo WHERE id = :id", { nombre: data.nombre, descripcion: data.descripcion, activo: data.activo, id: roleId });
-  await guardarFilasRol(s, roleId, data.permisos);
+  await s.execute("UPDATE roles SET nombre = :nombre, descripcion = :descripcion, activo = :activo WHERE id = :id", { nombre: data.nombre, descripcion: data.descripcion, activo: activoInmediato, id: roleId });
+  await guardarFilasRol(s, roleId, permisosInmediatos);
   await assertAdministratorRemains(s, adminsAntes);
   await registrarAuditoria(s, user, {
     accion: "editar",
@@ -192,10 +207,59 @@ export async function updateRole({ request, s, params }: RouteContext): Promise<
     referencia: data.nombre,
     motivo: motivo || null,
     antes: { ...antes, permisos: permisosAntes },
-    despues: { ...(await snapshotRow(s, "roles", roleId)), permisos: data.permisos },
+    despues: { ...(await snapshotRow(s, "roles", roleId)), permisos: permisosInmediatos },
+  });
+  if (!agregadas.length && !reactiva) {
+    await s.commit();
+    return json({ message: "Rol actualizado" });
+  }
+  const solicitud = await crearSolicitud(s, user, {
+    tipo: "ampliar_permisos_rol",
+    entidad: "roles",
+    entidadId: roleId,
+    referencia: data.nombre,
+    accion: "ampliar_permisos",
+    datos: { rol: data.nombre, agregar: agregadas, activar: reactiva },
+    motivo,
   });
   await s.commit();
-  return json({ message: "Rol actualizado" });
+  const quitadas = permisosAntes.length - permisosInmediatos.length;
+  const respuesta = respuestaSolicitud(solicitud, `la ampliación de permisos del rol «${data.nombre}»`);
+  if (!quitadas) return respuesta;
+  const cuerpo = (await respuesta.json()) as Record<string, unknown>;
+  return json({ ...cuerpo, message: `Se quitaron ${quitadas} permiso${quitadas === 1 ? "" : "s"} de inmediato. ${String(cuerpo.message)}` }, 202);
+}
+
+/* Ejecutor de "ampliar_permisos_rol": agrega lo solicitado a lo que el rol concede hoy (se vuelve a validar al aprobar). */
+export async function ejecutarAmpliacionPermisosRol(ctx: ContextoEjecucion): Promise<Record<string, unknown>> {
+  const roleId = Number(ctx.solicitud.entidad_id);
+  const antes = await snapshotRow(ctx.s, "roles", roleId);
+  if (!antes) throw new HttpError(404, { message: "El rol de la solicitud ya no existe" });
+  // Tampoco aprueba quien tiene el rol vigente: estaria ampliando sus propios permisos.
+  if ((await rolesVigentes(ctx.s, userIdFromClaims(ctx.user) as number)).some((r) => Number(r.id) === roleId)) {
+    throw new HttpError(409, { message: "Tienes este rol vigente: la ampliación de sus permisos la debe aprobar otra persona", codigo: "rol_propio" });
+  }
+  const permisosAntes = (await filasDeRoles(ctx.s, [roleId])).get(roleId) || [];
+  const permisos = normalizarFilas([...permisosAntes, ...(Array.isArray(ctx.datos.agregar) ? ctx.datos.agregar : [])]);
+  const activo = ctx.datos.activar ? 1 : Number(antes.activo) ? 1 : 0;
+  const nombre = String(antes.nombre || "");
+  const afectados = await afectadosPorCambioDeRol(ctx.s, roleId, permisos, !!activo, (antes.clave as string | null) || null, nombre);
+  if (afectados.length) throw new HttpError(409, { message: `La ampliación provocaría combinaciones de roles prohibidas en: ${afectados.map((a) => a.email).join(", ")}. ${mensajeViolaciones(afectados[0].violaciones)}`, codigo: "COMBINACION_PROHIBIDA", afectados });
+  const adminsAntes = await countActiveAdministrators(ctx.s);
+  await ctx.s.execute("UPDATE roles SET activo = :activo WHERE id = :id", { activo, id: roleId });
+  await guardarFilasRol(ctx.s, roleId, permisos);
+  await assertAdministratorRemains(ctx.s, adminsAntes);
+  await registrarAuditoria(ctx.s, ctx.user, {
+    accion: "editar",
+    entidad: "roles",
+    entidadId: roleId,
+    referencia: nombre,
+    motivo: ctx.solicitud.motivo,
+    antes: { ...antes, permisos: permisosAntes },
+    despues: { ...(await snapshotRow(ctx.s, "roles", roleId)), permisos },
+    detalle: detalleSolicitud(ctx.solicitud),
+  });
+  return { rol: nombre, agregados: permisos.length - permisosAntes.length, activo: !!activo };
 }
 
 export async function deleteRole({ request, s, params }: RouteContext): Promise<Response> {
@@ -523,8 +587,9 @@ export async function createUsuario({ request, s }: RouteContext): Promise<Respo
   let insertedId: number;
   try {
     const result = await s.execute(
-      `INSERT INTO usuarios (nombre, email, activo, id_rol, departamento, password_hash, avatar, tipo_cuenta, vigente_desde, vigente_hasta, supervisor_id, motivo_ultimo_cambio)
-       VALUES (:nombre, :email, :activo, :id_rol, :departamento, :password_hash, :avatar, :tipo_cuenta, :vigente_desde, :vigente_hasta, :supervisor_id, :motivo_cuenta)`,
+      // R10: la contrasena inicial la escribe el administrador; la persona la cambia en su primera entrada.
+      `INSERT INTO usuarios (nombre, email, activo, id_rol, departamento, password_hash, avatar, tipo_cuenta, vigente_desde, vigente_hasta, supervisor_id, motivo_ultimo_cambio, debe_cambiar_password)
+       VALUES (:nombre, :email, :activo, :id_rol, :departamento, :password_hash, :avatar, :tipo_cuenta, :vigente_desde, :vigente_hasta, :supervisor_id, :motivo_cuenta, 1)`,
       // Cada cuenta nace con un avatar al azar del catalogo; la persona puede cambiarlo en "Mi cuenta".
       { ...data, ...cuenta, id_rol: rolInicial, password_hash: validated.passwordHash, avatar: data.avatar ?? randomAvatar(), motivo_cuenta: motivoDe(payload, "motivo_cuenta") || null },
     );

@@ -18,6 +18,7 @@ import { invalidate, useResource } from "@/lib/client/store";
 import type { ApiRecord } from "@/lib/client/types";
 import { esTipoActivo, permisoParaAprobar, type TipoSolicitud } from "@/lib/shared/acciones-criticas";
 import { formatearFecha, formatearFechaHora } from "@/lib/shared/fechas";
+import { frasesPorArea } from "@/lib/client/permisos-legibles";
 
 /*
  * Solicitudes de un segundo usuario (Fase 3) y visto bueno de supervision
@@ -68,6 +69,8 @@ export function hrefDeSolicitud(item: ApiRecord): string | null {
       return `/calidad/nc/${id}`;
     case "usuarios":
       return "/administracion/usuarios";
+    case "roles":
+      return "/administracion/roles";
     case "documentos_sgc":
     case "biblioteca_documentos":
       return "/documentos";
@@ -94,6 +97,12 @@ export function describirSolicitud(item: ApiRecord): string {
       return datos.folio_nuevo ? `Cambiar el folio a ${String(datos.folio_nuevo)}` : "Cambiar el folio";
     case "decision_recepcion":
       return datos.decision ? `Decisión: ${String(datos.decision).replace(/_/g, " ")}` : "Decisión de la recepción";
+    case "ampliar_permisos_rol": {
+      // Lo que se agregaria, en las palabras de la pantalla de Roles (área: frases).
+      const frases = frasesPorArea(Array.isArray(datos.agregar) ? datos.agregar : []).map((a) => `${a.area}: ${a.frases.join("; ")}`);
+      const partes = [...(datos.activar ? ["Reactivar el rol"] : []), ...(frases.length ? [`Agregar ${frases.join(" · ")}`] : [])];
+      return `${partes.join(" y ") || "Ampliar permisos"} («${String(datos.rol || item.referencia || "")}»)`;
+    }
     default:
       return String(item.etiqueta || item.tipo);
   }
