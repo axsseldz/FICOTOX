@@ -114,7 +114,7 @@ function Inicio() {
           <div className="flex flex-col overflow-hidden rounded-card bg-surface shadow-card" data-testid="sgc-resultados">
             {buscados.data?.items?.length ? (
               buscados.data.items.slice(0, 8).map((d) => (
-                <Link key={d.id} href={`/documentos/${d.id}`} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-line px-4 py-2.5 last:border-b-0 hover:bg-surface-2">
+                <Link key={d.id} href={`/documentos/${d.id}`} className="foco-interior flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-line px-4 py-2.5 last:border-b-0 hover:bg-surface-2">
                   <span className="code text-xs font-semibold text-brand-strong">{d.clave}</span>
                   <span className="min-w-0 flex-1 truncate text-sm text-ink">{d.titulo}</span>
                 </Link>

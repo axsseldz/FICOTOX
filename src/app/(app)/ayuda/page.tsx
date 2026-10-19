@@ -379,7 +379,7 @@ export default function AyudaPage() {
               </dt>
               <dd>Abrir el buscador desde cualquier pantalla.</dd>
               <dt className="flex items-center gap-1">
-                <Kbd>↑</Kbd> <Kbd>↓</Kbd> <Kbd>↵</Kbd>
+                <Kbd>↑</Kbd> <Kbd>↓</Kbd> <Atajo atajo="Enter" />
               </dt>
               <dd>Moverse por los resultados y abrir.</dd>
               <dt className="flex items-center gap-1">
@@ -397,7 +397,7 @@ export default function AyudaPage() {
             </dl>
             <p className="text-sm text-ink-3">Los atajos se muestran según tu sistema: con ⌘ (Cmd) en Mac y con Ctrl en Windows y Linux.</p>
             <p className="text-sm text-ink-3">
-              Temas de esta guía en el buscador: {HELP_TOPICS.map((t) => t.label.toLowerCase()).slice(1, 5).join(", ")}…
+              Temas de esta guía en el buscador: {HELP_TOPICS.map((t) => t.label).slice(1, 5).join(", ")}…
             </p>
           </Section>
         </div>

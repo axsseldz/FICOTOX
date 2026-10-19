@@ -261,7 +261,7 @@ export function FormPage({ backHref, backLabel, code, title, status, statusTone 
                     >
                       <span className={cn("tnum flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-2xs font-semibold", section.complete ? "bg-success text-on-accent" : missing ? "bg-warning-soft text-warning-text" : active ? "bg-brand-soft text-brand-strong ring-1 ring-inset ring-brand/25" : "bg-surface-3 text-ink-3")}>{section.complete ? <Check size={11} weight="bold" /> : index + 1}</span>
                       <span className="truncate">{section.label}</span>
-                      {section.optional ? <span className="eyebrow ml-auto shrink-0 text-ink-3">{section.optionalLabel ? "después" : "opcional"}</span> : null}
+                      {section.optional ? <span className="ml-auto shrink-0 text-2xs font-medium uppercase tracking-wide text-ink-3">{section.optionalLabel ? "después" : "opcional"}</span> : null}
                     </button>
                   </li>
                 );

@@ -375,7 +375,8 @@
   [data-radix-popper-content-wrapper] :focus {
     outline: none;
   }
-  [data-radix-popper-content-wrapper] :focus-visible {
+  /* Los campos de texto dentro de un popover conservan su foco de borde (sin anillo). */
+  [data-radix-popper-content-wrapper] :focus-visible:not(input, textarea, select) {
     outline: none;
     box-shadow: inset 0 0 0 2px var(--color-focus);
   }
