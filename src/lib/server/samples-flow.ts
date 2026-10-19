@@ -1,9 +1,9 @@
 import { formatearFolio } from "../shared/folios";
-import type { CurrentUser } from "./auth";
+import { userIdFromClaims, type CurrentUser } from "./auth";
 import { registrarAuditoria, snapshotRow } from "./audit";
 import { esConflictoDeFolio, type Row, type Session } from "./db";
 import { HttpError, readJson } from "./http";
-import { consumeConsumible, consumeReactivo, restoreInventoryUsage } from "./inventory-usage";
+import { consumeConsumible, consumeReactivo, consumoVigente, exigirExistencias, resolveItemId, restoreInventoryUsage, type InsumoSolicitado } from "./inventory-usage";
 
 import { requirePermission, type Autorizacion } from "./rbac";
 import { exigirSinSupervisionPendiente } from "./supervision";
@@ -305,7 +305,7 @@ export async function anularRegistro(
   );
   let repuestos = 0;
   if (options.movimientosPrefix) {
-    repuestos = await restoreInventoryUsage(s, options.movimientosPrefix);
+    repuestos = await restoreInventoryUsage(s, options.movimientosPrefix, { user, causa: "anulación", entidad: table, entidadId: id, referencia: folioLabel(table, antes), motivo });
   }
   const despues = await snapshotRow(s, table, id);
   await registrarAuditoria(s, user, {
@@ -382,6 +382,19 @@ export function isFolioConflict(error: unknown): boolean {
 
 /* ---------- Inventario de una etapa ---------- */
 
+/* Filas de `uso_inventario_json` con insumo (tipo, referencia y cantidad; sin cantidad cuenta 1). */
+function insumosDe(insumos: unknown[]): InsumoSolicitado[] {
+  const out: InsumoSolicitado[] = [];
+  for (const fila of insumos) {
+    if (!fila || typeof fila !== "object" || Array.isArray(fila)) continue;
+    const item = fila as Record<string, unknown>;
+    const ref = item.ref || item.nombre || "";
+    if (!ref) continue;
+    out.push({ tipo: String(item.tipo || "").trim().toLowerCase(), ref, cantidad: item.cantidad || 1 });
+  }
+  return out;
+}
+
 /* Etapa a la que se vincula el movimiento automatico (el acceso a ese folio ya lo valido el formato que consume). */
 const VINCULO_DE_PREFIJO: Record<string, string> = { PROC: "procesamiento", EXT: "extraccion", ANA: "analisis" };
 
@@ -407,6 +420,8 @@ export async function applyStageInventory(
     return;
   }
   if (!Array.isArray(insumos)) return;
+  // Sin existencias negativas: si algo no alcanza no se descuenta nada (la transaccion se revierte).
+  await exigirExistencias(s, insumosDe(insumos));
   // Un insumo dado de baja se puede reponer hasta la cantidad que el registro ya
   // declaraba, pero no consumir mas existencias de un articulo retirado.
   const solicitado = new Map<string, number>();
@@ -431,4 +446,53 @@ export async function applyStageInventory(
     if (tipo === "reactivo") await consumeReactivo(s, ref, item.cantidad || 1, options);
     else if (tipo === "consumible") await consumeConsumible(s, ref, item.cantidad || 1, options);
   }
+}
+
+const ENTIDAD_DE_PREFIJO: Record<string, SampleTable> = { PROC: "muestras_procesamiento", EXT: "muestras_extraccion", ANA: "muestras_analisis" };
+
+/*
+ * Reedicion de un registro que consume inventario. Si lo que declara ya es lo
+ * que tiene descontado no se toca nada (guardar sin cambiar insumos no llena el
+ * historial). Si cambio, se revierten sus salidas vigentes (entradas de
+ * reversion ligadas, con bitacora) y se descuenta lo nuevo, comparando contra lo
+ * disponible mas lo que el propio registro ya habia consumido.
+ */
+export async function replaceStageInventory(
+  s: Session,
+  user: CurrentUser,
+  prefix: string,
+  id: number,
+  usoInventarioJson: string | null | undefined,
+  motivo: string,
+  referencia: string,
+  declaradosAntes: Map<string, number> = new Map(),
+): Promise<void> {
+  const referencePrefix = `${prefix}-${id}-INS-`;
+  const vigente = await consumoVigente(s, referencePrefix);
+  const nuevo = await consumoPedido(s, usoInventarioJson);
+  if (vigente.size === nuevo.size && [...nuevo].every(([clave, cantidad]) => Math.abs((vigente.get(clave) ?? Number.NaN) - cantidad) < 1e-9)) return;
+  await restoreInventoryUsage(s, referencePrefix, { user, causa: "reedición", entidad: ENTIDAD_DE_PREFIJO[prefix] || prefix, entidadId: id, referencia });
+  await applyStageInventory(s, prefix, id, usoInventarioJson, motivo, userIdFromClaims(user), declaradosAntes);
+}
+
+/* Lo que un `uso_inventario_json` descontaria, por insumo resuelto (`tabla:id`). */
+async function consumoPedido(s: Session, usoInventarioJson: string | null | undefined): Promise<Map<string, number>> {
+  const totales = new Map<string, number>();
+  let insumos: unknown = [];
+  try {
+    insumos = JSON.parse(String(usoInventarioJson || "[]"));
+  } catch {
+    return totales;
+  }
+  if (!Array.isArray(insumos)) return totales;
+  for (const insumo of insumosDe(insumos)) {
+    const tabla = insumo.tipo === "reactivo" ? "reactivos" : insumo.tipo === "consumible" ? "consumibles" : null;
+    const cantidad = Number(insumo.cantidad);
+    if (!tabla || !Number.isFinite(cantidad) || cantidad <= 0) continue;
+    const itemId = await resolveItemId(s, tabla, insumo.ref);
+    if (!itemId) continue;
+    const clave = `${tabla}:${itemId}`;
+    totales.set(clave, (totales.get(clave) || 0) + cantidad);
+  }
+  return totales;
 }

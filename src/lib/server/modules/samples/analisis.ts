@@ -3,7 +3,6 @@ import { banderasPuede, conSolicitudesYPuede } from "../../puede-registro";
 import { registrarAuditoria, snapshotRow } from "../../audit";
 import { isSqlite, type Row, type Session } from "../../db";
 import { HttpError, intParam, json, readJson, type RouteContext } from "../../http";
-import { restoreInventoryUsage } from "../../inventory-usage";
 import { cargarAutorizacion, cargoActuante, requirePermission } from "../../rbac";
 import { exigirReauth } from "../../seguridad";
 import { exigirSinSolicitudPendiente, pendientesDe, respuestaSolicitud, serializarSolicitud } from "../../solicitudes";
@@ -12,7 +11,7 @@ import { evaluarAnalisis, excepcionPara, type Violacion } from "../../../shared/
 import { aplicarSupervision, exigirSinSupervisionPendiente, filtroSupervision, marcaSupervision } from "../../supervision";
 import { recordBitacoraFolios } from "../inventory";
 
-import { advanceState, anularOSolicitar, validarRecepcionSiCompleta, applyStageInventory, assertEditableAsync, assertOrigin, deletionNotAllowed, exigirUsoDeRecursos, folioLabel, insumosDeclarados, isFolioConflict, nextFolioNum, readMotivo, restaurarOSolicitar } from "../../samples-flow";
+import { advanceState, anularOSolicitar, validarRecepcionSiCompleta, applyStageInventory, assertEditableAsync, assertOrigin, deletionNotAllowed, exigirUsoDeRecursos, folioLabel, insumosDeclarados, isFolioConflict, nextFolioNum, readMotivo, replaceStageInventory, restaurarOSolicitar } from "../../samples-flow";
 import { ANALYSIS_METHODS, ANALYSIS_TYPES, CONFORMITY_OPTIONS } from "../../../shared/sgc";
 import { jsonText, safeJsonLoad, searchParam, strippedOrNull, toFloatOrNull, toIntOrNull } from "../helpers";
 
@@ -287,7 +286,7 @@ export async function createAnalysis({ request, s }: RouteContext): Promise<Resp
   const actuo = cargoActuante(request, permiso);
   const payload = await readJson(request);
   // Contraseñas de firmantes enviadas al guardar: se verifican antes de cualquier otra escritura.
-  await verificarFirmasConPassword(s, user, payload);
+  await verificarFirmasConPassword(s, user, payload, request);
   const data = normalizePayload(payload);
   await exigirUsoDeRecursos(s, user, permiso.auth, { equipos: !!(data.equipo_id || data.equipo_nombre), insumosJson: data.uso_inventario_json });
   // Fase 4: autorizacion FX-THF-AP: analisis, metodo del tipo de analisis y equipo usado (si esta en el inventario).
@@ -371,7 +370,7 @@ export async function updateAnalysis({ request, s, params }: RouteContext): Prom
   const actuo = cargoActuante(request, permiso);
   const payload = await readJson(request);
   // Contraseñas de firmantes enviadas al guardar: se verifican antes de cualquier otra escritura.
-  await verificarFirmasConPassword(s, user, payload);
+  await verificarFirmasConPassword(s, user, payload, request);
   const data = normalizePayload(payload);
   await exigirUsoDeRecursos(s, user, permiso.auth, { equipos: !!(data.equipo_id || data.equipo_nombre), insumosJson: data.uso_inventario_json });
   // Fase 4: autorizacion FX-THF-AP: analisis, metodo del tipo de analisis y equipo usado (si esta en el inventario).
@@ -408,8 +407,7 @@ export async function updateAnalysis({ request, s, params }: RouteContext): Prom
       `,
       { ...data, id, actualizado_por: userId },
     );
-    await restoreInventoryUsage(s, `ANA-${id}-INS-`);
-    await applyStageInventory(s, "ANA", id, data.uso_inventario_json, `Analisis folio ${data.folio_num}`, userId, insumosDeclarados(antes?.uso_inventario_json));
+    await replaceStageInventory(s, user, "ANA", id, data.uso_inventario_json, `Analisis folio ${data.folio_num}`, folioLabel(TABLE, antes), insumosDeclarados(antes?.uso_inventario_json));
     await aplicarSupervision(s, TABLE, id, supervision, userId);
     await guardarFirmantes(s, TABLE, id, data, firmasAnalisis(data.tipo_analisis));
     const despues = await snapshotRow(s, TABLE, id);

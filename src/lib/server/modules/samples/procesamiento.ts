@@ -1,16 +1,15 @@
-import { requireUser, userIdFromClaims } from "../../auth";
+import { requireUser, userIdFromClaims, type CurrentUser } from "../../auth";
 import { conSolicitudesYPuede } from "../../puede-registro";
 import { registrarAuditoria, snapshotRow } from "../../audit";
 import { type Row, type Session } from "../../db";
 import { HttpError, intParam, json, readJson, type RouteContext } from "../../http";
-import { restoreInventoryUsage } from "../../inventory-usage";
 import { cargoActuante, requirePermission } from "../../rbac";
 import { exigirReauth } from "../../seguridad";
 import { evaluarSupervisionCaptura } from "../../../shared/segregacion";
 import { respuestaSolicitud } from "../../solicitudes";
 import { aplicarSupervision, filtroSupervision, marcaSupervision } from "../../supervision";
 
-import { advanceState, anularOSolicitar, applyStageInventory, assertEditableAsync, assertOrigin, deletionNotAllowed, exigirUsoDeRecursos, folioLabel, insumosDeclarados, isFolioConflict, nextFolioNum, readMotivo, restaurarOSolicitar } from "../../samples-flow";
+import { advanceState, anularOSolicitar, applyStageInventory, assertEditableAsync, assertOrigin, deletionNotAllowed, exigirUsoDeRecursos, folioLabel, insumosDeclarados, isFolioConflict, nextFolioNum, readMotivo, replaceStageInventory, restaurarOSolicitar } from "../../samples-flow";
 import { jsonText, safeJsonLoad, searchParam, strippedOrNull, toIntOrNull } from "../helpers";
 
 import { exigirAutorizaciones } from "../../autorizaciones";
@@ -75,9 +74,8 @@ function normalizePayload(raw: Record<string, unknown>) {
   };
 }
 
-async function replaceInventoryUsage(s: Session, processingId: number, data: ProcessingData, userId: number | null, declaradosAntes: Map<string, number>): Promise<void> {
-  await restoreInventoryUsage(s, `PROC-${processingId}-INS-`);
-  await applyStageInventory(s, "PROC", processingId, data.uso_inventario_json, `Procesamiento de muestra folio ${data.folio_num}`, userId, declaradosAntes);
+async function replaceInventoryUsage(s: Session, user: CurrentUser, processingId: number, data: ProcessingData, referencia: string, declaradosAntes: Map<string, number>): Promise<void> {
+  await replaceStageInventory(s, user, "PROC", processingId, data.uso_inventario_json, `Procesamiento de muestra folio ${data.folio_num}`, referencia, declaradosAntes);
 }
 
 function serializeRow(row: Row): Row {
@@ -181,7 +179,7 @@ export async function createProcessingSample({ request, s }: RouteContext): Prom
 
   const payload = await readJson(request);
   // Contraseñas de firmantes enviadas al guardar: se verifican antes de cualquier otra escritura.
-  await verificarFirmasConPassword(s, user, payload);
+  await verificarFirmasConPassword(s, user, payload, request);
   const data = normalizePayload(payload);
   await exigirUsoDeRecursos(s, user, permiso.auth, { equipos: false, insumosJson: data.uso_inventario_json });
   // Fase 4: autorizacion FX-THF-AP de quien captura.
@@ -263,7 +261,7 @@ export async function updateProcessingSample({ request, s, params }: RouteContex
   await assertEditableAsync(s, antes, TABLE);
   const payload = await readJson(request);
   // Contraseñas de firmantes enviadas al guardar: se verifican antes de cualquier otra escritura.
-  await verificarFirmasConPassword(s, user, payload);
+  await verificarFirmasConPassword(s, user, payload, request);
   const data = normalizePayload(payload);
   await exigirUsoDeRecursos(s, user, permiso.auth, { equipos: false, insumosJson: data.uso_inventario_json });
   // Fase 4: autorizacion FX-THF-AP de quien captura.
@@ -323,7 +321,7 @@ export async function updateProcessingSample({ request, s, params }: RouteContex
       await s.rollback();
       return json({ message: "Registro no encontrado" }, 404);
     }
-    await replaceInventoryUsage(s, processingId, data, userId, insumosDeclarados(antes?.uso_inventario_json));
+    await replaceInventoryUsage(s, user, processingId, data, folioLabel(TABLE, antes), insumosDeclarados(antes?.uso_inventario_json));
     await aplicarSupervision(s, TABLE, processingId, supervision, userId);
     await guardarFirmantes(s, TABLE, processingId, data, FIRMAS_PROCESAMIENTO);
     await advanceState(s, "muestras_recepcion", data.recepcion_id, "en_procesamiento");
