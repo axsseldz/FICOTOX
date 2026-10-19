@@ -95,6 +95,7 @@ export type AuditAction =
   | "respaldo_fallido"
   | "probar_restauracion"
   | "restaurar_respaldo"
+  | "restauracion_fallida"
   | "reportar"
   | "evaluar"
   | "cerrar_sin_nc"

@@ -21,7 +21,7 @@ export const CATEGORIAS: Array<{ value: Categoria; label: string; acciones: stri
   { value: "anular", label: "Anulaciones y rechazos", acciones: ["anular", "rechazar", "baja", "eliminar", "devolver", "sustituir", "regresar_supervision", "revocar_autorizacion", "revocar_rol", "anular_adjunto", "escalar", "cancelar", "suspender", "retener"] },
   { value: "solicitudes", label: "Solicitudes", acciones: ["solicitar", "aprobar_solicitud", "rechazar_solicitud", "cancelar_solicitud", "vencer_solicitud"] },
   { value: "imprimir", label: "Impresiones y descargas", acciones: ["imprimir_etiquetas", "descargar", "exportar"] },
-  { value: "sistema", label: "Sistema", acciones: ["migrar", "respaldar", "respaldo_fallido", "probar_restauracion", "restaurar_respaldo", "alerta_integridad", "vencer_rol", "vencer_autorizacion", "vencer_mantenimiento", "requiere_enmienda"] },
+  { value: "sistema", label: "Sistema", acciones: ["migrar", "respaldar", "respaldo_fallido", "probar_restauracion", "restaurar_respaldo", "restauracion_fallida", "alerta_integridad", "vencer_rol", "vencer_autorizacion", "vencer_mantenimiento", "requiere_enmienda"] },
 ];
 
 const POR_ACCION = new Map<string, Categoria>(CATEGORIAS.flatMap((c) => c.acciones.map((a) => [a, c.value] as [string, Categoria])));
@@ -79,6 +79,7 @@ const ICONO_ACCION: Record<string, ReactNode> = {
   respaldo_fallido: <Database weight="bold" />,
   probar_restauracion: <Database weight="bold" />,
   restaurar_respaldo: <Database weight="bold" />,
+  restauracion_fallida: <Database weight="bold" />,
   migrar: <Gear weight="bold" />,
   solicitar: <ChatCircleDots weight="bold" />,
   aprobar_solicitud: <CheckCircle weight="bold" />,

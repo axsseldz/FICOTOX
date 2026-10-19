@@ -147,7 +147,8 @@ export function registrarAvisoSesion(fn: AvisoSesion | null): void {
 }
 function avisarSesion(status: number, data: ApiRecord): void {
   const codigo = String(data?.codigo || "");
-  if ((status === 401 && ["sesion_revocada", "cuenta_no_vigente"].includes(codigo)) || (status === 403 && codigo === "cambiar_password")) {
+  // 503 "restaurando": la plataforma se esta restaurando desde un respaldo (pantalla de espera).
+  if ((status === 401 && ["sesion_revocada", "cuenta_no_vigente"].includes(codigo)) || (status === 403 && codigo === "cambiar_password") || (status === 503 && codigo === "restaurando")) {
     avisoSesion?.(codigo, String(data.message || ""));
   }
 }

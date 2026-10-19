@@ -2,7 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { API_BASE_URL, getJsonAuth, postJson, registrarAvisoSesion, sendJsonAuth } from "@/lib/client/api";
+import { CircleNotch } from "@phosphor-icons/react";
+import { API_BASE_URL, ApiError, getJsonAuth, postJson, registrarAvisoSesion, sendJsonAuth } from "@/lib/client/api";
 import { adoptarTemaDeCuenta } from "@/lib/client/tema";
 import { clearSession, getStoredPermissions, getStoredToken, setSession, setStoredPermissions } from "@/lib/client/session";
 import type { ApiRecord, AuthConfig, ModuleAction, PermissionsMap, RolSesion, SessionUser } from "@/lib/client/types";
@@ -64,6 +65,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const started = useRef(false);
   const [locked, setLocked] = useState(false);
   const lockedRef = useRef(false);
+  // La plataforma se esta restaurando desde un respaldo: pantalla de espera hasta que vuelva a atender.
+  const [restaurando, setRestaurando] = useState(false);
 
   const enter = useCallback((nextToken: string, nextUser: SessionUser, nextPermissions: PermissionsMap, nextRoles: RolSesion[] = []) => {
     setStoredPermissions(nextPermissions);
@@ -96,6 +99,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const data = await getJsonAuth(`${API_BASE_URL}/auth/me`, stored);
       enter(stored, (data.user || {}) as SessionUser, (data.permissions || {}) as PermissionsMap, (data.roles || []) as RolSesion[]);
     } catch (err) {
+      // Restauracion en curso: no se sale; se espera a que la plataforma vuelva.
+      if (err instanceof ApiError && err.status === 503 && err.codigo === "restaurando") {
+        setRestaurando(true);
+        return;
+      }
       // Sesion revocada o cuenta no vigente: el acceso muestra el motivo.
       const mensaje = err instanceof Error ? err.message : "";
       if (mensaje && !/token/i.test(mensaje)) {
@@ -197,6 +205,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // El servidor cerro la sesion (token revocado, cuenta fuera de vigencia) o exige cambiar la contrasena.
   useEffect(() => {
     registrarAvisoSesion((codigo, mensaje) => {
+      if (codigo === "restaurando") {
+        setRestaurando(true);
+        return;
+      }
       if (codigo === "cambiar_password") {
         void refreshMe();
         return;
@@ -228,6 +240,54 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     };
   }, [status, refreshMe]);
 
+  /*
+   * Restauracion desde un respaldo. Con la sesion abierta se consulta cada 15 s si
+   * la plataforma atiende; mientras se restaura (503 "restaurando") se muestra la
+   * pantalla de espera y se consulta cada 3 s. Al volver: si la restauracion cerro
+   * las sesiones, se va al acceso con el aviso; si no se restauro, se sigue igual.
+   */
+  useEffect(() => {
+    if (status !== "authenticated" && !restaurando) return;
+    let vivo = true;
+    const consultar = async () => {
+      if (!restaurando && document.visibilityState !== "visible") return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/health`, { cache: "no-store" });
+        const data = (await res.json().catch(() => ({}))) as ApiRecord;
+        if (!vivo) return;
+        if (res.status === 503 && data.codigo === "restaurando") {
+          setRestaurando(true);
+          return;
+        }
+        if (!res.ok || !restaurando) return;
+        setRestaurando(false);
+        const actual = getStoredToken();
+        const me = actual ? await fetch(`${API_BASE_URL}/auth/me`, { headers: { Authorization: `Bearer ${actual}` }, cache: "no-store" }) : null;
+        if (me && me.ok) {
+          void refreshMe();
+          return;
+        }
+        try {
+          window.sessionStorage.setItem(AVISO_LOGIN_KEY, "La plataforma se restauró desde un respaldo: vuelve a iniciar sesión.");
+        } catch {
+          /* sin almacenamiento */
+        }
+        lockedRef.current = false;
+        setLocked(false);
+        leave();
+        router.replace("/login");
+      } catch {
+        /* sin red: se reintenta */
+      }
+    };
+    const timer = window.setInterval(consultar, restaurando ? 3_000 : 15_000);
+    if (restaurando) void consultar();
+    return () => {
+      vivo = false;
+      window.clearInterval(timer);
+    };
+  }, [status, restaurando, refreshMe, leave, router]);
+
   const can = useCallback(
     (modulo: Modulo, accion: ModuleAction = "V", ctx?: ContextoAlcance) => {
       if (!permissions[modulo]?.[accion]) return false;
@@ -249,7 +309,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [status, token, user, permissions, roles, authConfig, can, alcance, loginWithEmail, acceptLogin, logout, refreshMe, logoutAll, locked, lock, unlock, unlockWith],
   );
 
-  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+  return (
+    <SessionContext.Provider value={value}>
+      {children}
+      {restaurando ? <PantallaRestaurando /> : null}
+    </SessionContext.Provider>
+  );
+}
+
+/* Pantalla de espera mientras la plataforma se restaura desde un respaldo (cubre todo; no se puede trabajar). */
+function PantallaRestaurando() {
+  return (
+    <div role="alertdialog" aria-modal="true" aria-labelledby="restaurando-titulo" data-restaurando className="fixed inset-0 z-[1000] flex items-center justify-center bg-canvas/95 px-4 backdrop-blur-sm">
+      <div className="flex max-w-sm flex-col items-center gap-4 text-center">
+        <CircleNotch size={36} className="animate-spin text-brand motion-reduce:animate-none" aria-hidden="true" />
+        <h1 id="restaurando-titulo" className="text-[20px] font-semibold text-ink">
+          Restaurando la plataforma, vuelve en un momento
+        </h1>
+        <p className="text-[14px] leading-[1.5] text-ink-3">Se está recuperando la información desde un respaldo. Al terminar tendrás que volver a iniciar sesión.</p>
+      </div>
+    </div>
+  );
 }
 
 export function useSession(): SessionValue {

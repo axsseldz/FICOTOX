@@ -16,6 +16,7 @@ import { ejecutarCambioFolio, ejecutarDecisionRecepcion, ejecutarReapertura } fr
 import { ejecutarAnulacionCalidad, violacionParaExcepcionNc, violacionParaExcepcionSuspension } from "./modules/calidad/nc";
 import { violacionParaExcepcionIncidencia } from "./modules/calidad/incidencias";
 import { ejecutarObsolescencia } from "./modules/sgc/flujo";
+import { ejecutarRestauracionRespaldo } from "./modules/respaldos";
 
 /*
  * Que hace el servidor cuando un segundo usuario aprueba cada tipo de
@@ -69,6 +70,8 @@ const EJECUTORES: Ejecutores = {
   anular_calidad: (ctx) => ejecutarAnulacionCalidad({ s: ctx.s, user: ctx.user, actuo: ctx.actuo, solicitud: ctx.solicitud, motivo: ctx.motivo }),
   // Documentos SGC (Fase 2): declarar obsoleto sin reemplazo.
   obsoletar_documento_sgc: ejecutarObsolescencia,
+  // Restaurar la plataforma desde un respaldo: se programa al aprobarse (corre al terminar la transaccion).
+  restaurar_respaldo: ejecutarRestauracionRespaldo,
 };
 
 export const aprobarSolicitud = aprobarSolicitudCon(EJECUTORES);

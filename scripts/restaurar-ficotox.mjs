@@ -13,6 +13,18 @@
  * un respaldo automatico de la instancia actual, restaura, y agrega a la
  * bitacora de la base restaurada la entrada "restauracion desde respaldo <id>"
  * (actor: sistema) con audit-chain.mjs, para que la cadena continue integra.
+ * Al final cierra todas las sesiones (token_version de cada cuenta por encima
+ * del que tenia antes de restaurar) y borra la carpeta de preparacion.
+ *
+ * Restauracion desde la plataforma (Calidad › Respaldos, solicitud aprobada por
+ * un segundo usuario): el propio servidor ejecuta este script con
+ * FICOTOX_RESTAURAR_DESDE_SERVIDOR=<su pid> despues de cerrar su conexion a la
+ * base y de dejar de atender (503). Solo entonces se acepta el modo real con el
+ * servidor encendido: el bloqueo vivo debe ser de ese pid y ese pid debe ser el
+ * proceso padre. Los datos de la solicitud (responsable, solicitante, aprobador,
+ * motivo y numero) llegan en FICOTOX_RESTAURAR_SOLICITUD (JSON), nunca como
+ * argumentos: un motivo escrito por una persona no puede parecer una opcion.
+ * Por terminal, --solicitante, --aprobador, --motivo y --solicitud.
  *
  * Verificaciones (en ambos modos, cada una en el acta con ✅/❌):
  *   1. manifest valido y SHA-256 de cada archivo del respaldo
@@ -69,8 +81,21 @@ const respaldo = fs.existsSync(path.resolve(respaldoArg)) ? path.resolve(respald
 if (!fs.existsSync(respaldo)) salir(`No existe el respaldo: ${respaldoArg}`);
 const destinoArg = valor("--destino");
 const modoReal = destinoArg === "instance";
-const responsable = valor("--responsable") || process.env.USER || os.userInfo().username || "—";
+const solicitudServidor = (() => {
+  try {
+    const datos = JSON.parse(process.env.FICOTOX_RESTAURAR_SOLICITUD || "{}");
+    return datos && typeof datos === "object" ? datos : {};
+  } catch {
+    return {};
+  }
+})();
+const textoDe = (v) => (v === undefined || v === null || v === "" ? null : String(v));
+const responsable = textoDe(solicitudServidor.responsable) || valor("--responsable") || process.env.USER || os.userInfo().username || "—";
 const confirmar = args.includes("--confirmar");
+const solicitante = textoDe(solicitudServidor.solicitante) || valor("--solicitante");
+const aprobador = textoDe(solicitudServidor.aprobador) || valor("--aprobador");
+const motivoArg = textoDe(solicitudServidor.motivo) || valor("--motivo");
+const solicitudArg = textoDe(solicitudServidor.solicitud) || valor("--solicitud");
 
 /* ---------- Guardas del modo real ---------- */
 
@@ -107,8 +132,11 @@ if (modoReal) {
   if (!confirmar) salir("Modo real rechazado: restaurar sobre la instancia real exige --destino instance --confirmar.");
   if (entorno.motor !== "sqlite") salir("Modo real rechazado: esta instalación usa MySQL/MariaDB (restaura con mysql < respaldo.sql; ver README.md).");
   const vivo = bloqueoVivo(entorno.instanceDir);
-  if (vivo) salir(`Modo real rechazado: el servidor está encendido (archivo de bloqueo ${path.join(entorno.instanceDir, "servidor.lock")}, pid ${vivo.pid}). Detenlo y vuelve a intentarlo.`);
-  if (await puertoOcupado(entorno.puerto)) {
+  // Desde la plataforma: el servidor dueño del bloqueo es quien ejecuta este script (ya cerro su conexion y no atiende).
+  const desdeServidor = Number(process.env.FICOTOX_RESTAURAR_DESDE_SERVIDOR || 0);
+  const pedidoPorServidor = !!vivo && desdeServidor > 0 && Number(vivo.pid) === desdeServidor && process.ppid === desdeServidor;
+  if (vivo && !pedidoPorServidor) salir(`Modo real rechazado: el servidor está encendido (archivo de bloqueo ${path.join(entorno.instanceDir, "servidor.lock")}, pid ${vivo.pid}). Detenlo y vuelve a intentarlo.`);
+  if (!pedidoPorServidor && (await puertoOcupado(entorno.puerto))) {
     // En macOS el 5000 lo usa AirPlay: solo se rechaza si quien responde es FICOTOX (o si no se puede saber).
     const quien = await servicioEn(entorno.puerto);
     if (quien !== "otro") salir(`Modo real rechazado: el puerto ${entorno.puerto} está en uso${quien === "ficotox" ? " por un servidor de FICOTOX" : " (¿servidor encendido?)"}. Detenlo y vuelve a intentarlo.`);
@@ -341,6 +369,21 @@ if (modoReal && db && !fallidas.length) {
   } else {
     db.close();
     db = null;
+    // Lo de antes de restaurar: al final cada cuenta queda con un token_version mayor que el que tenia aqui y
+    // que el del respaldo, y ningun id ya usado se reutiliza (un token viejo no vuelve a valer, y un folio o una
+    // solicitud de lo que se pierde no se confunde con uno nuevo).
+    const deAntes = { versiones: new Map(), secuencias: new Map() };
+    if (fs.existsSync(entorno.sqlitePath)) {
+      const actual = new Sqlite(entorno.sqlitePath, { readonly: true, fileMustExist: true });
+      try {
+        for (const f of actual.prepare("SELECT name, seq FROM sqlite_sequence").all()) deAntes.secuencias.set(String(f.name), Number(f.seq || 0));
+        for (const f of actual.prepare("SELECT id, token_version FROM usuarios").all()) deAntes.versiones.set(Number(f.id), Number(f.token_version || 0));
+      } catch {
+        /* base actual sin usuarios: no hay sesiones que cerrar */
+      } finally {
+        actual.close();
+      }
+    }
     // Respaldo automatico de la instancia actual antes de sobrescribirla.
     if (fs.existsSync(entorno.sqlitePath)) {
       respaldoPrevio = await crearRespaldo({ Sqlite, sqlitePath: entorno.sqlitePath, instanceDir: entorno.instanceDir, respaldosDir: entorno.respaldosDir, secretKey: entorno.secretKey, baseDir: root, etiqueta: `antes de restaurar ${respaldoId}` });
@@ -361,7 +404,25 @@ if (modoReal && db && !fallidas.length) {
     try {
       const previo = real.prepare("SELECT hash FROM auditoria ORDER BY id DESC LIMIT 1").get();
       const registro = construirRegistro(
-        { accion: "restaurar_respaldo", entidad: "respaldos", entidadId: respaldoId, referencia: respaldoId, motivo: `Restauración desde respaldo ${respaldoId}`, detalle: { respaldo_id: respaldoId, responsable, respaldo_previo: respaldoPrevio?.id || null, creado_en: manifest.creado_en, app: versionApp(root) } },
+        {
+          accion: "restaurar_respaldo",
+          entidad: "respaldos",
+          entidadId: respaldoId,
+          referencia: respaldoId,
+          motivo: motivoArg ? `Restauración desde respaldo ${respaldoId}: ${motivoArg}` : `Restauración desde respaldo ${respaldoId}`,
+          detalle: {
+            respaldo_id: respaldoId,
+            responsable,
+            respaldo_previo: respaldoPrevio?.id || null,
+            creado_en: manifest.creado_en,
+            app: versionApp(root),
+            sesiones_cerradas: true,
+            ...(solicitante ? { solicitado_por: solicitante } : {}),
+            ...(aprobador ? { aprobado_por: aprobador } : {}),
+            ...(solicitudArg ? { solicitud_id: Number(solicitudArg) || solicitudArg } : {}),
+            ...(motivoArg ? { motivo: motivoArg } : {}),
+          },
+        },
         null,
         previo?.hash || null,
       );
@@ -376,6 +437,14 @@ if (modoReal && db && !fallidas.length) {
       liberarBloqueoMigracion(real);
       const migracion = await aplicarMigraciones(adaptadorSqlite(real), { Sqlite, clave: llave, appCommit: versionApp(root).commit, respaldo: async () => respaldo, avisar: (m) => console.log(`  [migraciones] ${m}`) });
       if (migracion.aplicadas.length || migracion.lineaBase !== null) observaciones.push(`Migraciones aplicadas a la instancia restaurada: ${migracion.lineaBase !== null ? `línea base ${migracion.lineaBase}; ` : ""}${migracion.aplicadas.map((m) => m.version).join(", ") || "ninguna"}.`);
+      // Todas las sesiones se cierran (quien estaba dentro vuelve a iniciar sesion) y los id siguen despues de los ya usados.
+      real.transaction(() => {
+        const subir = real.prepare("UPDATE usuarios SET token_version = :tv WHERE id = :id");
+        for (const f of real.prepare("SELECT id, token_version FROM usuarios").all()) subir.run({ id: f.id, tv: Math.max(Number(f.token_version || 0), deAntes.versiones.get(Number(f.id)) ?? 0) + 1 });
+        const secuencia = real.prepare("UPDATE sqlite_sequence SET seq = :seq WHERE name = :name AND seq < :seq");
+        for (const [name, seq] of deAntes.secuencias) if (name !== "auditoria") secuencia.run({ name, seq });
+      })();
+      observaciones.push("Se cerraron todas las sesiones: cada persona vuelve a iniciar sesión.");
     } finally {
       real.close();
     }
@@ -397,6 +466,8 @@ if (!modoReal && db && !fallidas.length && planMigracion && (planMigracion.pendi
   }
 }
 if (db) db.close();
+// Modo real: la carpeta de preparacion (con todos los datos) ya no sirve, se haya aplicado o no.
+if (modoReal) fs.rmSync(preparacion, { recursive: true, force: true });
 
 /* ---------- Acta ---------- */
 
@@ -419,6 +490,7 @@ const acta = {
   manifest_sha256: manifest ? (() => { try { return huellaManifest(respaldo); } catch { return null; } })() : null,
   respaldo_creado_en: manifest?.creado_en || null,
   responsable,
+  ...(solicitante || aprobador || motivoArg ? { solicitado_por: solicitante, aprobado_por: aprobador, motivo: motivoArg, solicitud_id: solicitudArg ? Number(solicitudArg) || solicitudArg : null } : {}),
   modo: modoReal ? "real" : "prueba",
   destino: modoReal ? entorno.instanceDir : preparacion,
   host: os.hostname(),

@@ -19,7 +19,7 @@ import { formatearFechaCorta, formatearFechaHora } from "@/lib/shared/fechas";
  * la pidio, con los dialogos de siempre (useAccionesSolicitud).
  */
 
-const TONO_ESTADO: Record<string, Tone> = { pendiente: "warning", aprobada: "success", rechazada: "danger", cancelada: "neutral", vencida: "neutral" };
+const TONO_ESTADO: Record<string, Tone> = { pendiente: "warning", aprobada: "success", rechazada: "danger", cancelada: "neutral", vencida: "neutral", fallida: "danger" };
 
 export function EstadoSolicitudBadge({ estado }: { estado: unknown }) {
   const key = String(estado || "") as EstadoSolicitud;

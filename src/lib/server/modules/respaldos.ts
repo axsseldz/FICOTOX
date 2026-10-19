@@ -6,8 +6,13 @@
  *
  * - Ver: respaldos:V. Crear respaldo y probar restauracion: respaldos:G con
  *   reautenticacion (respaldos:crear / respaldos:probar). Todo queda en la bitacora.
- * - La restauracion REAL no se hace desde aqui: solo por linea de comandos con
- *   el servidor detenido (README).
+ * - Restauracion REAL: la pide quien tiene respaldos:G (solicitud de segundo
+ *   usuario restaurar_respaldo, con motivo y contrasena) y la aprueba otra
+ *   persona con calidad:A. Al aprobarse, el servidor deja de atender (503), cierra
+ *   su conexion a la base (con el WAL volcado) y ejecuta el mismo script en modo
+ *   real: verificaciones, respaldo "Previo a restauracion", reemplazo, entrada en
+ *   la bitacora, migracion y cierre de todas las sesiones. Despues reabre la base.
+ *   Igual con `npm run dev`, `npm start` o el lanzador: no reinicia el proceso.
  * - La prueba de restauracion corre en un proceso aparte (el script de siempre,
  *   en modo prueba) para no bloquear la plataforma, y al terminar se borra la
  *   copia restaurada (contiene todos los datos); el acta se conserva.
@@ -20,7 +25,10 @@ import { registrarIncidenciaAutomatica } from "./calidad/automaticas";
 import { requireUser, type CurrentUser } from "../auth";
 import { registrarAuditoria } from "../audit";
 import { getConfig } from "../config";
-import { withSession } from "../db";
+import { conBaseCerrada, withSession } from "../db";
+import { migrarAlArrancar } from "../migrar-arranque";
+import { invalidarIndice } from "../busqueda/version";
+import { crearSolicitud, respuestaSolicitud, type Ejecutores } from "../solicitudes";
 import { HttpError, json, readJson, type RouteContext } from "../http";
 import { cargarAutorizacion, permisoDe, requirePermission, type Autorizacion } from "../rbac";
 import { exigirReauth } from "../seguridad";
@@ -80,7 +88,7 @@ export interface PasoPrueba {
 
 export interface Trabajo {
   id: number;
-  tipo: "respaldo" | "prueba";
+  tipo: "respaldo" | "prueba" | "restauracion";
   respaldo_id: string | null;
   usuario: string;
   etiqueta: string | null;
@@ -538,10 +546,14 @@ export async function probarRestauracionPost(request: Request, params: { id?: st
   }
 }
 
-async function ejecutarPrueba(user: CurrentUser, trabajo: Trabajo, id: string): Promise<void> {
+/*
+ * Ejecuta scripts/restaurar-ficotox.mjs (modo prueba o real) en un proceso aparte:
+ * cada verificacion (✅/❌) se agrega al avance del trabajo. Devuelve el acta que
+ * escribio el script, o null si no termino.
+ */
+async function correrScriptRestauracion(trabajo: Trabajo, argumentos: string[], entorno: Record<string, string> = {}): Promise<Acta | null> {
   const cfg = getConfig();
   const script = path.join(/*turbopackIgnore: true*/ cfg.BASE_DIR, "scripts", "restaurar-ficotox.mjs");
-  const responsable = String(user.nombre || user.email || "—");
   let actaNombre: string | null = null;
   const alLinea = (linea: string) => {
     const paso = /^(✅|❌)\s+(\d+)\.\s+(.*?):\s*(.*)$/u.exec(linea.trim());
@@ -556,7 +568,7 @@ async function ejecutarPrueba(user: CurrentUser, trabajo: Trabajo, id: string): 
   };
   const exito = await new Promise<boolean>((resolver) => {
     if (!fs.existsSync(script)) return resolver(false);
-    const hijo = spawn(process.execPath, [script, "--respaldo", id, "--responsable", responsable], { cwd: cfg.BASE_DIR, env: { ...process.env }, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    const hijo = spawn(process.execPath, [script, ...argumentos], { cwd: cfg.BASE_DIR, env: { ...process.env, ...entorno }, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
     let pendiente = "";
     hijo.stdout.setEncoding("utf8");
     hijo.stdout.on("data", (trozo: string) => {
@@ -565,7 +577,10 @@ async function ejecutarPrueba(user: CurrentUser, trabajo: Trabajo, id: string): 
       pendiente = lineas.pop() || "";
       lineas.forEach(alLinea);
     });
-    hijo.stderr.resume();
+    hijo.stderr.setEncoding("utf8");
+    hijo.stderr.on("data", (trozo: string) => {
+      if (entorno.FICOTOX_RESTAURAR_DESDE_SERVIDOR) console.error(`[respaldos] ${trozo.trim()}`);
+    });
     // Tope de tiempo: una prueba no debe quedarse colgada para siempre.
     const limite = setTimeout(() => hijo.kill(), 30 * 60_000);
     hijo.on("error", () => {
@@ -578,8 +593,12 @@ async function ejecutarPrueba(user: CurrentUser, trabajo: Trabajo, id: string): 
       resolver(true);
     });
   });
-  let acta: Acta | null = null;
-  if (exito && actaNombre) acta = listarActas(cfg.RESPALDOS_DIR).find((a) => a.archivo === actaNombre) || null;
+  return exito && actaNombre ? listarActas(cfg.RESPALDOS_DIR).find((a) => a.archivo === actaNombre) || null : null;
+}
+
+async function ejecutarPrueba(user: CurrentUser, trabajo: Trabajo, id: string): Promise<void> {
+  const responsable = String(user.nombre || user.email || "—");
+  const acta = await correrScriptRestauracion(trabajo, ["--respaldo", id], { FICOTOX_RESTAURAR_SOLICITUD: JSON.stringify({ responsable }) });
   // La copia restaurada tiene todos los datos del laboratorio: se borra siempre; el acta queda.
   if (acta) borrarCopiaRestaurada(acta.destino);
   if (!acta) {
@@ -596,4 +615,122 @@ async function ejecutarPrueba(user: CurrentUser, trabajo: Trabajo, id: string): 
     await registrarAuditoria(s, user, { accion: "probar_restauracion", entidad: "respaldos", entidadId: id, referencia: id, detalle: { resultado: acta.resultado, duracion_ms: acta.duracion_ms, acta: acta.archivo, verificaciones_fallidas: legible.verificaciones.filter((v) => !v.ok).map((v) => v.n) } });
     await s.commit();
   }).catch(() => undefined);
+}
+
+/* ---------- Restaurar un respaldo (solicitud de segundo usuario) ---------- */
+
+/*
+ * POST /api/respaldos/:id/restaurar { motivo } (respaldos:G + reautenticacion
+ * respaldos:restaurar). No restaura: crea la solicitud restaurar_respaldo, que
+ * aprueba otra persona con calidad:A (Responsable General) desde «Por autorizar».
+ */
+export async function solicitarRestauracion({ request, s, params }: RouteContext): Promise<Response> {
+  const user = await requireUser(request);
+  await requirePermission(s, user, "respaldos", "G");
+  const cfg = getConfig();
+  if (!cfg.SQLITE_PATH) throw new HttpError(501, { message: "Con MySQL los respaldos se restauran con la herramienta del servidor de base de datos.", codigo: "respaldo_mysql" });
+  const id = String(params.id || "");
+  const manifest = ID_RE.test(id) ? manifestDe(id) : null;
+  if (!manifest) throw new HttpError(404, { message: "Respaldo no encontrado o dañado: no se puede restaurar." });
+  const payload = await readJson(request);
+  const motivo = String(payload.motivo || "").trim();
+  if (motivo.length < 5) throw new HttpError(400, { message: "Indica el motivo de la restauración (al menos 5 caracteres)", campo: "motivo" });
+  if (trabajoEnCurso()) throw new HttpError(409, { message: MENSAJE_OCUPADO, codigo: "respaldo_en_curso" });
+  await exigirReauth(s, request, user, "respaldos:restaurar");
+  const creado = manifest.creado_en || instanteDeId(id);
+  const solicitud = await crearSolicitud(s, user, {
+    tipo: "restaurar_respaldo",
+    entidad: "respaldos",
+    entidadId: id,
+    referencia: `Respaldo del ${creado ? formatearFechaHora(creado) : id}`,
+    accion: "restaurar",
+    datos: { respaldo_id: id, creado_en: creado },
+    motivo,
+  });
+  await s.commit();
+  return respuestaSolicitud(solicitud, `la restauración del respaldo del ${creado ? formatearFechaHora(creado) : id}`);
+}
+
+function manifestDe(id: string): Manifest | null {
+  try {
+    return leerManifest(path.join(/*turbopackIgnore: true*/ getConfig().RESPALDOS_DIR, id));
+  } catch {
+    return null;
+  }
+}
+
+const nombreDe = async (s: RouteContext["s"], id: unknown): Promise<string> => String((await s.scalar("SELECT nombre FROM usuarios WHERE id = :id", { id: Number(id) })) || `#${id}`);
+
+/*
+ * Al aprobarse: solo se programa (no puede correr dentro de la transaccion de la
+ * aprobacion, que tiene tomada la base). La restauracion empieza en cuanto esa
+ * transaccion termina; si no llego a confirmarse, no se restaura nada.
+ */
+export const ejecutarRestauracionRespaldo: NonNullable<Ejecutores["restaurar_respaldo"]> = async (ctx) => {
+  const cfg = getConfig();
+  if (!cfg.SQLITE_PATH) throw new HttpError(501, { message: "Con MySQL los respaldos se restauran con la herramienta del servidor de base de datos.", codigo: "respaldo_mysql" });
+  // Quien aprueba debe poder ver los respaldos (Responsable General los ve).
+  const auth = await cargarAutorizacion(ctx.s, ctx.user);
+  if (!puedeVerRespaldos(auth)) throw new HttpError(403, { message: "Para aprobar una restauración necesitas poder ver los respaldos", required: { module: "respaldos", action: "V" } });
+  const id = String(ctx.datos.respaldo_id || ctx.solicitud.entidad_id);
+  if (!ID_RE.test(id) || !manifestDe(id)) throw new HttpError(409, { message: "El respaldo ya no existe o está dañado: no se puede restaurar. Rechaza la solicitud.", codigo: "respaldo_no_disponible" });
+  if (trabajoEnCurso()) throw new HttpError(409, { message: MENSAJE_OCUPADO, codigo: "respaldo_en_curso" });
+  const solicitante = await nombreDe(ctx.s, ctx.solicitud.solicitado_por);
+  const aprobador = String(ctx.user.nombre || ctx.user.email || "");
+  const trabajo = iniciarTrabajo({ tipo: "restauracion", respaldo_id: id, usuario: aprobador, etiqueta: null, fase: "Preparando la restauración" });
+  setTimeout(() => void restaurarAhora({ solicitudId: Number(ctx.solicitud.id), respaldoId: id, solicitante, aprobador, motivo: ctx.solicitud.motivo, trabajo }), 0);
+  return { programada: true, message: "La restauración empezó: la plataforma no atenderá mientras dura y después todos vuelven a iniciar sesión." };
+};
+
+interface Restauracion {
+  solicitudId: number;
+  respaldoId: string;
+  solicitante: string;
+  aprobador: string;
+  motivo: string;
+  trabajo: Trabajo;
+}
+
+async function restaurarAhora(r: Restauracion): Promise<void> {
+  const { trabajo } = r;
+  // La aprobacion debe haberse confirmado (esta sesion espera a que termine la de la aprobacion).
+  const aprobada = await withSession(async (s) => !!(await s.scalar("SELECT 1 FROM solicitudes_autorizacion WHERE id = :id AND estado = 'aprobada'", { id: r.solicitudId }))).catch(() => false);
+  if (!aprobada) {
+    terminarTrabajo(trabajo, { estado: "fallido", fase: "No se restauró", mensaje: "La aprobación no llegó a guardarse; no se restauró nada." });
+    return;
+  }
+  let acta: Acta | null = null;
+  try {
+    acta = await conBaseCerrada(async () => {
+      trabajo.fase = "Verificando el respaldo";
+      const resultado = await correrScriptRestauracion(
+        trabajo,
+        // Solo opciones fijas en los argumentos; lo que escribieron las personas va en el entorno (no puede parecer una opcion).
+        ["--respaldo", r.respaldoId, "--destino", "instance", "--confirmar"],
+        { FICOTOX_RESTAURAR_DESDE_SERVIDOR: String(process.pid), FICOTOX_RESTAURAR_SOLICITUD: JSON.stringify({ responsable: r.aprobador, solicitante: r.solicitante, aprobador: r.aprobador, motivo: r.motivo, solicitud: r.solicitudId }) },
+      );
+      // La base queda en la version de la aplicacion aunque el script se hubiera interrumpido (sin pendientes no hace nada).
+      await migrarAlArrancar().catch((error: unknown) => console.error("[respaldos] Migración tras restaurar:", error));
+      return resultado;
+    });
+  } catch (error) {
+    console.error("[respaldos] No se pudo restaurar:", error);
+  }
+  memoria.cache.datos = null;
+  invalidarIndice();
+  if (acta?.restaurado) {
+    // La base ya es la del respaldo: la solicitud no existe ahi; quien pidio, quien aprobo y el motivo quedaron en la entrada de la bitacora.
+    terminarTrabajo(trabajo, { estado: "terminado", fase: "Plataforma restaurada", resultado: "aprobada", acta: acta.archivo, pasos: actaLegible(acta).verificaciones });
+    console.log(`[respaldos] Plataforma restaurada desde el respaldo ${r.respaldoId} (solicitud #${r.solicitudId}).`);
+    return;
+  }
+  // No se reemplazo nada: la solicitud termina «fallida» con la razon.
+  const fallidas = acta ? actaLegible(acta).verificaciones.filter((v) => !v.ok) : [];
+  const razon = fallidas.length ? `el respaldo no pasó: ${fallidas.map((v) => v.titulo.toLowerCase()).join("; ")}` : "la restauración no pudo completarse";
+  terminarTrabajo(trabajo, { estado: "fallido", fase: "No se restauró", resultado: acta ? "fallida" : null, acta: acta?.archivo || null, pasos: acta ? actaLegible(acta).verificaciones : trabajo.pasos, mensaje: `No se restauró nada: ${razon}. La plataforma siguió como estaba.` });
+  await withSession(async (s) => {
+    await s.execute("UPDATE solicitudes_autorizacion SET estado = 'fallida', motivo_resolucion = :motivo WHERE id = :id AND estado = 'aprobada'", { id: r.solicitudId, motivo: `No se restauró nada: ${razon}` });
+    await registrarAuditoria(s, null, { accion: "restauracion_fallida", entidad: "respaldos", entidadId: r.respaldoId, referencia: r.respaldoId, motivo: r.motivo, detalle: { respaldo_id: r.respaldoId, solicitud_id: r.solicitudId, solicitado_por: r.solicitante, aprobado_por: r.aprobador, razon, acta: acta?.archivo || null, verificaciones_fallidas: fallidas.map((v) => v.n) } });
+    await s.commit();
+  }).catch((error: unknown) => console.error("[respaldos] No se pudo registrar la restauración fallida:", error));
 }

@@ -11,11 +11,12 @@
  */
 import type { Accion, Modulo } from "./permisos";
 
-export const VERSION_ACCIONES_CRITICAS = "2026-10-18.1";
+export const VERSION_ACCIONES_CRITICAS = "2026-10-18.2";
 
-export type TipoSolicitud = "anular_registro" | "restaurar_registro" | "anular_informe" | "excepcion_segregacion" | "asignar_rol" | "reactivar_cuenta" | "ampliar_vigencia" | "decision_recepcion" | "cambiar_folio" | "reabrir_recepcion" | "anular_calidad" | "obsoletar_documento_sgc" | "ampliar_permisos_rol";
+export type TipoSolicitud = "anular_registro" | "restaurar_registro" | "anular_informe" | "excepcion_segregacion" | "asignar_rol" | "reactivar_cuenta" | "ampliar_vigencia" | "decision_recepcion" | "cambiar_folio" | "reabrir_recepcion" | "anular_calidad" | "obsoletar_documento_sgc" | "ampliar_permisos_rol" | "restaurar_respaldo";
 
-export type EstadoSolicitud = "pendiente" | "aprobada" | "rechazada" | "cancelada" | "vencida";
+/* "fallida": se aprobo pero no se pudo ejecutar (p. ej. una restauracion cuyo respaldo no paso las verificaciones). */
+export type EstadoSolicitud = "pendiente" | "aprobada" | "rechazada" | "cancelada" | "vencida" | "fallida";
 
 export interface AccionCritica {
   tipo: TipoSolicitud;
@@ -45,6 +46,8 @@ export const ACCIONES_CRITICAS: Record<TipoSolicitud, AccionCritica> = {
   obsoletar_documento_sgc: { tipo: "obsoletar_documento_sgc", etiqueta: "Declarar obsoleto un documento", pendiente: "Obsolescencia solicitada", aprueba: { modulo: "documentos", accion: "documento_autorizar" }, descripcion: "Retirar del uso un documento SGC sin reemplazo. Queda obsoleto y se conserva en el historial." },
   // Correcciones V1 (R8): ampliar lo que concede un rol (permisos nuevos o reactivarlo); quitar permisos es directo.
   ampliar_permisos_rol: { tipo: "ampliar_permisos_rol", etiqueta: "Ampliar permisos de un rol", pendiente: "Ampliación de permisos solicitada", aprueba: { modulo: "usuarios", accion: "A" }, descripcion: "Agregar permisos a un rol o reactivarlo. La aprueba quien tiene A en usuarios y no tiene ese rol. Quitar permisos se aplica directo." },
+  // Restaurar la plataforma desde un respaldo: lo pide quien tiene respaldos:G (Administrador técnico); lo aprueba otra persona con calidad:A (Responsable General).
+  restaurar_respaldo: { tipo: "restaurar_respaldo", etiqueta: "Restaurar un respaldo", pendiente: "Restauración solicitada", aprueba: { modulo: "calidad", accion: "A" }, descripcion: "Recuperar toda la plataforma desde un respaldo: se pierde lo registrado después de su fecha. Antes se guarda un respaldo «Previo a restauración» y al terminar todos vuelven a iniciar sesión." },
   ampliar_vigencia: { tipo: "ampliar_vigencia", etiqueta: "Ampliar vigencia", pendiente: "Ampliación de vigencia solicitada", aprueba: { modulo: "usuarios", accion: "A" }, descripcion: "Ampliar la vigencia de una cuenta temporal (o convertirla en permanente)." },
 };
 
@@ -99,4 +102,5 @@ export const ETIQUETA_ESTADO_SOLICITUD: Record<EstadoSolicitud, string> = {
   rechazada: "Rechazada",
   cancelada: "Cancelada",
   vencida: "Vencida",
+  fallida: "Fallida",
 };

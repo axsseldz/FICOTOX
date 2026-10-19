@@ -20,7 +20,7 @@ import { ActividadDialog, agruparActividades, ListaActividades, usePersonas } fr
  * Calidad › Auditoría. La bitacora no se exporta (decision del laboratorio).
  */
 
-const TONO_SOLICITUD: Record<string, Tone> = { pendiente: "warning", aprobada: "success", rechazada: "danger", cancelada: "neutral", vencida: "neutral" };
+const TONO_SOLICITUD: Record<string, Tone> = { pendiente: "warning", aprobada: "success", rechazada: "danger", cancelada: "neutral", vencida: "neutral", fallida: "danger" };
 
 export function RecordHistory({ entidad, entidadId, compact = false }: { entidad: string; entidadId: number | string | null | undefined; compact?: boolean }) {
   const { token } = useSession();

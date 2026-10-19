@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { invalidarIndice } from "./busqueda/version";
-import { esConflictoDeFolio, withSession, type Session } from "./db";
+import { esConflictoDeFolio, PlataformaRestaurando, plataformaRestaurando, withSession, type Session } from "./db";
 
 /*
  * Utilidades comunes de los route handlers.
@@ -87,6 +87,8 @@ function esConflictoReintentable(error: unknown): boolean {
 export function apiRoute(handler: RouteHandler) {
   return async (request: Request, routeCtx?: { params?: Promise<Record<string, string | string[]>> | Record<string, string | string[]> }): Promise<Response> => {
     const params = routeCtx?.params ? await routeCtx.params : {};
+    // Restauracion en curso: la API no atiende (ni lecturas ni escrituras); la interfaz muestra la pantalla de espera.
+    if (plataformaRestaurando()) return json(new PlataformaRestaurando().body, 503);
     try {
       /*
        * Fase 12: el cuerpo (p. ej. una evidencia de 25 MB) se recibe completo ANTES de tomar la sesion. Con
@@ -130,6 +132,7 @@ export function apiRoute(handler: RouteHandler) {
         }
       }
     } catch (error) {
+      if (error instanceof PlataformaRestaurando) return json(error.body, 503);
       console.error(`[api] ${request.method} ${new URL(request.url).pathname}`, error);
       return json({ message: "Error interno del servidor" }, 500);
     }
