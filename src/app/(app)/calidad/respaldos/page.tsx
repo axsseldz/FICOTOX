@@ -408,7 +408,7 @@ function ComoRecuperar() {
         <li>El administrador técnico elige el respaldo, usa «Restaurar este respaldo» y escribe el motivo y su contraseña.</li>
         <li>Otra persona con autoridad (Responsable General) aprueba la solicitud en «Por autorizar». Nadie aprueba la suya.</li>
         <li>Primero se comprueba el respaldo; si no pasa, no se toca nada. Si pasa, se guarda un respaldo «Previo a restauración» de lo que había, por si hace falta volver atrás.</li>
-        <li>La recuperación queda en el registro de actividad: quién la pidió, quién la aprobó, desde qué respaldo y por qué. Sin la plataforma encendida, el administrador técnico puede usar el comando del README («Respaldos y restauración»).</li>
+        <li>La recuperación queda en el registro de actividad: quién la pidió, quién la aprobó, desde qué respaldo y por qué. Sin la plataforma encendida, el administrador técnico puede restaurar por terminal con «npm run restaurar».</li>
       </ol>
     </details>
   );

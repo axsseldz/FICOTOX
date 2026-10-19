@@ -1,5 +1,5 @@
 {
-  "_comentario": "Matriz de permisos de la Fase 1 (FX-MO-2-1, seccion 5 y decisiones anotadas; ver README.md). Por rol: { modulo: { accion: alcance } }. Acciones V C E R A AN G (en 'documentos', acciones documentales: documento_consultar_vigente, documento_proponer, ...; ver src/lib/shared/permisos.ts); un modulo o accion ausente = sin permiso. 'clave' es estable (reglas de combinacion). Lo usa scripts/seed-roles-usuarios.mjs. Respaldos (Calidad › Respaldos): admin_tecnico V y G; responsable_general, mejora_continua y auditor_interno solo V.",
+  "_comentario": "Matriz de permisos de la Fase 1 (FX-MO-2-1, seccion 5 y decisiones anotadas; ver CLAUDE.md). Por rol: { modulo: { accion: alcance } }. Acciones V C E R A AN G (en 'documentos', acciones documentales: documento_consultar_vigente, documento_proponer, ...; ver src/lib/shared/permisos.ts); un modulo o accion ausente = sin permiso. 'clave' es estable (reglas de combinacion). Lo usa scripts/seed-roles-usuarios.mjs. Respaldos (Calidad › Respaldos): admin_tecnico V y G; responsable_general, mejora_continua y auditor_interno solo V.",
   "version": "fase-1",
   "modulos": [
     "usuarios",

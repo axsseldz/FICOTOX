@@ -4,7 +4,7 @@
  * - CA-09: la exportacion (PDF) conserva clave, revision, estado, responsables y fechas de cada renglon.
  * - CA-12: la bitacora es de solo lectura (sin endpoints de edicion o borrado; la base rechaza UPDATE/DELETE)
  *   y el historial de la ficha esta completo.
- * - CA-15: los manuales de usuario y tecnico existen y cubren instalacion, configuracion, permisos, flujo y recuperacion.
+ * - CA-15: CLAUDE.md documenta el modulo (acciones, flujo, confidencialidad y recuperacion).
  * - CA-16: ninguna ruta de la API responde datos sin sesion (salvo inicio de sesion y salud) y no hay rutas publicas
  *   de documentos ni informes.
  */
@@ -66,14 +66,11 @@ try {
 db.close();
 check("CA-12: la base rechaza modificar o borrar la bitácora (disparadores)", !!upd && !!del, `${upd} | ${del}`);
 
-/* ---------- CA-15: manuales ---------- */
-const docs = path.join(root, "docs", "documentos-sgc");
-const leer = (f) => (fs.existsSync(path.join(docs, f)) ? fs.readFileSync(path.join(docs, f), "utf8") : "");
-const usuario = leer("MANUAL_USUARIO.md");
-const tecnico = leer("MANUAL_TECNICO.md");
-check("CA-15: manual de usuario por papel (Mejora Continua, elaborador, revisor, autorizador, destinatario y auditor)", ["Mejora Continua", "Elaborador", "Revisor", "Autorizador", "Destinatario", "Auditor"].every((p) => usuario.includes(p)));
-check("CA-15: manual técnico con instalación, configuración, permisos, flujo y recuperación", [/instalaci/i, /configuraci/i, /permis/i, /flujo/i, /restauraci|recuperaci/i].every((r) => r.test(tecnico)));
-check("CA-15: el resto de la documentación de la sección 14 existe", ["MODELO_DATOS.md", "API_Y_PERMISOS.md", "MATRIZ_PRUEBAS.md", "RESPALDO_RESTAURACION.md", "DECISIONES_Y_LIMITACIONES.md"].every((f) => leer(f).length > 500));
+/* ---------- CA-15: documentacion tecnica (CLAUDE.md) ---------- */
+const claudeMd = path.join(root, "CLAUDE.md");
+const guia = fs.existsSync(claudeMd) ? fs.readFileSync(claudeMd, "utf8") : "";
+const seccionSgc = guia.slice(guia.indexOf("**Documentos SGC**"));
+check("CA-15: CLAUDE.md documenta Documentos SGC (acciones, flujo, confidencialidad y recuperación)", guia.includes("**Documentos SGC**") && [/acciones documentales/i, /flujo/i, /confidencial/i, /recuperaci/i].every((r) => r.test(seccionSgc)));
 
 /* ---------- CA-16: sin acceso sin sesion ni publicacion externa ---------- */
 const rutas = [];

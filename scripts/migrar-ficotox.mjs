@@ -52,7 +52,7 @@ try {
         appCommit: versionApp(root).commit,
         respaldo: async () => {
           if (entorno.motor !== "sqlite") {
-            if (!args.includes("--respaldo-hecho")) throw new Error("En MySQL/MariaDB respalda antes con mysqldump y vuelve a correr con --respaldo-hecho (ver README.md).");
+            if (!args.includes("--respaldo-hecho")) throw new Error("En MySQL/MariaDB respalda antes con mysqldump y vuelve a correr con --respaldo-hecho (ver CLAUDE.md).");
             return "(respaldo de MySQL hecho con mysqldump)";
           }
           return (await crearRespaldo({ Sqlite, sqlitePath: entorno.sqlitePath, instanceDir: entorno.instanceDir, respaldosDir: entorno.respaldosDir, secretKey: entorno.secretKey, baseDir: root, incluirLlave: true, etiqueta: "pre-migracion" })).carpeta;

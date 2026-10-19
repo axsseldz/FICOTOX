@@ -7,7 +7,7 @@
  * HTTPS el mismo criterio de IP real que scripts/ip-real.mjs.
  *
  * Por que: en HTTP, las contrasenas y los tokens de sesion viajan sin cifrar por
- * la red del laboratorio. Ver README.md (certificado para la red interna).
+ * la red del laboratorio. Ver CLAUDE.md (certificado para la red interna).
  */
 import fs from "node:fs";
 import http from "node:http";

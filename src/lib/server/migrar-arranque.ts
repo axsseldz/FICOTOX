@@ -15,7 +15,7 @@ import { adaptadorMysql, adaptadorSqlite, aplicarMigraciones, estadoMigraciones,
  *   que la aplicacion, fallo a mitad) detiene el arranque con un mensaje claro.
  * - MySQL: el respaldo previo se hace con mysqldump fuera de la aplicacion; si
  *   hay pendientes hace falta MIGRAR_MYSQL_RESPALDO_HECHO=true (ver
- *   README.md).
+ *   CLAUDE.md).
  */
 export async function migrarAlArrancar(): Promise<void> {
   const cfg = getConfig();

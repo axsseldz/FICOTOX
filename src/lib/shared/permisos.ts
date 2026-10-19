@@ -78,7 +78,7 @@ export type Accion = AccionClasica | AccionDocumental;
  *   dan ningun permiso y en usuarios equivalen a V "propio" (solo su cuenta);
  * - en los demas modulos se comportan como "total" (son necesarios para el
  *   trabajo diario y no exponen datos fuera del laboratorio). Ver
- *   README.md.
+ *   CLAUDE.md.
  */
 export const ALCANCES = [
   { clave: "total", nombre: "Total", fase: null, descripcion: "Sin limite" },

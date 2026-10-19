@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * Sistema de diseño FICOTOX (ver README.md).
+ * Sistema de diseño FICOTOX.
  *
  * Una sola familia tipográfica (la del sistema: SF Pro en Apple, Inter como
  * respaldo), un solo acento "océano" y superficies translúcidas para la
@@ -166,7 +166,7 @@
   }
 
   /*
-   * Tema oscuro: los MISMOS tokens con otros valores (ver README.md).
+   * Tema oscuro: los MISMOS tokens con otros valores.
    * Lienzo gris muy oscuro con tinte azulado (sin negro puro), superficies un
    * poco más claras, bordes suaves y sombras cambiadas por bordes tonales.
    * Acento y estados aclarados para contraste AA sobre las superficies; los

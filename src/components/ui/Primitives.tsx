@@ -11,7 +11,7 @@ import { cn } from "./cn";
 export type Tone = "neutral" | "brand" | "success" | "warning" | "danger" | "bloom" | "ink";
 
 /*
- * Paleta tonal de insignias (README.md): fondo tenue del tono, texto del
+ * Paleta tonal de insignias: fondo tenue del tono, texto del
  * mismo tono y un borde sutil. brand = información / en curso; neutral = cerrado,
  * borrador, archivado; "ink" es un alias del gris tonal (nunca un fondo claro u
  * oscuro sólido, que en oscuro brillaba más que el resto).

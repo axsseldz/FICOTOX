@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * Paso de SQLite a MySQL/MariaDB (Fase 12; ver README.md).
+ * Paso de SQLite a MySQL/MariaDB (Fase 12; ver CLAUDE.md).
  *
  *   npm run sqlite-a-mysql -- --simular                       (solo revisa la base SQLite)
  *   npm run sqlite-a-mysql -- --destino mysql://usuario:clave@host:3306/ficotox --confirmar

@@ -131,7 +131,7 @@ if (!fs.existsSync(serverFile)) fallar("FICOTOX no arranca: no existe el build d
 {
   const { bloqueoVivo } = await import("../src/lib/shared/bloqueo.mjs");
   const datos = bloqueoVivo(path.join(instanceDir, "servidor.lock"));
-  if (datos) fallar(`FICOTOX no arranca: ya hay un servidor sobre esta instancia (pid ${datos.pid}${datos.puerto ? `, puerto ${datos.puerto}` : ""}). Si es el servicio, detenlo primero con npm run detener; si no hay ninguno, ver README.md, «Solución de problemas».`, SALIDA_FATAL);
+  if (datos) fallar(`FICOTOX no arranca: ya hay un servidor sobre esta instancia (pid ${datos.pid}${datos.puerto ? `, puerto ${datos.puerto}` : ""}). Si es el servicio, detenlo primero con npm run detener; si no hay ninguno, ver CLAUDE.md, «Comandos» (npm run detener retira bloqueos huérfanos).`, SALIDA_FATAL);
 }
 
 // Un solo lanzador por instancia: lanzador.lock se toma de forma atomica ("wx") ANTES de tocar nada
@@ -250,7 +250,7 @@ async function anunciarCuandoResponda(proceso) {
   const { esperarSalud } = await import("./lib/operacion.mjs");
   const salud = await esperarSalud({ ...process.env, PORT: port }, 600);
   if (!salud.ok || hijo !== proceso) return;
-  avisar(`FICOTOX escuchando en ${esquema}://${host}:${port}${esquema === "http" ? " (HTTP sin cifrar: ver HTTPS en README.md)" : ""}`);
+  avisar(`FICOTOX escuchando en ${esquema}://${host}:${port}${esquema === "http" ? " (HTTP sin cifrar: ver HTTPS en CLAUDE.md)" : ""}`);
   if (!navegadorAbierto && truthy("FICOTOX_OPEN_BROWSER", process.env.FLASK_OPEN_BROWSER ?? "true")) {
     navegadorAbierto = true;
     const command = process.platform === "win32" ? ["cmd", ["/c", "start", "", url]] : process.platform === "darwin" ? ["open", [url]] : ["xdg-open", [url]];

@@ -130,7 +130,7 @@ const bloqueoVivo = (instanceDir) => bloqueoCompartido(path.join(instanceDir, "s
 
 if (modoReal) {
   if (!confirmar) salir("Modo real rechazado: restaurar sobre la instancia real exige --destino instance --confirmar.");
-  if (entorno.motor !== "sqlite") salir("Modo real rechazado: esta instalación usa MySQL/MariaDB (restaura con mysql < respaldo.sql; ver README.md).");
+  if (entorno.motor !== "sqlite") salir("Modo real rechazado: esta instalación usa MySQL/MariaDB (restaura con mysql < respaldo.sql; ver CLAUDE.md).");
   const vivo = bloqueoVivo(entorno.instanceDir);
   // Desde la plataforma: el servidor dueño del bloqueo es quien ejecuta este script (ya cerro su conexion y no atiende).
   const desdeServidor = Number(process.env.FICOTOX_RESTAURAR_DESDE_SERVIDOR || 0);

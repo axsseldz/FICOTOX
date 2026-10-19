@@ -40,7 +40,7 @@ try {
   console.log("La llave de la bitácora NO va en el archivo: en Railway, SECRET_KEY debe ser la misma de tu .env local.");
   console.log(`\nArchivo:  ${salida}  (${Math.round(fs.statSync(salida).size / 1024)} KB)`);
   console.log(`SHA-256:  ${hash.digest("hex")}`);
-  console.log("\nSúbelo a un lugar privado con liga de descarga (p. ej. Google Drive) y pon esa liga en IMPORTAR_URL y el SHA-256 en IMPORTAR_SHA256 (ver DEPLOY_RAILWAY.md).");
+  console.log("\nSúbelo a un lugar privado con liga de descarga (p. ej. Google Drive) y pon esa liga en IMPORTAR_URL y el SHA-256 en IMPORTAR_SHA256 (ver CLAUDE.md, «Despliegue»).");
 } catch (error) {
   console.error(`ERROR: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
