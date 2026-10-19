@@ -147,19 +147,29 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [enter],
   );
 
-  const logout = useCallback(() => {
+  const salir = useCallback(() => {
     lockedRef.current = false;
     setLocked(false);
     leave();
     router.replace("/login");
   }, [leave, router]);
 
+  // Salir revoca este token en el servidor (no solo lo borra del navegador); si no responde, el token vence solo.
+  const logout = useCallback(() => {
+    const actual = getStoredToken();
+    if (actual) void sendJsonAuth("POST", `${API_BASE_URL}/auth/logout`, actual, { motivo: "salir" }).catch(() => undefined);
+    salir();
+  }, [salir]);
+
   const logoutAll = useCallback(async () => {
     await sendJsonAuth("POST", `${API_BASE_URL}/auth/logout-all`, token, {});
-    logout();
-  }, [token, logout]);
+    salir();
+  }, [token, salir]);
 
+  // Cierre por inactividad: revoca el token en el servidor; al volver a entrar con la contrasena se emite uno nuevo.
   const lock = useCallback(() => {
+    const actual = getStoredToken();
+    if (actual) void sendJsonAuth("POST", `${API_BASE_URL}/auth/logout`, actual, { motivo: "inactividad" }).catch(() => undefined);
     lockedRef.current = true;
     setLocked(true);
     clearSession();

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { SignJWT, jwtVerify, errors as joseErrors, type JWTPayload } from "jose";
 import { getConfig } from "./config";
 import { HttpError } from "./http";
@@ -20,8 +21,10 @@ function secretKey(): Uint8Array {
 export async function createAccessToken(payload: Record<string, unknown>): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const expiresAt = now + getConfig().JWT_EXPIRES_HOURS * 3600;
+  // jti: identifica esta sesion para revocarla sola al salir o por inactividad (sesiones_revocadas).
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setJti(randomUUID())
     .setIssuedAt(now)
     .setExpirationTime(expiresAt)
     .sign(secretKey());

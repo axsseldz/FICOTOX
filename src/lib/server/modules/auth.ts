@@ -274,6 +274,31 @@ export async function cambiarPassword({ request, s }: RouteContext): Promise<Res
   return issueSession(s, fila as Row);
 }
 
+/*
+ * POST /api/auth/logout { motivo?: "salir" | "inactividad" }: revoca en el
+ * servidor el token de esta sesion (por su jti) sin cerrar las demas. Lo llaman
+ * "Salir" y el cierre por inactividad; volver a entrar emite un token nuevo.
+ * Repetirlo no hace nada. Los tokens anteriores sin jti vencen solos (JWT_EXPIRES_HOURS).
+ */
+export async function cerrarSesion({ request, s }: RouteContext): Promise<Response> {
+  const user = await requireUser(request);
+  const jti = user.jti ? String(user.jti).slice(0, 64) : "";
+  const usuarioId = Number.parseInt(String(user.sub || ""), 10);
+  if (!jti || !Number.isFinite(usuarioId)) return json({ message: "Sesión cerrada", revocada: false });
+  const motivo = String((await readJson(request)).motivo || "") === "inactividad" ? "inactividad" : "salir";
+  if (!(await s.scalar("SELECT 1 FROM sesiones_revocadas WHERE jti = :jti", { jti }))) {
+    await s.execute("INSERT INTO sesiones_revocadas (jti, usuario_id, motivo, revocada_en, expira_en) VALUES (:jti, :usuario_id, :motivo, :en, :expira)", {
+      jti,
+      usuario_id: usuarioId,
+      motivo,
+      en: new Date().toISOString(),
+      expira: user.exp ? new Date(user.exp * 1000).toISOString() : null,
+    });
+    await s.commit();
+  }
+  return json({ message: "Sesión cerrada", revocada: true });
+}
+
 /* Cerrar sesion en todos los dispositivos: invalida todos los tokens emitidos (incluido el actual). */
 export async function cerrarSesiones({ request, s }: RouteContext): Promise<Response> {
   const user = await requireUser(request);

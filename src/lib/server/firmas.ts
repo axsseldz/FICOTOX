@@ -25,7 +25,8 @@ import { getConfig } from "./config";
 import { type Row, type Session } from "./db";
 import { HttpError, json, readJson, type RouteContext } from "./http";
 import { verifyPassword } from "./password";
-import { rolesVigentes } from "./rbac";
+import { cargarAutorizacion, exigirSesionVigente, rolesVigentes } from "./rbac";
+import { exigirIntentosFirma, ipDe, registrarIntento, sesionDe } from "./seguridad";
 
 import { faltantes, type Requisito } from "../shared/autorizaciones";
 
@@ -37,14 +38,16 @@ const hashToken = (token: string) => createHash("sha256").update(`${token}:${get
 /* POST /api/firmas/confirmar { usuario_id, password }: el firmante confirma con su contrasena. */
 export async function confirmarFirmante({ request, s }: RouteContext): Promise<Response> {
   const user = await requireUser(request);
+  // Sesion vigente (no revocada, cuenta activa) y sin exceder los intentos fallidos de esta sesion.
+  await cargarAutorizacion(s, user);
+  await exigirIntentosFirma(s, user);
   const payload = await readJson(request);
   const usuarioId = Number(payload.usuario_id) || 0;
-  const fila = await s.queryOne<Row>("SELECT id, nombre, email, activo, password_hash, bloqueado_hasta FROM usuarios WHERE id = :id", { id: usuarioId });
+  const fila = await s.queryOne<Row>("SELECT id, nombre, email, activo, password_hash, bloqueado_hasta, intentos_desde FROM usuarios WHERE id = :id", { id: usuarioId });
   if (!fila || !Number(fila.activo ?? 1)) throw new HttpError(400, { message: "Elige una cuenta activa" });
   if (fila.bloqueado_hasta && String(fila.bloqueado_hasta) > new Date().toISOString()) throw new HttpError(423, { message: "La cuenta del firmante está bloqueada temporalmente" });
   if (!verifyPassword(String(payload.password || ""), (fila.password_hash as string | null) || null)) {
-    await registrarAuditoria(s, user, { accion: "reauth_fallida", entidad: "usuarios", entidadId: usuarioId, referencia: String(fila.email), detalle: { motivo: "confirmar firma" } });
-    await s.commit();
+    await fallaFirma(s, request, user, fila);
     throw new HttpError(401, { message: `La contraseña de ${fila.nombre || fila.email} no es correcta`, codigo: "firma_invalida" });
   }
   const token = randomBytes(24).toString("base64url");
@@ -79,7 +82,17 @@ const verificadas = new WeakMap<object, Set<string>>();
  */
 const ETIQUETA_ROL: Record<string, string> = { recibio: "Recibido por", proceso: "Procesó", superviso: "Supervisó", extrajo: "Extrajo", limpio: "Realizó la limpieza", analista: "Analista" };
 
-export async function verificarFirmasConPassword(s: Session, user: CurrentUser, payload: Record<string, unknown>): Promise<void> {
+/*
+ * Contrasena incorrecta al confirmar una firma: cuenta como intento fallido de
+ * la cuenta del firmante (su bloqueo por intentos) y de la sesion que lo
+ * intento (exigirIntentosFirma). Se confirma antes de responder el error.
+ */
+async function fallaFirma(s: Session, request: Request | undefined, user: CurrentUser, firmante: Row): Promise<void> {
+  await registrarIntento(s, { email: String(firmante.email || ""), ip: request ? ipDe(request) : "desconocida", tipo: "firma", exito: false, usuario: firmante, sesion: sesionDe(user), actor: user });
+  await s.commit();
+}
+
+export async function verificarFirmasConPassword(s: Session, user: CurrentUser, payload: Record<string, unknown>, request?: Request): Promise<void> {
   const elegidos = (payload.firmantes && typeof payload.firmantes === "object" ? payload.firmantes : {}) as Record<string, { usuario_id?: unknown; password?: unknown } | null>;
   const ok = new Set<string>();
   for (const [rol, elegido] of Object.entries(elegidos)) {
@@ -87,12 +100,12 @@ export async function verificarFirmasConPassword(s: Session, user: CurrentUser, 
     const usuarioId = Number(elegido?.usuario_id) || 0;
     const password = typeof elegido?.password === "string" ? elegido.password : "";
     if (!usuarioId || !password) continue;
-    const fila = await s.queryOne<Row>("SELECT id, nombre, email, activo, password_hash, bloqueado_hasta FROM usuarios WHERE id = :id", { id: usuarioId });
+    await exigirIntentosFirma(s, user);
+    const fila = await s.queryOne<Row>("SELECT id, nombre, email, activo, password_hash, bloqueado_hasta, intentos_desde FROM usuarios WHERE id = :id", { id: usuarioId });
     if (!fila || !Number(fila.activo ?? 1)) throw new HttpError(400, { message: `${r.etiqueta}: elige una cuenta activa`, rol: r.rol });
     if (fila.bloqueado_hasta && String(fila.bloqueado_hasta) > new Date().toISOString()) throw new HttpError(423, { message: `${r.etiqueta}: la cuenta de ${fila.nombre || fila.email} está bloqueada temporalmente`, codigo: "firma_bloqueada", rol: r.rol });
     if (!verifyPassword(password, (fila.password_hash as string | null) || null)) {
-      await registrarAuditoria(s, user, { accion: "reauth_fallida", entidad: "usuarios", entidadId: usuarioId, referencia: String(fila.email), detalle: { motivo: "confirmar firma" } });
-      await s.commit();
+      await fallaFirma(s, request, user, fila);
       throw new HttpError(401, { message: `${r.etiqueta}: la contraseña de ${fila.nombre || fila.email} no es correcta`, codigo: "firma_invalida", rol: r.rol });
     }
     ok.add(`${r.rol}:${usuarioId}`);
@@ -167,7 +180,7 @@ export async function guardarFirmantes(s: Session, tabla: string, id: number, da
 
 /* GET /api/cuentas/activas: cuentas activas para elegir firmantes o asignar muestras (nombre, correo y cargo). */
 export async function listarCuentasActivas({ request, s }: RouteContext): Promise<Response> {
-  await requireUser(request);
+  await exigirSesionVigente(s, await requireUser(request));
   const filas = await s.query<Row>("SELECT id, nombre, email, avatar, foto, usa_foto FROM usuarios WHERE COALESCE(activo, 1) = 1 ORDER BY nombre, email");
   const items = [];
   // La figura de perfil elegida (o null) y, si la persona eligio mostrarla, la version de su foto: la interfaz muestra a cada quien asi.

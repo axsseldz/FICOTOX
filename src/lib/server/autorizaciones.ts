@@ -13,7 +13,7 @@ import { registrarAuditoria } from "./audit";
 import { getConfig } from "./config";
 import { type Row, type Session } from "./db";
 import { HttpError, intParam, json, readJson, type RouteContext } from "./http";
-import { cargarAutorizacion, cargoActuante, permisoDe, requirePermission, type Autorizacion, type Permiso } from "./rbac";
+import { cargarAutorizacion, cargoActuante, exigirSesionVigente, permisoDe, requirePermission, type Autorizacion, type Permiso } from "./rbac";
 
 import { exigirReauth } from "./seguridad";
 import { ACTIVIDADES_AUTORIZABLES, estadoAutorizacion, etiquetaAutorizacion, faltantes, mensajeFaltante, METODOS_AUTORIZABLES, requisitoEquipo, type AutorizacionPersonal, type Requisito, type TipoAutorizacion } from "../shared/autorizaciones";
@@ -107,13 +107,13 @@ export async function listarAutorizacionesUsuario({ request, s, params }: RouteC
 
 /* GET /api/autorizaciones/mias: las propias, para "Mi cuenta" y los avisos de los formatos. */
 export async function misAutorizaciones({ request, s }: RouteContext): Promise<Response> {
-  const user = await requireUser(request);
-  return json({ items: await autorizacionesDe(s, userIdFromClaims(user) as number), obligatorias: getConfig().AUTORIZACIONES_OBLIGATORIAS });
+  const auth = await exigirSesionVigente(s, await requireUser(request));
+  return json({ items: await autorizacionesDe(s, auth.userId), obligatorias: getConfig().AUTORIZACIONES_OBLIGATORIAS });
 }
 
 /* GET /api/autorizaciones/catalogo: actividades, metodos y equipos activos del inventario. */
 export async function catalogoAutorizaciones({ request, s }: RouteContext): Promise<Response> {
-  await requireUser(request);
+  await exigirSesionVigente(s, await requireUser(request));
   const equipos = await s.query<Row>("SELECT id, nombre, clave_bitacora FROM equipos WHERE COALESCE(activo, 1) = 1 ORDER BY nombre").catch(() => [] as Row[]);
   return json({
     actividades: ACTIVIDADES_AUTORIZABLES,
