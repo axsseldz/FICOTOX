@@ -21,7 +21,8 @@ import { requireUser } from "../../auth";
 import { registrarAuditoria } from "../../audit";
 import type { Row } from "../../db";
 import { HttpError, intParam, json, readJson, type RouteContext } from "../../http";
-import { requirePermission } from "../../rbac";
+import { requirePermission, soloEstado } from "../../rbac";
+import { exigirVistaAsignada } from "../../asignaciones";
 import { folioLabel } from "../../samples-flow";
 import { LEGACY_RECEPTION_SAMPLE_TYPES, RECEPTION_SAMPLE_TYPES, STORAGE_PLACES } from "../../../shared/sgc";
 import { safeJsonLoad } from "../helpers";
@@ -62,11 +63,18 @@ function etiquetasDe(row: Row): Etiqueta[] {
   }));
 }
 
+/*
+ * Mismos alcances que la ficha de la recepcion: con "asignado" solo lo asignado
+ * o registrado por la persona; con "estado" solo se ve el estado, asi que no hay
+ * etiqueta (lleva id interno, organismo y resguardo). Si no la puede ver: 403.
+ */
 async function cargar(ctx: RouteContext): Promise<{ row: Row; user: Awaited<ReturnType<typeof requireUser>> }> {
   const user = await requireUser(ctx.request);
-  await requirePermission(ctx.s, user, "muestras", "V");
+  const permiso = await requirePermission(ctx.s, user, "muestras", "V");
   const row = await ctx.s.queryOne<Row>(`SELECT * FROM ${TABLE} WHERE id = :id`, { id: intParam(ctx.params.id) });
   if (!row) throw new HttpError(404, { message: "Registro no encontrado" });
+  if (soloEstado(permiso)) throw new HttpError(403, { message: "Tu alcance en muestras es solo el estado: no puedes imprimir sus etiquetas", codigo: "solo_estado" });
+  await exigirVistaAsignada(ctx.s, permiso, row);
   return { row, user };
 }
 
