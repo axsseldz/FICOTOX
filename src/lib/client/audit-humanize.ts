@@ -665,6 +665,7 @@ const SOLICITUD_QUE: Record<string, string> = {
   reactivar_cuenta: "reactivar",
   ampliar_vigencia: "ampliar la vigencia de",
   ampliar_permisos_rol: "ampliar los permisos de",
+  restaurar_respaldo: "restaurar la plataforma desde",
   cambiar_folio: "cambiar el folio de",
   reabrir_recepcion: "reabrir",
   obsoletar_documento: "declarar obsoleto",
@@ -1002,8 +1003,15 @@ function redactar(record: ApiRecord, actor: string, sistema: boolean): Partes {
       const frase = res === "aprobada" ? "La prueba salió bien: el respaldo se puede recuperar." : res === "fallida" ? "La prueba encontró problemas: no confíes en ese respaldo hasta revisarlo." : "La prueba no pudo terminarse.";
       return { accion: `probó la restauración de un respaldo${res === "aprobada" ? " (salió bien)" : res === "fallida" ? " (encontró problemas)" : ""}`, quePaso: `${quien} probó recuperar un respaldo en una copia aparte, sin tocar la plataforma. ${frase}` };
     }
-    case "restaurar_respaldo":
-      return { accion: "Se restauró un respaldo", quePaso: `La información de la plataforma se recuperó desde una copia de seguridad${d.responsable ? `; lo hizo ${texto(d.responsable)}` : ""}.`, sinActor: true };
+    case "restaurar_respaldo": {
+      // Desde la plataforma: quien la pidio, quien la aprobo y el motivo (la solicitud no sobrevive a la restauracion; queda aqui).
+      const pidio = d.solicitado_por ? ` La pidió ${texto(d.solicitado_por)}${d.aprobado_por ? ` y la aprobó ${texto(d.aprobado_por)}` : ""}.` : d.responsable ? ` Lo hizo ${texto(d.responsable)}.` : "";
+      const motivo = d.motivo ? ` Motivo: «${texto(d.motivo)}».` : "";
+      const previo = d.respaldo_previo ? " Antes se guardó un respaldo «Previo a restauración» para poder volver atrás." : "";
+      return { accion: "Se restauró la plataforma desde un respaldo", quePaso: `La información de la plataforma se recuperó desde una copia de seguridad; se perdió lo registrado después de su fecha y todos volvieron a iniciar sesión.${pidio}${motivo}${previo}`, sinActor: true };
+    }
+    case "restauracion_fallida":
+      return { accion: "no se pudo restaurar un respaldo", quePaso: `Se intentó restaurar la plataforma desde un respaldo, pero no se reemplazó nada: ${texto(d.razon || "el respaldo no pasó las verificaciones")}. La plataforma siguió como estaba.`, sinActor: true };
     case "reportar":
       if (sistema || d.origen_automatico) return { accion: `Se registró automáticamente ${O}`, quePaso: `La plataforma registró ${O} por su cuenta${d.origen_automatico ? `: ${(ORIGEN_AUTOMATICO_LABEL[String(d.origen_automatico)] || palabras(String(d.origen_automatico))).toLowerCase()}` : ""}. Calidad debe evaluarla.`, sinActor: true };
       return { accion: `reportó ${O}`, quePaso: `${quien} reportó ${O}${d.tipo ? ` (${(TIPO_INCIDENCIA_LABEL[String(d.tipo)] || palabras(String(d.tipo))).toLowerCase()})` : ""}. Calidad debe evaluarla.` };

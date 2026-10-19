@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Archive, CaretDown, Database, Flask, Key, Plus, ShieldCheck } from "@phosphor-icons/react";
+import { Archive, CaretDown, ClockCounterClockwise, Database, Flask, Key, Plus, ShieldCheck, Warning } from "@phosphor-icons/react";
 import { ActaVentana, RespaldoVentana } from "@/components/features/respaldos/RespaldoVentana";
 import { archivosTexto, ConfirmarRespaldo, FRASE_OCUPADO, Girando, hace, InsigniaVerificacion, MarcaProtegido, mb, TIPOS_RESPALDO } from "@/components/features/respaldos/comun";
 import { Callout } from "@/components/features/samples/FormLayout";
@@ -29,8 +29,9 @@ import { fechaSola, formatearFecha, hoyLocal, sumarDias } from "@/lib/shared/fec
 /*
  * Calidad › Respaldos: las copias de seguridad de la plataforma y las pruebas
  * que comprueban que se pueden recuperar. Quien tiene respaldos:V lo ve todo en
- * solo lectura; quien tiene respaldos:G crea respaldos y prueba la restauración
- * (con su contraseña). La recuperación real se hace fuera de la plataforma.
+ * solo lectura; quien tiene respaldos:G crea respaldos, prueba la restauración
+ * (con su contraseña) y pide restaurar uno de verdad: la solicitud la aprueba
+ * otra persona (Responsable General) en «Por autorizar».
  */
 
 export default function RespaldosPage() {
@@ -90,7 +91,7 @@ function Contenido() {
   const [orden, setOrden] = useState<Orden>("recientes");
   const [abierto, setAbierto] = useState<number | null>(null);
   const [acta, setActa] = useState<string | null>(null);
-  const [confirmar, setConfirmar] = useState<null | { tipo: "crear" } | { tipo: "probar"; id: string }>(null);
+  const [confirmar, setConfirmar] = useState<null | { tipo: "crear" } | { tipo: "probar"; id: string } | { tipo: "restaurar"; id: string; creado_en: unknown }>(null);
   const [trabajo, setTrabajo] = useState<ApiRecord | null>(null);
   const [resultado, setResultado] = useState<ApiRecord | null>(null);
   const miTrabajo = useRef<number | null>(null);
@@ -211,9 +212,20 @@ function Contenido() {
     setTrabajo(data.trabajo as ApiRecord);
   };
 
+  // Pedir la restauración: crea la solicitud; se restaura cuando otra persona la aprueba.
+  const restaurar = async (id: string, motivo: string) => {
+    await sendJsonAuth("POST", `${API_BASE_URL}/respaldos/${encodeURIComponent(id)}/restaurar`, token, { motivo });
+    invalidate("solicitudes");
+    toast.success("Solicitud enviada: otra persona con autoridad (Responsable General) debe aprobarla en «Por autorizar».");
+  };
+  const pedirRestauracion = (id: string) => setConfirmar({ tipo: "restaurar", id, creado_en: respaldos.find((r) => String(r.id) === id)?.creado_en });
+
   const menuFor = (r: ApiRecord): MenuItem[] =>
     puedeGestionar && r.estado === "ok"
-      ? [{ label: "Probar restauración", description: enCurso ? FRASE_OCUPADO : "Comprueba que se puede recuperar, sin tocar la plataforma", icon: <Flask size={16} weight="duotone" />, tone: "brand", disabled: enCurso, onSelect: () => setConfirmar({ tipo: "probar", id: String(r.id) }) }]
+      ? [
+          { label: "Probar restauración", description: enCurso ? FRASE_OCUPADO : "Comprueba que se puede recuperar, sin tocar la plataforma", icon: <Flask size={16} weight="duotone" />, tone: "brand", disabled: enCurso, onSelect: () => setConfirmar({ tipo: "probar", id: String(r.id) }) },
+          { label: "Restaurar este respaldo", description: enCurso ? FRASE_OCUPADO : "Recupera la plataforma tal como estaba; requiere la aprobación de otra persona", icon: <ClockCounterClockwise size={16} weight="duotone" />, tone: "danger", disabled: enCurso, onSelect: () => pedirRestauracion(String(r.id)) },
+        ]
       : [];
 
   const ultimo = datos?.ultimo_respaldo as ApiRecord | null | undefined;
@@ -283,7 +295,7 @@ function Contenido() {
 
       <ComoRecuperar />
 
-      <RespaldoVentana ids={filas.map((r) => String(r.id))} indice={abierto} onIndice={setAbierto} onCerrar={() => setAbierto(null)} puedeGestionar={puedeGestionar} ocupado={enCurso} onProbar={(id) => setConfirmar({ tipo: "probar", id })} />
+      <RespaldoVentana ids={filas.map((r) => String(r.id))} indice={abierto} onIndice={setAbierto} onCerrar={() => setAbierto(null)} puedeGestionar={puedeGestionar} ocupado={enCurso} onProbar={(id) => setConfirmar({ tipo: "probar", id })} onRestaurar={pedirRestauracion} />
       <ActaVentana archivo={acta} onCerrar={() => setActa(null)} />
 
       {confirmar?.tipo === "crear" ? (
@@ -291,6 +303,25 @@ function Contenido() {
       ) : null}
       {confirmar?.tipo === "probar" ? (
         <ConfirmarRespaldo titulo="Probar restauración" descripcion="Se recupera este respaldo en una copia aparte y se comprueba que todo coincide. No se toca la plataforma y la copia se borra al terminar. Confirma con tu contraseña." confirmar="Probar restauración" onCerrar={() => setConfirmar(null)} onConfirmar={() => probar(confirmar.id)} />
+      ) : null}
+      {confirmar?.tipo === "restaurar" ? (
+        <ConfirmarRespaldo
+          titulo="Restaurar este respaldo"
+          descripcion={`Respaldo del ${fmtDateTime(confirmar.creado_en)}. Se crea una solicitud: la plataforma se restaura cuando otra persona con autoridad (Responsable General) la aprueba.`}
+          aviso={
+            <div role="alert" data-aviso-restaurar className="flex items-start gap-2.5 rounded-[12px] bg-danger-soft px-3.5 py-3 text-[13.5px] leading-[1.45] text-danger-text">
+              <Warning size={18} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0" />
+              <span>
+                <strong className="font-semibold">Se perderá todo lo registrado después del {fmtDateTime(confirmar.creado_en)}.</strong> Antes se guarda un respaldo «Previo a restauración» para poder volver atrás, y al terminar todos vuelven a iniciar sesión.
+              </span>
+            </div>
+          }
+          confirmar="Solicitar restauración"
+          conMotivo
+          peligro
+          onCerrar={() => setConfirmar(null)}
+          onConfirmar={(motivo) => restaurar(confirmar.id, motivo)}
+        />
       ) : null}
     </>
   );
@@ -373,11 +404,11 @@ function ComoRecuperar() {
         <CaretDown size={14} aria-hidden="true" className="transition-transform duration-200 group-open:rotate-180" />
       </summary>
       <ol className="mt-3 flex list-decimal flex-col gap-1.5 pl-5 text-[13.5px] leading-[1.5] text-ink-3">
-        <li>Avisa al personal y apaga la plataforma. La recuperación real no se hace con la plataforma encendida ni desde esta pantalla.</li>
-        <li>El administrador técnico elige el respaldo y ejecuta el comando de restauración que viene en el README, en la sección «Respaldos y restauración».</li>
-        <li>Ten a la mano la llave del registro de actividad: sin ella no se puede comprobar que el registro esté íntegro.</li>
-        <li>Antes de recuperar, el sistema guarda un respaldo de lo que había, por si hace falta volver atrás.</li>
-        <li>Enciende la plataforma y revisa que todo esté en orden. La recuperación queda en el registro de actividad.</li>
+        <li>Avisa al personal: mientras se restaura, nadie puede usar la plataforma y al terminar todos vuelven a iniciar sesión.</li>
+        <li>El administrador técnico elige el respaldo, usa «Restaurar este respaldo» y escribe el motivo y su contraseña.</li>
+        <li>Otra persona con autoridad (Responsable General) aprueba la solicitud en «Por autorizar». Nadie aprueba la suya.</li>
+        <li>Primero se comprueba el respaldo; si no pasa, no se toca nada. Si pasa, se guarda un respaldo «Previo a restauración» de lo que había, por si hace falta volver atrás.</li>
+        <li>La recuperación queda en el registro de actividad: quién la pidió, quién la aprobó, desde qué respaldo y por qué. Sin la plataforma encendida, el administrador técnico puede usar el comando del README («Respaldos y restauración»).</li>
       </ol>
     </details>
   );

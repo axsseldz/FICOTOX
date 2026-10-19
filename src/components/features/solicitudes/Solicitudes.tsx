@@ -76,6 +76,8 @@ export function hrefDeSolicitud(item: ApiRecord): string | null {
       return "/documentos";
     case "sgc_documentos":
       return `/documentos/${id}`;
+    case "respaldos":
+      return "/calidad/respaldos";
     default:
       return null;
   }
@@ -97,6 +99,8 @@ export function describirSolicitud(item: ApiRecord): string {
       return datos.folio_nuevo ? `Cambiar el folio a ${String(datos.folio_nuevo)}` : "Cambiar el folio";
     case "decision_recepcion":
       return datos.decision ? `Decisión: ${String(datos.decision).replace(/_/g, " ")}` : "Decisión de la recepción";
+    case "restaurar_respaldo":
+      return `Restaurar la plataforma desde el respaldo del ${datos.creado_en ? formatearFechaHora(datos.creado_en) : String(item.entidad_id || "")}: se perderá todo lo registrado después`;
     case "ampliar_permisos_rol": {
       // Lo que se agregaria, en las palabras de la pantalla de Roles (área: frases).
       const frases = frasesPorArea(Array.isArray(datos.agregar) ? datos.agregar : []).map((a) => `${a.area}: ${a.frases.join("; ")}`);

@@ -88,7 +88,7 @@ export function ActaVentana({ archivo, onCerrar }: { archivo: string | null; onC
 
 /* ---------- Un respaldo ---------- */
 
-function FichaRespaldo({ id, puedeGestionar, ocupado, onProbar, onAbrirActa }: { id: string; puedeGestionar: boolean; ocupado: boolean; onProbar: (id: string) => void; onAbrirActa: (archivo: string) => void }) {
+function FichaRespaldo({ id, puedeGestionar, ocupado, onProbar, onRestaurar, onAbrirActa }: { id: string; puedeGestionar: boolean; ocupado: boolean; onProbar: (id: string) => void; onRestaurar: (id: string) => void; onAbrirActa: (archivo: string) => void }) {
   const { item, error, recargar } = useRegistro(`/respaldos/${encodeURIComponent(id)}`);
   if (error) return <ErrorState message={error} onRetry={recargar} />;
   if (!item) return <Skeleton className="h-72 w-full" />;
@@ -176,7 +176,7 @@ function FichaRespaldo({ id, puedeGestionar, ocupado, onProbar, onAbrirActa }: {
           </VentanaSeccion>
 
           <VentanaSeccion titulo="Recuperar la plataforma" i={3}>
-            <p className="text-[13.5px] leading-[1.5] text-ink-3">La recuperación real no se hace desde aquí. Se hace con la plataforma apagada, por el administrador técnico, con el comando que viene en el README (sección «Respaldos y restauración»).</p>
+            <p className="text-[13.5px] leading-[1.5] text-ink-3">El administrador técnico puede pedir «Restaurar este respaldo». Se restaura cuando otra persona con autoridad (Responsable General) lo aprueba; antes se guarda un respaldo «Previo a restauración» y se pierde lo registrado después de la fecha de este respaldo.</p>
           </VentanaSeccion>
         </>
       )}
@@ -185,6 +185,9 @@ function FichaRespaldo({ id, puedeGestionar, ocupado, onProbar, onAbrirActa }: {
         <VentanaAcciones>
           <Button icon={<Flask size={16} />} onClick={() => onProbar(id)} disabled={ocupado} title={ocupado ? FRASE_OCUPADO : undefined}>
             Probar restauración
+          </Button>
+          <Button variant="secondary" icon={<ClockCounterClockwise size={16} />} onClick={() => onRestaurar(id)} disabled={ocupado} title={ocupado ? FRASE_OCUPADO : undefined} data-restaurar-respaldo>
+            Restaurar este respaldo
           </Button>
           {ocupado ? <span className="text-[13px] text-ink-3">{FRASE_OCUPADO}</span> : <span className="text-[13px] text-ink-3">Se hace en una copia aparte y no toca la plataforma.</span>}
         </VentanaAcciones>
@@ -201,6 +204,7 @@ export function RespaldoVentana({
   puedeGestionar,
   ocupado,
   onProbar,
+  onRestaurar,
 }: {
   ids: string[];
   indice: number | null;
@@ -209,6 +213,7 @@ export function RespaldoVentana({
   puedeGestionar: boolean;
   ocupado: boolean;
   onProbar: (id: string) => void;
+  onRestaurar: (id: string) => void;
 }) {
   const id = indice !== null ? ids[indice] : undefined;
   const [acta, setActa] = useState<{ para: string; archivo: string } | null>(null);
@@ -236,7 +241,7 @@ export function RespaldoVentana({
       ) : verActa ? (
         <ActaContenido key={verActa} archivo={verActa} />
       ) : (
-        <FichaRespaldo key={id} id={id} puedeGestionar={puedeGestionar} ocupado={ocupado} onProbar={onProbar} onAbrirActa={(archivo) => setActa({ para: id, archivo })} />
+        <FichaRespaldo key={id} id={id} puedeGestionar={puedeGestionar} ocupado={ocupado} onProbar={onProbar} onRestaurar={onRestaurar} onAbrirActa={(archivo) => setActa({ para: id, archivo })} />
       )}
     </VentanaCentrada>
   );

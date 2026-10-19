@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import { CircleNotch, ShieldCheck } from "@phosphor-icons/react";
 import { CampoIdentidad } from "@/components/session/Reautenticar";
 import { Button } from "@/components/ui/Button";
-import { Field, Input } from "@/components/ui/Field";
+import { Field, Input, Textarea } from "@/components/ui/Field";
 import { Dialog } from "@/components/ui/Overlay";
 import { Badge } from "@/components/ui/Primitives";
 import { useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
@@ -19,7 +19,7 @@ export const TIPOS_RESPALDO: Record<string, string> = {
   automatico: "Automático",
   pre_actualizacion: "Antes de actualizar",
   pre_migracion: "Antes de migrar",
-  pre_restauracion: "Antes de restaurar",
+  pre_restauracion: "Previo a restauración",
 };
 
 export const FRASE_OCUPADO = "Hay un respaldo en curso";
@@ -86,6 +86,9 @@ export function ConfirmarRespaldo({
   descripcion,
   confirmar,
   conEtiqueta = false,
+  conMotivo = false,
+  aviso,
+  peligro = false,
   onCerrar,
   onConfirmar,
 }: {
@@ -93,16 +96,25 @@ export function ConfirmarRespaldo({
   descripcion: ReactNode;
   confirmar: string;
   conEtiqueta?: boolean;
+  /* Motivo obligatorio (restaurar): se entrega en lugar de la nota. */
+  conMotivo?: boolean;
+  /* Advertencia destacada arriba de los campos. */
+  aviso?: ReactNode;
+  peligro?: boolean;
   onCerrar: () => void;
-  onConfirmar: (etiqueta: string) => Promise<void>;
+  onConfirmar: (texto: string) => Promise<void>;
 }) {
   const [abierta, setAbierta] = useState(true);
   const [etiqueta, setEtiqueta] = useState("");
+  const [motivo, setMotivo] = useState("");
   const [password, setPassword] = useState("");
   const [enviando, setEnviando] = useState(false);
   const v = useValidacion({
     titulo: "Falta información para continuar",
-    reglas: () => (password ? [] : [{ campo: "respaldo-password", mensaje: msg.password }]),
+    reglas: () => [
+      ...(conMotivo && motivo.trim().length < 5 ? [{ campo: "respaldo-motivo", mensaje: "Indica el motivo (al menos 5 caracteres)" }] : []),
+      ...(password ? [] : [{ campo: "respaldo-password", mensaje: msg.password }]),
+    ],
   });
   const cerrar = () => {
     setAbierta(false);
@@ -114,7 +126,7 @@ export function ConfirmarRespaldo({
     armarCargo(null);
     setEnviando(true);
     try {
-      await onConfirmar(etiqueta.trim());
+      await onConfirmar(conMotivo ? motivo.trim() : etiqueta.trim());
       cerrar();
     } catch (err) {
       v.errorServidor(err);
@@ -134,7 +146,7 @@ export function ConfirmarRespaldo({
           <Button variant="secondary" onClick={cerrar}>
             Cancelar
           </Button>
-          <Button onClick={aceptar} loading={enviando}>
+          <Button variant={peligro ? "danger" : "primary"} onClick={aceptar} loading={enviando}>
             {confirmar}
           </Button>
         </>
@@ -142,6 +154,12 @@ export function ConfirmarRespaldo({
     >
       <ValidacionAmbito v={v}>
         <div className="flex flex-col gap-4">
+          {aviso}
+          {conMotivo ? (
+            <Field label="Motivo" htmlFor="respaldo-motivo" required hint="Queda en la solicitud y en el registro de actividad.">
+              <Textarea id="respaldo-motivo" value={motivo} maxLength={500} rows={3} onChange={(event) => setMotivo(event.target.value)} autoFocus />
+            </Field>
+          ) : null}
           {conEtiqueta ? (
             <Field label="Nota (opcional)" htmlFor="respaldo-etiqueta" hint="Sirve para reconocerlo después, por ejemplo: «Antes de capturar el lote de octubre».">
               <Input id="respaldo-etiqueta" value={etiqueta} maxLength={80} onChange={(event) => setEtiqueta(event.target.value)} autoFocus />
