@@ -2,6 +2,7 @@ import { withSession } from "./db";
 import { registrarVencimientosAutorizaciones } from "./autorizaciones";
 import { registrarVencimientos } from "./rbac";
 import { vencerSolicitudes } from "./solicitudes";
+import { vencerMantenimientos } from "./modules/inventory";
 
 /*
  * Fase 12: el esquema lo crean y actualizan las migraciones versionadas
@@ -22,7 +23,7 @@ export function barrerVencimientos(): Promise<void> {
   if (Date.now() - ultimoBarrido < 60_000) return Promise.resolve();
   ultimoBarrido = Date.now();
   barridoEnCurso = withSession(async (s) => {
-    const vencidos = (await registrarVencimientos(s)) + (await vencerSolicitudes(s)) + (await registrarVencimientosAutorizaciones(s));
+    const vencidos = (await registrarVencimientos(s)) + (await vencerSolicitudes(s)) + (await registrarVencimientosAutorizaciones(s)) + (await vencerMantenimientos(s));
     if (vencidos) await s.commit();
   })
     .catch((error: unknown) => {

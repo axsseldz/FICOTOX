@@ -754,9 +754,43 @@ const MANTENIMIENTO_SELECT = `
   ) rm ON rm.id_mantenimiento = mt.id
 `;
 
+/*
+ * Un mantenimiento programado cuya fecha ya paso queda "vencido" (accion del
+ * sistema en la bitacora). Idempotente: solo toca los que siguen en
+ * "programado"; corre en el barrido de vencimientos (al arrancar y antes de
+ * atender peticiones, una vez por minuto) y al consultar la lista. El equipo
+ * sigue "en mantenimiento" (vencido cuenta como pendiente); al completarse sigue
+ * el flujo normal.
+ */
+export async function vencerMantenimientos(s: Session): Promise<number> {
+  const hoy = hoyLocal();
+  const filas = await s.query<Row>("SELECT * FROM mantenimientos WHERE estado = 'programado' AND fecha_programada IS NOT NULL AND SUBSTR(fecha_programada, 1, 10) < :hoy ORDER BY id", { hoy });
+  let vencidos = 0;
+  for (const antes of filas) {
+    const r = await s.execute("UPDATE mantenimientos SET estado = 'vencido' WHERE id = :id AND estado = 'programado'", { id: antes.id });
+    if (!r.rowcount) continue;
+    vencidos += 1;
+    const despues = await snapshotRow(s, "mantenimientos", Number(antes.id));
+    const equipo = await s.scalar<string>("SELECT nombre FROM equipos WHERE id = :id", { id: antes.id_equipo });
+    await registrarAuditoria(s, null, {
+      accion: "vencer_mantenimiento",
+      entidad: "mantenimientos",
+      entidadId: Number(antes.id),
+      referencia: `${equipo || "Equipo"} · ${String(antes.fecha_programada).slice(0, 10)}`,
+      motivo: `La fecha programada (${String(antes.fecha_programada).slice(0, 10)}) pasó sin completarse`,
+      antes,
+      despues,
+      detalle: { equipo_id: antes.id_equipo, fecha_programada: String(antes.fecha_programada).slice(0, 10), tipo: antes.tipo },
+    });
+    if (antes.id_equipo) await syncEquipoEstado(s, Number(antes.id_equipo));
+  }
+  return vencidos;
+}
+
 export async function listMantenimientos({ request, s }: RouteContext): Promise<Response> {
   const user = await requireUser(request);
   await requirePermission(s, user, "equipos", "V");
+  if (await vencerMantenimientos(s)) await s.commit();
 
   const search = searchParam(request, "search");
   const tipo = searchParam(request, "tipo");
