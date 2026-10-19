@@ -88,17 +88,67 @@ export function isSqlite(): boolean {
 
 type SqliteDatabase = import("better-sqlite3").Database;
 
-let sqliteDb: SqliteDatabase | null = null;
-let sqliteChain: Promise<void> = Promise.resolve();
+/*
+ * Una sola conexion y una sola fila de espera para todo el proceso: cada ruta
+ * de Next.js puede cargar su propia copia de este modulo, asi que viven en
+ * globalThis. Asi, restaurar un respaldo (conBaseCerrada) cierra la UNICA
+ * conexion abierta y ninguna sesion corre mientras se reemplaza la base.
+ */
+interface EstadoSqlite {
+  db: SqliteDatabase | null;
+  cadena: Promise<void>;
+  /* Restauracion en curso: ninguna sesion nueva toca la base (la API responde 503). */
+  restaurando: boolean;
+}
+const globalSqlite = globalThis as unknown as { __ficotoxSqlite?: EstadoSqlite };
+const sqlite = (globalSqlite.__ficotoxSqlite ||= { db: null, cadena: Promise.resolve(), restaurando: false });
 
 function getSqliteDb(): SqliteDatabase {
-  if (sqliteDb) return sqliteDb;
+  if (sqlite.db) return sqlite.db;
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const Database = require("better-sqlite3") as typeof import("better-sqlite3");
   const config = getConfig();
-  sqliteDb = new Database(config.SQLITE_PATH || ":memory:");
-  aplicarPragmasSqlite(sqliteDb);
-  return sqliteDb;
+  sqlite.db = new Database(config.SQLITE_PATH || ":memory:");
+  aplicarPragmasSqlite(sqlite.db);
+  return sqlite.db;
+}
+
+/* La plataforma se esta restaurando desde un respaldo: la API no atiende (503) y no se abren sesiones. */
+export class PlataformaRestaurando extends Error {
+  readonly status = 503;
+  readonly body = { message: "Restaurando la plataforma, vuelve en un momento", codigo: "restaurando" };
+  constructor() {
+    super("Restaurando la plataforma");
+  }
+}
+
+export const plataformaRestaurando = (): boolean => sqlite.restaurando;
+
+/*
+ * Restauracion desde la plataforma: marca la plataforma como "restaurando"
+ * (las sesiones nuevas se rechazan), espera a que terminen las que ya estaban
+ * en la fila, vuelca el WAL a la base y cierra la conexion (sin -wal ni -shm
+ * colgando), ejecuta `fn` con la base cerrada y la reabre al terminar (la
+ * siguiente sesion abre la conexion de nuevo, con sus PRAGMA). Solo SQLite.
+ */
+export async function conBaseCerrada<T>(fn: () => Promise<T>): Promise<T> {
+  if (!isSqlite()) throw new Error("conBaseCerrada solo aplica a SQLite");
+  sqlite.restaurando = true;
+  try {
+    return await withSqliteLock(async () => {
+      if (sqlite.db) {
+        try {
+          sqlite.db.pragma("wal_checkpoint(TRUNCATE)");
+        } finally {
+          sqlite.db.close();
+          sqlite.db = null;
+        }
+      }
+      return fn();
+    });
+  } finally {
+    sqlite.restaurando = false;
+  }
 }
 
 /*
@@ -125,8 +175,8 @@ function aplicarPragmasSqlite(db: SqliteDatabase): void {
 }
 
 function withSqliteLock<T>(fn: () => Promise<T>): Promise<T> {
-  const run = sqliteChain.then(fn);
-  sqliteChain = run.then(
+  const run = sqlite.cadena.then(fn);
+  sqlite.cadena = run.then(
     () => undefined,
     () => undefined,
   );
@@ -302,6 +352,7 @@ class MysqlSession implements Session {
 
 export async function withSession<T>(fn: (session: Session) => Promise<T>): Promise<T> {
   if (isSqlite()) {
+    if (sqlite.restaurando) throw new PlataformaRestaurando();
     return withSqliteLock(async () => {
       const session = new SqliteSession(getSqliteDb());
       try {
