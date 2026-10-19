@@ -185,6 +185,7 @@
         },
         "informes": {
           "C": "total",
+          "E": "total",
           "R": "total",
           "A": "total",
           "AN": "total"
