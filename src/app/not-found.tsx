@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { BrandLockup } from "@/components/shell/Brand";
-import { buttonClass } from "@/components/ui/Button";
+import { buttonClass } from "@/components/ui/boton";
 
 export default function NotFound() {
   return (
