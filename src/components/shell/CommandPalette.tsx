@@ -7,7 +7,7 @@ import { Busqueda, type VentanaCalidad } from "./Busqueda";
 import { VELO_VENTANA } from "@/components/ui/Overlay";
 
 /*
- * Búsqueda de la barra lateral (ícono de lupa y ⌘K / Ctrl K): el MISMO
+ * Búsqueda de la barra lateral (ícono de lupa y ⌘K en Mac, Ctrl+K en Windows): el MISMO
  * componente que la barra del Inicio, abierto como ventana centrada con fondo
  * difuminado y el campo ya enfocado. Esc la cierra. Las ventanas de detalle
  * (incidencias y NC) viven aquí, fuera del diálogo, para que sigan abiertas

@@ -168,7 +168,7 @@ try {
     check("SGC: el PDF muestra «de 12»", (await page.getByTestId("visor-total-paginas").innerText()).trim() === "12");
 
     await areaPaginas(page).click({ position: { x: 20, y: 20 } });
-    await page.keyboard.press("Control+f");
+    await page.keyboard.press("ControlOrMeta+f");
     await page.getByTestId("visor-buscar").fill("saxitoxina");
     await page.getByTestId("visor-buscar").press("Enter");
     await page.waitForFunction(() => /^1 de \d+$/.test(document.querySelector("[data-testid=visor-resultados]")?.textContent || ""), null, { timeout: 60_000 });
