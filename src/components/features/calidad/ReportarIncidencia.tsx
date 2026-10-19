@@ -200,7 +200,7 @@ function ReportarSheet({ registrosIniciales, onClose }: { registrosIniciales: Re
           <Field label="Registros relacionados">
             <div className="flex flex-wrap gap-1.5">
               {registros.map((r) => (
-                <span key={`${r.entidad}-${r.entidad_id}`} className="inline-flex h-7 items-center gap-1.5 rounded-full bg-brand-soft pr-1.5 pl-2.5 text-[12.5px] font-medium text-brand-strong">
+                <span key={`${r.entidad}-${r.entidad_id}`} className="inline-flex h-7 items-center gap-1.5 rounded-full bg-brand-soft pr-1.5 pl-2.5 text-xs font-medium text-brand-strong">
                   <LinkSimple size={12} /> {r.etiqueta}
                   <button type="button" aria-label={`Quitar ${r.etiqueta}`} onClick={() => setRegistros((prev) => prev.filter((x) => x !== r))} className="press flex h-5 w-5 items-center justify-center rounded-full hover:bg-brand-soft/60">
                     <X size={11} weight="bold" />
@@ -243,7 +243,7 @@ function ReportarSheet({ registrosIniciales, onClose }: { registrosIniciales: Re
         </Field>
         <Field label="Fotos o archivos" hint="Opcional; hasta 6. Se validan y guardan con su huella SHA-256.">
           <CampoValidado id="inc-archivos-zona">
-          <label htmlFor="inc-archivos" className="press flex cursor-pointer items-center justify-center gap-2 rounded-[12px] border border-dashed border-line-strong bg-surface-2 px-4 py-4 text-[13.5px] font-medium text-ink-2 hover:bg-surface-3">
+          <label htmlFor="inc-archivos" className="press flex cursor-pointer items-center justify-center gap-2 rounded-box border border-dashed border-line-strong bg-surface-2 px-4 py-4 text-sm font-medium text-ink-2 hover:bg-surface-3">
             <Camera size={18} /> Agregar foto o archivo
             <input ref={input} id="inc-archivos" type="file" multiple accept={ACCEPT} className="sr-only" onChange={(event) => agregarArchivos(event.target.files)} />
           </label>
@@ -251,7 +251,7 @@ function ReportarSheet({ registrosIniciales, onClose }: { registrosIniciales: Re
           {archivos.length ? (
             <ul className="mt-2 flex flex-col gap-1.5">
               {archivos.map((file, i) => (
-                <li key={`${file.name}-${i}`} className="flex items-center justify-between gap-2 rounded-[10px] bg-surface-2 px-3 py-2 text-[13px] ring-1 ring-line">
+                <li key={`${file.name}-${i}`} className="flex items-center justify-between gap-2 rounded-field bg-surface-2 px-3 py-2 text-sm ring-1 ring-line">
                   <span className="min-w-0 truncate">{file.name}</span>
                   <span className="flex shrink-0 items-center gap-2">
                     <Badge>{fmtBytes(file.size)}</Badge>

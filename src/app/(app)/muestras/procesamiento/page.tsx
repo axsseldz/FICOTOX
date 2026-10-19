@@ -9,7 +9,7 @@ import { FolioChip, SampleStatus, SolicitudBadge, SupervisionBadge } from "@/com
 import { useAnulacion } from "@/components/features/samples/useAnulacion";
 import { RequireModule } from "@/components/session/RequireModule";
 import { useSession } from "@/components/session/SessionProvider";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonClass } from "@/components/ui/Button";
 import { FilterChips, FilterMenu, type FilterGroup, type FilterToggle } from "@/components/ui/FilterMenu";
 import { ActionMenu, type MenuItem } from "@/components/ui/Overlay";
 import { SearchInput, Toolbar } from "@/components/ui/PageHeader";
@@ -120,7 +120,7 @@ function ProcesamientoList() {
       <Toolbar
         end={
           canCreate ? (
-            <Link href="/muestras/procesamiento/nuevo" className="press inline-flex h-9 items-center gap-2 rounded-[9px] bg-brand px-3.5 text-[13.5px] font-medium text-on-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] hover:bg-brand-strong">
+            <Link href="/muestras/procesamiento/nuevo" className={buttonClass()}>
               <Plus size={16} weight="bold" /> Nuevo procesamiento
             </Link>
           ) : null
@@ -162,7 +162,7 @@ function ProcesamientoList() {
                     <Td className="min-w-[240px] max-w-[380px]">
                       <CellPrimary lineas={2} title={item.id_interno || "—"} subtitle={item.muestra_tipo === "lote" ? "Lote" : "Muestra única"} />
                     </Td>
-                    <Td>{item.folio_recepcion_num ? <FolioChip type="R" num={item.folio_recepcion_num} /> : <span className="text-[12.5px] text-ink-3">Sin vincular</span>}</Td>
+                    <Td>{item.folio_recepcion_num ? <FolioChip type="R" num={item.folio_recepcion_num} /> : <span className="text-xs text-ink-3">Sin vincular</span>}</Td>
                     <Td muted className={COL_FECHA}>
                       {fmtDate(item.fecha_procesamiento)}
                     </Td>

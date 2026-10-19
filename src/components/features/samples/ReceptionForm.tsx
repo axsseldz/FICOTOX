@@ -243,7 +243,7 @@ function LegacyChips({ values, catalog, labels, onRemove }: { values: string[]; 
   return (
     <div className="mt-1 flex flex-wrap gap-1.5">
       {legacy.map((value) => (
-        <span key={value} className="inline-flex items-center gap-1 rounded-[6px] bg-warning-soft px-2 py-0.5 text-[12px] text-warning-text">
+        <span key={value} className="inline-flex items-center gap-1 rounded-sm bg-warning-soft px-2 py-0.5 text-xs text-warning-text">
           {labels[value] || value}
           <button type="button" onClick={() => onRemove(value)} aria-label={`Quitar ${labels[value] || value}`} className="opacity-70 hover:opacity-100">
             <X size={11} weight="bold" />
@@ -524,21 +524,21 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
                       <FolioChip type="P" num={proc.folio_num} />
                       <SampleStatus status={proc.estado} />
                     </span>
-                    <Link href={`/muestras/procesamiento/${proc.id}`} className="text-[13px] font-medium text-brand hover:text-brand-strong">
+                    <Link href={`/muestras/procesamiento/${proc.id}`} className="text-sm font-medium text-brand hover:text-brand-strong">
                       Abrir procesamiento
                     </Link>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-[13px] text-ink-3">Aún no hay procesamientos vinculados a esta recepción.</p>
+              <p className="text-sm text-ink-3">Aún no hay procesamientos vinculados a esta recepción.</p>
             )}
             <div className="mt-3 flex flex-wrap gap-2">
-              <Link href={`/muestras/analisis?recepcion=${item!.id}`} className="text-[13px] font-medium text-brand hover:text-brand-strong">
+              <Link href={`/muestras/analisis?recepcion=${item!.id}`} className="text-sm font-medium text-brand hover:text-brand-strong">
                 Ver análisis de esta recepción
               </Link>
               <span className="text-ink-4">·</span>
-              <Link href={`/informes?recepcion=${item!.id}`} className="text-[13px] font-medium text-brand hover:text-brand-strong">
+              <Link href={`/informes?recepcion=${item!.id}`} className="text-sm font-medium text-brand hover:text-brand-strong">
                 Ver informes
               </Link>
             </div>
@@ -548,23 +548,23 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
           <FormCard id="sec-disposicion" title="Disposición final de remanentes" description="Cierra la muestra: qué se hizo con lo que sobró, cuándo y quién (FX-MC 7.4.4).">
             {savedDisposicion ? (
               <div className="grid gap-3 sm:grid-cols-2">
-                <p className="text-[13.5px]">
+                <p className="text-sm">
                   <span className="text-ink-3">Disposición: </span>
                   <span className="font-medium text-ink">{DISPOSAL_TYPES.find((d) => d.value === savedDisposicion.tipo)?.label || savedDisposicion.tipo_otro || savedDisposicion.tipo}</span>
                 </p>
-                <p className="text-[13.5px]">
+                <p className="text-sm">
                   <span className="text-ink-3">Fecha: </span>
                   <span className="font-medium text-ink">{fmtDate(savedDisposicion.fecha)}</span>
                 </p>
-                <p className="text-[13.5px]">
+                <p className="text-sm">
                   <span className="text-ink-3">Responsable: </span>
                   <span className="font-medium text-ink">{savedDisposicion.responsable}</span>
                 </p>
-                <p className="text-[13.5px]">
+                <p className="text-sm">
                   <span className="text-ink-3">Remanentes: </span>
                   <span className="whitespace-pre-wrap text-ink">{savedDisposicion.remanentes || "—"}</span>
                 </p>
-                {savedDisposicion.observaciones ? <p className="whitespace-pre-wrap text-[13.5px] sm:col-span-2">{savedDisposicion.observaciones}</p> : null}
+                {savedDisposicion.observaciones ? <p className="whitespace-pre-wrap text-sm sm:col-span-2">{savedDisposicion.observaciones}</p> : null}
               </div>
             ) : puedeDisponer ? (
               <div className="flex flex-col gap-4">
@@ -610,7 +610,7 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
                   <Button variant="secondary" icon={<Archive size={16} />} loading={savingDisposicion} onClick={registrarDisposicion} disabled={!!bloqueoDisposicion} title={bloqueoDisposicion || undefined}>
                     Registrar disposición y cerrar la muestra
                   </Button>
-                  {bloqueoDisposicion ? <p className="text-[12.5px] text-ink-3" data-testid="disposicion-bloqueo">{bloqueoDisposicion}: la disposición final exige el informe liberado o enviado.</p> : null}
+                  {bloqueoDisposicion ? <p className="text-xs text-ink-3" data-testid="disposicion-bloqueo">{bloqueoDisposicion}: la disposición final exige el informe liberado o enviado.</p> : null}
                 </div>
               </div>
             ) : (
@@ -727,12 +727,12 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
           </FormGrid>
         ) : (
           <div className="flex flex-col gap-3">
-            <p className="text-[13px] text-ink-3">{form.loteRows.length} muestra(s) en el lote. Marca “Trabajar” en las que continúan al procesamiento.</p>
+            <p className="text-sm text-ink-3">{form.loteRows.length} muestra(s) en el lote. Marca “Trabajar” en las que continúan al procesamiento.</p>
             <div className="flex flex-col gap-2.5">
               {form.loteRows.map((row, index) => {
-                const cell = "flex flex-col gap-1 text-[11.5px] font-medium text-ink-3";
+                const cell = "flex flex-col gap-1 text-2xs font-medium text-ink-3";
                 return (
-                  <div key={row.key} className="on-panel grid gap-3 rounded-[12px] bg-surface-2 p-3.5 ring-1 ring-line md:grid-cols-[auto_minmax(0,1fr)_auto]">
+                  <div key={row.key} className="on-panel grid gap-3 rounded-box bg-surface-2 p-3.5 ring-1 ring-line md:grid-cols-[auto_minmax(0,1fr)_auto]">
                     <div className="self-start md:w-[88px] md:pt-5">
                       <Checkbox label="Trabajar" checked={row.trabajar} onChange={(event) => updateLote(row.key, { trabajar: event.target.checked })} />
                     </div>
@@ -785,13 +785,13 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
       <FormCard id="sec-analisis" title="Análisis solicitado" description="Marca uno o más análisis, el método y el tipo de muestra, tal como los lista el formato.">
         <div className="grid gap-6 lg:grid-cols-3">
           <CampoValidado id="r-tipos" className="flex flex-col gap-2">
-            <p className="text-[13px] font-medium text-ink-2">Tipo de análisis</p>
+            <p className="text-sm font-medium text-ink-2">Tipo de análisis</p>
             {RECEPTION_ANALYSIS_TYPES.map(({ value, label }) => (
               <Checkbox key={value} label={label} checked={form.tipos.includes(value)} onChange={(event) => patch({ tipos: toggle(form.tipos, value, event.target.checked) })} />
             ))}
           </CampoValidado>
           <div className="flex flex-col gap-2">
-            <p className="text-[13px] font-medium text-ink-2">Método de análisis</p>
+            <p className="text-sm font-medium text-ink-2">Método de análisis</p>
             {RECEPTION_METHODS.map(({ value, label }) => (
               <Checkbox key={value} label={label} checked={form.metodos.includes(value)} onChange={(event) => patch({ metodos: toggle(form.metodos, value, event.target.checked), metodoOtro: value === "otro" && !event.target.checked ? "" : form.metodoOtro })} />
             ))}
@@ -799,7 +799,7 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
             {methodOther ? <Input placeholder="Especifica el método" maxLength={120} value={form.metodoOtro} onChange={(event) => patch({ metodoOtro: event.target.value })} aria-label="Otro método" /> : null}
           </div>
           <div className="flex flex-col gap-2">
-            <p className="text-[13px] font-medium text-ink-2">Tipo de muestra</p>
+            <p className="text-sm font-medium text-ink-2">Tipo de muestra</p>
             {RECEPTION_SAMPLE_TYPES.map(({ value, label }) => (
               <Checkbox key={value} label={label} checked={form.tiposMuestra.includes(value)} onChange={(event) => patch({ tiposMuestra: toggle(form.tiposMuestra, value, event.target.checked), tipoMuestraOtro: value === "otro" && !event.target.checked ? "" : form.tipoMuestraOtro })} />
             ))}
@@ -827,7 +827,7 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
         <div className="flex flex-col divide-y divide-line">
           {form.inspeccion.map((row, index) => (
             <CampoValidado key={row.requisito} id={`r-insp-${index + 1}`} className="grid gap-3 px-1 py-3 md:grid-cols-[1fr_auto_260px] md:items-center">
-              <p className="text-[13.5px] leading-snug text-ink">
+              <p className="text-sm leading-snug text-ink">
                 <span className="tnum mr-1.5 text-ink-3">{index + 1}.</span>
                 {row.requisito}
               </p>
@@ -836,7 +836,7 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
                   const active = row.estado === status;
                   const tone = status === "C" ? "bg-success text-on-accent" : status === "NC" ? "bg-danger text-on-accent" : "bg-surface text-ink shadow-card";
                   return (
-                    <button key={status} type="button" role="radio" aria-checked={active} onClick={() => patch({ inspeccion: form.inspeccion.map((entry) => (entry.requisito === row.requisito ? { ...entry, estado: active ? "" : status } : entry)) })} className={`press h-7 min-w-11 rounded-full px-2.5 text-[12.5px] font-medium transition-colors ${active ? tone : "text-ink-3 hover:text-ink"}`}>
+                    <button key={status} type="button" role="radio" aria-checked={active} onClick={() => patch({ inspeccion: form.inspeccion.map((entry) => (entry.requisito === row.requisito ? { ...entry, estado: active ? "" : status } : entry)) })} className={`press h-7 min-w-11 rounded-full px-2.5 text-xs font-medium transition-colors ${active ? tone : "text-ink-3 hover:text-ink"}`}>
                       {status}
                     </button>
                   );

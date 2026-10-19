@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/Button";
 import { FilterMenu, type FilterGroup, type FilterToggle } from "@/components/ui/FilterMenu";
 import { ActionMenu, Dialog, usePrompt, type MenuItem } from "@/components/ui/Overlay";
 import { PageHeader, SearchInput, Toolbar } from "@/components/ui/PageHeader";
-import { Avatar, Badge } from "@/components/ui/Primitives";
+import { Avatar, Badge, Correo } from "@/components/ui/Primitives";
 import { useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
 import { API_BASE_URL, getJsonAuth, resolveApiEntity, sendJsonAuth } from "@/lib/client/api";
 import { fmt, normalizeText } from "@/lib/client/format";
@@ -305,7 +305,7 @@ function UsuariosContent() {
         propsFila={(item) => ({ "data-usuario": String(item.id) })}
         vacio={{ icono: <Users size={20} />, titulo: "Sin usuarios", descripcion: filtrando ? "No hay personas con estos filtros." : "Crea la primera cuenta de acceso." }}
       />
-      {resource.data && rows.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-3">{rows.length === 1 ? "1 persona" : `${fmt(rows.length)} personas`}</p> : null}
+      {resource.data && rows.length ? <p className="tnum mt-2 px-1 text-xs text-ink-3">{rows.length === 1 ? "1 persona" : `${fmt(rows.length)} personas`}</p> : null}
 
       <UsuarioVentana usuarios={rows} todos={items} indice={indice} onIndice={setAbierta} onCerrar={cerrar} onDesbloquear={desbloquear} onAbrirPersona={abrirPersona} />
 
@@ -333,10 +333,10 @@ function UsuariosContent() {
           </>
         }
       >
-        <p className="rounded-[10px] bg-surface-2 px-3 py-3 text-center font-mono text-[17px] tracking-wide text-ink ring-1 ring-line" data-testid="password-temporal">
+        <p className="rounded-field bg-surface-2 px-3 py-3 text-center font-mono text-lg tracking-wide text-ink ring-1 ring-line" data-testid="password-temporal">
           {temporal?.password}
         </p>
-        <p className="mt-3 text-[12.5px] text-ink-3">La persona deberá cambiarla al iniciar sesión. El cambio queda en la bitácora sin la contraseña.</p>
+        <p className="mt-3 text-xs text-ink-3">La persona deberá cambiarla al iniciar sesión. El cambio queda en la bitácora sin la contraseña.</p>
       </Dialog>
 
       {modal.key ? <UserSheet key={`modal-${modal.key}`} open={modal.isOpen} item={modal.payload} onClose={modal.close} /> : null}
@@ -369,25 +369,25 @@ function celdasUsuario(item: ApiRecord, todos: ApiRecord[], yo: boolean) {
     <span key="p" className="flex min-w-0 items-center gap-3">
       <Avatar name={item.nombre} email={item.email} avatar={item.avatar} size="lg" animado="al-pasar" className="h-11 w-11" />
       <span className="flex min-w-0 flex-col">
-        <span className="text-[14.5px] leading-tight font-semibold text-ink">
+        <span className="text-base leading-tight font-semibold text-ink">
           {String(item.nombre || "Sin nombre")}
-          {yo ? <span className="ml-1.5 text-[12px] font-normal text-ink-3">(tú)</span> : null}
+          {yo ? <span className="ml-1.5 text-xs font-normal text-ink-3">(tú)</span> : null}
         </span>
-        <span className="break-all text-[12.5px] text-ink-3">{String(item.email || "")}</span>
+        <Correo valor={item.email} className="text-xs text-ink-3" />
       </span>
     </span>,
     <span key="r" className="flex flex-wrap items-center gap-1.5">
       {roles.map((r) => (
         <EtiquetaRol key={r}>{r}</EtiquetaRol>
       ))}
-      {!roles.length ? <span className="text-[13px] text-ink-4">—</span> : null}
+      {!roles.length ? <span className="text-sm text-ink-4">—</span> : null}
     </span>,
     <span key="e" className="flex flex-col items-start gap-1">
       <Badge tone={estado.tone} dot>
         {estado.label}
       </Badge>
       {temporal && item.vigente_hasta ? (
-        <span className="flex flex-col items-start gap-0.5 text-[12px] text-ink-3">
+        <span className="flex flex-col items-start gap-0.5 text-xs text-ink-3">
           <span>Hasta {formatearFecha(item.vigente_hasta)}</span>
           {item.supervisor_nombre ? (
             <span className="inline-flex items-center gap-1">
@@ -397,16 +397,16 @@ function celdasUsuario(item: ApiRecord, todos: ApiRecord[], yo: boolean) {
         </span>
       ) : null}
     </span>,
-    <span key="a" className="text-[13px] text-ink-2" title={item.ultimo_acceso ? `Último acceso: ${formatearFechaHora(item.ultimo_acceso)}` : undefined}>
+    <span key="a" className="text-sm text-ink-2" title={item.ultimo_acceso ? `Último acceso: ${formatearFechaHora(item.ultimo_acceso)}` : undefined}>
       {item.ultimo_acceso ? haceCuantoCorto(item.ultimo_acceso) : <span className="text-ink-3">Nunca</span>}
     </span>,
     autorizaciones ? (
-      <span key="z" className="inline-flex items-center gap-1 rounded-full bg-brand-faint px-2 py-0.5 text-[12px] font-medium text-brand-strong">
+      <span key="z" className="inline-flex items-center gap-1 rounded-full bg-brand-faint px-2 py-0.5 text-xs font-medium text-brand-strong">
         <Certificate size={13} weight="duotone" />
         {autorizaciones === 1 ? "1 vigente" : `${autorizaciones} vigentes`}
       </span>
     ) : (
-      <span key="z" className="text-[13px] text-ink-4">—</span>
+      <span key="z" className="text-sm text-ink-4">—</span>
     ),
   ];
 }

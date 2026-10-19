@@ -57,26 +57,26 @@ export function ReportesMantenimiento() {
           const meta = REPORTE_ESTADOS[String(item.estado || "")] || { label: String(item.estado || "—"), tone: "neutral" as Tone };
           return [
             <span key="c" className="flex min-w-0 items-center gap-3">
-              <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-danger-soft text-danger">
+              <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-box bg-danger-soft text-danger">
                 <FilePdf size={20} weight="duotone" />
               </span>
               <span className="flex min-w-0 flex-col">
-                <span className="text-[14.5px] leading-tight font-semibold text-ink">{String(item.codigo || "Reporte")}</span>
-                <span className="text-[12.5px] text-ink-3">{item.archivo_url ? "Pulsa para abrir el PDF" : "Sin PDF"}</span>
+                <span className="text-base leading-tight font-semibold text-ink">{String(item.codigo || "Reporte")}</span>
+                <span className="text-xs text-ink-3">{item.archivo_url ? "Pulsa para abrir el PDF" : "Sin PDF"}</span>
               </span>
             </span>,
-            <span key="t" className="text-[13.5px] capitalize text-ink-2">{String(item.tipo_mantenimiento || "—")}</span>,
-            <span key="v" className="text-[13.5px] text-ink-2">{item.version ? `Versión ${String(item.version)}` : "—"}</span>,
+            <span key="t" className="text-sm capitalize text-ink-2">{String(item.tipo_mantenimiento || "—")}</span>,
+            <span key="v" className="text-sm text-ink-2">{item.version ? `Versión ${String(item.version)}` : "—"}</span>,
             <Badge key="e" tone={meta.tone} dot>
               {meta.label}
             </Badge>,
-            <span key="f" className="text-[13.5px] text-ink-2">{formatearFechaCorta(item.fecha_reporte)}</span>,
+            <span key="f" className="text-sm text-ink-2">{formatearFechaCorta(item.fecha_reporte)}</span>,
           ];
         }}
         anchoExtremo="12px"
         vacio={{ icono: <FileText size={20} />, titulo: "Sin reportes", descripcion: "Para adjuntar el reporte de servicio que entregó el proveedor o el técnico, abre el mantenimiento en la lista de arriba y usa «Adjuntar reporte PDF»." }}
       />
-      {recurso.data && items.length ? <p className="tnum px-1 text-[12px] text-ink-3">{items.length === 1 ? "1 reporte" : `${fmt(items.length)} reportes`}</p> : null}
+      {recurso.data && items.length ? <p className="tnum px-1 text-xs text-ink-3">{items.length === 1 ? "1 reporte" : `${fmt(items.length)} reportes`}</p> : null}
     </section>
   );
 }

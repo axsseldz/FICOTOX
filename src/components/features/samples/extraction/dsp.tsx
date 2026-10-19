@@ -121,12 +121,12 @@ function DspSections({ ctx }: { ctx: ProtocolContext }) {
   return (
     <>
       <FormCard id="sec-extraccion" title="Extracción" description="Pasos 1 a 8 del formato. Los reactivos de cantidad fija se descuentan al guardar, multiplicados por el número de tubos (muestras, réplicas y blanco).">
-        <div className="mb-3 text-[12.5px] font-medium text-ink-3">Molienda congelada</div>
+        <div className="mb-3 text-xs font-medium text-ink-3">Molienda congelada</div>
         <div className="mb-5 flex flex-col">
           {step("dsp1", 1, "Descongelar en oscuridad")}
           {step("dsp2", 2, "Homogeneizar en licuadora por 30 a 45 s reincorporando el líquido de descongelación", equipo("id_equipo_licuadora", "Licuadora"))}
         </div>
-        <div className="mb-3 text-[12.5px] font-medium text-ink-3">Submuestreo y blanco</div>
+        <div className="mb-3 text-xs font-medium text-ink-3">Submuestreo y blanco</div>
         <div className="mb-5 flex flex-col">
           {step(
             "dsp3",
@@ -148,9 +148,9 @@ function DspSections({ ctx }: { ctx: ProtocolContext }) {
             </>,
           )}
         </div>
-        <div className="mb-3 text-[12.5px] font-medium text-ink-3">Paso 5 · Registro de peso de las submuestras</div>
+        <div className="mb-3 text-xs font-medium text-ink-3">Paso 5 · Registro de peso de las submuestras</div>
         <div className="mb-5">{weightTable(PESOS)}</div>
-        <div className="mb-3 text-[12.5px] font-medium text-ink-3">Primera extracción</div>
+        <div className="mb-3 text-xs font-medium text-ink-3">Primera extracción</div>
         <div className="flex flex-col">
           {step("dsp6", 6, "Adicionar a la(s) muestra(s) y el blanco 9 mL de metanol 100 %", fixed("reactivo_metanol_1"))}
           {step(
@@ -249,7 +249,7 @@ function DspSections({ ctx }: { ctx: ProtocolContext }) {
             )}
             {step("dsp17", 17, "Agitar en vórtex 30 s y pesar el tubo")}
             <div className="my-3">
-              <p className="mb-2 text-[12.5px] font-medium text-ink-3">Peso precalentamiento</p>
+              <p className="mb-2 text-xs font-medium text-ink-3">Peso precalentamiento</p>
               {weightTable(PESOS_PRE, { compact: true })}
             </div>
             {step(
@@ -268,7 +268,7 @@ function DspSections({ ctx }: { ctx: ProtocolContext }) {
             {step("dsp19", 19, "Dejar enfriar la(s) muestra(s) a temperatura ambiente")}
             {step("dsp20", 20, "Pesar nuevamente el tubo y completar al peso inicial con metanol 100 %")}
             <div className="my-3">
-              <p className="mb-2 text-[12.5px] font-medium text-ink-3">Peso post calentamiento</p>
+              <p className="mb-2 text-xs font-medium text-ink-3">Peso post calentamiento</p>
               {weightTable(PESOS_POST, { compact: true })}
             </div>
             {step("dsp21", 21, "Agregar 125 µL de HCl 2.5 M", fixed("reactivo_hcl"))}

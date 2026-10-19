@@ -47,7 +47,7 @@ export function FolioChip({ type, num }: { type: "R" | "P" | "E-A" | "E-D" | "A"
   const n = Number(num || 0);
   const tone = CHIP_TONES[type] || CHIP_TONES["E-A"];
   return (
-    <span className={`code inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-[6px] px-2 text-[12px] font-medium ${tone}`}>
+    <span className={`code inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-sm px-2 text-xs font-medium ${tone}`}>
       <span className="opacity-70">{type}</span>
       {n ? String(n).padStart(7, "0") : "-"}
     </span>

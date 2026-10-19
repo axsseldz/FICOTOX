@@ -18,21 +18,21 @@ import { cn } from "@/components/ui/cn";
 export function PantallaAcceso({ children, saliendo = false }: { children: ReactNode; saliendo?: boolean }) {
   return (
     <main className="acceso flex min-h-dvh flex-col bg-canvas text-ink lg:flex-row">
-      <div className={cn("acceso-panel relative isolate flex h-[210px] shrink-0 flex-col items-center justify-center overflow-hidden text-white sm:h-[240px] lg:h-auto lg:w-[55%]", saliendo && "acceso-panel-sale")}>
+      <div className={cn("acceso-panel relative isolate flex h-[210px] shrink-0 flex-col items-center justify-center overflow-hidden text-on-deep sm:h-[240px] lg:h-auto lg:w-[55%]", saliendo && "acceso-panel-sale")}>
         <Microalgas />
         <Olas />
         <div className="relative z-10 flex flex-col items-center px-6 text-center">
           <div className="acceso-logo">
-            <BrandMark animated className="h-[68px] w-[68px] drop-shadow-[0_16px_28px_rgba(0,20,30,0.35)] sm:h-[84px] sm:w-[84px] lg:h-[120px] lg:w-[120px]" size={120} inverted />
+            <BrandMark animated className="h-[68px] w-[68px] drop-shadow-marca sm:h-[84px] sm:w-[84px] lg:h-[120px] lg:w-[120px]" size={120} inverted />
           </div>
-          <p className="acceso-entra mt-3 text-[22px] font-bold tracking-[-0.03em] lg:mt-7 lg:text-[40px]" style={{ ["--i" as string]: 2 }}>
+          <p className="acceso-entra mt-3 text-3xl font-bold tracking-tight lg:mt-7 lg:text-6xl" style={{ ["--i" as string]: 2 }}>
             FICOTOX
           </p>
-          <p className="acceso-entra mt-1 hidden text-[16px] text-white/85 sm:block lg:mt-2" style={{ ["--i" as string]: 3 }}>
+          <p className="acceso-entra mt-1 hidden text-lg text-on-deep/85 sm:block lg:mt-2" style={{ ["--i" as string]: 3 }}>
             Sistema Integrado de Gestión de Laboratorio
           </p>
         </div>
-        <p className="acceso-entra absolute bottom-5 z-10 hidden text-[12px] font-medium tracking-[0.08em] text-white/75 lg:block" style={{ ["--i" as string]: 4 }}>
+        <p className="acceso-entra absolute bottom-5 z-10 hidden text-xs font-medium tracking-widest text-on-deep/75 lg:block" style={{ ["--i" as string]: 4 }}>
           LN-FICOTOX · CICESE
         </p>
       </div>
@@ -48,13 +48,13 @@ function Olas() {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-[38%] min-h-[90px]">
       <svg className="acceso-ola absolute bottom-0 left-0 h-full w-[200%]" viewBox="0 0 1200 120" preserveAspectRatio="none" style={{ ["--dur" as string]: "26s" }}>
-        <path d={ola} fill="currentColor" className="text-white/[0.07]" />
+        <path d={ola} fill="currentColor" className="text-on-deep/[0.07]" />
       </svg>
       <svg className="acceso-ola absolute bottom-0 left-0 h-[80%] w-[200%]" viewBox="0 0 1200 120" preserveAspectRatio="none" style={{ ["--dur" as string]: "38s" }}>
-        <path d={ola} fill="currentColor" className="text-white/[0.06]" />
+        <path d={ola} fill="currentColor" className="text-on-deep/[0.06]" />
       </svg>
       <svg className="acceso-ola absolute bottom-0 left-0 h-[60%] w-[200%]" viewBox="0 0 1200 120" preserveAspectRatio="none" style={{ ["--dur" as string]: "12s" }}>
-        <path d={ola} fill="none" stroke="currentColor" strokeWidth="2" className="text-white/25" vectorEffect="non-scaling-stroke" />
+        <path d={ola} fill="none" stroke="currentColor" strokeWidth="2" className="text-on-deep/25" vectorEffect="non-scaling-stroke" />
       </svg>
     </div>
   );
@@ -188,7 +188,7 @@ export function TarjetaAcceso({ children, niega = 0, saliendo, className }: { ch
     el.classList.add("acceso-niega");
   }, [niega]);
   return (
-    <section ref={ref} className={cn("acceso-tarjeta w-full max-w-[420px] rounded-[22px] bg-surface p-6 shadow-raised ring-1 ring-line sm:p-8", saliendo && "acceso-tarjeta-sale", className)}>
+    <section ref={ref} className={cn("acceso-tarjeta w-full max-w-[420px] rounded-panel bg-surface p-6 shadow-raised ring-1 ring-line sm:p-8", saliendo && "acceso-tarjeta-sale", className)}>
       {children}
     </section>
   );

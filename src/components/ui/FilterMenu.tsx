@@ -63,12 +63,12 @@ function FilterSwitchRow({ label, hint, checked, disabled, onChange }: { label: 
       aria-label={typeof label === "string" ? label : undefined}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={cn("press flex min-h-9 w-full items-center gap-2.5 rounded-[9px] px-2 py-1.5 text-left text-[13.5px]", disabled ? "cursor-not-allowed text-ink-4" : checked ? "text-ink" : "text-ink-2 hover:bg-surface-3/80 hover:text-ink")}
+      className={cn("press flex min-h-9 w-full items-center gap-2.5 rounded-field px-2 py-1.5 text-left text-sm", disabled ? "cursor-not-allowed text-ink-4" : checked ? "text-ink" : "text-ink-2 hover:bg-surface-3/80 hover:text-ink")}
     >
       <span className={cn("min-w-0 flex-1 truncate", checked && "font-medium")}>{label}</span>
-      {hint ? <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[10.5px] font-medium uppercase tracking-wide text-ink-4">{hint}</span> : null}
+      {hint ? <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-2xs font-medium uppercase tracking-wide text-ink-4">{hint}</span> : null}
       <span aria-hidden="true" className={cn("relative h-[20px] w-[34px] shrink-0 rounded-full transition-colors duration-200 ease-[var(--ease-spring)]", checked ? "bg-success" : "bg-line-strong", disabled && "opacity-50")}>
-        <span className={cn("absolute top-[2px] left-[2px] h-[16px] w-[16px] rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.25)] transition-transform duration-200 ease-[var(--ease-spring)]", checked && "translate-x-[14px]")} />
+        <span className={cn("absolute top-[2px] left-[2px] h-[16px] w-[16px] rounded-full bg-knob shadow-knob transition-transform duration-200 ease-[var(--ease-spring)]", checked && "translate-x-[14px]")} />
       </span>
     </button>
   );
@@ -121,20 +121,20 @@ export function FilterMenu({ groups = [], toggles = [], children, className, lab
   return (
     <RadixPopover.Root>
       <RadixPopover.Trigger asChild>
-        <button type="button" className={cn("press inline-flex h-10 items-center gap-2 rounded-full bg-surface px-3.5 text-[13px] font-medium text-ink-2 shadow-card hover:text-ink data-[state=open]:bg-surface-3 data-[state=open]:text-ink", active > 0 && "text-ink", className)} aria-label={active ? `${label} (${active} activos)` : label}>
+        <button type="button" className={cn("press inline-flex h-10 items-center gap-2 rounded-full bg-surface px-3.5 text-sm font-medium text-ink-2 shadow-card hover:text-ink data-[state=open]:bg-surface-3 data-[state=open]:text-ink", active > 0 && "text-ink", className)} aria-label={active ? `${label} (${active} activos)` : label}>
           <SlidersHorizontal size={16} />
           {label}
-          {active > 0 ? <span className="tnum flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-semibold text-on-accent">{active}</span> : null}
+          {active > 0 ? <span className="tnum flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-2xs font-semibold text-on-accent">{active}</span> : null}
         </button>
       </RadixPopover.Trigger>
       <RadixPopover.Portal>
-        <RadixPopover.Content align="start" sideOffset={8} collisionPadding={12} className="bg-popover border border-line z-[var(--z-popover)] flex max-h-[min(var(--radix-popover-content-available-height),640px)] w-[min(320px,calc(100vw-24px))] origin-[var(--radix-popover-content-transform-origin)] flex-col rounded-[16px] p-2 shadow-pop outline-none data-[state=open]:animate-materialize">
+        <RadixPopover.Content align="start" sideOffset={8} collisionPadding={12} className="bg-popover border border-line z-[var(--z-popover)] flex max-h-[min(var(--radix-popover-content-available-height),640px)] w-[min(320px,calc(100vw-24px))] origin-[var(--radix-popover-content-transform-origin)] flex-col rounded-card p-2 shadow-pop outline-none data-[state=open]:animate-materialize">
           <div className="flex shrink-0 items-center justify-between gap-2 px-2 pt-0.5 pb-2">
-            <p className="text-[13px] font-semibold text-ink">
+            <p className="text-sm font-semibold text-ink">
               {label}
               {active > 0 ? <span className="tnum ml-1.5 font-normal text-ink-3">· {active} {active === 1 ? "activo" : "activos"}</span> : null}
             </p>
-            <button type="button" onClick={reset} disabled={active === 0} className="press h-7 rounded-[8px] px-2 text-[12.5px] font-medium text-brand hover:bg-brand-faint disabled:cursor-default disabled:text-ink-4 disabled:hover:bg-transparent">
+            <button type="button" onClick={reset} disabled={active === 0} className="press h-7 rounded-control px-2 text-xs font-medium text-brand hover:bg-brand-faint disabled:cursor-default disabled:text-ink-4 disabled:hover:bg-transparent">
               Limpiar filtros
             </button>
           </div>
@@ -179,7 +179,7 @@ export function FilterChips({ groups = [], toggles = [] }: { groups?: FilterGrou
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {chips.map((chip) => (
-        <button key={chip.key} type="button" onClick={chip.clear} className="press inline-flex h-7 items-center gap-1 rounded-full bg-brand-soft pr-2 pl-2.5 text-[12.5px] font-medium text-brand-strong hover:bg-brand-soft/70" aria-label={`Quitar filtro ${String(chip.label)}`}>
+        <button key={chip.key} type="button" onClick={chip.clear} className="press inline-flex h-7 items-center gap-1 rounded-full bg-brand-soft pr-2 pl-2.5 text-xs font-medium text-brand-strong hover:bg-brand-soft/70" aria-label={`Quitar filtro ${String(chip.label)}`}>
           {chip.label}
           <span aria-hidden="true" className="text-brand">×</span>
         </button>

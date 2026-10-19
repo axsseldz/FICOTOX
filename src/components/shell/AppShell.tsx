@@ -11,6 +11,7 @@ import { useSession } from "@/components/session/SessionProvider";
 import { cn } from "@/components/ui/cn";
 import { Dropdown, Tooltip } from "@/components/ui/Overlay";
 import { Avatar } from "@/components/ui/Primitives";
+import { coincideAtajo, useAtajo } from "@/lib/client/atajos";
 import { isActivePath, isItemActive, visibleNav, type NavChild, type NavIcon, type NavItem } from "@/lib/client/nav";
 import { BrandLockup, BrandMark } from "./Brand";
 import { ABRIR_MIS_AUTORIZACIONES, AccountSheet, EVENTO_ABRIR_CUENTA } from "./AccountSheet";
@@ -100,7 +101,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [cuentaClave, setCuentaClave] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const collapsed = useSyncExternalStore(subscribeCollapsed, readCollapsed, () => false);
-  const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent);
+  const atajoBuscar = useAtajo("Mod+K");
 
   const toggleCollapsed = () => writeCollapsed(!collapsed);
 
@@ -135,7 +136,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      if (coincideAtajo(event, "Mod+K")) {
         event.preventDefault();
         setPaletteOpen((open) => !open);
       }
@@ -166,14 +167,14 @@ export function AppShell({ children }: { children: ReactNode }) {
           reportarIncidencia();
         }
       : undefined,
-    isMac,
+    atajoBuscar,
     user,
     onLogout: logout,
   };
 
   return (
     <div className="flex min-h-dvh">
-      <a href="#contenido" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[var(--z-toast)] focus:rounded-[8px] focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:shadow-pop">
+      <a href="#contenido" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[var(--z-toast)] focus:rounded-control focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:shadow-pop">
         Saltar al contenido
       </a>
 
@@ -197,13 +198,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Barra superior solo en móvil */}
         <header className="material sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-line/70 px-3 lg:hidden">
-          <button type="button" className="press inline-flex h-9 w-9 items-center justify-center rounded-[9px] text-ink-2 hover:bg-surface-3" aria-label="Abrir menú" aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}>
+          <button type="button" className="press inline-flex h-9 w-9 items-center justify-center rounded-field text-ink-2 hover:bg-surface-3" aria-label="Abrir menú" aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}>
             <List size={20} />
           </button>
-          <Link href="/" className="rounded-[8px]">
+          <Link href="/" className="rounded-control">
             <BrandLockup size={26} />
           </Link>
-          <button type="button" onClick={() => setPaletteOpen(true)} className="press ml-auto inline-flex h-9 w-9 items-center justify-center rounded-[9px] text-ink-2 hover:bg-surface-3" aria-label="Buscar">
+          <button type="button" onClick={() => setPaletteOpen(true)} className="press ml-auto inline-flex h-9 w-9 items-center justify-center rounded-field text-ink-2 hover:bg-surface-3" aria-label="Buscar">
             <MagnifyingGlass size={20} />
           </button>
         </header>
@@ -224,7 +225,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 type VisibleItem = NavItem & { children: NavChild[] };
 
-function SidebarContent({ items, pathname, collapsed, onSearch, onToggle, onAccount, onClose, onReportar, isMac, user, onLogout }: { items: VisibleItem[]; pathname: string; collapsed: boolean; onSearch: () => void; onToggle: () => void; onAccount: () => void; onClose?: () => void; onReportar?: () => void; isMac: boolean; user: { id?: number; nombre?: string; email?: string; roles?: string[]; avatar?: string | null } | null; onLogout: () => void }) {
+function SidebarContent({ items, pathname, collapsed, onSearch, onToggle, onAccount, onClose, onReportar, atajoBuscar, user, onLogout }: { items: VisibleItem[]; pathname: string; collapsed: boolean; onSearch: () => void; onToggle: () => void; onAccount: () => void; onClose?: () => void; onReportar?: () => void; atajoBuscar: string; user: { id?: number; nombre?: string; email?: string; roles?: string[]; avatar?: string | null } | null; onLogout: () => void }) {
   // El shell solo se monta ya autenticado (en el cliente), así que leer localStorage al iniciar no desajusta la hidratación.
   const [expanded, setExpanded] = useState<string[]>(() => (typeof window === "undefined" ? [] : readExpanded()));
   // Contadores de lo que la persona puede resolver: "Por autorizar" y "Por supervisar".
@@ -254,23 +255,23 @@ function SidebarContent({ items, pathname, collapsed, onSearch, onToggle, onAcco
   return (
     <>
       <div className={cn("flex h-14 items-center", collapsed ? "justify-center px-2" : "justify-between pr-2 pl-4")}>
-        <Link href="/" className="rounded-[8px]" aria-label="Inicio">
+        <Link href="/" className="rounded-control" aria-label="Inicio">
           {collapsed ? <BrandMark size={28} /> : <BrandLockup size={28} />}
         </Link>
         {!collapsed ? (
           <div className="flex items-center gap-0.5">
             <Campana />
-            <Tooltip content={`Buscar (${isMac ? "⌘" : "Ctrl"} K)`} side="bottom">
-              <button type="button" onClick={onSearch} className="press inline-flex h-8 w-8 items-center justify-center rounded-[8px] text-ink-3 hover:bg-surface-3 hover:text-ink" aria-label="Buscar">
+            <Tooltip content={`Buscar (${atajoBuscar})`} side="bottom">
+              <button type="button" onClick={onSearch} className="press inline-flex h-8 w-8 items-center justify-center rounded-control text-ink-3 hover:bg-surface-3 hover:text-ink" aria-label="Buscar">
                 <MagnifyingGlass size={17} />
               </button>
             </Tooltip>
             {onClose ? (
-              <button type="button" onClick={onClose} className="press inline-flex h-8 w-8 items-center justify-center rounded-[8px] text-ink-3 hover:bg-surface-3 hover:text-ink" aria-label="Cerrar menú">
+              <button type="button" onClick={onClose} className="press inline-flex h-8 w-8 items-center justify-center rounded-control text-ink-3 hover:bg-surface-3 hover:text-ink" aria-label="Cerrar menú">
                 <X size={18} />
               </button>
             ) : (
-              <button type="button" onClick={onToggle} className="press hidden h-8 w-8 items-center justify-center rounded-[8px] text-ink-3 hover:bg-surface-3 hover:text-ink lg:inline-flex" aria-label="Contraer barra lateral">
+              <button type="button" onClick={onToggle} className="press hidden h-8 w-8 items-center justify-center rounded-control text-ink-3 hover:bg-surface-3 hover:text-ink lg:inline-flex" aria-label="Contraer barra lateral">
                 <SidebarSimple size={18} />
               </button>
             )}
@@ -281,8 +282,8 @@ function SidebarContent({ items, pathname, collapsed, onSearch, onToggle, onAcco
       {collapsed ? (
         <div className="flex flex-col gap-0.5 px-2">
           <Campana compacta />
-          <Tooltip content={`Buscar (${isMac ? "⌘" : "Ctrl"} K)`} side="right">
-            <button type="button" onClick={onSearch} className="press flex h-9 w-full items-center justify-center rounded-[9px] text-ink-3 hover:bg-surface-3 hover:text-ink" aria-label="Buscar">
+          <Tooltip content={`Buscar (${atajoBuscar})`} side="right">
+            <button type="button" onClick={onSearch} className="press flex h-9 w-full items-center justify-center rounded-field text-ink-3 hover:bg-surface-3 hover:text-ink" aria-label="Buscar">
               <MagnifyingGlass size={18} />
             </button>
           </Tooltip>
@@ -307,7 +308,7 @@ function SidebarContent({ items, pathname, collapsed, onSearch, onToggle, onAcco
                   if (hasChildren && !collapsed && !open) toggleExpanded(item.label, active);
                 }}
                 className={cn(
-                  "seleccion press group/item flex h-9 min-w-0 flex-1 items-center gap-2.5 rounded-[9px] text-[13.5px]",
+                  "seleccion press group/item flex h-9 min-w-0 flex-1 items-center gap-2.5 rounded-field text-sm",
                   collapsed ? "justify-center px-0" : "px-2.5",
                   leafActive ? "font-semibold text-ink" : active ? "font-semibold text-ink" : "font-medium text-ink-2 hover:text-ink",
                 )}
@@ -325,7 +326,7 @@ function SidebarContent({ items, pathname, collapsed, onSearch, onToggle, onAcco
                     aria-label={open ? `Contraer ${item.label}` : `Desplegar ${item.label}`}
                     aria-expanded={open}
                     onClick={() => toggleExpanded(item.label, active)}
-                    className="press inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] text-ink-4 hover:bg-surface-3 hover:text-ink"
+                    className="press inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-control text-ink-4 hover:bg-surface-3 hover:text-ink"
                   >
                     <CaretRight size={13} weight="bold" className={cn("transition-transform duration-300 ease-[var(--ease-spring)]", open && "rotate-90")} />
                   </button>
@@ -354,12 +355,12 @@ function SidebarContent({ items, pathname, collapsed, onSearch, onToggle, onAcco
                               href={child.href}
                               tabIndex={open ? 0 : -1}
                               aria-current={childActive ? "page" : undefined}
-                              className={cn("seleccion press flex h-8 items-center gap-2 rounded-[7px] px-2.5 text-[13px]", childActive ? "font-semibold text-ink" : "text-ink-2 hover:text-ink")}
+                              className={cn("seleccion press flex h-8 items-center gap-2 rounded-sm px-2.5 text-sm", childActive ? "font-semibold text-ink" : "text-ink-2 hover:text-ink")}
                             >
                               <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full transition-colors", childActive ? "bg-brand" : "bg-line-strong")} aria-hidden="true" />
                               <span className="truncate">{child.label}</span>
                               {contador[child.href] ? (
-                                <span className={cn("tnum ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold", "bg-warning text-on-accent")} aria-label={`${contador[child.href]} pendientes`} data-contador={child.href}>
+                                <span className={cn("tnum ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-2xs font-semibold", "bg-warning text-on-accent")} aria-label={`${contador[child.href]} pendientes`} data-contador={child.href}>
                                   {/* La Bandeja de Documentos SGC cuenta con animacion al cambiar (sin movimiento con movimiento reducido). */}
                                   {child.href === "/documentos/bandeja" ? <Conteo valor={contador[child.href]} duracion={300} /> : contador[child.href]}
                                 </span>
@@ -381,12 +382,12 @@ function SidebarContent({ items, pathname, collapsed, onSearch, onToggle, onAcco
         {onReportar ? (
           collapsed ? (
             <Tooltip content="Reportar incidencia" side="right">
-              <button type="button" onClick={onReportar} className="press inline-flex h-8 w-8 items-center justify-center rounded-[8px] text-ink-3 hover:bg-surface-3 hover:text-ink" aria-label="Reportar incidencia">
+              <button type="button" onClick={onReportar} className="press inline-flex h-8 w-8 items-center justify-center rounded-control text-ink-3 hover:bg-surface-3 hover:text-ink" aria-label="Reportar incidencia">
                 <WarningDiamond size={18} />
               </button>
             </Tooltip>
           ) : (
-            <button type="button" onClick={onReportar} className="press mb-0.5 flex h-9 w-full items-center gap-2.5 rounded-[9px] px-2.5 text-left text-[13.5px] font-medium text-ink-2 hover:bg-surface-3/80 hover:text-ink" data-reportar-incidencia-boton>
+            <button type="button" onClick={onReportar} className="press mb-0.5 flex h-9 w-full items-center gap-2.5 rounded-field px-2.5 text-left text-sm font-medium text-ink-2 hover:bg-surface-3/80 hover:text-ink" data-reportar-incidencia-boton>
               <WarningDiamond size={18} className="text-ink-3" />
               Reportar incidencia
             </button>
@@ -395,18 +396,18 @@ function SidebarContent({ items, pathname, collapsed, onSearch, onToggle, onAcco
         {/* Ayuda: siempre visible, no depende de permisos. */}
         {collapsed ? (
           <Tooltip content="Ayuda" side="right">
-            <Link href="/ayuda" aria-current={isActivePath(pathname, "/ayuda") ? "page" : undefined} className={cn("seleccion press inline-flex h-8 w-8 items-center justify-center rounded-[8px]", isActivePath(pathname, "/ayuda") ? "text-brand" : "text-ink-3 hover:text-ink")} aria-label="Ayuda">
+            <Link href="/ayuda" aria-current={isActivePath(pathname, "/ayuda") ? "page" : undefined} className={cn("seleccion press inline-flex h-8 w-8 items-center justify-center rounded-control", isActivePath(pathname, "/ayuda") ? "text-brand" : "text-ink-3 hover:text-ink")} aria-label="Ayuda">
               <Question size={18} />
             </Link>
           </Tooltip>
         ) : (
-          <Link href="/ayuda" aria-current={isActivePath(pathname, "/ayuda") ? "page" : undefined} className={cn("seleccion press mb-1 flex h-9 items-center gap-2.5 rounded-[9px] px-2.5 text-[13.5px]", isActivePath(pathname, "/ayuda") ? "font-semibold text-ink" : "font-medium text-ink-2 hover:text-ink")}>
+          <Link href="/ayuda" aria-current={isActivePath(pathname, "/ayuda") ? "page" : undefined} className={cn("seleccion press mb-1 flex h-9 items-center gap-2.5 rounded-field px-2.5 text-sm", isActivePath(pathname, "/ayuda") ? "font-semibold text-ink" : "font-medium text-ink-2 hover:text-ink")}>
             <Question size={18} className={isActivePath(pathname, "/ayuda") ? "text-brand" : "text-ink-3"} />
             Ayuda
           </Link>
         )}
         {collapsed ? (
-          <button type="button" onClick={onToggle} className="press hidden h-8 w-8 items-center justify-center rounded-[8px] text-ink-3 hover:bg-surface-3 hover:text-ink lg:inline-flex" aria-label="Expandir barra lateral">
+          <button type="button" onClick={onToggle} className="press hidden h-8 w-8 items-center justify-center rounded-control text-ink-3 hover:bg-surface-3 hover:text-ink lg:inline-flex" aria-label="Expandir barra lateral">
             <SidebarSimple size={18} />
           </button>
         ) : null}
@@ -414,12 +415,12 @@ function SidebarContent({ items, pathname, collapsed, onSearch, onToggle, onAcco
           label="Menú de usuario"
           align="start"
           trigger={
-            <button type="button" className={cn("press flex w-full items-center gap-2.5 rounded-[10px] py-1.5 text-left hover:bg-surface-3/80", collapsed ? "justify-center px-0" : "px-2")} aria-label="Menú de usuario">
+            <button type="button" className={cn("press flex w-full items-center gap-2.5 rounded-field py-1.5 text-left hover:bg-surface-3/80", collapsed ? "justify-center px-0" : "px-2")} aria-label="Menú de usuario">
               <Avatar id={user?.id} name={user?.nombre} email={user?.email} avatar={user?.avatar} size="md" />
               {!collapsed ? (
                 <span className="flex min-w-0 flex-col">
-                  <span className="truncate text-[13.5px] font-medium text-ink">{user?.nombre || user?.email}</span>
-                  <span className="truncate text-[12px] text-ink-3">{user?.roles?.join(", ") || user?.email}</span>
+                  <span className="truncate text-sm font-medium text-ink">{user?.nombre || user?.email}</span>
+                  <span className="truncate text-xs text-ink-3">{user?.roles?.join(", ") || user?.email}</span>
                 </span>
               ) : null}
             </button>

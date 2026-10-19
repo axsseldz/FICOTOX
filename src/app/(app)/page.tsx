@@ -64,8 +64,8 @@ export default function InicioPage() {
     <PageBody>
       {/* Un poco por encima del centro óptico: el relleno inferior es mayor que el superior. */}
       <div className="mx-auto flex min-h-[calc(100dvh-220px)] w-full max-w-[720px] flex-col items-center justify-center pb-[12vh] text-center">
-        <p className="animate-fade-in text-[13px] text-ink-3">{today}</p>
-        <h1 className="animate-fade-in mt-1.5 text-[24px] font-medium tracking-[-0.01em] text-ink sm:text-[28px]">
+        <p className="animate-fade-in text-sm text-ink-3">{today}</p>
+        <h1 className="animate-fade-in mt-1.5 text-3xl font-medium tracking-snug text-ink sm:text-4xl">
           {greeting()}
           {firstName ? `, ${firstName}` : ""}.
         </h1>
@@ -76,8 +76,8 @@ export default function InicioPage() {
               const tono = TONO[p.tone];
               return (
                 <li key={p.key}>
-                  <Link href={p.href} title={p.label} className="press inline-flex h-8 items-center gap-2 rounded-full bg-surface pr-3 pl-1.5 text-[12.5px] text-ink-2 ring-1 ring-line transition-[box-shadow,color] duration-200 hover:text-ink hover:shadow-card focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none">
-                    <span aria-hidden="true" className={cn("flex h-5 w-5 items-center justify-center rounded-full text-[12px] [&>svg]:h-[1em] [&>svg]:w-[1em]", tono.circulo)}>
+                  <Link href={p.href} title={p.label} className="press inline-flex h-8 items-center gap-2 rounded-full bg-surface pr-3 pl-1.5 text-xs text-ink-2 ring-1 ring-line transition-[box-shadow,color] duration-200 hover:text-ink hover:shadow-card">
+                    <span aria-hidden="true" className={cn("flex h-5 w-5 items-center justify-center rounded-full text-xs [&>svg]:h-[1em] [&>svg]:w-[1em]", tono.circulo)}>
                       {corto.icono}
                     </span>
                     <span className="tnum font-semibold text-ink">{p.count}</span>

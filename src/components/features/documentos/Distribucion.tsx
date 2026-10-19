@@ -55,23 +55,23 @@ export function SelectorDestinatarios({ valor, onChange, catalogos, prefijo, ple
     <div className="flex flex-col gap-4">
       <CampoValidado id={`${prefijo}-destinatarios`} className="grid gap-4 sm:grid-cols-2">
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-[13px] font-medium text-ink">Por rol</legend>
-          <div className="flex max-h-[220px] flex-col gap-2 overflow-y-auto rounded-[12px] bg-surface-2 p-3 ring-1 ring-line">
+          <legend className="mb-1 text-sm font-medium text-ink">Por rol</legend>
+          <div className="flex max-h-[220px] flex-col gap-2 overflow-y-auto rounded-box bg-surface-2 p-3 ring-1 ring-line">
             {roles.map((r) => (
               <Checkbox key={r.id} checked={valor.roles.includes(r.id)} onChange={() => alternar("roles", r.id)} label={r.nombre} description={valor.requiere_lectura && !r.acusa ? "No puede confirmar lecturas" : undefined} disabled={valor.requiere_lectura && !r.acusa} data-testid="dist-rol" />
             ))}
-            {!roles.length ? <span className="text-[12.5px] text-ink-3">Sin roles disponibles.</span> : null}
+            {!roles.length ? <span className="text-xs text-ink-3">Sin roles disponibles.</span> : null}
           </div>
         </fieldset>
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-[13px] font-medium text-ink">Por persona</legend>
+          <legend className="mb-1 text-sm font-medium text-ink">Por persona</legend>
           <Input small placeholder="Buscar persona" value={filtro} onChange={(e) => setFiltro(e.target.value)} aria-label="Buscar persona" />
-          <div className="flex max-h-[180px] flex-col gap-2 overflow-y-auto rounded-[12px] bg-surface-2 p-3 ring-1 ring-line">
+          <div className="flex max-h-[180px] flex-col gap-2 overflow-y-auto rounded-box bg-surface-2 p-3 ring-1 ring-line">
             {visibles.map((p) => {
               const sinAcuse = valor.requiere_lectura && !p.acciones.includes("documento_acusar_lectura");
               return <Checkbox key={p.id} checked={valor.usuarios.includes(p.id)} onChange={() => alternar("usuarios", p.id)} label={p.nombre} description={sinAcuse ? "No puede confirmar lecturas" : undefined} disabled={sinAcuse} data-testid="dist-persona" />;
             })}
-            {!visibles.length ? <span className="text-[12.5px] text-ink-3">Sin coincidencias.</span> : null}
+            {!visibles.length ? <span className="text-xs text-ink-3">Sin coincidencias.</span> : null}
           </div>
         </fieldset>
       </CampoValidado>
@@ -230,15 +230,15 @@ export function AcuseLectura({ dist, sinBoton = false }: { dist: Distribucion; s
   if (!mia?.requiere) return null;
   if (mia.leido_en)
     return (
-      <p className="flex items-center gap-2 rounded-[12px] bg-success-soft px-3.5 py-2.5 text-[13.5px] text-success-text" data-testid="acuse-hecho">
+      <p className="flex items-center gap-2 rounded-box bg-success-soft px-3.5 py-2.5 text-sm text-success-text" data-testid="acuse-hecho">
         <CheckCircle size={17} weight="fill" aria-hidden="true" />
         Confirmaste la lectura de la revisión {dist.numero} el {formatearFechaHora(mia.leido_en)}.
       </p>
     );
   return (
-    <div id="acuse" className="flex scroll-mt-24 flex-wrap items-center gap-3 rounded-[12px] bg-brand-soft px-4 py-3 ring-1 ring-brand/25" data-testid="acuse-pendiente">
+    <div id="acuse" className="flex scroll-mt-24 flex-wrap items-center gap-3 rounded-box bg-brand-soft px-4 py-3 ring-1 ring-brand/25" data-testid="acuse-pendiente">
       <BookOpenText size={20} weight="duotone" className="text-brand-strong" aria-hidden="true" />
-      <span className="min-w-0 flex-1 text-[13.5px] text-ink">
+      <span className="min-w-0 flex-1 text-sm text-ink">
         Este documento te fue distribuido{mia.puntos.length ? ` (${mia.puntos.join(", ")})` : ""} y requiere que confirmes su lectura. {sinBoton ? "Léelo en el visor y usa «Confirmar lectura» arriba." : "Léelo en el visor y confirma."}
       </span>
       {sinBoton ? null : (
@@ -258,7 +258,7 @@ export function SeccionDistribucion({ dist, catalogos, obsoleto, sinAgregar = fa
   const [agregar, setAgregar] = useState(false);
   const [retirar, setRetirar] = useState<FilaDistribucion | null>(null);
   const [recordando, setRecordando] = useState(false);
-  if (!dist) return <p className="text-[13px] text-ink-3">{obsoleto ? "El documento está obsoleto: ya no se distribuye." : "Se define al publicar la revisión vigente."}</p>;
+  if (!dist) return <p className="text-sm text-ink-3">{obsoleto ? "El documento está obsoleto: ya no se distribuye." : "Se define al publicar la revisión vigente."}</p>;
   const recordar = async () => {
     const ok = await confirm({ title: "Enviar recordatorio", description: "Las personas con la lectura pendiente reciben un aviso en la campana.", confirmLabel: "Enviar", tone: "primary" });
     if (!ok) return;
@@ -277,7 +277,7 @@ export function SeccionDistribucion({ dist, catalogos, obsoleto, sinAgregar = fa
   const sinDestinatarios = !dist.filas.length && !dist.puntos_uso.length;
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-2">
         <span>Revisión {dist.numero}</span>
         {dist.puntos_uso.length ? (
           <span className="flex items-center gap-1">
@@ -304,12 +304,12 @@ export function SeccionDistribucion({ dist, catalogos, obsoleto, sinAgregar = fa
           {dist.filas.length ? (
             <ul className="flex flex-wrap gap-2" aria-label="Destinatarios definidos">
               {dist.filas.map((f) => (
-                <li key={f.id} className="flex items-center gap-1.5 rounded-full bg-surface-2 py-1 pl-3 pr-1.5 text-[12.5px] text-ink ring-1 ring-line" data-testid="dist-fila" title={[f.motivo, f.creado_por_nombre ? `por ${f.creado_por_nombre}` : null, formatearFecha(f.creado_en)].filter(Boolean).join(" · ")}>
+                <li key={f.id} className="flex items-center gap-1.5 rounded-full bg-surface-2 py-1 pl-3 pr-1.5 text-xs text-ink ring-1 ring-line" data-testid="dist-fila" title={[f.motivo, f.creado_por_nombre ? `por ${f.creado_por_nombre}` : null, formatearFecha(f.creado_en)].filter(Boolean).join(" · ")}>
                   {f.rol_nombre ? <UsersThree size={13} aria-hidden="true" /> : null}
                   {f.rol_nombre ? `Rol: ${f.rol_nombre}` : f.usuario_nombre}
                   {f.requiere_lectura ? <Badge tone="brand">Lectura</Badge> : null}
                   {dist.puede.administrar.ok ? (
-                    <button type="button" className="ml-0.5 rounded-full p-1 text-ink-3 hover:bg-surface-3 hover:text-danger-text focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none" aria-label={`Quitar ${f.rol_nombre || f.usuario_nombre}`} onClick={() => setRetirar(f)} data-testid="dist-quitar">
+                    <button type="button" className="ml-0.5 rounded-full p-1 text-ink-3 hover:bg-surface-3 hover:text-danger-text" aria-label={`Quitar ${f.rol_nombre || f.usuario_nombre}`} onClick={() => setRetirar(f)} data-testid="dist-quitar">
                       <Trash size={13} />
                     </button>
                   ) : null}
@@ -317,15 +317,15 @@ export function SeccionDistribucion({ dist, catalogos, obsoleto, sinAgregar = fa
               ))}
             </ul>
           ) : (
-            <p className="text-[13px] text-ink-3">Sin destinatarios definidos.</p>
+            <p className="text-sm text-ink-3">Sin destinatarios definidos.</p>
           )}
           {dist.destinatarios.length ? (
-            <ul className="flex flex-col divide-y divide-line rounded-[12px] ring-1 ring-line" data-testid="dist-lecturas" aria-label="Lecturas por persona">
+            <ul className="flex flex-col divide-y divide-line rounded-box ring-1 ring-line" data-testid="dist-lecturas" aria-label="Lecturas por persona">
               {dist.destinatarios.map((d) => (
-                <li key={d.usuario_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-[13px]" data-testid="dist-persona-estado" data-leido={d.leido_en ? "1" : "0"}>
+                <li key={d.usuario_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm" data-testid="dist-persona-estado" data-leido={d.leido_en ? "1" : "0"}>
                   <span className="min-w-0 flex-1 font-medium text-ink">{d.nombre}</span>
                   {!d.requiere ? (
-                    <span className="text-[12px] text-ink-3">Solo consulta</span>
+                    <span className="text-xs text-ink-3">Solo consulta</span>
                   ) : d.leido_en ? (
                     <Badge tone="success" className="gap-1">
                       <CheckCircle size={12} weight="bold" aria-hidden="true" /> Leído {formatearFechaHora(d.leido_en)}
@@ -341,7 +341,7 @@ export function SeccionDistribucion({ dist, catalogos, obsoleto, sinAgregar = fa
           ) : null}
         </>
       ) : sinDestinatarios ? (
-        <p className="text-[13px] text-ink-3">Sin distribución definida.</p>
+        <p className="text-sm text-ink-3">Sin distribución definida.</p>
       ) : null}
       {dist.puede.administrar.ok ? (
         <div className="flex flex-wrap gap-2">
@@ -366,7 +366,7 @@ function Boton({ puede, onClick, cargando }: { puede: Puede; onClick: () => void
       <Button size="sm" variant="secondary" icon={<BellRinging size={15} />} disabled={!puede.ok} title={puede.motivo} loading={cargando} onClick={onClick} data-testid="dist-recordatorio">
         Enviar recordatorio
       </Button>
-      {!puede.ok && puede.motivo ? <span className={cn("text-[11.5px] text-ink-3")}>{puede.motivo}</span> : null}
+      {!puede.ok && puede.motivo ? <span className={cn("text-2xs text-ink-3")}>{puede.motivo}</span> : null}
     </span>
   );
 }

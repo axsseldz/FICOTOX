@@ -192,8 +192,8 @@ function celdasRol(role: ApiRecord) {
     <span key="r" className="flex min-w-0 items-start gap-3.5">
       <IconoRol icono={desc.icono} />
       <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-[14.5px] leading-tight font-semibold text-ink">{String(role.nombre || "Rol")}</span>
-        <span className="text-[13px] leading-[1.45] text-ink-3">{desc.proposito}</span>
+        <span className="text-base leading-tight font-semibold text-ink">{String(role.nombre || "Rol")}</span>
+        <span className="text-sm leading-normal text-ink-3">{desc.proposito}</span>
       </span>
     </span>,
     <span key="p" className="flex items-center gap-2.5">
@@ -204,7 +204,7 @@ function celdasRol(role: ApiRecord) {
           ))}
         </FigurasApiladas>
       ) : null}
-      <span className="text-[13px] text-ink-3">{total ? (total === 1 ? "1 persona" : `${fmt(total)} personas`) : "Sin personas"}</span>
+      <span className="text-sm text-ink-3">{total ? (total === 1 ? "1 persona" : `${fmt(total)} personas`) : "Sin personas"}</span>
     </span>,
     <span key="t" className="flex flex-wrap gap-1.5">
       {role.es_sistemico ? <Badge tone="neutral">Del sistema</Badge> : <Badge tone="brand">Personalizado</Badge>}

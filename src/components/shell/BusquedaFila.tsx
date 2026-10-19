@@ -90,19 +90,19 @@ export interface FilaBusqueda {
 
 export function BusquedaFila({ fila, consulta, onQuitar, className }: { fila: FilaBusqueda; consulta?: string; onQuitar?: () => void; className?: string }) {
   return (
-    <div className={cn("flex cursor-pointer items-center gap-3 px-2.5 py-2 text-[14px]", className)}>
-      <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-surface-3 text-ink-2 transition-colors group-data-[selected=true]:bg-brand-soft group-data-[selected=true]:text-brand-strong", fila.tipo ? TONO[fila.tipo] : undefined)}>{iconoDeTipo(fila.tipo)}</span>
+    <div className={cn("flex cursor-pointer items-center gap-3 px-2.5 py-2 text-base", className)}>
+      <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-field bg-surface-3 text-ink-2 transition-colors group-data-[selected=true]:bg-brand-soft group-data-[selected=true]:text-brand-strong", fila.tipo ? TONO[fila.tipo] : undefined)}>{iconoDeTipo(fila.tipo)}</span>
       <span className="flex min-w-0 flex-1 flex-col leading-tight">
         <span className={cn("truncate font-medium", fila.mono && "code")}>
           <Resaltado texto={fila.titulo} consulta={consulta} />
         </span>
         {fila.sub ? (
-          <span className="truncate text-[12.5px] text-ink-3">
+          <span className="truncate text-xs text-ink-3">
             <Resaltado texto={fila.sub} consulta={consulta} />
           </span>
         ) : null}
       </span>
-      {fila.etiqueta ? <span className="hidden shrink-0 rounded-full bg-surface-3 px-2 py-0.5 text-[11px] font-medium text-ink-3 sm:inline">{fila.etiqueta}</span> : null}
+      {fila.etiqueta ? <span className="hidden shrink-0 rounded-full bg-surface-3 px-2 py-0.5 text-2xs font-medium text-ink-3 sm:inline">{fila.etiqueta}</span> : null}
       {onQuitar ? (
         <button
           type="button"

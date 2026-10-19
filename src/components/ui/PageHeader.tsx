@@ -11,9 +11,9 @@ export function PageHeader({ title, description, actions, eyebrow, className }: 
   return (
     <header className={cn("flex flex-col gap-4 md:flex-row md:items-end md:justify-between", className)}>
       <div className="flex min-w-0 flex-col gap-1">
-        {eyebrow ? <div className="text-[13px] text-ink-3">{eyebrow}</div> : null}
+        {eyebrow ? <div className="text-sm text-ink-3">{eyebrow}</div> : null}
         <h1 className="title-1 text-ink">{title}</h1>
-        {description ? <p className="max-w-2xl text-[14px] text-ink-3">{description}</p> : null}
+        {description ? <p className="max-w-2xl text-base text-ink-3">{description}</p> : null}
       </div>
       {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
     </header>
@@ -31,7 +31,7 @@ export interface TabItem {
 export function LinkTabs({ items, className }: { items: TabItem[]; className?: string }) {
   const pathname = usePathname();
   return (
-    <nav className={cn("scroll-thin inline-flex max-w-full gap-0.5 self-start overflow-x-auto rounded-[11px] bg-surface-3/80 p-1", className)} aria-label="Secciones">
+    <nav className={cn("scroll-thin inline-flex max-w-full gap-0.5 self-start overflow-x-auto rounded-field bg-surface-3/80 p-1", className)} aria-label="Secciones">
       {items.map((item) => {
         const active = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
@@ -40,12 +40,12 @@ export function LinkTabs({ items, className }: { items: TabItem[]; className?: s
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "press flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-[8px] px-3.5 text-[13px] font-medium transition-colors",
+              "press flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-control px-3.5 text-sm font-medium transition-colors",
               active ? "bg-surface text-ink shadow-card" : "text-ink-3 hover:text-ink",
             )}
           >
             {item.label}
-            {typeof item.count === "number" ? <span className={cn("tnum text-[12px]", active ? "text-ink-3" : "text-ink-3")}>{item.count}</span> : null}
+            {typeof item.count === "number" ? <span className={cn("tnum text-xs", active ? "text-ink-3" : "text-ink-3")}>{item.count}</span> : null}
           </Link>
         );
       })}
@@ -72,7 +72,7 @@ export function SegmentedTabs<T extends string>({ value, onChange, options, clas
   return (
     <div
       ref={group}
-      className={cn("scroll-thin inline-flex max-w-full gap-0.5 overflow-x-auto rounded-[11px] bg-surface-3/80 p-1", className)}
+      className={cn("scroll-thin inline-flex max-w-full gap-0.5 overflow-x-auto rounded-field bg-surface-3/80 p-1", className)}
       role="radiogroup"
       aria-label={label || "Filtro"}
       onKeyDown={(event) => {
@@ -97,14 +97,14 @@ export function SegmentedTabs<T extends string>({ value, onChange, options, clas
             tabIndex={active ? 0 : -1}
             onClick={() => onChange(option.value)}
             className={cn(
-              "press flex items-center gap-1.5 whitespace-nowrap rounded-[8px] font-medium transition-colors",
+              "press flex items-center gap-1.5 whitespace-nowrap rounded-control font-medium transition-colors",
               stretch ? "flex-1 justify-center" : "shrink-0",
-              size === "sm" ? "h-7 px-2.5 text-[12.5px]" : "h-8 px-3.5 text-[13px]",
+              size === "sm" ? "h-7 px-2.5 text-xs" : "h-8 px-3.5 text-sm",
               active ? "bg-surface text-ink shadow-card" : "text-ink-3 hover:text-ink",
             )}
           >
             {option.label}
-            {typeof option.count === "number" ? <span className={cn("tnum text-[12px]", countTone)}>{option.count}</span> : null}
+            {typeof option.count === "number" ? <span className={cn("tnum text-xs", countTone)}>{option.count}</span> : null}
           </button>
         );
       })}

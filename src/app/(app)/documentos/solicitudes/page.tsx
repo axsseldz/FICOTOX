@@ -127,19 +127,19 @@ function Solicitudes() {
           const a = x.area_codigo ? areaDe(cat?.areas, x.area_codigo) : null;
           return [
             <span key="s" className="flex min-w-0 items-start gap-3">
-              {a ? <IconoArea area={a} size="sm" /> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-surface-2 text-ink-3 ring-1 ring-line" aria-hidden="true"><FilePlus size={16} weight="duotone" /></span>}
+              {a ? <IconoArea area={a} size="sm" /> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-field bg-surface-2 text-ink-3 ring-1 ring-line" aria-hidden="true"><FilePlus size={16} weight="duotone" /></span>}
               <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="flex flex-wrap items-center gap-x-2 text-[12px] text-ink-3">
+                <span className="flex flex-wrap items-center gap-x-2 text-xs text-ink-3">
                   <span className="tnum font-semibold">#{x.id}</span>
                   <span>{x.tipo === "nuevo" ? "Documento nuevo" : "Cambio"}</span>
                   {x.documento_clave ? <span className="code font-semibold text-ink-2">{x.documento_clave}</span> : x.area_codigo ? <span>{x.area_codigo} · {nombreTipo(cat?.tipos, x.tipo_codigo || "")}</span> : null}
                 </span>
-                <span className="line-clamp-2 break-words text-[14px] font-medium leading-snug text-ink">{x.titulo_propuesto || x.documento_titulo}</span>
+                <span className="line-clamp-2 break-words text-base font-medium leading-snug text-ink">{x.titulo_propuesto || x.documento_titulo}</span>
               </span>
             </span>,
-            <span key="p" className="flex flex-col text-[13px] text-ink-2">
+            <span key="p" className="flex flex-col text-sm text-ink-2">
               <span>{x.solicitante_nombre || "—"}</span>
-              <span className="tnum text-[12px] text-ink-3">{formatearFecha(x.creado_en)}</span>
+              <span className="tnum text-xs text-ink-3">{formatearFecha(x.creado_en)}</span>
             </span>,
             <span key="e">
               <EstadoSolicitudEtiqueta estado={x.estado} />
@@ -166,7 +166,7 @@ function Solicitudes() {
         {abierta ? (
           <div className="flex flex-col gap-5" data-testid="sgc-solicitud-detalle">
             <div className="flex flex-col gap-1.5">
-              <span className="flex flex-wrap items-center gap-2 text-[12.5px] text-ink-3">
+              <span className="flex flex-wrap items-center gap-2 text-xs text-ink-3">
                 <span className="tnum font-semibold">#{abierta.id}</span>
                 <span>{abierta.tipo === "nuevo" ? "Documento nuevo" : "Cambio"}</span>
                 <EstadoSolicitudEtiqueta estado={abierta.estado} />

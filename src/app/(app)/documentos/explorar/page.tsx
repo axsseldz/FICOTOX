@@ -141,11 +141,11 @@ function Explorador() {
       extra:
         periodo === "rango" ? (
           <div className="grid grid-cols-2 gap-2">
-            <label className="flex flex-col gap-1 text-[12px] text-ink-3">
+            <label className="flex flex-col gap-1 text-xs text-ink-3">
               Desde
               <DateInput id="sgc-desde" small value={desde} onChange={setDesde} aria-label="Desde" />
             </label>
-            <label className="flex flex-col gap-1 text-[12px] text-ink-3">
+            <label className="flex flex-col gap-1 text-xs text-ink-3">
               Hasta
               <DateInput id="sgc-hasta" small value={hasta} onChange={setHasta} aria-label="Hasta" />
             </label>
@@ -193,7 +193,7 @@ function Explorador() {
             label="Ordenar"
             align="end"
             trigger={
-              <button type="button" className="press flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium text-ink-2 hover:bg-surface-3 hover:text-ink focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none data-[state=open]:bg-surface-3" data-testid="sgc-ordenar">
+              <button type="button" className="press flex h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-ink-2 hover:bg-surface-3 hover:text-ink data-[state=open]:bg-surface-3" data-testid="sgc-ordenar">
                 <SortAscending size={16} aria-hidden="true" />
                 {ordenActual.label}
                 <CaretDown size={12} aria-hidden="true" />
@@ -256,7 +256,7 @@ function Tarjeta({ doc, area, tipo, onAbrir, onKeyDown }: { doc: DocLista; area:
       onKeyDown={onKeyDown}
       data-testid="sgc-tarjeta"
       data-clave={doc.clave}
-      className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-card bg-surface shadow-card transition-[box-shadow,transform,translate] duration-200 ease-[var(--ease-fluid)] hover:-translate-y-0.5 hover:shadow-raised focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+      className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-card bg-surface shadow-card transition-[box-shadow,transform,translate] duration-200 ease-[var(--ease-fluid)] hover:-translate-y-0.5 hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0"
     >
       <div className="relative">
         <MiniaturaDocumento doc={doc} className="aspect-[4/3] w-full border-b border-line" />
@@ -267,24 +267,24 @@ function Tarjeta({ doc, area, tipo, onAbrir, onKeyDown }: { doc: DocLista; area:
         <div className="flex items-center gap-2">
           <IconoArea area={area} size="sm" />
           <span className="flex min-w-0 flex-col">
-            <span className="code truncate text-[12.5px] font-semibold text-ink-2">{doc.clave}</span>
-            <span className="truncate text-[11.5px] text-ink-3">{tipo}</span>
+            <span className="code truncate text-xs font-semibold text-ink-2">{doc.clave}</span>
+            <span className="truncate text-2xs text-ink-3">{tipo}</span>
           </span>
         </div>
-        <h3 className="line-clamp-2 break-words text-[14px] font-semibold leading-snug text-ink" title={doc.titulo}>
+        <h3 className="line-clamp-2 break-words text-base font-semibold leading-snug text-ink" title={doc.titulo}>
           {doc.titulo}
         </h3>
         {/* Revision, estado y marcas siempre al pie de la tarjeta. */}
         <div className="mt-auto flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-1.5">
-            {doc.vigente ? <span className="tnum text-[12px] font-medium text-ink-2">Rev. {doc.vigente.numero}</span> : null}
+            {doc.vigente ? <span className="tnum text-xs font-medium text-ink-2">Rev. {doc.vigente.numero}</span> : null}
             <EstadoDocumentoEtiqueta estado={doc.estado} />
             <ProximaRevisionEtiqueta fecha={doc.vigente?.fecha_proxima_revision} />
             {doc.origen === "externo" ? <ExternoEtiqueta /> : null}
             <ConfidencialidadEtiqueta valor={doc.confidencialidad} />
           </div>
           {doc.trabajo && IconoCurso ? (
-            <p className="flex items-center gap-1 text-[11.5px] text-ink-3" data-testid="sgc-tarjeta-en-curso">
+            <p className="flex items-center gap-1 text-2xs text-ink-3" data-testid="sgc-tarjeta-en-curso">
               <IconoCurso size={12} weight="bold" aria-hidden="true" />
               {enCursoTexto(doc)}
             </p>

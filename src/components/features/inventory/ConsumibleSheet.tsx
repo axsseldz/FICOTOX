@@ -159,7 +159,7 @@ export function ConsumibleSheet({ open, item, onClose }: { open: boolean; item: 
             <Input id="c-minimo" type="number" min="0" step="any" inputMode="decimal" value={form.stockMinimo} onChange={set("stockMinimo")} />
           </Field>
         </FormGrid>
-        <p className="text-[13.5px] text-ink-2">
+        <p className="text-sm text-ink-2">
           Total: <b className="tnum text-ink">{form.piezas && Number.isFinite(piezas) ? `${(piezas * (form.cantidadPieza && Number.isFinite(porPieza) && porPieza > 0 ? porPieza : 1)).toLocaleString("es-MX")} unidades` : "—"}</b> (piezas × cantidad por pieza). {editing ? "La existencia actual cambia solo con movimientos." : "Es la existencia inicial, en unidades."}
         </p>
         <Field label="Observaciones" htmlFor="c-observaciones">

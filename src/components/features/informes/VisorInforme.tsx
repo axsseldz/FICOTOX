@@ -83,10 +83,10 @@ export function VisorInforme({ item }: { item: ApiRecord }) {
             <ArrowLeft size={16} weight="bold" />
           </button>
           <div className="flex min-w-0 flex-1 flex-col">
-            <h1 className="truncate text-[15.5px] font-semibold tracking-[-0.01em] text-ink">
+            <h1 className="truncate text-md font-semibold tracking-snug text-ink">
               <span className="code">{folio}</span> · v{version}
             </h1>
-            <p className="flex min-w-0 items-center gap-1.5 truncate text-[12px] text-ink-3">
+            <p className="flex min-w-0 items-center gap-1.5 truncate text-xs text-ink-3">
               {cliente ? <span className="truncate" title={cliente}>{cliente}</span> : null}
               {cliente ? <span aria-hidden="true">·</span> : null}
               <StateBadge kind="informe" status={estado} />
@@ -94,7 +94,7 @@ export function VisorInforme({ item }: { item: ApiRecord }) {
           </div>
           <div className="flex items-center gap-1">
             {versiones.length > 1 ? (
-              <select aria-label="Versión del informe" value={id} onChange={(e) => router.replace(`/informes/${e.target.value}/ver`)} className="h-8 rounded-[8px] border border-line bg-surface-2 px-1.5 text-[12.5px] text-ink focus:border-brand/55 focus:outline-none">
+              <select aria-label="Versión del informe" value={id} onChange={(e) => router.replace(`/informes/${e.target.value}/ver`)} className="h-8 rounded-control border border-line bg-surface-2 px-1.5 text-xs text-ink focus:border-focus focus:outline-none">
                 {versiones.map((v) => (
                   <option key={v.id} value={v.id}>
                     Versión {v.version}
@@ -108,7 +108,7 @@ export function VisorInforme({ item }: { item: ApiRecord }) {
           </div>
         </header>
       ) : (
-        <button type="button" onClick={() => setEncabezado(true)} aria-label="Mostrar encabezado" className="press material absolute top-2 right-3 z-20 flex h-8 items-center gap-1 rounded-full px-3 text-[12px] font-medium text-ink-2 shadow-card hover:text-ink">
+        <button type="button" onClick={() => setEncabezado(true)} aria-label="Mostrar encabezado" className="press material absolute top-2 right-3 z-20 flex h-8 items-center gap-1 rounded-full px-3 text-xs font-medium text-ink-2 shadow-card hover:text-ink">
           <CaretDown size={14} /> {folio} · v{version}
         </button>
       )}
@@ -121,7 +121,7 @@ export function VisorInforme({ item }: { item: ApiRecord }) {
             </Callout>
           ) : null}
           {integridad === "alterado" || integridad === "faltante" ? (
-            <div data-testid="visor-aviso-integridad" role="alert" className="-mx-3 -mt-2 flex items-start gap-2 border-b border-danger/25 bg-danger-soft px-3 py-1.5 text-[12.5px] text-danger sm:-mx-4 sm:px-4">
+            <div data-testid="visor-aviso-integridad" role="alert" className="-mx-3 -mt-2 flex items-start gap-2 border-b border-danger/25 bg-danger-soft px-3 py-1.5 text-xs text-danger sm:-mx-4 sm:px-4">
               <Warning size={15} weight="bold" className="mt-0.5 shrink-0" />
               <p>
                 <b className="font-semibold">{integridad === "faltante" ? "El PDF no está en el servidor." : "El PDF no coincide con su huella SHA-256."}</b>{" "}

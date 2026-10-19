@@ -5,6 +5,7 @@ import { useFiguraDe } from "./Figura";
 import { urlFoto, useFotoDe, useFotoUrl } from "./FotoPerfil";
 import { AvatarArt } from "./AvatarArt";
 import { cn } from "./cn";
+import { teclasAtajo, useEsMac } from "@/lib/client/atajos";
 
 /* Piezas pequeñas compartidas: Badge, Card, Skeleton, EmptyState, Kbd, Avatar, Stat, StockMeter. */
 
@@ -28,7 +29,7 @@ const TONES: Record<Tone, string> = {
 
 export function Badge({ tone = "neutral", dot, className, children }: { tone?: Tone; dot?: boolean; className?: string; children: ReactNode }) {
   return (
-    <span className={cn("inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[12px] font-medium", TONES[tone], className)}>
+    <span className={cn("inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-xs font-medium", TONES[tone], className)}>
       {dot ? <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" aria-hidden="true" /> : null}
       {children}
     </span>
@@ -48,7 +49,7 @@ export function CardHeader({ title, description, actions, className }: { title: 
     <div className={cn("mb-4 flex items-start justify-between gap-4", className)}>
       <div className="flex flex-col gap-0.5">
         <h2 className="title-3 text-ink">{title}</h2>
-        {description ? <p className="text-[13px] text-ink-3">{description}</p> : null}
+        {description ? <p className="text-sm text-ink-3">{description}</p> : null}
       </div>
       {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
     </div>
@@ -56,7 +57,7 @@ export function CardHeader({ title, description, actions, className }: { title: 
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse rounded-[6px] bg-surface-3", className)} aria-hidden="true" />;
+  return <div className={cn("animate-pulse rounded-sm bg-surface-3", className)} aria-hidden="true" />;
 }
 
 export function TableSkeleton({ rows = 6, cols = 5 }: { rows?: number; cols?: number }) {
@@ -76,10 +77,10 @@ export function TableSkeleton({ rows = 6, cols = 5 }: { rows?: number; cols?: nu
 export function EmptyState({ icon, title, description, action, compact, className }: { icon?: ReactNode; title: ReactNode; description?: ReactNode; action?: ReactNode; compact?: boolean; className?: string }) {
   return (
     <div className={cn("flex flex-col items-center justify-center text-center", compact ? "gap-2 px-4 py-8" : "gap-3 px-6 py-14", className)}>
-      {icon ? <div className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-surface-3 text-ink-3">{icon}</div> : null}
+      {icon ? <div className="flex h-12 w-12 items-center justify-center rounded-card bg-surface-3 text-ink-3">{icon}</div> : null}
       <div className="flex flex-col gap-1">
-        <p className="text-[15px] font-semibold text-ink">{title}</p>
-        {description ? <p className="max-w-md text-[13px] text-ink-3">{description}</p> : null}
+        <p className="text-md font-semibold text-ink">{title}</p>
+        {description ? <p className="max-w-md text-sm text-ink-3">{description}</p> : null}
       </div>
       {action ? <div className="mt-1">{action}</div> : null}
     </div>
@@ -89,10 +90,10 @@ export function EmptyState({ icon, title, description, action, compact, classNam
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
-      <p className="text-[15px] font-semibold text-ink">No se pudo cargar</p>
-      <p className="max-w-md text-[13px] text-ink-3">{message}</p>
+      <p className="text-md font-semibold text-ink">No se pudo cargar</p>
+      <p className="max-w-md text-sm text-ink-3">{message}</p>
       {onRetry ? (
-        <button type="button" onClick={onRetry} className="press h-8 rounded-[8px] bg-surface px-3 text-[13px] font-medium text-ink shadow-card hover:bg-surface-2">
+        <button type="button" onClick={onRetry} className="press h-8 rounded-control bg-surface px-3 text-sm font-medium text-ink shadow-card hover:bg-surface-2">
           Reintentar
         </button>
       ) : null}
@@ -100,8 +101,20 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
   );
 }
 
+/* Un atajo («Mod+K», «Esc», «Mod+F») con las teclas del sistema de la persona: ⌘ K en Mac, Ctrl K en Windows/Linux. */
+export function Atajo({ atajo, className }: { atajo: string; className?: string }) {
+  const mac = useEsMac();
+  return (
+    <span className={cn("inline-flex items-center gap-1", className)} data-atajo={atajo}>
+      {teclasAtajo(atajo, mac).map((tecla, i) => (
+        <Kbd key={i}>{tecla}</Kbd>
+      ))}
+    </span>
+  );
+}
+
 export function Kbd({ children }: { children: ReactNode }) {
-  return <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-[5px] bg-surface-3 px-1.5 font-sans text-[11px] font-medium text-ink-3">{children}</kbd>;
+  return <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-xs bg-surface-3 px-1.5 font-sans text-2xs font-medium text-ink-3">{children}</kbd>;
 }
 
 /*
@@ -159,7 +172,7 @@ export function StockMeter({ current, max, min, unit, low, size = "sm", label, c
         <div className={cn("h-full w-full rounded-full transition-[translate,background-color] duration-700 ease-[var(--ease-spring)]", bar, state === "empty" && "animate-pulse")} style={{ translate: `${ready ? percent - 100 : -100}% 0` }} />
         {minPercent !== null ? <span className="absolute top-0 h-full w-0.5 bg-ink/35" style={{ left: `calc(${minPercent}% - 1px)` }} title={`Mínimo: ${fmtNumber(min as number)}${u}`} aria-hidden="true" /> : null}
       </div>
-      <div className={cn("tnum flex items-center justify-between gap-2", size === "lg" ? "text-[13px]" : "text-[12px]")}>
+      <div className={cn("tnum flex items-center justify-between gap-2", size === "lg" ? "text-sm" : "text-xs")}>
         <span className="text-ink-3">{label ?? reading}</span>
         <span className={cn("shrink-0 font-medium", text)}>{status}</span>
       </div>
@@ -169,10 +182,25 @@ export function StockMeter({ current, max, min, unit, low, size = "sm", label, c
 
 const fmtNumber = (value: number) => value.toLocaleString("es-MX", { maximumFractionDigits: 3 });
 
+/* Correo que, si no cabe, parte la línea antes de la @ o de un punto (nunca a media palabra). */
+export function Correo({ valor, className }: { valor: unknown; className?: string }) {
+  const partes = String(valor || "").split(/(?=[@.])/);
+  return (
+    <span className={cn("break-words", className)}>
+      {partes.map((parte, i) => (
+        <span key={i}>
+          {i > 0 ? <wbr /> : null}
+          {parte}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 /* Fila "etiqueta · valor" para fichas de detalle (estilo lista de ajustes). */
 export function DetailRow({ label, children, className }: { label: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <div className={cn("flex items-start justify-between gap-4 py-2.5 text-[13.5px]", className)}>
+    <div className={cn("flex items-start justify-between gap-4 py-2.5 text-sm", className)}>
       <span className="shrink-0 text-ink-3">{label}</span>
       <span className="min-w-0 text-right text-ink">{children}</span>
     </div>

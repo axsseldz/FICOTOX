@@ -131,7 +131,7 @@ function urlCanonica(f: FiltrosUrl, buscar: string): string {
 function Breve({ texto }: { texto: unknown }) {
   const completo = String(texto || "");
   return (
-    <span className="line-clamp-2 break-words text-[13px] leading-[1.45] text-ink-2" title={completo || undefined}>
+    <span className="line-clamp-2 break-words text-sm leading-normal text-ink-2" title={completo || undefined}>
       {completo}
     </span>
   );
@@ -217,11 +217,11 @@ function Contenido() {
     extra:
       periodo === "rango" ? (
         <div className="grid grid-cols-2 gap-2">
-          <label className="flex flex-col gap-1 text-[12px] text-ink-3">
+          <label className="flex flex-col gap-1 text-xs text-ink-3">
             Desde
             <DateInput id="cal-desde" small value={desdeRango} onChange={setDesdeRango} aria-label="Desde" />
           </label>
-          <label className="flex flex-col gap-1 text-[12px] text-ink-3">
+          <label className="flex flex-col gap-1 text-xs text-ink-3">
             Hasta
             <DateInput id="cal-hasta" small value={hastaRango} onChange={setHastaRango} aria-label="Hasta" />
           </label>
@@ -287,7 +287,7 @@ function celdasIncidencia(item: ApiRecord) {
       <IconoCalidad tipo={item.tipo} />
       <span className="flex min-w-0 flex-col gap-1">
         <FolioChip type="INC" num={item.folio_num} />
-        <span className="text-[13.5px] font-medium text-ink">{TIPO_INCIDENCIA_LABEL[String(item.tipo)] || "Incidencia"}</span>
+        <span className="text-sm font-medium text-ink">{TIPO_INCIDENCIA_LABEL[String(item.tipo)] || "Incidencia"}</span>
       </span>
     </span>,
     <Breve key="d" texto={item.descripcion} />,
@@ -296,8 +296,8 @@ function celdasIncidencia(item: ApiRecord) {
       {item.origen_automatico ? <StatusFlag kind="info" label="Automática" detail={`Generada automáticamente: ${ORIGEN_AUTOMATICO_LABEL[String(item.origen_automatico)] || ""}`} data-automatica /> : null}
       {item.nc_folio ? <FolioChip type="NC" num={item.nc_folio} /> : null}
     </span>,
-    item.reportada_por ? <FiguraPersona key="r" id={item.reportada_por} nombre={item.reportada_nombre} conNombre /> : <span key="r" className="text-[13px] text-ink-3">{ORIGEN_AUTOMATICO_LABEL[String(item.origen_automatico)] ? "Sistema" : String(item.reportada_nombre || "—")}</span>,
-    <span key="o" className="text-[13px] text-ink-2" title={fmtDateTime(item.fecha)}>
+    item.reportada_por ? <FiguraPersona key="r" id={item.reportada_por} nombre={item.reportada_nombre} conNombre /> : <span key="r" className="text-sm text-ink-3">{ORIGEN_AUTOMATICO_LABEL[String(item.origen_automatico)] ? "Sistema" : String(item.reportada_nombre || "—")}</span>,
+    <span key="o" className="text-sm text-ink-2" title={fmtDateTime(item.fecha)}>
       {formatearFechaCorta(item.fecha)}
     </span>,
   ];
@@ -311,7 +311,7 @@ function celdasNc(item: ApiRecord) {
       <IconoCalidad clase="nc" origen={item.origen} clasificacion={item.clasificacion} />
       <span className="flex min-w-0 flex-col gap-1">
         <FolioChip type="NC" num={item.folio_num} />
-        <span className="text-[13.5px] font-medium text-ink">{clasificacion ? `No conformidad ${clasificacion.toLowerCase()}` : "No conformidad"}</span>
+        <span className="text-sm font-medium text-ink">{clasificacion ? `No conformidad ${clasificacion.toLowerCase()}` : "No conformidad"}</span>
       </span>
     </span>,
     <Breve key="d" texto={item.descripcion} />,
@@ -322,8 +322,8 @@ function celdasNc(item: ApiRecord) {
       {Number(item.retenciones_activas) ? <StatusFlag kind="bloqueo" label="Informe retenido" detail="Hay un informe retenido por esta NC" data-retenido /> : null}
       {Number(item.reaperturas) ? <StatusFlag kind="aviso" label={`${item.reaperturas} reapertura${Number(item.reaperturas) > 1 ? "s" : ""}`} detail="La verificación de eficacia resultó no eficaz y la NC volvió a análisis." data-reaperturas={String(item.reaperturas)} /> : null}
     </span>,
-    item.responsable_id || item.responsable_nombre ? <FiguraPersona key="r" id={item.responsable_id} nombre={item.responsable_nombre} conNombre /> : <span key="r" className="text-[13px] text-ink-3">Sin nombrar</span>,
-    <span key="o" className="text-[13px] text-ink-2" title={fmtDateTime(item.fecha)}>
+    item.responsable_id || item.responsable_nombre ? <FiguraPersona key="r" id={item.responsable_id} nombre={item.responsable_nombre} conNombre /> : <span key="r" className="text-sm text-ink-3">Sin nombrar</span>,
+    <span key="o" className="text-sm text-ink-2" title={fmtDateTime(item.fecha)}>
       {formatearFechaCorta(item.fecha)}
     </span>,
   ];

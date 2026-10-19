@@ -98,14 +98,16 @@ export const norm = (value: unknown): string =>
 /* Temas del manual (/ayuda). Los anclas coinciden con las secciones de la página. */
 export const HELP_TOPICS: Array<{ anchor: string; label: string; sub: string; kw: string }> = [
   { anchor: "empezar", label: "Cómo usar la plataforma", sub: "Guía rápida de FICOTOX", kw: "manual inicio empezar tutorial primeros pasos" },
+  { anchor: "cuenta", label: "Tu cuenta y la sesión", sub: "Primer ingreso, contraseña, cerrar sesión e inactividad", kw: "cuenta contrasena password primer ingreso temporal cambiar cerrar sesion salir inactividad bloqueo" },
   { anchor: "buscar", label: "Cómo buscar", sub: "Folios, reactivos, equipos y acciones desde el buscador", kw: "buscar buscador comando k atajos" },
-  { anchor: "muestras", label: "Flujo de muestras", sub: "Recepción → procesamiento → extracción → análisis → informe", kw: "muestras flujo etapas recepcion procesamiento extraccion analisis" },
+  { anchor: "muestras", label: "Flujo de muestras", sub: "Recepción → procesamiento → extracción → análisis → informe", kw: "muestras flujo etapas recepcion procesamiento extraccion analisis disposicion final cerrar" },
   { anchor: "extraccion", label: "Extracciones ASP y DSP", sub: "Folios, equipos, insumos y autollenado", kw: "extraccion asp dsp folio bitacora insumos" },
   { anchor: "analisis", label: "Análisis, revisión y aprobación", sub: "Resultados, controles de calidad y firmas", kw: "analisis revisar aprobar firma controles" },
   { anchor: "informes", label: "Informes de resultados", sub: "Crear, revisar, autorizar, liberar (PDF) y enviar", kw: "informes pdf autorizar liberar enviar envio correo entregar enmienda" },
-  { anchor: "inventario", label: "Inventario y avisos", sub: "Stock, caducidad, equipos, mantenimiento y movimientos", kw: "inventario reactivos consumibles equipos mantenimiento movimientos avisos stock" },
-  { anchor: "calidad", label: "Auditoría y trazabilidad", sub: "Qué se registra y cómo se consulta", kw: "auditoria bitacora historial trazabilidad calidad" },
+  { anchor: "inventario", label: "Inventario y avisos", sub: "Stock sin negativos, caducidad, equipos, mantenimiento y su reporte PDF", kw: "inventario reactivos consumibles equipos mantenimiento reporte pdf movimientos avisos stock existencia negativa reversion" },
+  { anchor: "calidad", label: "Calidad y auditoría", sub: "Incidencias, no conformidades, Por autorizar y bitácora", kw: "auditoria bitacora historial trazabilidad calidad incidencia no conformidad nc accion correctiva por autorizar segundo usuario" },
+  { anchor: "respaldos", label: "Respaldos y restauración", sub: "Crear, probar y restaurar un respaldo desde la plataforma", kw: "respaldo respaldos copia seguridad backup restaurar restauracion recuperar" },
   { anchor: "documentos", label: "Documentos SGC", sub: "Solicitudes, revisión, autorización, lecturas y Lista Maestra", kw: "documentos sgc procedimiento manual formato revision autorizar publicar lectura lista maestra externo norma clave fx" },
   { anchor: "anular", label: "Corregir un registro", sub: "Anular con motivo, restaurar, enmendar", kw: "anular restaurar corregir error borrar eliminar enmienda" },
-  { anchor: "atajos", label: "Atajos de teclado", sub: "⌘K, Esc, navegación con flechas", kw: "atajos teclado comando" },
+  { anchor: "atajos", label: "Atajos de teclado", sub: "Abrir el buscador, Esc y navegación con flechas", kw: "atajos teclado comando cmd ctrl control k" },
 ];

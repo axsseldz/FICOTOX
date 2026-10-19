@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowRight, ArrowsClockwise, BookOpenText, Cube, FileText, Files, Flask, Keyboard, MagnifyingGlass, Prohibit, SealCheck, TestTube, WarningCircle } from "@phosphor-icons/react";
+import { ArrowRight, ArrowsClockwise, BookOpenText, ClockCounterClockwise, Cube, FileText, Files, Flask, Keyboard, MagnifyingGlass, Prohibit, SealCheck, TestTube, UserCircle, WarningCircle } from "@phosphor-icons/react";
 import { PageBody } from "@/components/shell/AppShell";
 import { useSession } from "@/components/session/SessionProvider";
 import { cn } from "@/components/ui/cn";
-import { Kbd } from "@/components/ui/Primitives";
+import { Atajo, Kbd } from "@/components/ui/Primitives";
 import { HELP_TOPICS } from "@/lib/shared/busqueda";
 
 /*
@@ -17,13 +17,15 @@ import { HELP_TOPICS } from "@/lib/shared/busqueda";
 
 const SECTIONS: Array<{ anchor: string; title: string; icon: ReactNode }> = [
   { anchor: "empezar", title: "Cómo usar la plataforma", icon: <BookOpenText size={16} /> },
+  { anchor: "cuenta", title: "Tu cuenta y la sesión", icon: <UserCircle size={16} /> },
   { anchor: "buscar", title: "Buscar", icon: <MagnifyingGlass size={16} /> },
   { anchor: "muestras", title: "Flujo de una muestra", icon: <TestTube size={16} /> },
   { anchor: "extraccion", title: "Extracciones ASP y DSP", icon: <Flask size={16} /> },
   { anchor: "analisis", title: "Análisis y firmas", icon: <SealCheck size={16} /> },
   { anchor: "informes", title: "Informes", icon: <FileText size={16} /> },
   { anchor: "inventario", title: "Inventario y avisos", icon: <Cube size={16} /> },
-  { anchor: "calidad", title: "Auditoría", icon: <ArrowsClockwise size={16} /> },
+  { anchor: "calidad", title: "Calidad y auditoría", icon: <ArrowsClockwise size={16} /> },
+  { anchor: "respaldos", title: "Respaldos", icon: <ClockCounterClockwise size={16} /> },
   { anchor: "documentos", title: "Documentos SGC", icon: <Files size={16} /> },
   { anchor: "anular", title: "Corregir un registro", icon: <Prohibit size={16} /> },
   { anchor: "atajos", title: "Atajos", icon: <Keyboard size={16} /> },
@@ -69,9 +71,9 @@ function Section({ anchor, title, lead, children }: { anchor: string; title: str
     <section id={anchor} className="scroll-mt-24 flex flex-col gap-4 rounded-card bg-surface p-6 shadow-card sm:p-7">
       <header className="flex flex-col gap-1">
         <h2 className="title-2 text-ink">{title}</h2>
-        {lead ? <p className="max-w-[62ch] text-[14px] leading-relaxed text-ink-3">{lead}</p> : null}
+        {lead ? <p className="max-w-[62ch] text-base leading-relaxed text-ink-3">{lead}</p> : null}
       </header>
-      <div className="flex max-w-[68ch] flex-col gap-3 text-[14px] leading-relaxed text-ink-2 [&_b]:font-semibold [&_b]:text-ink [&_kbd]:align-middle">{children}</div>
+      <div className="flex max-w-[68ch] flex-col gap-3 text-base leading-relaxed text-ink-2 [&_b]:font-semibold [&_b]:text-ink [&_kbd]:align-middle">{children}</div>
     </section>
   );
 }
@@ -81,7 +83,7 @@ function Steps({ items }: { items: ReactNode[] }) {
     <ol className="flex flex-col gap-2">
       {items.map((item, index) => (
         <li key={index} className="flex gap-3">
-          <span className="tnum mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[12px] font-semibold text-brand-strong">{index + 1}</span>
+          <span className="tnum mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand-strong">{index + 1}</span>
           <span className="min-w-0">{item}</span>
         </li>
       ))}
@@ -91,7 +93,7 @@ function Steps({ items }: { items: ReactNode[] }) {
 
 function Tip({ tone = "info", children }: { tone?: "info" | "warn"; children: ReactNode }) {
   return (
-    <p className={cn("flex gap-2.5 rounded-[10px] px-3.5 py-3 text-[13.5px]", tone === "warn" ? "bg-warning-soft text-warning-text" : "bg-brand-faint text-brand-strong")}>
+    <p className={cn("flex gap-2.5 rounded-field px-3.5 py-3 text-sm", tone === "warn" ? "bg-warning-soft text-warning-text" : "bg-brand-faint text-brand-strong")}>
       <WarningCircle size={17} className="mt-0.5 shrink-0" />
       <span>{children}</span>
     </p>
@@ -110,15 +112,13 @@ export default function AyudaPage() {
   const { can } = useSession();
   const active = useActiveSection();
   useHashScroll();
-  const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent);
-  const mod = isMac ? "⌘" : "Ctrl";
 
   return (
     <PageBody className="gap-6">
       <header className="flex flex-col gap-1">
         <p className="eyebrow text-brand-strong">Ayuda</p>
-        <h1 className="display text-[30px] text-ink sm:text-[34px]">Cómo se usa FICOTOX</h1>
-        <p className="max-w-[62ch] text-[14.5px] text-ink-3">Lo esencial de cada parte del sistema en pasos cortos. Si buscas algo concreto, escríbelo en el buscador: los temas de esta guía también aparecen ahí.</p>
+        <h1 className="display text-4xl text-ink sm:text-5xl">Cómo se usa FICOTOX</h1>
+        <p className="max-w-[62ch] text-base text-ink-3">Lo esencial de cada parte del sistema en pasos cortos. Si buscas algo concreto, escríbelo en el buscador: los temas de esta guía también aparecen ahí.</p>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
@@ -128,7 +128,7 @@ export default function AyudaPage() {
               const current = section.anchor === active;
               return (
                 <li key={section.anchor} className="shrink-0">
-                  <a href={`#${section.anchor}`} aria-current={current ? "location" : undefined} className={cn("press flex h-9 items-center gap-2.5 whitespace-nowrap rounded-[9px] px-2.5 text-[13.5px] transition-colors", current ? "bg-brand-soft font-medium text-brand-strong" : "text-ink-2 hover:bg-surface-3/80 hover:text-ink")}>
+                  <a href={`#${section.anchor}`} aria-current={current ? "location" : undefined} className={cn("press flex h-9 items-center gap-2.5 whitespace-nowrap rounded-field px-2.5 text-sm transition-colors", current ? "bg-brand-soft font-medium text-brand-strong" : "text-ink-2 hover:bg-surface-3/80 hover:text-ink")}>
                     <span className={cn("shrink-0", current ? "text-brand" : "text-ink-4")}>{section.icon}</span>
                     {section.title}
                   </a>
@@ -143,7 +143,7 @@ export default function AyudaPage() {
             <Steps
               items={[
                 <>
-                  <b>Empieza por el buscador del Inicio.</b> Escribe un folio, un reactivo, un equipo o lo que quieras hacer («nueva recepción», «informes por revisar») y te lleva ahí. Desde cualquier pantalla: <Kbd>{mod}</Kbd> <Kbd>K</Kbd>.
+                  <b>Empieza por el buscador del Inicio.</b> Escribe un folio, un reactivo, un equipo o lo que quieras hacer («nueva recepción», «informes por revisar») y te lleva ahí. Desde cualquier pantalla: <Atajo atajo="Mod+K" />.
                 </>,
                 <>
                   <b>El Inicio te dice qué toca.</b> Bajo el saludo aparecen tus pendientes más urgentes (por autorizar, stock bajo, calibraciones, informes por liberar o enviar…); cada uno abre su lista ya filtrada. La campana avisa de lo nuevo que te toca.
@@ -159,6 +159,23 @@ export default function AyudaPage() {
             <p>
               Lo que ves depende de tu rol: si una sección no aparece en la barra lateral, tu cuenta no tiene ese permiso. Pídeselo a quien administra los usuarios.
             </p>
+          </Section>
+
+          <Section anchor="cuenta" title="Tu cuenta y la sesión" lead="Entras con tu correo y tu contraseña. Tu cuenta, tu foto y la apariencia se cambian en Mi cuenta (tu nombre, abajo en la barra lateral).">
+            <ul className="flex flex-col gap-2">
+              <li>
+                <b>Primer ingreso:</b> una cuenta nueva, o una contraseña que restableció quien administra los usuarios, llega con una contraseña temporal. Al entrar, el sistema te pide cambiarla antes de seguir (mínimo 10 caracteres). Después la cambias cuando quieras en <b>Mi cuenta › Cambiar contraseña</b>.
+              </li>
+              <li>
+                <b>Cerrar sesión:</b> abre el menú de tu nombre en la barra lateral y elige <b>Cerrar sesión</b>, o escribe «cerrar sesión» en el buscador. En Mi cuenta, <b>Cerrar sesión en todos los dispositivos</b> cierra también las que dejaste abiertas en otras computadoras.
+              </li>
+              <li>
+                <b>Inactividad:</b> tras un rato sin usar la plataforma (30 minutos por omisión) la sesión se cierra sola; un minuto antes aparece un aviso para continuar. Lo que estabas capturando se conserva debajo: vuelve a escribir tu contraseña y sigues donde ibas.
+              </li>
+              <li>
+                <b>Varios roles:</b> si tienes más de un cargo, al firmar o aprobar el sistema te pregunta con cuál actúas y lo deja registrado.
+              </li>
+            </ul>
           </Section>
 
           <Section anchor="buscar" title="Buscar" lead="Un solo buscador encuentra registros, crea formatos nuevos y abre listas ya filtradas.">
@@ -200,7 +217,7 @@ export default function AyudaPage() {
                   <b>Análisis (A).</b> Resultados por muestra, controles de calidad, equipo y condiciones. Después se <b>revisa</b> y se <b>aprueba</b>.
                 </>,
                 <>
-                  <b>Informe (IR).</b> Se elabora con los análisis aprobados, se revisa, se <b>autoriza</b>, se <b>libera</b> (genera el PDF final) y se <b>envía</b> al cliente. Al final se registra la <b>disposición final</b> de los remanentes en la recepción y la muestra queda cerrada.
+                  <b>Informe (IR).</b> Se elabora con los análisis aprobados, se revisa, se <b>autoriza</b>, se <b>libera</b> (genera el PDF final) y se <b>envía</b> al cliente. Al final se registra la <b>disposición final</b> de los remanentes en la recepción y la muestra queda cerrada; la disposición solo se puede registrar con el informe <b>liberado o enviado</b> (una muestra rechazada en la recepción se dispone sin informe, con motivo).
                 </>,
               ]}
             />
@@ -271,13 +288,16 @@ export default function AyudaPage() {
                 <b>Existencias.</b> Cada reactivo y consumible muestra un medidor: cuánto queda frente a su capacidad y el mínimo. «Stock bajo» es por debajo del mínimo (o del 20 % si no hay mínimo); los consumibles se cuentan en unidades (no en cajas) y avisan con 5 unidades o menos si no tienen mínimo propio. <b>Registrar movimiento</b> anota entradas, salidas, consumos o ajustes por conteo.
               </li>
               <li>
+                <b>Sin existencias negativas.</b> Una salida, un consumo o un formato que descuenta más de lo que hay se rechaza y no descuenta nada; registra primero la entrada que falta o un ajuste por conteo. Al dar de alta un reactivo o consumible, la existencia inicial es la capacidad por el número de piezas.
+              </li>
+              <li>
                 <b>Equipos y mantenimiento.</b> Programar un mantenimiento pone el equipo <b>En mantenimiento</b>; al completarlo vuelve a <b>Operativo</b> y, si fue calibración, actualiza la próxima fecha. Una calibración vencida se marca en el equipo y en los avisos.
               </li>
               <li>
-                <b>Reporte de servicio (PDF).</b> Abre el mantenimiento y usa <b>Adjuntar reporte PDF</b> para subir el reporte que entregó el proveedor o el técnico (solo PDF; se guarda con su huella SHA-256 y entra en los respaldos). Se abre en el visor. Si se adjuntó por error, <b>Reemplazar</b> o <b>Quitar</b> piden motivo y tu contraseña; el archivo anterior se conserva y todo queda en la bitácora. Quien solo consulta lo ve, pero no puede cambiarlo.
+                <b>Reporte de servicio (PDF).</b> Abre el mantenimiento (Inventario › Mantenimiento) y usa <b>Adjuntar reporte PDF</b> para subir el reporte que entregó el proveedor o el técnico (solo PDF; se guarda con su huella SHA-256 y entra en los respaldos). Se abre en el visor. Si se adjuntó por error, <b>Reemplazar</b> o <b>Quitar</b> piden motivo y tu contraseña; el archivo anterior se conserva y todo queda en la bitácora. Quien solo consulta lo ve, pero no puede cambiarlo.
               </li>
               <li>
-                <b>Movimientos.</b> Cada entrada y salida queda con motivo y referencia («Extracción E-A folio 1»). Al anular un registro, lo que descontó se repone.
+                <b>Movimientos.</b> Cada entrada y salida queda con motivo y referencia («Extracción E-A folio 1»). Los movimientos no se borran: al anular un registro, lo que descontó se repone con un movimiento de reversión y ambos quedan en la lista.
               </li>
               <li>
                 <b>Avisos del Inicio.</b> Mantenimientos vencidos, equipos con alerta de calibración, stock bajo, análisis e informes esperando firma. Al abrirlos, la lista llega ya filtrada con la misma cuenta.
@@ -285,10 +305,36 @@ export default function AyudaPage() {
             </ul>
           </Section>
 
-          <Section anchor="calidad" title="Auditoría y trazabilidad" lead="Todo lo que se hace queda registrado: quién, qué, cuándo y por qué.">
+          <Section anchor="calidad" title="Calidad y auditoría" lead="Incidencias, no conformidades y la bitácora: todo lo que se hace queda registrado (quién, qué, cuándo y por qué).">
+            <ul className="flex flex-col gap-2">
+              <li>
+                <b>Reportar una incidencia:</b> «Reportar incidencia» en la barra lateral (o en el buscador): qué pasó, dónde y, si quieres, una foto. Calidad la evalúa y la cierra o la escala a <b>no conformidad</b>.
+              </li>
+              <li>
+                <b>No conformidades:</b> análisis de causa, acciones correctivas con responsable y fecha, y verificación de eficacia; si no fue eficaz, se reabre. Al cerrarla se genera su PDF. Las tuyas aparecen en «Mis acciones correctivas».
+              </li>
+              <li>
+                <b>Por autorizar:</b> las acciones delicadas (anular algo avanzado, asignar un rol, ampliar permisos, obsoletar un documento, restaurar un respaldo…) no se hacen solas: quedan como solicitud hasta que otra persona con permiso la aprueba en <b>Por autorizar</b>. Nadie aprueba lo suyo.
+              </li>
+            </ul>
             <p>
               Cada formato tiene al final un <b>Historial</b> con frases sencillas («Axel aprobó el análisis A 0000004»); al pulsar una actividad se abre una ventana con qué pasó, qué cambió y el motivo. En <b>Calidad › Auditoría</b> se ve lo mismo para toda la plataforma, con el buscador y el botón «Filtros» (periodo, personas, tipo de actividad y área). La bitácora no se exporta: se consulta solo aquí. Está sellada: si alguien la altera fuera de la plataforma, se detecta solo y aparece un aviso rojo.
             </p>
+          </Section>
+
+          <Section anchor="respaldos" title="Respaldos" lead="La plataforma guarda copias verificadas de la base y de los archivos. Se consultan en Calidad › Respaldos.">
+            <ul className="flex flex-col gap-2">
+              <li>
+                <b>Crear y probar:</b> quien administra el sistema crea un respaldo con <b>Crear respaldo</b> y comprueba que se puede recuperar con <b>Probar restauración</b>: se restaura en una copia aparte, corre 8 verificaciones y deja un acta, sin tocar los datos en uso.
+              </li>
+              <li>
+                <b>Restaurar un respaldo:</b> en el respaldo elegido, <b>Restaurar este respaldo</b> con el motivo. Queda en <b>Por autorizar</b> hasta que otra persona de Calidad lo apruebe. Al aprobarse, la plataforma muestra «Restaurando» unos momentos, guarda antes un respaldo del estado actual, reemplaza los datos y cierra todas las sesiones: hay que volver a entrar.
+              </li>
+              <li>
+                <b>Avisos:</b> si pasa más de un día sin respaldo o mucho tiempo sin una prueba de restauración, el Inicio lo avisa.
+              </li>
+            </ul>
+            <Tip tone="warn">Restaurar regresa la plataforma al momento del respaldo: lo capturado después se pierde (queda en el respaldo previo que se guarda antes).</Tip>
           </Section>
 
           <Section anchor="documentos" title="Documentos SGC" lead="Los documentos controlados del laboratorio, en seis carpetas por gestión (el color es de la gestión, nunca del estado).">
@@ -336,7 +382,7 @@ export default function AyudaPage() {
           <Section anchor="atajos" title="Atajos de teclado">
             <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-[max-content_1fr]">
               <dt className="flex items-center gap-1">
-                <Kbd>{mod}</Kbd> <Kbd>K</Kbd>
+                <Atajo atajo="Mod+K" />
               </dt>
               <dd>Abrir el buscador desde cualquier pantalla.</dd>
               <dt className="flex items-center gap-1">
@@ -347,8 +393,17 @@ export default function AyudaPage() {
                 <Kbd>Esc</Kbd>
               </dt>
               <dd>Cerrar el buscador, un panel o un diálogo.</dd>
+              <dt className="flex items-center gap-1">
+                <Atajo atajo="Mod+F" />
+              </dt>
+              <dd>Buscar dentro del PDF abierto en el visor.</dd>
+              <dt className="flex items-center gap-1">
+                <Kbd>←</Kbd> <Kbd>→</Kbd> <Kbd>F</Kbd>
+              </dt>
+              <dd>En el visor: página anterior o siguiente y pantalla completa.</dd>
             </dl>
-            <p className="text-[13px] text-ink-3">
+            <p className="text-sm text-ink-3">Los atajos se muestran según tu sistema: con ⌘ (Cmd) en Mac y con Ctrl en Windows y Linux.</p>
+            <p className="text-sm text-ink-3">
               Temas de esta guía en el buscador: {HELP_TOPICS.map((t) => t.label.toLowerCase()).slice(1, 5).join(", ")}…
             </p>
           </Section>

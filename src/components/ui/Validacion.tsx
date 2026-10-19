@@ -211,8 +211,8 @@ function DialogoValidacion({ titulo, dato, modo, onCerrar }: { titulo: string; d
                 <WarningCircle size={18} weight="bold" />
               </span>
               <div className="flex min-w-0 flex-col gap-1">
-                <RadixDialog.Title className="text-[16px] font-semibold leading-snug text-ink">{encabezado}</RadixDialog.Title>
-                <RadixDialog.Description className={cn(modo?.tipo === "faltan" ? "sr-only" : "text-[14px] leading-relaxed text-ink")}>{modo && modo.tipo !== "faltan" ? modo.que : "Corrige los datos marcados en rojo."}</RadixDialog.Description>
+                <RadixDialog.Title className="text-lg font-semibold leading-snug text-ink">{encabezado}</RadixDialog.Title>
+                <RadixDialog.Description className={cn(modo?.tipo === "faltan" ? "sr-only" : "text-base leading-relaxed text-ink")}>{modo && modo.tipo !== "faltan" ? modo.que : "Corrige los datos marcados en rojo."}</RadixDialog.Description>
               </div>
             </header>
             <div className="scroll-thin flex flex-col gap-3 overflow-y-auto px-5 pb-4 sm:pl-[64px]">
@@ -220,7 +220,7 @@ function DialogoValidacion({ titulo, dato, modo, onCerrar }: { titulo: string; d
                 <ul className="flex flex-col gap-0.5" aria-label="Datos por corregir">
                   {items.map((p, i) => (
                     <li key={`${p.campo}-${i}`}>
-                      <button type="button" onClick={() => onCerrar(p)} className="press -mx-2 w-[calc(100%+16px)] rounded-[8px] px-2 py-1.5 text-left text-[13.5px] text-ink hover:bg-surface-2">
+                      <button type="button" onClick={() => onCerrar(p)} className="press -mx-2 w-[calc(100%+16px)] rounded-control px-2 py-1.5 text-left text-sm text-ink hover:bg-surface-2">
                         <span aria-hidden="true" className="mr-1.5 text-danger">·</span>
                         {p.grupo ? <span className="font-medium">{p.grupo}: </span> : null}
                         <span className="text-brand-strong underline decoration-brand/30 underline-offset-2">{p.mensaje}</span>
@@ -230,7 +230,7 @@ function DialogoValidacion({ titulo, dato, modo, onCerrar }: { titulo: string; d
                 </ul>
               ) : null}
               {modo && modo.tipo !== "faltan" && modo.hacer ? (
-                <p className="rounded-[10px] bg-surface-2 px-3 py-2 text-[13px] text-ink-2">
+                <p className="rounded-field bg-surface-2 px-3 py-2 text-sm text-ink-2">
                   <span className="font-medium text-ink">Qué hacer: </span>
                   {modo.hacer}
                 </p>
@@ -256,10 +256,10 @@ function DialogoValidacion({ titulo, dato, modo, onCerrar }: { titulo: string; d
 export function CampoValidado({ id, children, className }: { id: string; children: ReactNode; className?: string }) {
   const error = useErrorDeCampo(id);
   return (
-    <div id={id} tabIndex={-1} aria-invalid={error ? true : undefined} aria-describedby={error ? `${id}-error` : undefined} data-invalido={error ? "true" : undefined} className={cn("scroll-mt-28 rounded-[12px] outline-none transition-shadow", error && "shadow-[0_0_0_1.5px_var(--color-danger)]", className)}>
+    <div id={id} tabIndex={-1} aria-invalid={error ? true : undefined} aria-describedby={error ? `${id}-error` : undefined} data-invalido={error ? "true" : undefined} className={cn("scroll-mt-28 rounded-box outline-none transition-shadow", error && "ring-2 ring-danger", className)}>
       {children}
       {error ? (
-        <p id={`${id}-error`} className="px-1 pt-1.5 text-[12.5px] text-danger">
+        <p id={`${id}-error`} className="px-1 pt-1.5 text-xs text-danger">
           {error}
         </p>
       ) : null}
@@ -284,7 +284,7 @@ export function MensajeCampo({ id }: { id: string }) {
     }
   }, [id, error]);
   return error ? (
-    <p id={`${id}-error`} className="text-[12.5px] font-normal text-danger">
+    <p id={`${id}-error`} className="text-xs font-normal text-danger">
       {error}
     </p>
   ) : null;

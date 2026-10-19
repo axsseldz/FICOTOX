@@ -12,6 +12,7 @@ import { datosPrincipales, dayLabel, fechaYHora, haceCuanto, humanizeAuditEntry,
 import { API_BASE_URL, getJsonAuth } from "@/lib/client/api";
 import type { ApiRecord } from "@/lib/client/types";
 import { EntryIcon, IconoArea } from "./categorias";
+import { buttonClass } from "@/components/ui/Button";
 
 /*
  * Lista de actividades de la bitacora y su detalle, iguales en Calidad ›
@@ -95,17 +96,17 @@ function FilaActividad({ grupo, activa, onAbrir }: { grupo: GrupoActividad; acti
         aria-haspopup="dialog"
         className={cn(
           "flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors duration-150 outline-none sm:px-5",
-          "hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_srgb,var(--color-brand)_45%,transparent)]",
+          "hover:bg-surface-2 focus-visible:bg-surface-2 foco-interior",
           activa && "bg-brand-faint hover:bg-brand-faint",
         )}
       >
         <EntryIcon entry={entry} size="sm" />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="line-clamp-2 text-[14px] leading-[1.35] break-words text-ink">
+          <span className="line-clamp-2 text-base leading-snug break-words text-ink">
             {entry.frase}
             {veces > 1 ? <span className="text-ink-3"> · {veces} veces</span> : null}
           </span>
-          <span className="flex items-center gap-1.5 text-[12.5px] text-ink-3">
+          <span className="flex items-center gap-1.5 text-xs text-ink-3">
             <span>
               {timeLabel(entry.when)} · {entry.area}
             </span>
@@ -125,7 +126,7 @@ export function ListaActividades({ grupos, seleccion, onAbrir }: { grupos: Grupo
     <>
       {dias.map(([dia, lista]) => (
         <section key={dia} aria-label={dia}>
-          <h2 className="material sticky top-0 z-[2] border-b border-line px-4 py-1.5 text-[12px] font-semibold text-ink-3">{dia}</h2>
+          <h2 className="material sticky top-0 z-[2] border-b border-line px-4 py-1.5 text-xs font-semibold text-ink-3">{dia}</h2>
           <ul className="divide-y divide-line">
             {lista.map((grupo) => (
               <FilaActividad key={grupo.entradas[0].id} grupo={grupo} activa={seleccion !== null && seleccion !== undefined && grupos[seleccion] === grupo} onAbrir={() => onAbrir(indice.get(grupo)!)} />
@@ -217,9 +218,9 @@ function DetalleActividad({ grupo, onIr }: { grupo: GrupoActividad; onIr: () => 
         principal={
           <>
             <Seccion titulo="Qué pasó" i={1}>
-              <p className="text-[14.5px] leading-[1.55] text-ink">{entry.quePaso}</p>
+              <p className="text-base leading-normal text-ink">{entry.quePaso}</p>
               {veces > 1 ? (
-                <p className="text-[13.5px] text-ink-2">
+                <p className="text-sm text-ink-2">
                   Lo hizo {veces} veces seguidas, a las {grupo.entradas.map((e) => timeLabel(e.when)).reverse().join(", ").replace(/, ([^,]*)$/, " y $1")}.
                 </p>
               ) : null}
@@ -227,7 +228,7 @@ function DetalleActividad({ grupo, onIr }: { grupo: GrupoActividad; onIr: () => 
 
             {entry.cambios.length ? (
               <Seccion titulo="Qué cambió" i={2}>
-                <ul className="flex flex-col gap-1.5 text-[14px] leading-[1.5] text-ink">
+                <ul className="flex flex-col gap-1.5 text-base leading-normal text-ink">
                   {entry.cambios.map((frase) => (
                     <li key={frase} className="flex gap-2">
                       <span aria-hidden="true" className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full bg-brand/60" />
@@ -238,8 +239,8 @@ function DetalleActividad({ grupo, onIr }: { grupo: GrupoActividad; onIr: () => 
               </Seccion>
             ) : principales.length ? (
               <Seccion titulo="Qué cambió" i={3}>
-                <p className="text-[14px] text-ink">Se registró con estos datos principales:</p>
-                <dl className="grid gap-x-4 gap-y-1.5 rounded-[12px] bg-surface-2 px-3.5 py-3 text-[13.5px] ring-1 ring-line sm:grid-cols-[max-content_minmax(0,1fr)]">
+                <p className="text-base text-ink">Se registró con estos datos principales:</p>
+                <dl className="grid gap-x-4 gap-y-1.5 rounded-box bg-surface-2 px-3.5 py-3 text-sm ring-1 ring-line sm:grid-cols-[max-content_minmax(0,1fr)]">
                   {principales.map((dato) => (
                     <div key={dato.etiqueta} className="contents">
                       <dt className="text-ink-3">{dato.etiqueta}</dt>
@@ -253,7 +254,7 @@ function DetalleActividad({ grupo, onIr }: { grupo: GrupoActividad; onIr: () => 
             {motivos.length ? (
               <Seccion titulo="Motivo" i={4}>
                 {motivos.map((motivo) => (
-                  <blockquote key={motivo} className="flex gap-2.5 rounded-[12px] bg-warning-soft/70 px-3.5 py-3 text-[14.5px] leading-[1.5] text-ink ring-1 ring-warning/15">
+                  <blockquote key={motivo} className="flex gap-2.5 rounded-box bg-warning-soft/70 px-3.5 py-3 text-base leading-normal text-ink ring-1 ring-warning/15">
                     <Quotes size={16} weight="fill" className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
                     <p className="whitespace-pre-line">{motivo}</p>
                   </blockquote>
@@ -265,22 +266,22 @@ function DetalleActividad({ grupo, onIr }: { grupo: GrupoActividad; onIr: () => 
         lateral={
           <>
             <TarjetaLateral icono={<User size={15} weight="duotone" />} titulo="Quién" i={0}>
-              {!entry.isSystem && entry.actor ? <FiguraPersona nombre={entry.actor} size="md" conNombre subtitulo={entry.cargo || undefined} /> : <p className="text-[14px] text-ink">La plataforma, por su cuenta</p>}
+              {!entry.isSystem && entry.actor ? <FiguraPersona nombre={entry.actor} size="md" conNombre subtitulo={entry.cargo || undefined} /> : <p className="text-base text-ink">La plataforma, por su cuenta</p>}
             </TarjetaLateral>
             <TarjetaLateral icono={<CalendarBlank size={15} weight="duotone" />} titulo="Cuándo" i={1}>
               <DatoLateral etiqueta="Fecha y hora">{fechaYHora(entry.when)}</DatoLateral>
-              <span className="text-[12.5px] text-ink-3">{haceCuanto(entry.when)}</span>
+              <span className="text-xs text-ink-3">{haceCuanto(entry.when)}</span>
             </TarjetaLateral>
             <TarjetaLateral icono={<MapPin size={15} weight="duotone" />} titulo="Dónde" i={2}>
               <span className="flex items-center gap-3">
                 <IconoArea entidad={entry.entidad} />
                 <span className="flex min-w-0 flex-col">
-                  <span className="text-[14px] font-medium text-ink">{entry.area}</span>
-                  {entry.reference ? <span className="break-words text-[12.5px] text-ink-3">{entry.reference}</span> : null}
+                  <span className="text-base font-medium text-ink">{entry.area}</span>
+                  {entry.reference ? <span className="break-words text-xs text-ink-3">{entry.reference}</span> : null}
                 </span>
               </span>
               {entry.href ? (
-                <Link href={entry.href} onClick={onIr} className="press mt-1 inline-flex h-9 w-fit items-center gap-2 rounded-full bg-brand px-4 text-[13.5px] font-medium text-on-accent shadow-card hover:bg-brand-strong focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none">
+                <Link href={entry.href} onClick={onIr} className={buttonClass({ className: "mt-1 w-fit" })}>
                   Ver el registro <ArrowRight size={14} weight="bold" />
                 </Link>
               ) : null}

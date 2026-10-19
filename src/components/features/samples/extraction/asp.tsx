@@ -103,12 +103,12 @@ function AspSections({ ctx }: { ctx: ProtocolContext }) {
   return (
     <>
       <FormCard id="sec-extraccion" title="Extracción" description="Pasos 1 a 8 del formato. Los reactivos de cantidad fija se descuentan al guardar, multiplicados por el número de tubos (muestras, réplicas y blanco).">
-        <div className="mb-3 text-[12.5px] font-medium text-ink-3">Molienda congelada</div>
+        <div className="mb-3 text-xs font-medium text-ink-3">Molienda congelada</div>
         <div className="mb-5 flex flex-col">
           {step("extrStep1", 1, "Descongelar en oscuridad")}
           {step("extrStep2", 2, "Homogeneizar por 30 a 45 s sin descartar el líquido de descongelación", equipo("id_equipo_licuadora", "Licuadora"))}
         </div>
-        <div className="mb-3 text-[12.5px] font-medium text-ink-3">Submuestreo y blanco</div>
+        <div className="mb-3 text-xs font-medium text-ink-3">Submuestreo y blanco</div>
         <div className="mb-5 flex flex-col">
           {step(
             "extrStep3",
@@ -121,7 +121,7 @@ function AspSections({ ctx }: { ctx: ProtocolContext }) {
           )}
           {step("extrStep4", 4, "Pesar agua desionizada para el blanco (4 ± 0.1 g)", text("folio_verificacion_balanza_blanco", "Folio de verificación de la balanza (blanco)", { maxLength: 60 }))}
         </div>
-        <div className="mb-3 text-[12.5px] font-medium text-ink-3">Preparación y homogeneización</div>
+        <div className="mb-3 text-xs font-medium text-ink-3">Preparación y homogeneización</div>
         <div className="flex flex-col">
           {step(
             "extrStep5",
@@ -239,7 +239,7 @@ function AspSections({ ctx }: { ctx: ProtocolContext }) {
             )}
             {step("limp9", 9, "Agitar en vórtex", equipo("limp_vortex", "Vórtex"))}
             {step("limp10", 10, "Transferir con micropipeta una alícuota de 1 mL a un vial ámbar para automuestreador", equipo("limp_micropipeta_10", "Micropipeta"))}
-            <div className="mt-4 grid gap-3 rounded-[14px] bg-surface-2 p-4 ring-1 ring-line md:grid-cols-[1fr_140px]">
+            <div className="mt-4 grid gap-3 rounded-card bg-surface-2 p-4 ring-1 ring-line md:grid-cols-[1fr_140px]">
               <Field label="Puntas de micropipeta utilizadas" hint="Se descuentan del inventario.">
                 {fixed("limp_total_puntas_ref")}
               </Field>

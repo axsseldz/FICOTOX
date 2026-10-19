@@ -70,7 +70,7 @@ export function SignDialog({
       description={description}
       footer={
         <>
-          {error ? <p className="mr-auto text-[13px] text-danger">{error}</p> : null}
+          {error ? <p className="mr-auto text-sm text-danger">{error}</p> : null}
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>

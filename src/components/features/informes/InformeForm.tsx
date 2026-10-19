@@ -481,7 +481,7 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
             <DateInput id="i-fecha" value={form.fechaEmision} onChange={(value) => patch({ fechaEmision: value })} readOnly={!draft} />
           </Field>
           {recepcionInfo ? (
-            <div className="flex flex-col gap-1 self-end pb-1 text-[13px] text-ink-2">
+            <div className="flex flex-col gap-1 self-end pb-1 text-sm text-ink-2">
               <span className="flex items-center gap-2">
                 <FolioChip type="R" num={recepcionInfo.folio_num} /> <Link href={`/muestras/recepcion/${recepcionInfo.id}`} className="text-brand">abrir recepción</Link>
               </span>
@@ -570,7 +570,7 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
           <div className="flex flex-col gap-4">
             {resultadosCongelados.map((a, i) => (
               <div key={i}>
-                <p className="mb-2 text-[13.5px] font-medium text-ink">
+                <p className="mb-2 text-sm font-medium text-ink">
                   {String(a.folio)} · {String(a.tipo)} · {String(a.metodo)}
                 </p>
                 <FormTable minWidth={640}>
@@ -631,7 +631,7 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
             <SignoffCard title="Revisó" name={item?.revisado_nombre} cargo={item?.revisado_cargo} at={item?.revisado_en} note={excepcionDe("revisar") ? `Revisión autorizada por excepción, solicitud #${excepcionDe("revisar")!.solicitud_id}` : null} hint={editing ? "Se firma con “Marcar revisado”." : "Después de crear el borrador."} />
             <SignoffCard title="Autorizó" name={item?.autorizado_nombre} cargo={item?.autorizado_cargo} at={item?.autorizado_en} note={excepcionDe("autorizar") ? `Autorización autorizada por excepción, solicitud #${excepcionDe("autorizar")!.solicitud_id}` : null} hint={editing ? "Se firma con “Autorizar” tras la revisión." : "Después de la revisión."} />
             <SignoffCard title="Liberó" name={item?.liberado_nombre} cargo={item?.liberado_cargo} at={item?.liberado_en} hint={editing ? "Se firma con “Liberar”: genera el PDF final." : "Después de la autorización."}>
-              {item?.pdf_sha256 ? <p className="code mt-1 text-[11px] text-ink-3">SHA-256 {String(item.pdf_sha256).slice(0, 16)}…</p> : null}
+              {item?.pdf_sha256 ? <p className="code mt-1 text-2xs text-ink-3">SHA-256 {String(item.pdf_sha256).slice(0, 16)}…</p> : null}
             </SignoffCard>
           </div>
         </div>

@@ -33,9 +33,9 @@ export interface VentanaCalidad {
   id: number;
 }
 
-const ENCABEZADO = "[&_[cmdk-group-heading]]:flex [&_[cmdk-group-heading]]:items-center [&_[cmdk-group-heading]]:justify-between [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:pt-3 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:text-[11.5px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:tracking-wide [&_[cmdk-group-heading]]:text-ink-3";
+const ENCABEZADO = "[&_[cmdk-group-heading]]:flex [&_[cmdk-group-heading]]:items-center [&_[cmdk-group-heading]]:justify-between [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:pt-3 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:text-2xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:tracking-wide [&_[cmdk-group-heading]]:text-ink-3";
 /* Seleccionado: el estilo compartido `.seleccion` (el mismo de la barra lateral). */
-const ITEM = "seleccion group rounded-[10px] outline-none";
+const ITEM = "seleccion group rounded-field outline-none";
 
 export function Busqueda({ modo, onCerrar, alAbrirVentana, className }: { modo: "pagina" | "ventana"; onCerrar?: () => void; /* Quien la aloja se encarga de las ventanas de detalle (si no, las abre ella misma). */ alAbrirVentana?: (ventana: VentanaCalidad) => void; className?: string }) {
   const router = useRouter();
@@ -148,7 +148,7 @@ export function Busqueda({ modo, onCerrar, alAbrirVentana, className }: { modo: 
               heading={
                 <>
                   <span>Recientes</span>
-                  <button type="button" onPointerDown={(event) => event.preventDefault()} onClick={borrarRecientes} className="rounded-[6px] px-1.5 py-0.5 text-[11.5px] font-normal text-ink-3 transition-colors hover:bg-surface-3 hover:text-ink-2">
+                  <button type="button" onPointerDown={(event) => event.preventDefault()} onClick={borrarRecientes} className="rounded-sm px-1.5 py-0.5 text-2xs font-normal text-ink-3 transition-colors hover:bg-surface-3 hover:text-ink-2">
                     Borrar recientes
                   </button>
                 </>
@@ -162,7 +162,7 @@ export function Busqueda({ modo, onCerrar, alAbrirVentana, className }: { modo: 
             </Command.Group>
           )
         : null}
-      {escrito && sinResultados ? <p className="px-3 py-9 text-center text-[14px] text-ink-3">No encontramos nada con «{query.trim()}»</p> : null}
+      {escrito && sinResultados ? <p className="px-3 py-9 text-center text-base text-ink-3">No encontramos nada con «{query.trim()}»</p> : null}
       {escrito
         ? grupos.map((grupo) => (
             <Command.Group key={grupo.clave} heading={grupo.titulo} className={ENCABEZADO}>
@@ -173,7 +173,7 @@ export function Busqueda({ modo, onCerrar, alAbrirVentana, className }: { modo: 
               ))}
               {grupo.mas ? (
                 <Command.Item value={`${grupo.clave}-todos`} onSelect={() => verTodos(grupo.mas!.href)} className={ITEM}>
-                  <span className="flex cursor-pointer items-center gap-1.5 px-2.5 py-1.5 text-[12.5px] font-medium text-brand">
+                  <span className="flex cursor-pointer items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-brand">
                     {grupo.mas.etiqueta} <ArrowRight size={13} />
                   </span>
                 </Command.Item>
@@ -197,7 +197,7 @@ export function Busqueda({ modo, onCerrar, alAbrirVentana, className }: { modo: 
       }}
     >
       <Command label="Buscar" shouldFilter={false} loop value={seleccion} onValueChange={(valor) => setElegido({ para: primero, valor })} className="w-full">
-        <div className={cn("flex items-center gap-3.5", modo === "pagina" ? cn("rounded-[22px] bg-surface pr-4 pl-6 shadow-raised ring-1 ring-line/60 transition-shadow duration-300 ease-[var(--ease-spring)]", enfocada && "shadow-[var(--shadow-panel)]") : "px-5")}>
+        <div className={cn("flex items-center gap-3.5", modo === "pagina" ? cn("rounded-panel bg-surface pr-4 pl-6 shadow-raised ring-1 ring-line/60 transition-shadow duration-300 ease-[var(--ease-spring)]", enfocada && "ring-focus") : "px-5")}>
           <MagnifyingGlass size={modo === "pagina" ? 24 : 22} className={cn("shrink-0 transition-colors", enfocada || modo === "ventana" ? "text-brand" : "text-ink-3")} />
           <Command.Input
             ref={campo}
@@ -223,7 +223,7 @@ export function Busqueda({ modo, onCerrar, alAbrirVentana, className }: { modo: 
             }}
             placeholder="Busca un folio, un reactivo, un equipo, o escribe lo que quieres hacer"
             aria-label="Buscar en FICOTOX"
-            className={cn("min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-4", modo === "pagina" ? "h-[72px] text-[16px] sm:text-[19px]" : "h-[58px] text-[16px] sm:text-[18px]")}
+            className={cn("min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-4", modo === "pagina" ? "h-[72px] text-lg sm:text-xl" : "h-[58px] text-lg sm:text-xl")}
           />
           <CircleNotch size={18} aria-hidden="true" className={cn("shrink-0 animate-spin text-ink-4 transition-opacity duration-200 motion-reduce:animate-none", cargando ? "opacity-100" : "opacity-0")} />
         </div>
@@ -235,7 +235,7 @@ export function Busqueda({ modo, onCerrar, alAbrirVentana, className }: { modo: 
             </div>
           ) : null
         ) : (
-          <div onMouseDown={(event) => event.preventDefault()} className={cn("absolute inset-x-0 top-[calc(100%+10px)] z-[var(--z-popover)] overflow-hidden rounded-[20px] border border-line bg-popover text-left shadow-panel", abierto ? "animate-materialize" : "hidden")}>
+          <div onMouseDown={(event) => event.preventDefault()} className={cn("absolute inset-x-0 top-[calc(100%+10px)] z-[var(--z-popover)] overflow-hidden rounded-panel border border-line bg-popover text-left shadow-panel", abierto ? "animate-materialize" : "hidden")}>
             {panel}
           </div>
         )}

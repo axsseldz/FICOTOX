@@ -187,13 +187,13 @@ function AsignarDialog({ recepcion, onClose, onChange }: { recepcion: ApiRecord;
     >
       <ValidacionAmbito v={v}>
       <div data-asignaciones className="mb-4 flex flex-col gap-2">
-        <p className="text-[13px] font-medium text-ink-2">Asignada a</p>
+        <p className="text-sm font-medium text-ink-2">Asignada a</p>
         {asignados === null ? (
-          <p className="text-[13px] text-ink-3">Cargando…</p>
+          <p className="text-sm text-ink-3">Cargando…</p>
         ) : vigentes.length ? (
           <ul className="flex flex-col gap-1.5">
             {vigentes.map((a) => (
-              <li key={String(a.id)} data-asignacion={String(a.id)} className="flex items-center justify-between gap-2 rounded-[10px] border border-line px-3 py-2 text-[13px]">
+              <li key={String(a.id)} data-asignacion={String(a.id)} className="flex items-center justify-between gap-2 rounded-field border border-line px-3 py-2 text-sm">
                 <span>
                   <span className="font-medium text-ink">{String(a.nombre || a.email)}</span>
                   <span className="ml-2 text-ink-3">desde {fmtDate(a.asignado_en)}</span>
@@ -205,7 +205,7 @@ function AsignarDialog({ recepcion, onClose, onChange }: { recepcion: ApiRecord;
             ))}
           </ul>
         ) : (
-          <p className="text-[13px] text-ink-3">Nadie todavía.</p>
+          <p className="text-sm text-ink-3">Nadie todavía.</p>
         )}
         {(asignados || []).some((a) => a.revocado_en) ? <Badge tone="neutral">{(asignados || []).filter((a) => a.revocado_en).length} asignación(es) revocada(s) en el historial</Badge> : null}
       </div>
@@ -226,7 +226,7 @@ function AsignarDialog({ recepcion, onClose, onChange }: { recepcion: ApiRecord;
         <Textarea id="asignar-motivo" rows={2} value={motivo} maxLength={300} onChange={(event) => setMotivo(event.target.value)} />
       </Field>
       {aviso ? (
-        <p role="alert" data-aviso-asignacion className="mt-3 rounded-[10px] border border-warning/40 bg-warning-soft px-3 py-2 text-[12.5px] text-ink-2">
+        <p role="alert" data-aviso-asignacion className="mt-3 rounded-field border border-warning/40 bg-warning-soft px-3 py-2 text-xs text-ink-2">
           {aviso}
         </p>
       ) : null}

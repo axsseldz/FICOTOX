@@ -140,13 +140,13 @@ export function AccountSheet({ open, onClose, abrirClave = false }: { open: bool
       }
     >
       <div className="flex flex-col gap-6">
-        <div className="flex items-center gap-4 rounded-[14px] bg-surface-2 p-4 ring-1 ring-line">
+        <div className="flex items-center gap-4 rounded-card bg-surface-2 p-4 ring-1 ring-line">
           {fotoVisible ? <Avatar id={user?.id} name={user?.nombre} email={user?.email} avatar={user?.avatar} size="xl" className="shadow-raised" /> : <AvatarArt avatar={choice} seed={seed} size={72} animado="siempre" className="rounded-full shadow-raised" />}
           <div className="flex min-w-0 flex-col">
-            <p className="truncate text-[16px] font-semibold text-ink">{user?.nombre || user?.email}</p>
-            <p className="truncate text-[13px] text-ink-3">{user?.email}</p>
+            <p className="truncate text-lg font-semibold text-ink">{user?.nombre || user?.email}</p>
+            <p className="truncate text-sm text-ink-3">{user?.email}</p>
             {roles.length ? (
-              <ul className="mt-1 flex flex-col gap-0.5 text-[12.5px] text-ink-2" aria-label="Roles vigentes">
+              <ul className="mt-1 flex flex-col gap-0.5 text-xs text-ink-2" aria-label="Roles vigentes">
                 {roles.map((rol) => (
                   <li key={rol.id}>
                     {rol.nombre}
@@ -155,13 +155,13 @@ export function AccountSheet({ open, onClose, abrirClave = false }: { open: bool
                 ))}
               </ul>
             ) : (
-              <p className="mt-1 text-[12.5px] text-warning-text">Sin roles vigentes</p>
+              <p className="mt-1 text-xs text-warning-text">Sin roles vigentes</p>
             )}
-            <p className="mt-1 text-[12px] text-ink-3">{fotoVisible ? "Tu foto" : AVATARS[resolveAvatarKey(choice, seed)].label}</p>
+            <p className="mt-1 text-xs text-ink-3">{fotoVisible ? "Tu foto" : AVATARS[resolveAvatarKey(choice, seed)].label}</p>
           </div>
         </div>
         {user?.tipo_cuenta === "temporal" ? (
-          <p className="rounded-[10px] bg-surface-2 px-3 py-2 text-[12.5px] text-ink-2 ring-1 ring-line">
+          <p className="rounded-field bg-surface-2 px-3 py-2 text-xs text-ink-2 ring-1 ring-line">
             Cuenta temporal{user.vigente_hasta ? ` vigente hasta el ${fmtDate(user.vigente_hasta)}` : ""}. Lo que capturas queda pendiente del visto bueno de tu supervisor.
           </p>
         ) : null}
@@ -169,7 +169,7 @@ export function AccountSheet({ open, onClose, abrirClave = false }: { open: bool
           <section className="flex flex-col gap-2">
             <div>
               <h3 className="title-3 text-ink">Cargo predeterminado</h3>
-              <p className="text-[13px] text-ink-3">Con qué cargo actúas cuando varios de tus roles permiten la misma acción. Si ese cargo no la permite, se te preguntará.</p>
+              <p className="text-sm text-ink-3">Con qué cargo actúas cuando varios de tus roles permiten la misma acción. Si ese cargo no la permite, se te preguntará.</p>
             </div>
             <Field label="Actuar como" htmlFor="cuenta-cargo">
               <Select id="cuenta-cargo" value={cargo} disabled={savingCargo} onChange={(event) => void guardarCargo(event.target.value)}>
@@ -186,14 +186,14 @@ export function AccountSheet({ open, onClose, abrirClave = false }: { open: bool
         <section className="flex flex-col gap-2" id="mis-autorizaciones">
           <div>
             <h3 className="title-3 text-ink">Mis autorizaciones</h3>
-            <p className="text-[13px] text-ink-3">Métodos, equipos y actividades para los que estás autorizada o autorizado en el formato FX-THF-AP. Las registra la coordinación.</p>
+            <p className="text-sm text-ink-3">Métodos, equipos y actividades para los que estás autorizada o autorizado en el formato FX-THF-AP. Las registra la coordinación.</p>
           </div>
-          {autorizaciones ? <ListaAutorizaciones items={autorizaciones} /> : <p className="text-[13px] text-ink-3">Cargando…</p>}
+          {autorizaciones ? <ListaAutorizaciones items={autorizaciones} /> : <p className="text-sm text-ink-3">Cargando…</p>}
         </section>
         <section className="flex flex-col gap-2">
           <div>
             <h3 className="title-3 text-ink">Seguridad</h3>
-            <p className="text-[13px] text-ink-3">
+            <p className="text-sm text-ink-3">
               Tu sesión se cierra tras {authConfig.sesion?.inactividad_min ?? 30} minutos sin actividad y, en todo caso, a las {authConfig.sesion?.expira_horas ?? 8} horas.
             </p>
           </div>
@@ -211,7 +211,7 @@ export function AccountSheet({ open, onClose, abrirClave = false }: { open: bool
         <section className="flex flex-col gap-3">
           <div>
             <h3 className="title-3 text-ink">Apariencia</h3>
-            <p className="text-[13px] text-ink-3">Claro, oscuro o automático (como tu sistema). Te sigue en cualquier computadora.</p>
+            <p className="text-sm text-ink-3">Claro, oscuro o automático (como tu sistema). Te sigue en cualquier computadora.</p>
           </div>
           <SelectorTema />
         </section>
@@ -219,7 +219,7 @@ export function AccountSheet({ open, onClose, abrirClave = false }: { open: bool
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 className="title-3 text-ink">Foto de perfil</h3>
-              <p className="text-[13px] text-ink-3">{modo === "foto" ? "Una foto tuya, recortada en círculo." : "Criaturas y objetos del laboratorio. Si no eliges, el sistema te asigna uno a partir de tu correo."}</p>
+              <p className="text-sm text-ink-3">{modo === "foto" ? "Una foto tuya, recortada en círculo." : "Criaturas y objetos del laboratorio. Si no eliges, el sistema te asigna uno a partir de tu correo."}</p>
             </div>
             <SelectorModoPerfil modo={modo} onModo={cambiarModo} />
           </div>
@@ -227,7 +227,7 @@ export function AccountSheet({ open, onClose, abrirClave = false }: { open: bool
             {modo === "foto" ? <PanelFoto onCambio={alCambiarFoto} /> : <AvatarPicker value={choice} seed={seed} onChange={setChoice} />}
           </div>
         </section>
-        <p className="text-[12px] text-ink-3">Nombre, correo y roles los administra quien tiene la administración de usuarios (Administración › Usuarios).</p>
+        <p className="text-xs text-ink-3">Nombre, correo y roles los administra quien tiene la administración de usuarios (Administración › Usuarios).</p>
       </div>
     </Sheet>
   );

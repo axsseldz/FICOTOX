@@ -9,7 +9,7 @@ import { FolioChip, StateBadge, SolicitudBadge, SupervisionBadge } from "@/compo
 import { PageBody } from "@/components/shell/AppShell";
 import { RequireModule } from "@/components/session/RequireModule";
 import { useSession } from "@/components/session/SessionProvider";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonClass } from "@/components/ui/Button";
 import { FilterChips, FilterMenu, type FilterGroup, type FilterToggle } from "@/components/ui/FilterMenu";
 import { ActionMenu, type MenuItem } from "@/components/ui/Overlay";
 import { PageHeader, SearchInput, Toolbar } from "@/components/ui/PageHeader";
@@ -106,7 +106,7 @@ function InformesContent() {
       <Toolbar
         end={
           canCreate ? (
-            <Link href="/informes/nuevo" className="press inline-flex h-9 items-center gap-2 rounded-[9px] bg-brand px-3.5 text-[13.5px] font-medium text-on-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] hover:bg-brand-strong">
+            <Link href="/informes/nuevo" className={buttonClass()}>
               <Plus size={16} weight="bold" /> Nuevo informe
             </Link>
           ) : null
@@ -165,7 +165,7 @@ function InformesContent() {
                       {Number(item.retenido || 0) ? <StatusFlag kind="bloqueo" label="Retenido por una no conformidad" detail="No se libera ni se envía hasta liberar la retención." data-retenido /> : null}
                       {Number(item.requiere_enmienda || 0) ? <StatusFlag kind="aviso" label="Requiere enmienda" detail={item.requiere_enmienda_motivo ? String(item.requiere_enmienda_motivo) : undefined} data-requiere-enmienda /> : null}
                     </StatusCell>
-                    {item.liberado_en ? <p className="mt-1 text-[11.5px] leading-tight text-ink-3">Liberado {fmtDate(item.liberado_en)}</p> : null}
+                    {item.liberado_en ? <p className="mt-1 text-2xs leading-tight text-ink-3">Liberado {fmtDate(item.liberado_en)}</p> : null}
                   </Td>
                   <Td align="right" sticky onClick={(event) => event.stopPropagation()}>
                     <ActionMenu items={menuFor(item)} header={String(item.folio || "")} />

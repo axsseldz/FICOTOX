@@ -183,7 +183,7 @@ export function EquipoSheet({ open, item, onClose }: { open: boolean; item: ApiR
                   />
                 ))
               ) : (
-                <p className="text-[13px] text-ink-3">No hay otras cuentas activas.</p>
+                <p className="text-sm text-ink-3">No hay otras cuentas activas.</p>
               )}
             </div>
             {autorizarA.length ? (
@@ -348,7 +348,7 @@ export function MantenimientoSheet({ open, item, onClose }: { open: boolean; ite
         <Field label="Observaciones" htmlFor="m-obs">
           <Textarea id="m-obs" rows={3} value={form.observaciones} onChange={set("observaciones")} />
         </Field>
-        <p className="rounded-[10px] bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-2 ring-1 ring-line">
+        <p className="rounded-field bg-surface-2 px-3.5 py-2.5 text-xs leading-relaxed text-ink-2 ring-1 ring-line">
           Mientras el mantenimiento esté <span className="font-medium">programado, en proceso o vencido</span>, el equipo se muestra “En mantenimiento” en la pestaña Equipos (con el detalle del pendiente debajo). Al marcarlo <span className="font-medium">completado</span> desaparece de Mantenimiento y el equipo vuelve a “Operativo”.
         </p>
       </form>

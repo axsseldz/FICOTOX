@@ -189,7 +189,7 @@ export function UserSheet({ open, item, onClose }: { open: boolean; item: ApiRec
                   <AvatarPicker value={avatar} seed={email.trim().toLowerCase() || nombre.toLowerCase()} onChange={setAvatar} size={44} />
                 </Field>
                 {esPropia ? (
-                  <p className="text-[12.5px] text-ink-3 sm:col-span-2">Tu propia contraseña se cambia en Mi cuenta › Cambiar contraseña.</p>
+                  <p className="text-xs text-ink-3 sm:col-span-2">Tu propia contraseña se cambia en Mi cuenta › Cambiar contraseña.</p>
                 ) : (
                   <Field label={editing ? "Nueva contraseña" : "Contraseña"} htmlFor="u-password" required={!editing} hint={editing ? "Déjala vacía para conservar la actual. Si la cambias, la persona deberá cambiarla al entrar." : "Mínimo 10 caracteres; distinta del correo y del nombre."} className="sm:col-span-2">
                     <Input

@@ -50,8 +50,8 @@ export function VentanaFormulario({
           >
             <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4 sm:px-6">
               <div className="flex min-w-0 flex-col gap-1">
-                <RadixDialog.Title className="text-[18px] leading-[1.3] font-semibold tracking-[-0.01em] text-ink">{title}</RadixDialog.Title>
-                {description ? <RadixDialog.Description className="text-[13px] leading-snug text-ink-3">{description}</RadixDialog.Description> : <RadixDialog.Description className="sr-only">{title}</RadixDialog.Description>}
+                <RadixDialog.Title className="text-xl leading-snug font-semibold tracking-snug text-ink">{title}</RadixDialog.Title>
+                {description ? <RadixDialog.Description className="text-sm leading-snug text-ink-3">{description}</RadixDialog.Description> : <RadixDialog.Description className="sr-only">{title}</RadixDialog.Description>}
               </div>
               <RadixDialog.Close asChild>
                 <IconButton label="Cerrar">
@@ -95,11 +95,11 @@ export function MasOpciones({ children, llenos = 0, etiqueta = "Más opciones", 
         aria-expanded={abierta}
         aria-controls={id}
         onClick={() => setAbierta((v) => !v)}
-        className="press flex items-center gap-2 self-start rounded-[8px] px-1 py-1 text-left text-[13px] font-medium text-brand-strong hover:text-brand focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none"
+        className="press flex items-center gap-2 self-start rounded-control px-1 py-1 text-left text-sm font-medium text-brand-strong hover:text-brand"
       >
         <CaretDown size={13} weight="bold" className={cn("transition-transform duration-200 motion-reduce:transition-none", abierta && "rotate-180")} aria-hidden="true" />
         {etiqueta}
-        {!abierta && llenos > 0 ? <span className="text-[12px] font-normal text-ink-3">· {llenos} con datos</span> : null}
+        {!abierta && llenos > 0 ? <span className="text-xs font-normal text-ink-3">· {llenos} con datos</span> : null}
       </button>
       <div id={id} ref={contenido} hidden={!abierta} className={cn("flex flex-col gap-4", abierta && "mas-opciones-entra")}>
         {children}

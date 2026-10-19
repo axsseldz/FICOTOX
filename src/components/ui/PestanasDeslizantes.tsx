@@ -41,7 +41,7 @@ export function PestanasDeslizantes<T extends string>({ value, onChange, options
             aria-selected={activa}
             tabIndex={activa ? 0 : -1}
             onClick={() => onChange(option.value)}
-            className={cn("press relative z-[1] inline-flex min-h-8 py-1 items-center justify-center gap-1.5 rounded-full px-2 text-[13px] font-medium outline-none transition-colors duration-200 focus-visible:shadow-[var(--shadow-focus)]", activa ? "text-ink" : "text-ink-3 hover:text-ink-2")}
+            className={cn("press relative z-[1] inline-flex min-h-8 py-1 items-center justify-center gap-1.5 rounded-full px-2 text-sm font-medium transition-colors duration-200", activa ? "text-ink" : "text-ink-3 hover:text-ink-2")}
           >
             {option.icon}
             <span className="text-center leading-tight">{option.label}</span>

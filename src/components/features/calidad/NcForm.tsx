@@ -230,8 +230,8 @@ export function NcForm({ item }: { item: ApiRecord }) {
     >
       <div className="flex flex-col gap-3 rounded-card bg-surface p-4 shadow-card" data-etapa={estado}>
         <FlowSteps steps={ETAPAS_NC.map((e) => ({ key: e, label: ESTADOS_NC[e].label }))} current={estado === "anulada" ? "" : estado} failed={estado === "anulada" ? "Anulada" : Number(item.reaperturas) ? `${item.reaperturas} reapertura${Number(item.reaperturas) > 1 ? "s" : ""}` : undefined} />
-        {sinGuardar ? <p className="text-[12.5px] text-warning-text">Tienes cambios sin guardar ({cambios.length}). Guárdalos antes de avanzar de etapa.</p> : null}
-        {!editar && !cerrada ? <p className="text-[12.5px] text-ink-3">Editan la NC quien administra calidad y su responsable.</p> : null}
+        {sinGuardar ? <p className="text-xs text-warning-text">Tienes cambios sin guardar ({cambios.length}). Guárdalos antes de avanzar de etapa.</p> : null}
+        {!editar && !cerrada ? <p className="text-xs text-ink-3">Editan la NC quien administra calidad y su responsable.</p> : null}
       </div>
       <SolicitudCallout item={item} />
       {estado === "anulada" ? (
@@ -256,7 +256,7 @@ export function NcForm({ item }: { item: ApiRecord }) {
                     i.restringida ? (
                       <FolioChip key={String(i.id)} type="INC" num={i.folio_num} />
                     ) : (
-                      <Link key={String(i.id)} href={`/calidad/incidencias/${i.id}`} className="press rounded-[6px]" title={String(i.descripcion)}>
+                      <Link key={String(i.id)} href={`/calidad/incidencias/${i.id}`} className="press rounded-sm" title={String(i.descripcion)}>
                         <FolioChip type="INC" num={i.folio_num} />
                       </Link>
                     ),
@@ -296,7 +296,7 @@ export function NcForm({ item }: { item: ApiRecord }) {
                 ))}
               </Select>
             ) : (
-              <div className="flex h-10 items-center gap-2 text-[14px]">
+              <div className="flex h-10 items-center gap-2 text-base">
                 {(item.responsable as ApiRecord)?.nombre || <span className="text-ink-3">Sin nombrar</span>}
               </div>
             )}
@@ -340,7 +340,7 @@ export function NcForm({ item }: { item: ApiRecord }) {
                   ))}
                 </Select>
               ) : (
-                <div className="flex h-10 items-center text-[14px]">{item[campo] === "si" ? "Sí" : item[campo] === "no" ? "No" : "Sin evaluar"}</div>
+                <div className="flex h-10 items-center text-base">{item[campo] === "si" ? "Sí" : item[campo] === "no" ? "No" : "Sin evaluar"}</div>
               )}
             </Field>
           ))}
@@ -348,7 +348,7 @@ export function NcForm({ item }: { item: ApiRecord }) {
         <Field label="Notas de la evaluación" htmlFor="nc-impacto-notas">
           {editar ? <Textarea id="nc-impacto-notas" rows={2} value={d.impacto_notas} onChange={(event) => set("impacto_notas")(event.target.value)} /> : <ReadValue value={item.impacto_notas} />}
         </Field>
-        {item.impacto_evaluado_en ? <p className="text-[12.5px] text-ink-3">Evaluó {String(item.impacto_evaluado_nombre || "—")} · {fmtDateTime(item.impacto_evaluado_en)}</p> : null}
+        {item.impacto_evaluado_en ? <p className="text-xs text-ink-3">Evaluó {String(item.impacto_evaluado_nombre || "—")} · {fmtDateTime(item.impacto_evaluado_en)}</p> : null}
 
         <InformesAfectados item={item} afectados={afectados} retenciones={retenciones} editar={editar && !cerrada} />
         <Suspensiones item={item} suspensiones={suspensiones} />
@@ -452,10 +452,10 @@ function InformePicker({ onElegir, excluir }: { onElegir: (informe: ApiRecord) =
     <div className="flex flex-col gap-1.5">
       <Input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Buscar informe por folio, cliente o ID interno" aria-label="Buscar informe afectado" small />
       {buscar.trim().length >= 2 && items.length ? (
-        <ul className="flex flex-col gap-1 rounded-[10px] bg-surface p-1 ring-1 ring-line">
+        <ul className="flex flex-col gap-1 rounded-field bg-surface p-1 ring-1 ring-line">
           {items.map((i) => (
             <li key={String(i.id)}>
-              <button type="button" onClick={() => (onElegir(i), setQ(""))} className="press flex w-full items-center justify-between gap-2 rounded-[8px] px-2 py-1.5 text-left text-[13px] hover:bg-surface-3">
+              <button type="button" onClick={() => (onElegir(i), setQ(""))} className="press flex w-full items-center justify-between gap-2 rounded-control px-2 py-1.5 text-left text-sm hover:bg-surface-3">
                 <span className="flex items-center gap-2">
                   <FolioChip type="IR" num={i.folio_num} /> {String((i.cliente as ApiRecord)?.nombre || i.solicitante || "")}
                 </span>
@@ -488,13 +488,13 @@ function InformesAfectados({ item, afectados, retenciones, editar }: { item: Api
           {afectados.map((a) => {
             const ret = activa(a.entidad_id);
             return (
-              <li key={String(a.id)} className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] bg-surface px-3 py-2 ring-1 ring-line" data-afectado={String(a.entidad_id)}>
+              <li key={String(a.id)} className="flex flex-wrap items-center justify-between gap-2 rounded-field bg-surface px-3 py-2 ring-1 ring-line" data-afectado={String(a.entidad_id)}>
                 <span className="flex flex-col">
-                  <Link href={`/informes/${a.entidad_id}`} className="flex items-center gap-2 text-[13.5px] font-medium text-ink hover:underline">
+                  <Link href={`/informes/${a.entidad_id}`} className="flex items-center gap-2 text-sm font-medium text-ink hover:underline">
                     <LinkSimple size={14} className="text-ink-3" /> {String(a.referencia)}
                   </Link>
                   {((a.enmiendas || []) as ApiRecord[]).length ? (
-                    <span className="text-[12px] text-ink-3">
+                    <span className="text-xs text-ink-3">
                       Enmienda:{" "}
                       {((a.enmiendas || []) as ApiRecord[]).map((e, i) => (
                         <span key={String(e.id)}>
@@ -506,7 +506,7 @@ function InformesAfectados({ item, afectados, retenciones, editar }: { item: Api
                       ))}
                     </span>
                   ) : (
-                    <span className="text-[12px] text-ink-3">Si hay que corregir resultados: «Emitir enmienda» en el informe.</span>
+                    <span className="text-xs text-ink-3">Si hay que corregir resultados: «Emitir enmienda» en el informe.</span>
                   )}
                 </span>
                 <span className="flex items-center gap-1.5">
@@ -532,10 +532,10 @@ function InformesAfectados({ item, afectados, retenciones, editar }: { item: Api
           })}
         </ul>
       ) : (
-        <p className="text-[13px] text-ink-3">Sin informes afectados.</p>
+        <p className="text-sm text-ink-3">Sin informes afectados.</p>
       )}
       {retenciones.some((r) => r.liberada_en) ? (
-        <p className="text-[12.5px] text-ink-3">
+        <p className="text-xs text-ink-3">
           Retenciones liberadas: {retenciones.filter((r) => r.liberada_en).map((r) => `${r.informe} (${fmtDateTime(r.liberada_en)}, ${r.liberada_nombre || "—"})`).join("; ")}
         </p>
       ) : null}
@@ -573,10 +573,10 @@ function Suspensiones({ item, suspensiones }: { item: ApiRecord; suspensiones: A
           {suspensiones.map((su) => {
             const propia = Number(su.suspendida_por) === Number(user?.id);
             return (
-              <li key={String(su.id)} className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] bg-surface px-3 py-2 ring-1 ring-line" data-suspension={String(su.id)}>
+              <li key={String(su.id)} className="flex flex-wrap items-center justify-between gap-2 rounded-field bg-surface px-3 py-2 ring-1 ring-line" data-suspension={String(su.id)}>
                 <span className="flex flex-col">
-                  <span className="text-[13.5px] font-medium text-ink">{su.tipo === "metodo" ? `Método ${su.clave}` : `Equipo ${su.equipo_nombre || `#${su.clave}`}`}</span>
-                  <span className="text-[12.5px] text-ink-3">
+                  <span className="text-sm font-medium text-ink">{su.tipo === "metodo" ? `Método ${su.clave}` : `Equipo ${su.equipo_nombre || `#${su.clave}`}`}</span>
+                  <span className="text-xs text-ink-3">
                     Suspendido {fmtDateTime(su.suspendida_en)} por {String(su.suspendida_nombre || "—")} · {String(su.motivo)}
                     {su.reanudada_en ? ` · reanudado ${fmtDateTime(su.reanudada_en)} por ${su.reanudada_nombre || "—"}` : ""}
                   </span>
@@ -605,7 +605,7 @@ function Suspensiones({ item, suspensiones }: { item: ApiRecord; suspensiones: A
           })}
         </ul>
       ) : (
-        <p className="text-[13px] text-ink-3">Sin suspensiones.</p>
+        <p className="text-sm text-ink-3">Sin suspensiones.</p>
       )}
       {puede.suspender ? (
         <ValidacionAmbito v={vSusp}>
@@ -677,19 +677,19 @@ function Comunicaciones({ item, comunicaciones, afectados, editar, requerida }: 
       {comunicaciones.length ? (
         <ul className="flex flex-col gap-2">
           {comunicaciones.map((c) => (
-            <li key={String(c.id)} className="rounded-[10px] bg-surface px-3 py-2 text-[13px] ring-1 ring-line">
+            <li key={String(c.id)} className="rounded-field bg-surface px-3 py-2 text-sm ring-1 ring-line">
               <p className="font-medium text-ink">
                 {fmtDate(c.fecha)} · {MEDIO_COMUNICACION_LABEL[String(c.medio)] || String(c.medio)} · {String(c.contacto)}
               </p>
               <p className="whitespace-pre-line text-ink-2">{String(c.resumen)}</p>
-              <p className="text-[12px] text-ink-3">Registró {String(c.registrado_nombre || "—")}</p>
+              <p className="text-xs text-ink-3">Registró {String(c.registrado_nombre || "—")}</p>
             </li>
           ))}
         </ul>
       ) : requerida ? (
         <Callout tone="warning">Falta registrar la comunicación con el cliente.</Callout>
       ) : (
-        <p className="text-[13px] text-ink-3">Sin comunicaciones registradas.</p>
+        <p className="text-sm text-ink-3">Sin comunicaciones registradas.</p>
       )}
       {editar ? (
         <Button variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => setAbierto(true)} className="self-start">
@@ -791,18 +791,18 @@ function AccionesTabla({ item, acciones, editar, editorNc }: { item: ApiRecord; 
           {acciones.map((a) => {
             const abierta = ["pendiente", "en_proceso"].includes(String(a.estado));
             return (
-              <li key={String(a.id)} className="on-panel flex flex-col gap-2 rounded-[12px] bg-surface-2 p-3 ring-1 ring-line" data-accion-fila={String(a.id)}>
+              <li key={String(a.id)} className="on-panel flex flex-col gap-2 rounded-box bg-surface-2 p-3 ring-1 ring-line" data-accion-fila={String(a.id)}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <p className="whitespace-pre-line text-[14px] font-medium text-ink">{String(a.descripcion)}</p>
-                    <p className="text-[12.5px] text-ink-3">
+                    <p className="whitespace-pre-line text-base font-medium text-ink">{String(a.descripcion)}</p>
+                    <p className="text-xs text-ink-3">
                       {String(a.responsable_nombre || "—")}
                       {!a.responsable_vigente && abierta ? " (sin cuenta vigente: reasígnala)" : ""} · compromiso{" "}
                       <span className={a.vencida ? "font-medium text-danger" : undefined}>{fmtDate(a.fecha_compromiso)}</span>
                     </p>
-                    {a.descripcion_implementacion ? <p className="whitespace-pre-line text-[12.5px] text-ink-2">Implementación: {String(a.descripcion_implementacion)}</p> : null}
-                    {a.motivo_cancelacion ? <p className="whitespace-pre-line text-[12.5px] text-danger">Cancelada: {String(a.motivo_cancelacion)}</p> : null}
-                    {a.motivo_reasignacion ? <p className="whitespace-pre-line text-[12px] text-ink-3">Reasignada: {String(a.motivo_reasignacion)}</p> : null}
+                    {a.descripcion_implementacion ? <p className="whitespace-pre-line text-xs text-ink-2">Implementación: {String(a.descripcion_implementacion)}</p> : null}
+                    {a.motivo_cancelacion ? <p className="whitespace-pre-line text-xs text-danger">Cancelada: {String(a.motivo_cancelacion)}</p> : null}
+                    {a.motivo_reasignacion ? <p className="whitespace-pre-line text-xs text-ink-3">Reasignada: {String(a.motivo_reasignacion)}</p> : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <EstadoAccion estado={a.estado} />
@@ -854,7 +854,7 @@ function AccionesTabla({ item, acciones, editar, editorNc }: { item: ApiRecord; 
           })}
         </ul>
       ) : (
-        <p className="text-[13px] text-ink-3">Sin acciones todavía.</p>
+        <p className="text-sm text-ink-3">Sin acciones todavía.</p>
       )}
       {editar ? (
         <ValidacionAmbito v={vAcc}>
@@ -909,7 +909,7 @@ function Verificar({ item, bloqueo, onExcepcion }: { item: ApiRecord; bloqueo: s
     void enviar("POST", `/calidad/nc/${item.id}/verificar`, { resultado, comentarios }, undefined, (err) => vVer.errorServidor(err));
   };
   if (!puede.verificar) {
-    return item.estado === "en_verificacion" ? <p className="text-[13px] text-ink-3">Pendiente: la verifica quien revisa en calidad.</p> : null;
+    return item.estado === "en_verificacion" ? <p className="text-sm text-ink-3">Pendiente: la verifica quien revisa en calidad.</p> : null;
   }
   if (bloqueo) return <SegregacionCallout bloqueo={bloqueo} accion="verificar" onSolicitar={onExcepcion} />;
   return (
@@ -944,7 +944,7 @@ function PropuestaAnterior({ item }: { item: ApiRecord }) {
   const propuesta = item.propuesta as ApiRecord | null;
   if (!propuesta) return null;
   return (
-    <p className="flex items-center gap-2 rounded-[10px] bg-surface-2 px-3 py-2 text-[13px] text-ink-2 ring-1 ring-line" data-propuesta-anterior>
+    <p className="flex items-center gap-2 rounded-field bg-surface-2 px-3 py-2 text-sm text-ink-2 ring-1 ring-line" data-propuesta-anterior>
       <FileText size={16} className="shrink-0 text-ink-3" />
       <span className="min-w-0 flex-1">
         Propuesta documental anterior #{String(propuesta.id)}: {String(propuesta.titulo)} <span className="text-ink-3">(flujo retirado; solo consulta)</span>
@@ -968,14 +968,14 @@ function Cierre({ item, bloqueo, onExcepcion, onPdf }: { item: ApiRecord; bloque
             <Button variant="secondary" icon={<FilePdf size={16} />} onClick={onPdf}>
               PDF final
             </Button>
-            <span className="font-mono text-[11.5px] break-all text-ink-3">SHA-256 {String(item.pdf_sha256)}</span>
+            <span className="font-mono text-2xs break-all text-ink-3">SHA-256 {String(item.pdf_sha256)}</span>
           </div>
         ) : null}
       </div>
     );
   }
-  if (item.estado === "anulada") return <p className="text-[13px] text-ink-3">La NC está anulada.</p>;
-  if (!puede.cerrar) return <p className="text-[13px] text-ink-3">La cierra quien aprueba en calidad (Responsable General o Mejora Continua) cuando se cumplan las condiciones.</p>;
+  if (item.estado === "anulada") return <p className="text-sm text-ink-3">La NC está anulada.</p>;
+  if (!puede.cerrar) return <p className="text-sm text-ink-3">La cierra quien aprueba en calidad (Responsable General o Mejora Continua) cuando se cumplan las condiciones.</p>;
   if (bloqueo) return <SegregacionCallout bloqueo={bloqueo} accion="cerrar" onSolicitar={onExcepcion} />;
   const cerrar = async () => {
     const conclusion = await prompt({ critico: true, title: `Cerrar ${item.folio}`, description: "Se genera el PDF «Registro de no conformidad» con su huella SHA-256. Después ya no se edita.", label: "Conclusión del cierre", minLength: 10, confirmLabel: "Cerrar NC" });

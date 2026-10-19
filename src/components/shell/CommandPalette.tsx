@@ -20,7 +20,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
         <RadixDialog.Portal>
           <RadixDialog.Overlay className="fixed inset-0 z-[var(--z-ventana)] bg-deep/25 backdrop-blur-[3px] data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out" />
-          <RadixDialog.Content className="bg-popover border border-line fixed top-[12vh] left-1/2 z-[var(--z-ventana)] w-[calc(100%-24px)] max-w-[680px] -translate-x-1/2 overflow-hidden rounded-[20px] shadow-panel outline-none data-[state=open]:animate-materialize data-[state=closed]:animate-dematerialize">
+          <RadixDialog.Content className="bg-popover border border-line fixed top-[12vh] left-1/2 z-[var(--z-ventana)] w-[calc(100%-24px)] max-w-[680px] -translate-x-1/2 overflow-hidden rounded-panel shadow-panel outline-none data-[state=open]:animate-materialize data-[state=closed]:animate-dematerialize">
             <RadixDialog.Title className="sr-only">Buscar</RadixDialog.Title>
             <RadixDialog.Description className="sr-only">Busca registros, ve a una pantalla o haz algo escribiendo lo que quieres</RadixDialog.Description>
             <Busqueda modo="ventana" onCerrar={() => onOpenChange(false)} alAbrirVentana={setVentana} />

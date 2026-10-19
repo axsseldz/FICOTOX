@@ -49,21 +49,21 @@ function celdas(item: ElementoSupervision) {
   const pendiente = item.clase === "pendiente";
   return [
     <span key="q" className="flex items-center gap-2.5">
-      <span aria-hidden="true" className={pendiente ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-warning-soft text-warning-text" : "flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-danger-soft text-danger"}>
+      <span aria-hidden="true" className={pendiente ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-field bg-warning-soft text-warning-text" : "flex h-9 w-9 shrink-0 items-center justify-center rounded-field bg-danger-soft text-danger"}>
         {pendiente ? <Eye size={18} weight="duotone" /> : <ArrowUUpLeft size={18} weight="duotone" />}
       </span>
       <span className="flex min-w-0 flex-col items-start gap-1">
-        <span className="text-[14px] leading-tight font-semibold text-ink">{pendiente ? "Dar visto bueno" : "Corregir lo regresado"}</span>
+        <span className="text-base leading-tight font-semibold text-ink">{pendiente ? "Dar visto bueno" : "Corregir lo regresado"}</span>
         <Badge tone={pendiente ? "warning" : "danger"} dot>
           {pendiente ? "Pendiente" : "Regresado"}
         </Badge>
       </span>
     </span>,
-    <span key="r" className="text-[13.5px] text-ink-2">
+    <span key="r" className="text-sm text-ink-2">
       {`${String(item.tipo || "Registro")} ${String(item.referencia || "")}`.trim()}
     </span>,
-    pendiente && item.solicitado_por ? <FiguraPersona key="p" nombre={item.solicitado_por} conNombre /> : <span key="p" className="text-[13px] text-ink-4">{pendiente ? "—" : "Tú"}</span>,
-    <span key="c" className="text-[13px] text-ink-2" title={item.solicitado_en ? formatearFechaHora(item.solicitado_en) : undefined}>
+    pendiente && item.solicitado_por ? <FiguraPersona key="p" nombre={item.solicitado_por} conNombre /> : <span key="p" className="text-sm text-ink-4">{pendiente ? "—" : "Tú"}</span>,
+    <span key="c" className="text-sm text-ink-2" title={item.solicitado_en ? formatearFechaHora(item.solicitado_en) : undefined}>
       {item.solicitado_en ? haceCuantoCorto(item.solicitado_en) : "—"}
     </span>,
   ];

@@ -155,16 +155,16 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
               <tr key={String(e.id)} data-envio={String(e.id)}>
                 <td className={formTd}>
                   <span className="block text-ink">{String(e.destinatario_nombre)}</span>
-                  <span className="code text-[12px] text-ink-3">{String(e.destinatario_correo)}</span>
+                  <span className="code text-xs text-ink-3">{String(e.destinatario_correo)}</span>
                 </td>
                 <td className={formTd}>
                   {formatearFechaHora(e.enviado_en)}
-                  <span className="block text-[12px] text-ink-3">versión {String(e.version)}</span>
+                  <span className="block text-xs text-ink-3">versión {String(e.version)}</span>
                 </td>
                 <td className={formTd}>{e.medio === "smtp" ? <Badge tone="brand">Plataforma (SMTP)</Badge> : <Badge>Manual</Badge>}</td>
                 <td className={formTd}>
                   {String(e.enviado_por_nombre || "—")}
-                  {e.enviado_rol ? <span className="block text-[12px] text-ink-3">{String(e.enviado_rol)}</span> : null}
+                  {e.enviado_rol ? <span className="block text-xs text-ink-3">{String(e.enviado_rol)}</span> : null}
                 </td>
                 <td className={formTd}>
                   {e.evidencia_archivo ? (
@@ -174,14 +174,14 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
                   ) : (
                     "—"
                   )}
-                  {e.evidencia_sha256 ? <span className="code block text-[11px] text-ink-3">SHA-256 {String(e.evidencia_sha256).slice(0, 12)}…</span> : null}
-                  {e.message_id ? <span className="code block text-[11px] text-ink-3">{String(e.message_id)}</span> : null}
+                  {e.evidencia_sha256 ? <span className="code block text-2xs text-ink-3">SHA-256 {String(e.evidencia_sha256).slice(0, 12)}…</span> : null}
+                  {e.message_id ? <span className="code block text-2xs text-ink-3">{String(e.message_id)}</span> : null}
                 </td>
                 <td className={cn(formTd)}>
                   {e.confirmacion_en ? (
                     <span className="inline-flex flex-col">
                       <Badge tone="success">Confirmado {formatearFechaHora(e.confirmacion_en)}</Badge>
-                      {e.confirmacion_nota ? <span className="text-[12px] text-ink-3">{String(e.confirmacion_nota)}</span> : null}
+                      {e.confirmacion_nota ? <span className="text-xs text-ink-3">{String(e.confirmacion_nota)}</span> : null}
                     </span>
                   ) : puedeEnviar ? (
                     <Button size="sm" variant="ghost" icon={<CheckCircle size={14} />} onClick={() => setConfirmar({ envio: e, fecha: hoyLocal(), nota: "" })}>
@@ -207,8 +207,8 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
         ) : (
           <ValidacionAmbito v={vEnvio}>
           <div className="flex flex-col gap-3 rounded-card border border-line p-4">
-            <p className="text-[14px] font-medium text-ink">Registrar envío manual</p>
-            <p className="text-[12.5px] text-ink-3">Envía el PDF desde tu correo institucional y registra aquí el envío con la evidencia (PDF, imagen o .eml del correo enviado).</p>
+            <p className="text-base font-medium text-ink">Registrar envío manual</p>
+            <p className="text-xs text-ink-3">Envía el PDF desde tu correo institucional y registra aquí el envío con la evidencia (PDF, imagen o .eml del correo enviado).</p>
             <FormGrid cols={2}>
               <Field label="Destinatario" htmlFor="envio-nombre" required>
                 <Input id="envio-nombre" maxLength={180} value={form.nombre} onChange={(event) => setForm({ ...form, nombre: event.target.value })} />
@@ -224,7 +224,7 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
               </Field>
             </FormGrid>
             <Field label="Evidencia del correo enviado" htmlFor="envio-evidencia" required hint="PDF, PNG, JPG, WebP o .eml (máx. 15 MB). Se guarda con su huella SHA-256.">
-              <input id="envio-evidencia" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.eml,.msg" onChange={(event) => setArchivo(event.target.files?.[0] || null)} className="max-w-full text-[13px] text-ink-2 file:mr-3 file:rounded-[8px] file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-[13px] file:font-medium file:text-ink file:shadow-card" />
+              <input id="envio-evidencia" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.eml,.msg" onChange={(event) => setArchivo(event.target.files?.[0] || null)} className="max-w-full text-sm text-ink-2 file:mr-3 file:rounded-control file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink file:shadow-card" />
             </Field>
             <Field label="Observaciones" htmlFor="envio-obs">
               <Textarea id="envio-obs" rows={2} value={form.observaciones} onChange={(event) => setForm({ ...form, observaciones: event.target.value })} />
@@ -242,7 +242,7 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
                 Registrar envío
               </Button>
             </div>
-            <p className="text-[12px] text-ink-3">«Abrir en mi correo» prepara el asunto y el texto; el PDF se adjunta a mano.</p>
+            <p className="text-xs text-ink-3">«Abrir en mi correo» prepara el asunto y el texto; el PDF se adjunta a mano.</p>
           </div>
           </ValidacionAmbito>
         )

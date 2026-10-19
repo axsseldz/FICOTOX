@@ -31,17 +31,17 @@ export function IncidenciasDelRegistro({ entidad, id, etiqueta }: { entidad: str
         <ul className="flex flex-col gap-1.5">
           {items.map((i) => (
             <li key={String(i.id)}>
-              <Link href={`/calidad/incidencias/${i.id}`} className="press flex flex-wrap items-center gap-2 rounded-[10px] bg-surface-2 px-3 py-2 text-[13px] ring-1 ring-line hover:bg-surface-3">
+              <Link href={`/calidad/incidencias/${i.id}`} className="press flex flex-wrap items-center gap-2 rounded-field bg-surface-2 px-3 py-2 text-sm ring-1 ring-line hover:bg-surface-3">
                 <FolioChip type="INC" num={i.folio_num} />
                 <span className="min-w-0 flex-1 truncate text-ink">{TIPO_INCIDENCIA_LABEL[String(i.tipo)] || String(i.tipo)} · {String(i.descripcion)}</span>
-                <span className="text-[12px] text-ink-3">{fmtDate(i.reportada_en)}</span>
+                <span className="text-xs text-ink-3">{fmtDate(i.reportada_en)}</span>
                 <EstadoIncidencia estado={i.estado} />
               </Link>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-[13px] text-ink-3">{puedeVer ? (recurso.data ? "Ninguna incidencia menciona este registro." : "Cargando…") : "Puedes reportar una incidencia ligada a este registro."}</p>
+        <p className="text-sm text-ink-3">{puedeVer ? (recurso.data ? "Ninguna incidencia menciona este registro." : "Cargando…") : "Puedes reportar una incidencia ligada a este registro."}</p>
       )}
       {puedeReportar ? (
         <Button variant="secondary" size="sm" icon={<WarningDiamond size={14} />} onClick={() => reportarIncidencia([{ entidad, entidad_id: Number(id), etiqueta }])} className="self-start">

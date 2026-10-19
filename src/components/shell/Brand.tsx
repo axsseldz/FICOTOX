@@ -65,7 +65,7 @@ export function BrandLockup({ inverted = false, className, size = 28 }: { invert
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
       <BrandMark inverted={inverted} size={size} />
-      <span className={cn("text-[15px] font-semibold tracking-[-0.02em]", inverted ? "text-white" : "text-ink")}>FICOTOX</span>
+      <span className={cn("text-md font-semibold tracking-tight", inverted ? "text-on-deep" : "text-ink")}>FICOTOX</span>
     </span>
   );
 }

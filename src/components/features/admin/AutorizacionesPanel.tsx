@@ -48,22 +48,22 @@ function FilaAutorizacion({ a, i, onRevocar }: { a: AutorizacionPersonal; i: num
   const dias = estado === "vigente" && a.vigente_hasta ? diasEntre(hoyLocal(), a.vigente_hasta) : null;
   const porVencer = dias !== null && dias < 30;
   return (
-    <li className={cn("entrada-escalonada flex flex-wrap items-start gap-3 rounded-[12px] bg-surface px-3.5 py-3 ring-1 transition-shadow duration-200 hover:shadow-raised", porVencer ? "ring-warning/40" : "ring-line")} style={{ ["--i" as string]: i }} data-autorizacion={a.id}>
+    <li className={cn("entrada-escalonada flex flex-wrap items-start gap-3 rounded-box bg-surface px-3.5 py-3 ring-1 transition-shadow duration-200 hover:shadow-raised", porVencer ? "ring-warning/40" : "ring-line")} style={{ ["--i" as string]: i }} data-autorizacion={a.id}>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[14px] font-medium text-ink">{a.etiqueta || "Autorización"}</span>
+          <span className="text-base font-medium text-ink">{a.etiqueta || "Autorización"}</span>
           {estado !== "vigente" ? (
             <Badge tone={TONO_ESTADO[estado]} dot>
               {ETIQUETA_ESTADO_AUTORIZACION[estado]}
             </Badge>
           ) : null}
         </div>
-        <span className={cn("text-[12.5px]", porVencer ? "text-warning-text" : "text-ink-3")}>
+        <span className={cn("text-xs", porVencer ? "text-warning-text" : "text-ink-3")}>
           {vigenciaEnPalabras(a, estado)}
           {a.folio_fx_thf_ap ? ` · formato ${a.folio_fx_thf_ap}` : ""}
         </span>
-        {porVencer ? <span className="text-[12px] text-warning-text">Vence pronto: conviene renovarla.</span> : null}
-        {a.motivo_revocacion ? <span className="text-[12.5px] text-ink-3">Motivo: {a.motivo_revocacion}</span> : null}
+        {porVencer ? <span className="text-xs text-warning-text">Vence pronto: conviene renovarla.</span> : null}
+        {a.motivo_revocacion ? <span className="text-xs text-ink-3">Motivo: {a.motivo_revocacion}</span> : null}
       </div>
       {revocable ? (
         <Button size="sm" variant="secondary" icon={<Prohibit size={14} />} onClick={() => onRevocar!(a)}>
@@ -80,7 +80,7 @@ function FilaAutorizacion({ a, i, onRevocar }: { a: AutorizacionPersonal; i: num
  * si vencen en menos de 30 dias. Las revocadas o vencidas quedan plegadas.
  */
 export function ListaAutorizaciones({ items, onRevocar }: { items: AutorizacionPersonal[]; onRevocar?: (a: AutorizacionPersonal) => void }) {
-  if (!items.length) return <p className="text-[13px] text-ink-3">Sin autorizaciones registradas en FX-THF-AP.</p>;
+  if (!items.length) return <p className="text-sm text-ink-3">Sin autorizaciones registradas en FX-THF-AP.</p>;
   const activa = (a: AutorizacionPersonal) => ["vigente", "por_iniciar"].includes(String(a.estado || "vigente"));
   const inactivas = items.filter((a) => !activa(a));
   return (
@@ -90,8 +90,8 @@ export function ListaAutorizaciones({ items, onRevocar }: { items: AutorizacionP
         if (!lista.length) return null;
         return (
           <section key={g.tipo} className="flex flex-col gap-2">
-            <h4 className="flex items-center gap-2 text-[13px] font-semibold text-ink-2">
-              <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-brand-soft text-brand-strong">
+            <h4 className="flex items-center gap-2 text-sm font-semibold text-ink-2">
+              <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-field bg-brand-soft text-brand-strong">
                 {g.icono}
               </span>
               {g.titulo}
@@ -105,10 +105,10 @@ export function ListaAutorizaciones({ items, onRevocar }: { items: AutorizacionP
           </section>
         );
       })}
-      {!items.some(activa) ? <p className="text-[13px] text-ink-3">No tiene autorizaciones vigentes.</p> : null}
+      {!items.some(activa) ? <p className="text-sm text-ink-3">No tiene autorizaciones vigentes.</p> : null}
       {inactivas.length ? (
-        <details className="group/aut rounded-[14px] bg-surface-2 ring-1 ring-line">
-          <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-[13.5px] font-medium text-ink-2 [&::-webkit-details-marker]:hidden">
+        <details className="group/aut rounded-card bg-surface-2 ring-1 ring-line">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-sm font-medium text-ink-2 [&::-webkit-details-marker]:hidden">
             Revocadas o vencidas ({inactivas.length})
             <span aria-hidden="true" className="text-ink-4 transition-transform duration-200 ease-[var(--ease-spring)] group-open/aut:rotate-180">
               ▾
@@ -222,7 +222,7 @@ export function AutorizacionesUsuario({ usuarioId }: { usuarioId: number }) {
   return (
     <ValidacionAmbito v={v}>
     <div className="flex flex-col gap-3" id="autorizaciones-usuario">
-      <p className="text-[13px] text-ink-3">Además del rol, la persona solo puede trabajar con los métodos, equipos y actividades para los que está autorizada (formato FX-THF-AP), mientras la autorización esté vigente.</p>
+      <p className="text-sm text-ink-3">Además del rol, la persona solo puede trabajar con los métodos, equipos y actividades para los que está autorizada (formato FX-THF-AP), mientras la autorización esté vigente.</p>
       <ListaAutorizaciones items={items} onRevocar={puede ? revocar : undefined} />
       {puede && !agregarAbierto ? (
         <div>

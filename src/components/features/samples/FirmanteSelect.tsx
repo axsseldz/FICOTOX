@@ -120,7 +120,7 @@ export function FirmanteSelect({
         ))}
       </Select>
       {actual ? (
-        <p className="text-[12.5px] text-ink-3" data-firmante={value.usuario_id}>
+        <p className="text-xs text-ink-3" data-firmante={value.usuario_id}>
           {actual.cargo ? `Cargo: ${actual.cargo}` : actual.email}
           {!disabled && actual.id !== yo ? (value.password ? " · su contraseña se verificará al guardar" : confirmada ? " · firma confirmada con su contraseña" : "") : ""}
         </p>

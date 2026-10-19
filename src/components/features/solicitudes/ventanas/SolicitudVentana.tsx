@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ArrowRight, CalendarBlank, ClockCounterClockwise, FolderSimple, Prohibit, Quotes, SealCheck, Stamp, XCircle } from "@phosphor-icons/react";
 import { describirSolicitud, hrefDeSolicitud, NOMBRE_GRUPO, GRUPO_DE_ENTIDAD } from "@/components/features/solicitudes/Solicitudes";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonClass } from "@/components/ui/Button";
 import { FiguraPersona } from "@/components/ui/FiguraPersona";
 import { Badge, type Tone } from "@/components/ui/Primitives";
 import { DatosRapidos, VentanaAcciones, VentanaCentrada, VentanaEncabezado, VentanaSeccion, VentanaTarjeta, VentanaTitulo } from "@/components/ui/Ventana";
@@ -61,7 +61,7 @@ function FichaSolicitud({ sol, acciones, onIr }: { sol: ApiRecord; acciones: Acc
     <div className="flex flex-col gap-5" data-solicitud-ventana={String(sol.id)}>
       <VentanaEncabezado
         figura={
-          <span aria-hidden="true" className="flex h-14 w-14 items-center justify-center rounded-[16px] bg-warning-soft text-warning-text">
+          <span aria-hidden="true" className="flex h-14 w-14 items-center justify-center rounded-card bg-warning-soft text-warning-text">
             <Stamp size={28} weight="duotone" />
           </span>
         }
@@ -82,7 +82,7 @@ function FichaSolicitud({ sol, acciones, onIr }: { sol: ApiRecord; acciones: Acc
       />
 
       <VentanaSeccion titulo="Qué se pide" i={0}>
-        <p className="text-[14.5px] leading-[1.55] text-ink">
+        <p className="text-base leading-normal text-ink">
           {quien} pidió <span className="font-medium">{que.charAt(0).toLowerCase() + que.slice(1)}</span> sobre {registro}.{" "}
           {pendiente ? "La acción no se hace hasta que otra persona autorizada la apruebe; quien la pidió no puede aprobarla." : null}
         </p>
@@ -93,7 +93,7 @@ function FichaSolicitud({ sol, acciones, onIr }: { sol: ApiRecord; acciones: Acc
       </VentanaSeccion>
 
       <VentanaSeccion titulo="Motivo" i={2}>
-        <blockquote className="flex gap-2.5 rounded-[12px] bg-warning-soft/70 px-3.5 py-3 text-[14.5px] leading-[1.5] text-ink ring-1 ring-warning/15">
+        <blockquote className="flex gap-2.5 rounded-box bg-warning-soft/70 px-3.5 py-3 text-base leading-normal text-ink ring-1 ring-warning/15">
           <Quotes size={16} weight="fill" className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
           <p className="whitespace-pre-line">{String(sol.motivo || "Sin motivo")}</p>
         </blockquote>
@@ -102,12 +102,12 @@ function FichaSolicitud({ sol, acciones, onIr }: { sol: ApiRecord; acciones: Acc
       {!pendiente ? (
         <VentanaSeccion titulo="Cómo se resolvió" i={3}>
           <VentanaTarjeta>
-            <p className="text-[14px] text-ink">
+            <p className="text-base text-ink">
               {ETIQUETA_ESTADO_SOLICITUD[String(sol.estado) as EstadoSolicitud] || String(sol.estado)}
               {sol.resuelto_nombre ? ` por ${String(sol.resuelto_nombre)}` : ""}
               {sol.resuelto_en ? ` el ${formatearFechaHora(sol.resuelto_en)}` : ""}.
             </p>
-            {sol.motivo_resolucion ? <p className="mt-1 whitespace-pre-line text-[13.5px] text-ink-2">{String(sol.motivo_resolucion)}</p> : null}
+            {sol.motivo_resolucion ? <p className="mt-1 whitespace-pre-line text-sm text-ink-2">{String(sol.motivo_resolucion)}</p> : null}
           </VentanaTarjeta>
         </VentanaSeccion>
       ) : null}
@@ -129,7 +129,7 @@ function FichaSolicitud({ sol, acciones, onIr }: { sol: ApiRecord; acciones: Acc
           </Button>
         ) : null}
         {href ? (
-          <Link href={href} onClick={onIr} className="press inline-flex h-9 items-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-medium text-brand hover:bg-brand-faint">
+          <Link href={href} onClick={onIr} className={buttonClass({ variant: "ghost" })}>
             Ver el registro <ArrowRight size={14} weight="bold" />
           </Link>
         ) : null}

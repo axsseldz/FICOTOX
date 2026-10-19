@@ -46,7 +46,7 @@ export function IconoCalidad({ tipo, clase = "incidencia", origen, clasificacion
         ? { icono: (n: number) => <ListChecks size={n} weight="duotone" />, tono: "bg-success-soft text-success-text" }
         : POR_TIPO[String(tipo || "")] || POR_TIPO.otro;
   return (
-    <span aria-hidden="true" className={cn("flex shrink-0 items-center justify-center", grande ? "h-16 w-16 rounded-[18px]" : "h-10 w-10 rounded-[12px]", def.tono)}>
+    <span aria-hidden="true" className={cn("flex shrink-0 items-center justify-center", grande ? "h-16 w-16 rounded-panel" : "h-10 w-10 rounded-box", def.tono)}>
       {def.icono(s)}
     </span>
   );

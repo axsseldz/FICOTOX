@@ -184,16 +184,16 @@ function MantenimientoContent() {
       <span key="e" className="flex min-w-0 items-center gap-3">
         <IconoEquipo nombre={item.equipo} tono={vencido ? "bg-danger-soft text-danger" : "bg-brand-faint text-brand-strong"} />
         <span className="flex min-w-0 flex-col">
-          <span className="text-[14.5px] leading-tight font-semibold text-ink">{String(item.equipo || "Equipo sin nombre")}</span>
-          <span className="text-[12.5px] text-ink-3">{item.tecnico_proveedor ? String(item.tecnico_proveedor) : [item.equipo_marca, item.equipo_modelo].filter(Boolean).join(" · ") || "Sin técnico asignado"}</span>
+          <span className="text-base leading-tight font-semibold text-ink">{String(item.equipo || "Equipo sin nombre")}</span>
+          <span className="text-xs text-ink-3">{item.tecnico_proveedor ? String(item.tecnico_proveedor) : [item.equipo_marca, item.equipo_modelo].filter(Boolean).join(" · ") || "Sin técnico asignado"}</span>
         </span>
       </span>,
       <Badge key="t" tone={tipoMeta.tone}>
         {tipoMeta.label}
       </Badge>,
       <span key="f" className="flex flex-col">
-        <span className={vencido ? "text-[13.5px] font-medium text-danger" : "text-[13.5px] text-ink-2"}>{formatearFechaCorta(item.fecha_programada)}</span>
-        {item.fecha_realizado ? <span className="text-[12px] text-ink-3">realizado el {formatearFechaCorta(item.fecha_realizado)}</span> : vencido ? <span className="text-[12px] text-danger">ya pasó la fecha</span> : null}
+        <span className={vencido ? "text-sm font-medium text-danger" : "text-sm text-ink-2"}>{formatearFechaCorta(item.fecha_programada)}</span>
+        {item.fecha_realizado ? <span className="text-xs text-ink-3">realizado el {formatearFechaCorta(item.fecha_realizado)}</span> : vencido ? <span className="text-xs text-danger">ya pasó la fecha</span> : null}
       </span>,
       <Badge key="s" tone={estadoMeta.tone} dot>
         {estadoMeta.label}
@@ -239,7 +239,7 @@ function MantenimientoContent() {
           accion: canCreate && !filtered ? <Button onClick={() => modal.open(null)}>Programar mantenimiento</Button> : undefined,
         }}
       />
-      {items && visible.length ? <p className="tnum mt-2 px-1 text-[12px] text-ink-3">{visible.length === 1 ? "1 registro" : `${fmt(visible.length)} registros`}</p> : null}
+      {items && visible.length ? <p className="tnum mt-2 px-1 text-xs text-ink-3">{visible.length === 1 ? "1 registro" : `${fmt(visible.length)} registros`}</p> : null}
 
       <MantenimientoVentana
         items={visible}

@@ -113,27 +113,27 @@ export function SignaturePad({ value, onChange, label, disabled: disabledProp = 
   if (readOnly) {
     return value ? (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={value} alt={label || "Firma"} className={cn("w-full rounded-[10px] bg-papel object-contain p-1 ring-1 ring-line", compact ? "h-[96px] max-w-[300px]" : "h-[120px] max-w-[360px]")} />
+      <img src={value} alt={label || "Firma"} className={cn("w-full rounded-field bg-papel object-contain p-1 ring-1 ring-line", compact ? "h-[96px] max-w-[300px]" : "h-[120px] max-w-[360px]")} />
     ) : (
-      <p className="flex h-9 items-center rounded-[10px] bg-surface-2 px-3 text-[13.5px] text-ink-4">Sin firma</p>
+      <p className="flex h-9 items-center rounded-field bg-surface-2 px-3 text-sm text-ink-4">Sin firma</p>
     );
   }
 
   // El lienzo mantiene 3:1; en modo compacto cabe junto a los campos de nombre y cargo.
   return (
     <div className={cn("flex flex-col gap-1.5", !compact && "max-w-[420px]")}>
-      <div className={cn("relative overflow-hidden rounded-[10px] border bg-papel transition-colors", isEmpty ? "border-dashed border-line-strong" : "border-line")}>
+      <div className={cn("relative overflow-hidden rounded-field border bg-papel transition-colors", isEmpty ? "border-dashed border-line-strong" : "border-line")}>
         <canvas ref={canvasRef} width={480} height={160} aria-label={label || "Lienzo de firma"} className={`block aspect-[3/1] w-full touch-none ${disabled ? "cursor-default" : "cursor-crosshair"}`} onPointerDown={disabled ? undefined : start} onPointerMove={disabled ? undefined : move} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop} />
       </div>
       <div className="flex items-center gap-1">
         <input ref={fileRef} type="file" accept="image/*" className="sr-only" onChange={handleFile} aria-label={`Subir imagen de ${label}`} />
-        <button type="button" disabled={disabled} onClick={() => fileRef.current?.click()} className="press inline-flex h-7 items-center gap-1.5 rounded-[7px] px-2 text-[12px] font-medium text-ink-3 hover:bg-surface-3 hover:text-ink">
+        <button type="button" disabled={disabled} onClick={() => fileRef.current?.click()} className="press inline-flex h-7 items-center gap-1.5 rounded-sm px-2 text-xs font-medium text-ink-3 hover:bg-surface-3 hover:text-ink">
           <UploadSimple size={13} /> Subir imagen
         </button>
-        <button type="button" onClick={() => onChange("")} disabled={disabled || !value} className="press inline-flex h-7 items-center gap-1.5 rounded-[7px] px-2 text-[12px] font-medium text-ink-3 hover:bg-surface-3 hover:text-danger disabled:opacity-40">
+        <button type="button" onClick={() => onChange("")} disabled={disabled || !value} className="press inline-flex h-7 items-center gap-1.5 rounded-sm px-2 text-xs font-medium text-ink-3 hover:bg-surface-3 hover:text-danger disabled:opacity-40">
           <Eraser size={13} /> Limpiar
         </button>
-        <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-ink-4">
+        <span className="ml-auto inline-flex items-center gap-1 text-2xs text-ink-4">
           <PaintBrush size={11} /> Pincel
         </span>
       </div>

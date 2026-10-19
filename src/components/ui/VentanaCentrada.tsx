@@ -96,5 +96,5 @@ export function VentanaCentrada({
 
 /* Titulo accesible de la ventana. */
 export function VentanaTitulo({ children, className }: { children: ReactNode; className?: string }) {
-  return <RadixDialog.Title className={cn("text-[19px] leading-[1.3] font-semibold tracking-[-0.01em] text-ink", className)}>{children}</RadixDialog.Title>;
+  return <RadixDialog.Title className={cn("text-xl leading-snug font-semibold tracking-snug text-ink", className)}>{children}</RadixDialog.Title>;
 }

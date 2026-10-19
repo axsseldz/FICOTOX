@@ -109,18 +109,18 @@ function Inicio() {
       ) : null}
 
       <div className="flex flex-col gap-3" data-testid="sgc-buscador">
-        <SearchInput value={texto} onChange={setTexto} placeholder="Buscar por clave, título o palabra clave" className="w-full text-[15px]" autoFocus />
+        <SearchInput value={texto} onChange={setTexto} placeholder="Buscar por clave, título o palabra clave" className="w-full" autoFocus />
         {consulta.length >= 2 ? (
           <div className="flex flex-col overflow-hidden rounded-card bg-surface shadow-card" data-testid="sgc-resultados">
             {buscados.data?.items?.length ? (
               buscados.data.items.slice(0, 8).map((d) => (
-                <Link key={d.id} href={`/documentos/${d.id}`} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-line px-4 py-2.5 last:border-b-0 hover:bg-surface-2 focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none">
-                  <span className="code text-[12.5px] font-semibold text-brand-strong">{d.clave}</span>
-                  <span className="min-w-0 flex-1 truncate text-[13.5px] text-ink">{d.titulo}</span>
+                <Link key={d.id} href={`/documentos/${d.id}`} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-line px-4 py-2.5 last:border-b-0 hover:bg-surface-2">
+                  <span className="code text-xs font-semibold text-brand-strong">{d.clave}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-ink">{d.titulo}</span>
                 </Link>
               ))
             ) : (
-              <p className="px-4 py-3 text-[13px] text-ink-3">{buscados.data ? "Ningún documento coincide con la búsqueda." : "Buscando…"}</p>
+              <p className="px-4 py-3 text-sm text-ink-3">{buscados.data ? "Ningún documento coincide con la búsqueda." : "Buscando…"}</p>
             )}
           </div>
         ) : null}
@@ -139,7 +139,7 @@ function Inicio() {
         <>
           <IndicadoresInicio ind={data.indicadores} />
           <section aria-labelledby="carpetas-titulo" className="flex flex-col gap-3">
-            <h2 id="carpetas-titulo" className="text-[15px] font-semibold text-ink">
+            <h2 id="carpetas-titulo" className="text-md font-semibold text-ink">
               Carpetas por gestión
             </h2>
             <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" data-testid="sgc-carpetas">
@@ -187,14 +187,14 @@ function IndicadoresInicio({ ind }: { ind: Indicadores }) {
               data-testid="sgc-indicador"
               data-indicador={x.clave}
               data-valor={x.valor}
-              className="press flex h-full min-w-0 items-center gap-3 rounded-card bg-surface px-3.5 py-3 shadow-card transition-[box-shadow,transform,translate] duration-200 hover:-translate-y-0.5 hover:shadow-raised focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+              className="press flex h-full min-w-0 items-center gap-3 rounded-card bg-surface px-3.5 py-3 shadow-card transition-[box-shadow,transform,translate] duration-200 hover:-translate-y-0.5 hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0"
             >
-              <span aria-hidden="true" className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]", x.valor ? TONO[x.tono] : "bg-surface-3 text-ink-3")}>
+              <span aria-hidden="true" className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-field", x.valor ? TONO[x.tono] : "bg-surface-3 text-ink-3")}>
                 {x.icono}
               </span>
               <span className="flex min-w-0 flex-col">
-                <Conteo valor={x.valor} className={cn("text-[22px] leading-none font-semibold tracking-[-0.01em]", x.valor ? "text-ink" : "text-ink-3")} />
-                <span className="mt-1 text-[12.5px] leading-tight text-ink-3">{x.etiqueta}</span>
+                <Conteo valor={x.valor} className={cn("text-3xl leading-none font-semibold tracking-snug", x.valor ? "text-ink" : "text-ink-3")} />
+                <span className="mt-1 text-xs leading-tight text-ink-3">{x.etiqueta}</span>
                 <span className="sr-only">
                   : {x.valor}. {x.ayuda}
                 </span>
@@ -215,17 +215,17 @@ function Carpeta({ area }: { area: Area & { conteos: Conteos } }) {
       data-testid="sgc-carpeta"
       data-area={area.codigo}
       aria-label={`${area.codigo}, ${area.nombre}: ${c.total} documentos`}
-      className="press group relative flex h-full overflow-hidden rounded-card bg-surface shadow-card transition-[box-shadow,transform,translate] duration-200 hover:-translate-y-0.5 hover:shadow-raised focus-visible:shadow-[var(--shadow-focus)] focus-visible:outline-none motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+      className="press group relative flex h-full overflow-hidden rounded-card bg-surface shadow-card transition-[box-shadow,transform,translate] duration-200 hover:-translate-y-0.5 hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0"
     >
       {/* Banda lateral con el color del area (el estado nunca se expresa con este color). */}
       <span className="w-1.5 shrink-0" style={{ backgroundColor: area.color }} aria-hidden="true" />
       <span className="flex min-w-0 flex-1 items-center gap-3 p-4">
         <IconoArea area={area} carpeta />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="code text-[12px] font-semibold tracking-wide text-ink-3">{area.codigo}</span>
-          <span className="text-[15px] font-semibold leading-snug text-ink">{area.nombre}</span>
+          <span className="code text-xs font-semibold tracking-wide text-ink-3">{area.codigo}</span>
+          <span className="text-md font-semibold leading-snug text-ink">{area.nombre}</span>
         </span>
-        <span className="tnum flex shrink-0 items-center gap-1 text-[12.5px] text-ink-3" title="Documentos vigentes" data-testid="sgc-carpeta-vigentes" data-valor={c.vigentes}>
+        <span className="tnum flex shrink-0 items-center gap-1 text-xs text-ink-3" title="Documentos vigentes" data-testid="sgc-carpeta-vigentes" data-valor={c.vigentes}>
           <CheckCircle size={14} weight="bold" aria-hidden="true" />
           <Conteo valor={c.vigentes} duracion={300} />
           <span className="sr-only">{c.vigentes} vigentes</span>

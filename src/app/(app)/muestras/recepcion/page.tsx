@@ -9,7 +9,7 @@ import { FolioChip, SampleStatus, SolicitudBadge, SupervisionBadge } from "@/com
 import { useAnulacion } from "@/components/features/samples/useAnulacion";
 import { RequireModule } from "@/components/session/RequireModule";
 import { useSession } from "@/components/session/SessionProvider";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonClass } from "@/components/ui/Button";
 import { FilterChips, FilterMenu, type FilterGroup, type FilterToggle } from "@/components/ui/FilterMenu";
 import { ActionMenu, type MenuItem } from "@/components/ui/Overlay";
 import { SearchInput, Toolbar } from "@/components/ui/PageHeader";
@@ -179,7 +179,7 @@ function RecepcionList() {
       <Toolbar
         end={
           canCreate ? (
-            <Link href="/muestras/recepcion/nueva" className="press inline-flex h-9 items-center gap-2 rounded-[9px] bg-brand px-3.5 text-[13.5px] font-medium text-on-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] hover:bg-brand-strong">
+            <Link href="/muestras/recepcion/nueva" className={buttonClass()}>
               <Plus size={16} weight="bold" /> Nueva recepción
             </Link>
           ) : null
@@ -230,7 +230,7 @@ function RecepcionList() {
                       <div className="flex flex-wrap gap-1">
                         {tipos.length ? (
                           tipos.map((t) => (
-                            <span key={t} className="rounded-[6px] bg-surface-3 px-1.5 py-0.5 text-[11.5px] font-medium text-ink-2">
+                            <span key={t} className="rounded-sm bg-surface-3 px-1.5 py-0.5 text-2xs font-medium text-ink-2">
                               {ANALYSIS_SHORT[t] || RECEPTION_ANALYSIS_TYPES.find((a) => a.value === t)?.label || t}
                             </span>
                           ))
@@ -239,7 +239,7 @@ function RecepcionList() {
                         )}
                       </div>
                     </Td>
-                    <Td>{dec ? <Badge tone={DECISION_TONE[dec]}>{DECISION_SHORT[dec] || dec}</Badge> : <span className="text-[12.5px] text-ink-3">Sin decisión</span>}</Td>
+                    <Td>{dec ? <Badge tone={DECISION_TONE[dec]}>{DECISION_SHORT[dec] || dec}</Badge> : <span className="text-xs text-ink-3">Sin decisión</span>}</Td>
                     <Td>
                       <StatusCell>
                         <SampleStatus status={item.estado} />

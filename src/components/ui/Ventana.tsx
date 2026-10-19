@@ -23,7 +23,7 @@ export function VentanaEncabezado({ figura, titulo, insignia, subtitulo, childre
           <VentanaTitulo className="break-words">{titulo}</VentanaTitulo>
           {insignia}
         </div>
-        {subtitulo ? <div className="break-words text-[13.5px] leading-[1.45] text-ink-3">{subtitulo}</div> : null}
+        {subtitulo ? <div className="break-words text-sm leading-normal text-ink-3">{subtitulo}</div> : null}
         {children}
       </div>
     </header>
@@ -60,13 +60,13 @@ export function DatosRapidos({ datos }: { datos: DatoRapido[] }) {
     <div className="@container">
       <dl className={cn("grid grid-cols-2 gap-2", COLUMNAS[Math.min(4, datos.length)] || "@lg:grid-cols-4")}>
         {datos.map((d, i) => (
-          <div key={d.etiqueta} title={d.titulo} className="entrada-escalonada flex min-w-0 items-start gap-2.5 rounded-[14px] bg-surface-2 px-3 py-2.5 ring-1 ring-line" style={{ ["--i" as string]: i } as CSSProperties}>
-            <span aria-hidden="true" className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] shadow-card", TONO_ICONO[d.tono || "brand"])}>
+          <div key={d.etiqueta} title={d.titulo} className="entrada-escalonada flex min-w-0 items-start gap-2.5 rounded-card bg-surface-2 px-3 py-2.5 ring-1 ring-line" style={{ ["--i" as string]: i } as CSSProperties}>
+            <span aria-hidden="true" className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-field shadow-card", TONO_ICONO[d.tono || "brand"])}>
               {d.icono}
             </span>
             <div className="flex min-w-0 flex-col">
-              <dt className="text-[11.5px] leading-tight break-words text-ink-3">{d.etiqueta}</dt>
-              <dd className="break-words text-[14.5px] leading-snug font-semibold text-ink">{d.valor}</dd>
+              <dt className="text-2xs leading-tight break-words text-ink-3">{d.etiqueta}</dt>
+              <dd className="break-words text-base leading-snug font-semibold text-ink">{d.valor}</dd>
             </div>
           </div>
         ))}
@@ -79,7 +79,7 @@ export function DatosRapidos({ datos }: { datos: DatoRapido[] }) {
 export function VentanaSeccion({ titulo, i = 0, children, className }: { titulo?: ReactNode; i?: number; children: ReactNode; className?: string }) {
   return (
     <section className={cn("entrada-escalonada flex flex-col gap-2.5", className)} style={{ ["--i" as string]: i } as CSSProperties}>
-      {titulo ? <h3 className="text-[13px] font-semibold tracking-[-0.005em] text-ink-2">{titulo}</h3> : null}
+      {titulo ? <h3 className="text-sm font-semibold tracking-snug text-ink-2">{titulo}</h3> : null}
       {children}
     </section>
   );
@@ -92,14 +92,14 @@ export function VentanaAcciones({ children }: { children: ReactNode }) {
 
 /* Tarjeta suave para agrupar datos dentro de una seccion (con elevacion al pasar el cursor si es interactiva). */
 export function VentanaTarjeta({ children, className, interactiva = false }: { children: ReactNode; className?: string; interactiva?: boolean }) {
-  return <div className={cn("rounded-[14px] bg-surface-2 px-4 py-3.5 ring-1 ring-line", interactiva && "transition-shadow duration-200 hover:shadow-raised", className)}>{children}</div>;
+  return <div className={cn("rounded-card bg-surface-2 px-4 py-3.5 ring-1 ring-line", interactiva && "transition-shadow duration-200 hover:shadow-raised", className)}>{children}</div>;
 }
 
 /* Lista de datos "etiqueta: valor" en dos columnas (una en angostas), sin recortar. */
 export function DatosLista({ datos }: { datos: Array<{ etiqueta: string; valor: ReactNode } | null | false> }) {
   const visibles = datos.filter((d): d is { etiqueta: string; valor: ReactNode } => !!d);
   return (
-    <dl className="grid gap-x-5 gap-y-2 text-[14px] sm:grid-cols-[max-content_minmax(0,1fr)]">
+    <dl className="grid gap-x-5 gap-y-2 text-base sm:grid-cols-[max-content_minmax(0,1fr)]">
       {visibles.map((d) => (
         <div key={d.etiqueta} className="contents">
           <dt className="text-ink-3">{d.etiqueta}</dt>
@@ -126,14 +126,14 @@ export function ColumnasVentana({ principal, lateral }: { principal: ReactNode; 
 export function TarjetaLateral({ icono, titulo, children, tono = "neutral", i = 0 }: { icono: ReactNode; titulo: string; children: ReactNode; tono?: "neutral" | "warning" | "danger" | "success"; i?: number }) {
   const fondo = { neutral: "bg-surface-2 ring-line", warning: "bg-warning-soft/50 ring-warning/20", danger: "bg-danger-soft/50 ring-danger/20", success: "bg-success-soft/50 ring-success/20" }[tono];
   return (
-    <section className={cn("entrada-escalonada flex flex-col gap-2.5 rounded-[16px] px-4 py-3.5 ring-1 transition-shadow duration-200 hover:shadow-raised", fondo)} style={{ ["--i" as string]: i }}>
-      <h3 className="flex items-center gap-2 text-[13px] font-semibold text-ink-2">
-        <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-surface text-brand-strong shadow-card">
+    <section className={cn("entrada-escalonada flex flex-col gap-2.5 rounded-card px-4 py-3.5 ring-1 transition-shadow duration-200 hover:shadow-raised", fondo)} style={{ ["--i" as string]: i }}>
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-ink-2">
+        <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-field bg-surface text-brand-strong shadow-card">
           {icono}
         </span>
         {titulo}
       </h3>
-      <div className="flex flex-col gap-2 text-[14px] text-ink">{children}</div>
+      <div className="flex flex-col gap-2 text-base text-ink">{children}</div>
     </section>
   );
 }
@@ -142,8 +142,8 @@ export function TarjetaLateral({ icono, titulo, children, tono = "neutral", i = 
 export function DatoLateral({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col">
-      <span className="text-[12px] text-ink-3">{etiqueta}</span>
-      <span className="break-words text-[14px] text-ink">{children}</span>
+      <span className="text-xs text-ink-3">{etiqueta}</span>
+      <span className="break-words text-base text-ink">{children}</span>
     </div>
   );
 }

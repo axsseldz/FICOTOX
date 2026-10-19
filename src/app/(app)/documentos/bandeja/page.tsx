@@ -136,10 +136,10 @@ function GrupoTareas({ grupo, total, id, testid, children }: { grupo: Grupo; tot
   const I = grupo.icono;
   return (
     <section id={id} className="flex scroll-mt-20 flex-col gap-2" aria-label={`${grupo.titulo}: ${total}`} data-testid={testid || "bandeja-grupo"} data-grupo={grupo.clave}>
-      <h2 className="flex items-center gap-2 px-1 text-[12.5px] font-semibold uppercase tracking-wide text-ink-3">
+      <h2 className="flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-wide text-ink-3">
         <I size={15} weight="bold" aria-hidden="true" />
         {grupo.titulo}
-        <span className="tnum flex h-[18px] min-w-[20px] items-center justify-center rounded-full bg-surface-3 px-1.5 text-[11px] text-ink-2" data-testid="bandeja-contador" data-valor={total}>
+        <span className="tnum flex h-[18px] min-w-[20px] items-center justify-center rounded-full bg-surface-3 px-1.5 text-2xs text-ink-2" data-testid="bandeja-contador" data-valor={total}>
           <Conteo valor={total} duracion={300} />
         </span>
       </h2>
@@ -156,23 +156,23 @@ function Renglon({ t, tipo, area, icono: Icono, i, testid, recordatorio }: { t: 
       {area ? (
         <IconoArea area={area} size="sm" />
       ) : (
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-surface-2 text-ink-3 ring-1 ring-line" aria-hidden="true">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-field bg-surface-2 text-ink-3 ring-1 ring-line" aria-hidden="true">
           <Icono size={16} weight="duotone" />
         </span>
       )}
       <div className="flex min-w-0 flex-[1_1_12rem] flex-col gap-0.5">
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          {t.clave_documento ? <span className="code text-[12.5px] font-semibold text-ink-2">{t.clave_documento}</span> : null}
-          {t.revision !== null ? <span className="tnum text-[12px] text-ink-3">Rev. {t.revision}</span> : null}
+          {t.clave_documento ? <span className="code text-xs font-semibold text-ink-2">{t.clave_documento}</span> : null}
+          {t.revision !== null ? <span className="tnum text-xs text-ink-3">Rev. {t.revision}</span> : null}
           {t.papel ? <Badge tone="neutral">{t.papel}</Badge> : null}
           {recordatorio ? <Badge tone="warning">Recordatorio</Badge> : null}
         </span>
-        <span className="truncate text-[14px] font-medium text-ink" title={t.titulo}>
+        <span className="truncate text-base font-medium text-ink" title={t.titulo}>
           {t.titulo}
         </span>
       </div>
       {t.fecha_limite ? (
-        <span className={cn("flex items-center gap-1 text-[12.5px]", t.vencida ? "rounded-full bg-danger-soft px-2 py-0.5 font-semibold text-danger-text" : "text-ink-3")} data-testid={t.vencida ? "bandeja-vencida" : undefined}>
+        <span className={cn("flex items-center gap-1 text-xs", t.vencida ? "rounded-full bg-danger-soft px-2 py-0.5 font-semibold text-danger-text" : "text-ink-3")} data-testid={t.vencida ? "bandeja-vencida" : undefined}>
           {t.vencida ? <WarningCircle size={14} weight="bold" aria-hidden="true" /> : <Clock size={14} aria-hidden="true" />}
           {t.vencida ? "Venció el" : "Límite"} {formatearFecha(t.fecha_limite)}
         </span>
