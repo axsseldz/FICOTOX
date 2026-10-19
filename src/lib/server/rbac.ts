@@ -163,6 +163,8 @@ export async function cargarAutorizacion(s: Session, user: CurrentUser | null, o
   if (!fila) throw new HttpError(401, { message: "La cuenta ya no existe", codigo: "sesion_revocada" });
   if (fila.activo !== null && fila.activo !== undefined && !Number(fila.activo)) throw new HttpError(401, { message: "Usuario inactivo", codigo: "sesion_revocada" });
   if (Number(user.tv ?? 0) !== Number(fila.token_version ?? 0)) throw new HttpError(401, { message: "Tu sesión se cerró (cambio de contraseña, bloqueo o cierre en todos los dispositivos); vuelve a iniciar sesión", codigo: "sesion_revocada" });
+  // Sesion cerrada en el servidor (salir o cierre por inactividad): el token queda revocado por su jti.
+  if (user.jti && (await s.scalar("SELECT 1 FROM sesiones_revocadas WHERE jti = :jti", { jti: String(user.jti) }))) throw new HttpError(401, { message: "Tu sesión se cerró; vuelve a iniciar sesión", codigo: "sesion_revocada" });
   if (!cuentaVigente(fila)) throw new HttpError(401, { message: MENSAJE_CUENTA_NO_VIGENTE, codigo: "cuenta_no_vigente" });
   const debeCambiar = !!Number(fila.debe_cambiar_password || 0);
   if (debeCambiar && !opciones.permitirCambioPendiente) throw new HttpError(403, { message: "Debes cambiar tu contraseña antes de continuar", codigo: "cambiar_password" });
@@ -182,6 +184,15 @@ export async function cargarAutorizacion(s: Session, user: CurrentUser | null, o
       debe_cambiar_password: debeCambiar,
     },
   };
+}
+
+/*
+ * Para rutas que solo necesitan una sesion valida (sin permiso de modulo): token
+ * vigente, no revocado (token_version o jti) y cuenta activa y en vigencia.
+ * No exige haber cambiado la contrasena temporal.
+ */
+export async function exigirSesionVigente(s: Session, user: CurrentUser | null): Promise<Autorizacion> {
+  return cargarAutorizacion(s, user, { permitirCambioPendiente: true });
 }
 
 export interface Permiso {

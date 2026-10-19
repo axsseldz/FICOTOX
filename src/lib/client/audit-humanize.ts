@@ -664,6 +664,7 @@ const SOLICITUD_QUE: Record<string, string> = {
   asignar_rol: "asignar un rol a",
   reactivar_cuenta: "reactivar",
   ampliar_vigencia: "ampliar la vigencia de",
+  ampliar_permisos_rol: "ampliar los permisos de",
   cambiar_folio: "cambiar el folio de",
   reabrir_recepcion: "reabrir",
   obsoletar_documento: "declarar obsoleto",
@@ -813,6 +814,11 @@ function redactar(record: ApiRecord, actor: string, sistema: boolean): Partes {
     case "eliminar":
       return { accion: `eliminó ${O}`, quePaso: `${quien} eliminó ${O}.` };
     case "reponer": {
+      if (d.tipo === "reversion") {
+        const n = Array.isArray(d.movimientos) ? d.movimientos.length : 0;
+        const por = d.causa === "reedición" ? "al cambiar los insumos" : "al anularlo";
+        return { accion: `devolvió al inventario lo que había descontado ${O}`, quePaso: `${quien} devolvió al inventario lo que había descontado ${O} ${por}: se registr${n === 1 ? "ó una entrada" : `aron ${numero(n)} entradas`} de reversión ligada${n === 1 ? "" : "s"} a las salidas originales, que se conservan.` };
+      }
       const mov = String(d.tipo || "entrada");
       const cuandoMov = d.fecha_movimiento ? ` (movimiento del ${formatearFecha(d.fecha_movimiento)})` : "";
       if (mov === "salida" || mov === "consumo") {
@@ -891,6 +897,8 @@ function redactar(record: ApiRecord, actor: string, sistema: boolean): Partes {
       const que = queSeSolicito(d);
       return { accion: `canceló su solicitud para ${que} ${O}`, quePaso: `${quien} retiró la solicitud que había hecho para ${que} ${O}; no se hizo ningún cambio.` };
     }
+    case "vencer_mantenimiento":
+      return { accion: `Venció ${O}`, quePaso: `${O.charAt(0).toUpperCase()}${O.slice(1)} no se completó en su fecha programada${d.fecha_programada ? ` (${formatearFecha(d.fecha_programada)})` : ""}, así que quedó como vencido. Al completarse sigue su flujo normal.`, sinActor: true };
     case "vencer_solicitud": {
       const que = queSeSolicito(d);
       return { accion: `Venció la solicitud para ${que} ${O}`, quePaso: `Nadie resolvió a tiempo la solicitud para ${que} ${O}, así que se cerró sin aplicar el cambio.`, sinActor: true };

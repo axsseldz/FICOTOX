@@ -21,7 +21,7 @@ export const CATEGORIAS: Array<{ value: Categoria; label: string; acciones: stri
   { value: "anular", label: "Anulaciones y rechazos", acciones: ["anular", "rechazar", "baja", "eliminar", "devolver", "sustituir", "regresar_supervision", "revocar_autorizacion", "revocar_rol", "anular_adjunto", "escalar", "cancelar", "suspender", "retener"] },
   { value: "solicitudes", label: "Solicitudes", acciones: ["solicitar", "aprobar_solicitud", "rechazar_solicitud", "cancelar_solicitud", "vencer_solicitud"] },
   { value: "imprimir", label: "Impresiones y descargas", acciones: ["imprimir_etiquetas", "descargar", "exportar"] },
-  { value: "sistema", label: "Sistema", acciones: ["migrar", "respaldar", "respaldo_fallido", "probar_restauracion", "restaurar_respaldo", "alerta_integridad", "vencer_rol", "vencer_autorizacion", "requiere_enmienda"] },
+  { value: "sistema", label: "Sistema", acciones: ["migrar", "respaldar", "respaldo_fallido", "probar_restauracion", "restaurar_respaldo", "alerta_integridad", "vencer_rol", "vencer_autorizacion", "vencer_mantenimiento", "requiere_enmienda"] },
 ];
 
 const POR_ACCION = new Map<string, Categoria>(CATEGORIAS.flatMap((c) => c.acciones.map((a) => [a, c.value] as [string, Categoria])));
@@ -85,6 +85,7 @@ const ICONO_ACCION: Record<string, ReactNode> = {
   rechazar_solicitud: <XCircle weight="bold" />,
   cancelar_solicitud: <Prohibit weight="bold" />,
   vencer_solicitud: <ClockCountdown weight="bold" />,
+  vencer_mantenimiento: <ClockCountdown weight="bold" />,
   proponer: <Lightbulb weight="bold" />,
   enmendar: <PencilLine weight="bold" />,
   requiere_enmienda: <PencilLine weight="bold" />,

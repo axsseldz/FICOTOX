@@ -1,11 +1,10 @@
 import { formatearFolio } from "../../../shared/folios";
 import { conSolicitudesYPuede } from "../../puede-registro";
-import { requireUser, userIdFromClaims } from "../../auth";
+import { requireUser, userIdFromClaims, type CurrentUser } from "../../auth";
 import { registrarAuditoria, snapshotRow } from "../../audit";
 
 import { type Row, type Session } from "../../db";
 import { HttpError, intParam, json, readJson, type RouteContext } from "../../http";
-import { restoreInventoryUsage } from "../../inventory-usage";
 import { cargoActuante, requirePermission } from "../../rbac";
 import { exigirReauth } from "../../seguridad";
 import { evaluarSupervisionCaptura } from "../../../shared/segregacion";
@@ -13,7 +12,7 @@ import { respuestaSolicitud } from "../../solicitudes";
 import { aplicarSupervision, filtroSupervision, marcaSupervision } from "../../supervision";
 import { recordBitacoraFolios } from "../inventory";
 
-import { advanceState, anularOSolicitar, applyStageInventory, recepcionDe, assertEditableAsync, assertOrigin, avanzarRecepcion, deletionNotAllowed, exigirUsoDeRecursos, folioLabel, insumosDeclarados, isFolioConflict, nextFolioNum, readMotivo, restaurarOSolicitar } from "../../samples-flow";
+import { advanceState, anularOSolicitar, applyStageInventory, recepcionDe, assertEditableAsync, assertOrigin, avanzarRecepcion, deletionNotAllowed, exigirUsoDeRecursos, folioLabel, insumosDeclarados, isFolioConflict, nextFolioNum, readMotivo, replaceStageInventory, restaurarOSolicitar } from "../../samples-flow";
 import { EXTRACTION_TYPES, claveForType, normalizeExtractionType, parseExtractionFolioSearch, type ExtractionType } from "../../../shared/extraction";
 import { jsonText, safeJsonLoad, searchParam, strippedOrNull, toIntOrNull } from "../helpers";
 
@@ -155,9 +154,8 @@ async function resolveType(s: Session, payload: Record<string, unknown>, extract
   return normalizeExtractionType(stored) || "E-A";
 }
 
-async function replaceInventoryUsage(s: Session, extractionId: number, data: ExtractionData, userId: number | null, declaradosAntes: Map<string, number>): Promise<void> {
-  await restoreInventoryUsage(s, `EXT-${extractionId}-INS-`);
-  await applyStageInventory(s, "EXT", extractionId, data.uso_inventario_json, `Extraccion ${data.tipo_registro} folio ${data.folio_num}`, userId, declaradosAntes);
+async function replaceInventoryUsage(s: Session, user: CurrentUser, extractionId: number, data: ExtractionData, referencia: string, declaradosAntes: Map<string, number>): Promise<void> {
+  await replaceStageInventory(s, user, "EXT", extractionId, data.uso_inventario_json, `Extraccion ${data.tipo_registro} folio ${data.folio_num}`, referencia, declaradosAntes);
 }
 
 function serializeRow(row: Row): Row {
@@ -274,7 +272,7 @@ export async function createExtractionSample({ request, s }: RouteContext): Prom
 
   const payload = await readJson(request);
   // Contraseñas de firmantes enviadas al guardar: se verifican antes de cualquier otra escritura.
-  await verificarFirmasConPassword(s, user, payload);
+  await verificarFirmasConPassword(s, user, payload, request);
   const tipo = await resolveType(s, payload, null);
   if (!tipo) {
     return json({ message: "Tipo de extraccion no valido" }, 400);
@@ -361,7 +359,7 @@ export async function updateExtractionSample({ request, s, params }: RouteContex
   await assertEditableAsync(s, antes, TABLE);
   const payload = await readJson(request);
   // Contraseñas de firmantes enviadas al guardar: se verifican antes de cualquier otra escritura.
-  await verificarFirmasConPassword(s, user, payload);
+  await verificarFirmasConPassword(s, user, payload, request);
   const tipo = await resolveType(s, payload, extractionId);
   if (!tipo) {
     return json({ message: "Tipo de extraccion no valido" }, 400);
@@ -423,7 +421,7 @@ export async function updateExtractionSample({ request, s, params }: RouteContex
       await s.rollback();
       return json({ message: "Registro no encontrado" }, 404);
     }
-    await replaceInventoryUsage(s, extractionId, data, userId, insumosDeclarados(antes?.uso_inventario_json));
+    await replaceInventoryUsage(s, user, extractionId, data, folioLabel(TABLE, antes), insumosDeclarados(antes?.uso_inventario_json));
     await aplicarSupervision(s, TABLE, extractionId, supervision, userId);
     await guardarFirmantes(s, TABLE, extractionId, data, firmasExtraccion(tipo));
     await advanceState(s, "muestras_procesamiento", data.procesamiento_id, "en_proceso");

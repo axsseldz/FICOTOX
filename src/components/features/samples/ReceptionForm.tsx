@@ -262,8 +262,9 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
   // Fase 5: quien recibe se liga a una cuenta (por omisión la sesión; otra persona confirma con su contraseña).
   const [recibio, setRecibio] = useState<FirmanteState>(() => firmanteDe(item, "recibio"));
   const [submitting, setSubmitting] = useState(false);
-  const [disposicion, setDisposicion] = useState({ tipo: "", tipoOtro: "", fecha: todayIso(), responsable: formatActiveUserSignature(), remanentes: "", observaciones: "", firma: "" });
+  const [disposicion, setDisposicion] = useState({ tipo: "", tipoOtro: "", fecha: todayIso(), responsable: formatActiveUserSignature(), remanentes: "", observaciones: "", firma: "", motivo: "" });
   const [savingDisposicion, setSavingDisposicion] = useState(false);
+  const disponeSinInforme = String(item?.estado || "") === "rechazada";
   const editing = !!item?.id;
   // Con las banderas del servidor (rol + autorización FX-THF-AP + asignación); sin ellas, solo el rol.
   const canEdit = editing ? seOfrece(item, "editar", can("muestras", "E", { objeto: "recepcion", borrador: String(item?.estado || "registrada") === "registrada" })) : puedeCrear("recepcion", can("muestras", "C", { objeto: "recepcion", borrador: true }));
@@ -433,6 +434,7 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
       if (!disposicion.tipo) out.push({ campo: "r-disp-tipo", mensaje: msg.elige("el tipo de disposición final"), grupo: "Disposición final" });
       if (!disposicion.fecha) out.push({ campo: "r-disp-fecha", mensaje: msg.indica("la fecha de la disposición"), grupo: "Disposición final" });
       if (!disposicion.responsable.trim()) out.push({ campo: "r-disp-resp", mensaje: msg.indica("el responsable"), grupo: "Disposición final" });
+      if (disponeSinInforme && disposicion.motivo.trim().length < 5) out.push({ campo: "r-disp-motivo", mensaje: msg.indica("el motivo de la disposición (al menos 5 caracteres)"), grupo: "Disposición final" });
       return out;
     },
   });
@@ -479,6 +481,7 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
         remanentes: disposicion.remanentes.trim() || null,
         observaciones: disposicion.observaciones.trim() || null,
         firma: disposicion.firma || null,
+        ...(disponeSinInforme ? { motivo: disposicion.motivo.trim() } : {}),
       });
       toast.success("Disposición registrada; la muestra queda cerrada");
       invalidate("muestras", "dashboard");
@@ -495,6 +498,8 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
   // Una muestra rechazada tambien se dispone (se devuelve o se desecha); solo las
   // cerradas y las anuladas ya no admiten disposicion.
   const puedeDisponer = editing && !["cerrada", "anulada"].includes(String(form.estado)) && can("muestras", "A") && !savedDisposicion;
+  // Exige el informe liberado (o enviado); la muestra rechazada en la recepcion se dispone sin el, con motivo.
+  const bloqueoDisposicion = item?.disposicion_bloqueo ? String(item.disposicion_bloqueo) : null;
 
   return (
     <FormPage
@@ -592,10 +597,20 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
                     </EditableScope>
                   </Field>
                 </FormGrid>
-                <div>
-                  <Button variant="secondary" icon={<Archive size={16} />} loading={savingDisposicion} onClick={registrarDisposicion}>
+                {disponeSinInforme ? (
+                  <FormGrid>
+                    <Field label="Motivo de la disposición" htmlFor="r-disp-motivo" required hint="La muestra se rechazó en la recepción y no tendrá informe.">
+                      <CampoValidado id="r-disp-motivo">
+                        <Textarea id="r-disp-motivo" rows={2} maxLength={500} value={disposicion.motivo} onChange={(event) => setDisposicion({ ...disposicion, motivo: event.target.value })} />
+                      </CampoValidado>
+                    </Field>
+                  </FormGrid>
+                ) : null}
+                <div className="flex flex-col items-start gap-1.5">
+                  <Button variant="secondary" icon={<Archive size={16} />} loading={savingDisposicion} onClick={registrarDisposicion} disabled={!!bloqueoDisposicion} title={bloqueoDisposicion || undefined}>
                     Registrar disposición y cerrar la muestra
                   </Button>
+                  {bloqueoDisposicion ? <p className="text-[12.5px] text-ink-3" data-testid="disposicion-bloqueo">{bloqueoDisposicion}: la disposición final exige el informe liberado o enviado.</p> : null}
                 </div>
               </div>
             ) : (

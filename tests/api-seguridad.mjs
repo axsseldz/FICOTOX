@@ -22,6 +22,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { autorizarTodo } from "./lib/autorizar.mjs";
+import { informeLiberado } from "./lib/calidad.mjs";
 
 const Database = createRequire(import.meta.url)(process.env.BETTER_SQLITE3 || "better-sqlite3");
 const BASE = process.env.BASE || "http://localhost:3100/api";
@@ -342,9 +343,11 @@ const temporal = (extra = {}) => ({ tipo_cuenta: "temporal", vigente_hasta: "209
   check("token de otra persona -> 401 reauth_invalido", ajeno.status === 401 && /otra persona/i.test(String(ajeno.data?.message)), `${ajeno.status} ${ajeno.data?.message}`);
 
   // Cada endpoint critico exige reautenticacion (sin token: 401 reauth_required antes de cambiar nada).
+  // La disposicion final exige el informe liberado (correcciones V1): se sondea una recepcion con su informe liberado.
+  const conInforme = await informeLiberado({ qa: QA, ricardo: tRicardo, patricia: await token("patricia.luna@ficotox.local") }, "SONDA-DISP");
   const criticos = [
     ["POST", `/samples/reception/${R}/anular`, { motivo: "Sonda critica" }],
-    ["POST", `/samples/reception/${R}/disposicion`, { tipo: "rpbi", fecha: "2026-09-20", responsable: "QA" }],
+    ["POST", `/samples/reception/${conInforme.R}/disposicion`, { tipo: "rpbi", fecha: "2026-09-20", responsable: "QA" }],
     ["POST", `/samples/processing/${P}/anular`, { motivo: "Sonda critica" }],
     ["POST", `/inventory/reactivos/${fila("SELECT id FROM reactivos ORDER BY id LIMIT 1")?.id}/refill`, null],
     ["DELETE", `/inventory/reactivos/${fila("SELECT id FROM reactivos ORDER BY id LIMIT 1")?.id}`, { motivo: "Sonda critica" }],
@@ -405,7 +408,8 @@ const temporal = (extra = {}) => ({ tipo_cuenta: "temporal", vigente_hasta: "209
   check("la propia contrasena no se cambia desde Administracion (400; solo en Mi cuenta con la actual)", propia.status === 400 && sigue.status === 200, `${propia.status} ${sigue.status}`);
   const reset = await api("POST", `/admin/usuarios/${u.id}/password`, { motivo: "Olvido su contrasena" }, QA);
   const temporalPwd = reset.data?.password_temporal;
-  const tTemp = await token(u.email, temporalPwd);
+  // Sin el cambio automatico del envoltorio: aqui se prueba que el servidor lo exige.
+  const tTemp = (await api("POST", "/auth/login", { email: u.email, password: temporalPwd }, null, { "X-Sin-Cambio-Auto": "1" })).data?.token;
   const bloqueada = await api("GET", "/samples/reception?search=", undefined, tTemp);
   const me = await api("GET", "/auth/me", undefined, tTemp);
   const cambio = await api("POST", "/auth/password", { actual: temporalPwd, nueva: "Definitiva-2026-abc" }, tTemp);

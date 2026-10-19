@@ -213,7 +213,8 @@ export async function getReceptionSample({ request, s, params }: RouteContext): 
   if (soloEstado(permiso)) return json({ item: vistaEstado(row) });
   // Etapas derivadas, para mostrar la cadena completa desde la recepcion.
   const procesamientos = await s.query("SELECT id, folio_num, estado FROM muestras_procesamiento WHERE recepcion_id = :id ORDER BY folio_num", { id: sampleId });
-  return json({ item: { ...(await conSolicitudesYPuede(s, user, TABLE, [serializeRow(row)]))[0], procesamientos } });
+  const disposicionBloqueo = ["cerrada", "anulada"].includes(String(row.estado)) ? null : await bloqueoDisposicion(s, row);
+  return json({ item: { ...(await conSolicitudesYPuede(s, user, TABLE, [serializeRow(row)]))[0], procesamientos, disposicion_bloqueo: disposicionBloqueo } });
 }
 
 export async function createReceptionSample({ request, s }: RouteContext): Promise<Response> {
@@ -224,7 +225,7 @@ export async function createReceptionSample({ request, s }: RouteContext): Promi
 
   const payload = await readJson(request);
   // Contraseñas de firmantes enviadas al guardar: se verifican antes de cualquier otra escritura.
-  await verificarFirmasConPassword(s, user, payload);
+  await verificarFirmasConPassword(s, user, payload, request);
   const data = normalizePayload(payload);
   // Fase 4: autorizacion FX-THF-AP de quien captura.
   await exigirAutorizaciones(s, user, requisitosRecepcion());
@@ -303,7 +304,7 @@ export async function updateReceptionSample({ request, s, params }: RouteContext
   if (antes) await exigirVistaAsignada(s, permiso, antes);
   const payload = await readJson(request);
   // Contraseñas de firmantes enviadas al guardar: se verifican antes de cualquier otra escritura.
-  await verificarFirmasConPassword(s, user, payload);
+  await verificarFirmasConPassword(s, user, payload, request);
   const data = normalizePayload(payload);
   // Fase 4: autorizacion FX-THF-AP de quien captura.
   await exigirAutorizaciones(s, user, requisitosRecepcion());
@@ -409,6 +410,17 @@ export async function restaurarReceptionSample({ request, s, params }: RouteCont
 const DISPOSALS = new Set(DISPOSAL_TYPES.map((item) => item.value));
 
 /* Disposicion final de remanentes: cierra la muestra (FX-MC 7.4.4). */
+/*
+ * Por que no se puede registrar todavia la disposicion final, o null. Exige un
+ * informe liberado o enviado de la recepcion; la unica excepcion es la muestra
+ * rechazada en la recepcion (no tendra informe), que se dispone con motivo.
+ */
+export async function bloqueoDisposicion(s: Session, row: Row): Promise<string | null> {
+  if (String(row.estado) === "rechazada") return null;
+  const liberados = Number((await s.scalar("SELECT COUNT(*) FROM informes WHERE recepcion_id = :id AND estado IN ('liberado', 'enviado')", { id: row.id })) || 0);
+  return liberados > 0 ? null : "Falta liberar el informe";
+}
+
 export async function registrarDisposicion({ request, s, params }: RouteContext): Promise<Response> {
   const sampleId = intParam(params.id);
   const user = await requireUser(request);
@@ -420,7 +432,13 @@ export async function registrarDisposicion({ request, s, params }: RouteContext)
   if (["cerrada", "anulada"].includes(String(antes.estado))) return json({ message: `La recepcion ${folioLabel(TABLE, antes)} ya esta ${antes.estado}; no admite otra disposicion` }, 409);
   exigirSinSupervisionPendiente(antes, `La recepcion ${folioLabel(TABLE, antes)}`, "cerrar");
   await exigirSinSolicitudPendiente(s, TABLE, sampleId, `La recepcion ${folioLabel(TABLE, antes)}`, "cerrar");
+  // La disposicion exige el informe liberado (o enviado); solo una muestra rechazada en la recepcion se dispone sin el, con motivo.
+  const bloqueo = await bloqueoDisposicion(s, antes);
+  if (bloqueo) return json({ message: `${bloqueo}: la disposición final de ${folioLabel(TABLE, antes)} exige su informe liberado o enviado`, codigo: "informe_no_liberado" }, 409);
   const payload = await readJson(request);
+  const rechazada = String(antes.estado) === "rechazada";
+  const motivo = rechazada ? String(payload.motivo || "").trim() : "";
+  if (rechazada && motivo.length < 5) return json({ message: "La muestra fue rechazada en la recepción y no tiene informe: indica el motivo de la disposición (al menos 5 caracteres)", campo: "motivo" }, 400);
   const tipo = String(payload.tipo || "").trim();
   if (!DISPOSALS.has(tipo)) return json({ message: "Selecciona el tipo de disposicion final" }, 400);
   const fecha = strippedOrNull(payload.fecha, 10);
@@ -435,6 +453,7 @@ export async function registrarDisposicion({ request, s, params }: RouteContext)
     firma: strippedOrNull(payload.firma),
     remanentes: strippedOrNull(payload.remanentes),
     observaciones: strippedOrNull(payload.observaciones),
+    ...(rechazada ? { sin_informe: true, motivo } : {}),
     registrado_por: userIdFromClaims(user),
     registrado_rol_id: actuo.rol_id,
     registrado_cargo: actuo.cargo,
@@ -442,7 +461,7 @@ export async function registrarDisposicion({ request, s, params }: RouteContext)
   };
   await s.execute(`UPDATE ${TABLE} SET disposicion_json = :disposicion, estado_antes_cierre = :previo, estado = 'cerrada', actualizado_por = :usuario WHERE id = :id`, { disposicion: jsonText(disposicion), previo: String(antes.estado || ""), usuario: userIdFromClaims(user), id: sampleId });
   const despues = await snapshotRow(s, TABLE, sampleId);
-  await registrarAuditoria(s, user, { accion: "cerrar", entidad: TABLE, entidadId: sampleId, referencia: folioLabel(TABLE, despues), antes, despues, detalle: { disposicion: tipo, actuo_como: actuo } });
+  await registrarAuditoria(s, user, { accion: "cerrar", entidad: TABLE, entidadId: sampleId, referencia: folioLabel(TABLE, despues), motivo: motivo || null, antes, despues, detalle: { disposicion: tipo, ...(rechazada ? { sin_informe: true } : {}), actuo_como: actuo } });
   await s.commit();
   return json({ message: "Disposicion final registrada; la muestra queda cerrada", item: serializeRow(despues || antes!) });
 }

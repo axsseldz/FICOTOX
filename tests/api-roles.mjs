@@ -80,8 +80,8 @@ const MATRIZ = {
   },
   "Coordinador/a del Área Técnica": {
     email: "ricardo.medina@ficotox.local",
-    // Migracion 21: tambien aprueba cambios de acceso (usuarios:A).
-    filas: [...f("usuarios", "V A"), ...f("documentos", "documento_consultar_vigente documento_proponer documento_elaborar documento_enviar_revision documento_revisar documento_autorizar documento_consultar_historico documento_acusar_lectura"), ...f("muestras", "C E R A AN"), ...f("ensayos", "C E R A AN"), ...f("informes", "C R A AN"), ...f("equipos", "G R AN"), ...f("inventario", "G R AN"), ...f("calidad", "C R"), ...f("compras", "V")],
+    // Migracion 21: tambien aprueba cambios de acceso (usuarios:A). Migracion 26: edita borradores de informe (informes:E).
+    filas: [...f("usuarios", "V A"), ...f("documentos", "documento_consultar_vigente documento_proponer documento_elaborar documento_enviar_revision documento_revisar documento_autorizar documento_consultar_historico documento_acusar_lectura"), ...f("muestras", "C E R A AN"), ...f("ensayos", "C E R A AN"), ...f("informes", "C E R A AN"), ...f("equipos", "G R AN"), ...f("inventario", "G R AN"), ...f("calidad", "C R"), ...f("compras", "V")],
   },
   "Coordinador/a de Investigación y Desarrollo": {
     email: "gabriela.ortiz@ficotox.local",

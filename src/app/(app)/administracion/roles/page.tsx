@@ -109,8 +109,10 @@ function RolesContent() {
     if (!motivo) return;
     try {
       const actual = await cargarRol(Number(role.id), token);
-      await guardarRol(token, actual.role, { activo: activar, permisos: actual.permisos, motivo });
-      toast.success(activar ? "Rol activado" : "Rol desactivado");
+      const data = await guardarRol(token, actual.role, { activo: activar, permisos: actual.permisos, motivo });
+      // Reactivar un rol amplia lo que concede: queda en solicitud de un segundo usuario.
+      if (data.codigo === "solicitud_creada") toast.success(String(data.message || "La reactivación quedó pendiente de autorización"));
+      else toast.success(activar ? "Rol activado" : "Rol desactivado");
       invalidate("roles", "usuarios");
     } catch (err) {
       vAccion.errorServidor(err);

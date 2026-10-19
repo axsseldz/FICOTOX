@@ -73,23 +73,26 @@ export async function estadoAcceso(s: Session, email: string, ip: string): Promi
  * ventana, la bloquea (bloqueado_hasta, token_version + 1) y lo deja en la
  * bitacora. Devuelve true si este fallo provoco el bloqueo.
  */
-export async function registrarIntento(s: Session, datos: { email: string; ip: string; tipo: "login" | "reauth"; exito: boolean; usuario?: Row | null }): Promise<boolean> {
+export async function registrarIntento(s: Session, datos: { email: string; ip: string; tipo: "login" | "reauth" | "firma"; exito: boolean; usuario?: Row | null; sesion?: string | null; actor?: CurrentUser | null }): Promise<boolean> {
   const cfg = getConfig();
   const email = datos.email.trim().toLowerCase().slice(0, 150);
   const usuarioId = datos.usuario ? Number(datos.usuario.id) : null;
-  await s.execute("INSERT INTO intentos_acceso (email, usuario_id, ip, tipo, exito, fecha) VALUES (:email, :usuario_id, :ip, :tipo, :exito, :fecha)", {
+  await s.execute("INSERT INTO intentos_acceso (email, usuario_id, ip, tipo, exito, fecha, sesion) VALUES (:email, :usuario_id, :ip, :tipo, :exito, :fecha, :sesion)", {
     email,
     usuario_id: usuarioId,
     ip: datos.ip,
     tipo: datos.tipo,
     exito: datos.exito ? 1 : 0,
     fecha: ahoraIso(),
+    sesion: datos.sesion ? datos.sesion.slice(0, 64) : null,
   });
   if (datos.exito) {
     if (usuarioId) await s.execute("UPDATE usuarios SET intentos_desde = :fecha WHERE id = :id", { fecha: ahoraIso(), id: usuarioId });
     return false;
   }
-  await registrarAuditoria(s, null, { accion: datos.tipo === "login" ? "login_fallido" : "reauth_fallida", entidad: "sesion", entidadId: usuarioId, referencia: email, detalle: { ip: datos.ip, existe_usuario: !!datos.usuario } });
+  // Confirmar la firma de otra persona: el fallo queda a nombre de quien lo intento, sobre la cuenta del firmante.
+  if (datos.tipo === "firma") await registrarAuditoria(s, datos.actor, { accion: "reauth_fallida", entidad: "usuarios", entidadId: usuarioId, referencia: email, detalle: { motivo: "confirmar firma", ip: datos.ip } });
+  else await registrarAuditoria(s, null, { accion: datos.tipo === "login" ? "login_fallido" : "reauth_fallida", entidad: "sesion", entidadId: usuarioId, referencia: email, detalle: { ip: datos.ip, existe_usuario: !!datos.usuario } });
   if (!datos.usuario) return false;
   const desdeVentana = new Date(Date.now() - minutos(cfg.LOGIN_VENTANA_MIN)).toISOString();
   const reinicio = String(datos.usuario.intentos_desde || "");
@@ -107,6 +110,26 @@ export async function registrarIntento(s: Session, datos: { email: string; ip: s
     detalle: { bloqueado_hasta: hasta, ip: datos.ip, tipo: datos.tipo },
   });
   return true;
+}
+
+/* Identificador de la sesion (jti del token; los tokens anteriores sin jti, por persona y hora de emision). */
+export function sesionDe(user: CurrentUser): string {
+  return String(user.jti || `${user.sub}:${user.iat ?? ""}`).slice(0, 64);
+}
+
+/*
+ * Limite de intentos fallidos de confirmar firmas desde una misma sesion
+ * (LOGIN_MAX_INTENTOS en LOGIN_VENTANA_MIN). Evita que una sesion pruebe
+ * contrasenas de varias cuentas sin bloquear ninguna. 429 mientras dure.
+ */
+export async function exigirIntentosFirma(s: Session, user: CurrentUser): Promise<void> {
+  const cfg = getConfig();
+  const desde = new Date(Date.now() - minutos(cfg.LOGIN_VENTANA_MIN)).toISOString();
+  const fallos = await s.query<{ fecha: string }>("SELECT fecha FROM intentos_acceso WHERE sesion = :sesion AND tipo = 'firma' AND exito = 0 AND fecha >= :desde ORDER BY fecha ASC", { sesion: sesionDe(user), desde });
+  if (fallos.length < cfg.LOGIN_MAX_INTENTOS) return;
+  const libre = Date.parse(fallos[fallos.length - cfg.LOGIN_MAX_INTENTOS].fecha) + minutos(cfg.LOGIN_VENTANA_MIN);
+  const min = Math.max(1, Math.ceil((libre - Date.now()) / 60_000));
+  throw new HttpError(429, { message: `Demasiados intentos fallidos de confirmar firmas desde esta sesión; espera ${min} min antes de intentar de nuevo`, codigo: "firma_intentos" });
 }
 
 /* ---------- Reautenticacion ---------- */

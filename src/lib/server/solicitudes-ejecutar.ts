@@ -9,7 +9,7 @@ import type { CurrentUser } from "./auth";
 import type { Row, Session } from "./db";
 import { exigirReauth } from "./seguridad";
 import { aprobarSolicitudCon, crearSolicitud, detalleSolicitud, respuestaSolicitud, type Ejecutores } from "./solicitudes";
-import { ejecutarAmpliacionVigencia, ejecutarAsignacionRol, ejecutarReactivacion } from "./modules/admin";
+import { ejecutarAmpliacionPermisosRol, ejecutarAmpliacionVigencia, ejecutarAsignacionRol, ejecutarReactivacion } from "./modules/admin";
 import { ejecutarAnulacionInforme, informeFolio, violacionParaExcepcionInforme } from "./modules/informes";
 import { violacionParaExcepcionAnalisis } from "./modules/samples/analisis";
 import { ejecutarCambioFolio, ejecutarDecisionRecepcion, ejecutarReapertura } from "./modules/samples/recepcion";
@@ -61,6 +61,7 @@ const EJECUTORES: Ejecutores = {
   asignar_rol: ejecutarAsignacionRol,
   reactivar_cuenta: ejecutarReactivacion,
   ampliar_vigencia: ejecutarAmpliacionVigencia,
+  ampliar_permisos_rol: ejecutarAmpliacionPermisosRol,
   decision_recepcion: ejecutarDecisionRecepcion,
   cambiar_folio: ejecutarCambioFolio,
   reabrir_recepcion: ejecutarReapertura,

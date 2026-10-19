@@ -292,8 +292,10 @@ function EditorPermisos({ role, iniciales, onCancelar, onGuardado }: { role: Api
     if (!motivo) return;
     setGuardando(true);
     try {
-      await guardarRol(token, role, { permisos, motivo });
-      toast.success("Permisos actualizados");
+      const data = await guardarRol(token, role, { permisos, motivo });
+      // Agregar permisos queda en solicitud de un segundo usuario (lo que se quita se aplica de inmediato).
+      if (data.codigo === "solicitud_creada") toast.success(String(data.message || "La ampliación de permisos quedó pendiente de autorización"));
+      else toast.success("Permisos actualizados");
       invalidate("roles", "usuarios");
       await onGuardado();
     } catch (err) {

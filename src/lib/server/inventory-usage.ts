@@ -1,5 +1,7 @@
 import { HttpError } from "./http";
 import { type Session } from "./db";
+import { registrarAuditoria } from "./audit";
+import { userIdFromClaims, type CurrentUser } from "./auth";
 import { hoyLocal } from "../shared/fechas";
 
 /* Portado de utils/inventory_usage.py del backend Flask original. */
@@ -13,7 +15,7 @@ function toPositiveFloat(value: unknown): number | null {
   return amount > 0 ? amount : null;
 }
 
-async function resolveItemId(s: Session, tableName: string, value: unknown): Promise<number | null> {
+export async function resolveItemId(s: Session, tableName: string, value: unknown): Promise<number | null> {
   if (!SUPPORTED_INVENTORY_TABLES.has(tableName)) {
     throw new Error(`Tabla de inventario no soportada: ${tableName}`);
   }
@@ -61,25 +63,78 @@ async function assertActive(s: Session, tableName: string, itemId: number): Prom
   }
 }
 
-async function movementExists(s: Session, reference: string): Promise<boolean> {
-  if (!reference) return false;
-  const existing = await s.scalar("SELECT id FROM movimientos WHERE referencia = :referencia LIMIT 1", { referencia: reference });
-  return !!existing;
+/*
+ * Referencia libre para una salida nueva. La primera vez es la referencia base
+ * (`EXT-5-INS-0`); si ya existe (una salida anterior del mismo registro que se
+ * revirtio al reeditar), se numera: `EXT-5-INS-0-r2`, `-r3`... Asi el prefijo
+ * del registro sigue agrupando todas sus salidas.
+ */
+async function referenciaLibre(s: Session, base: string): Promise<string> {
+  let candidata = base;
+  for (let n = 2; await s.scalar("SELECT id FROM movimientos WHERE referencia = :referencia LIMIT 1", { referencia: candidata }); n += 1) candidata = `${base}-r${n}`;
+  return candidata;
 }
 
-/* Revierte salidas de inventario registradas bajo un prefijo de referencia. */
-export async function restoreInventoryUsage(s: Session, referencePrefix: string): Promise<number> {
-  if (!referencePrefix) return 0;
-  const rows = await s.query<{ id: number; tabla_origen: string; id_item: number; cantidad: number | string | null }>(
+export interface ContextoReversion {
+  user: CurrentUser | null | undefined;
+  /* Por que se revierte: "Anulación" o "Reedición". */
+  causa: string;
+  entidad: string;
+  entidadId: number;
+  referencia: string;
+  motivo?: string | null;
+}
+
+interface SalidaVigente {
+  id: number;
+  tabla_origen: string;
+  id_item: number;
+  cantidad: number | string | null;
+  motivo: string | null;
+  referencia: string;
+  unidad: string | null;
+  vinculo_tipo: string | null;
+  vinculo_id: number | null;
+}
+
+/* Salidas de un registro (por prefijo de referencia) que aun no tienen reversion. */
+async function salidasVigentes(s: Session, referencePrefix: string): Promise<SalidaVigente[]> {
+  return s.query<SalidaVigente>(
     `
-    SELECT id, tabla_origen, id_item, cantidad
-    FROM movimientos
-    WHERE tipo = 'salida'
-      AND referencia LIKE :reference_like
-      AND tabla_origen IN ('reactivos', 'consumibles')
+    SELECT m.id, m.tabla_origen, m.id_item, m.cantidad, m.motivo, m.referencia, m.unidad, m.vinculo_tipo, m.vinculo_id
+    FROM movimientos m
+    WHERE m.tipo = 'salida'
+      AND m.referencia LIKE :reference_like
+      AND m.tabla_origen IN ('reactivos', 'consumibles')
+      AND NOT EXISTS (SELECT 1 FROM movimientos r WHERE r.revierte_id = m.id)
+    ORDER BY m.id
     `,
     { reference_like: `${referencePrefix}%` },
   );
+}
+
+/* Cantidad vigente que un registro tiene descontada, por insumo (`tabla:id`). */
+export async function consumoVigente(s: Session, referencePrefix: string): Promise<Map<string, number>> {
+  const totales = new Map<string, number>();
+  if (!referencePrefix) return totales;
+  for (const row of await salidasVigentes(s, referencePrefix)) {
+    const clave = `${row.tabla_origen}:${row.id_item}`;
+    totales.set(clave, (totales.get(clave) || 0) + Number(row.cantidad || 0));
+  }
+  return totales;
+}
+
+/*
+ * Revierte las salidas de inventario registradas bajo un prefijo de referencia.
+ * No borra nada: por cada salida vigente devuelve la cantidad a la existencia y
+ * agrega una entrada de reversion ligada a ella (revierte_id), con motivo. Si se
+ * da el contexto, deja una entrada en la bitacora con lo revertido.
+ */
+export async function restoreInventoryUsage(s: Session, referencePrefix: string, contexto?: ContextoReversion): Promise<number> {
+  if (!referencePrefix) return 0;
+  const rows = await salidasVigentes(s, referencePrefix);
+  const userId = contexto ? userIdFromClaims(contexto.user) : null;
+  const revertidos: Array<Record<string, unknown>> = [];
 
   for (const row of rows) {
     const amount = Number(row.cantidad || 0);
@@ -106,18 +161,88 @@ export async function restoreInventoryUsage(s: Session, referencePrefix: string)
         { id: row.id_item, cantidad: amount },
       );
     }
+    const motivo = `Reversión (${contexto?.causa || "anulación o reedición"}) de: ${row.motivo || row.referencia}`;
+    const result = await s.execute(
+      `
+      INSERT INTO movimientos (
+          tipo, tabla_origen, id_item, cantidad, motivo, referencia, id_usuario, unidad, vinculo_tipo, vinculo_id, fecha_movimiento, revierte_id
+      )
+      VALUES (
+          'entrada', :tabla_origen, :id_item, :cantidad, :motivo, :referencia, :id_usuario, :unidad, :vinculo_tipo, :vinculo_id, :fecha_movimiento, :revierte_id
+      )
+      `,
+      {
+        tabla_origen: row.tabla_origen,
+        id_item: row.id_item,
+        cantidad: amount,
+        motivo: motivo.slice(0, 500),
+        referencia: await referenciaLibre(s, `${row.referencia}-REV`),
+        id_usuario: userId,
+        unidad: row.unidad,
+        vinculo_tipo: row.vinculo_tipo,
+        vinculo_id: row.vinculo_id,
+        fecha_movimiento: hoyLocal(),
+        revierte_id: row.id,
+      },
+    );
+    revertidos.push({ salida_id: row.id, reversion_id: result.lastrowid, tabla: row.tabla_origen, id_item: row.id_item, cantidad: amount, unidad: row.unidad });
   }
 
-  await s.execute(
-    `
-    DELETE FROM movimientos
-    WHERE tipo = 'salida'
-      AND referencia LIKE :reference_like
-      AND tabla_origen IN ('reactivos', 'consumibles')
-    `,
-    { reference_like: `${referencePrefix}%` },
-  );
+  if (contexto && revertidos.length) {
+    await registrarAuditoria(s, contexto.user, {
+      accion: "reponer",
+      entidad: contexto.entidad,
+      entidadId: contexto.entidadId,
+      referencia: contexto.referencia,
+      motivo: contexto.motivo || null,
+      detalle: { tipo: "reversion", causa: contexto.causa, movimientos: revertidos },
+    });
+  }
   return rows.length;
+}
+
+export interface InsumoSolicitado {
+  tipo: string;
+  ref: unknown;
+  cantidad: unknown;
+}
+
+const fmtCantidad = (n: number): string => String(Math.round(n * 1e6) / 1e6);
+
+/*
+ * Existencias suficientes para lo que se va a descontar (dentro de la misma
+ * transaccion del guardado). Suma por insumo lo pedido y lo compara con la
+ * existencia actual; si falta, no se guarda nada (409) y el mensaje dice el
+ * insumo, lo disponible y lo requerido. Al reeditar, las salidas anteriores del
+ * registro ya se revirtieron, asi que lo disponible incluye lo que el propio
+ * registro habia consumido. Una existencia sin capturar cuenta como 0.
+ */
+export async function exigirExistencias(s: Session, insumos: InsumoSolicitado[]): Promise<void> {
+  const pedidos = new Map<string, { tabla: string; id: number; cantidad: number }>();
+  for (const insumo of insumos) {
+    const tabla = insumo.tipo === "reactivo" ? "reactivos" : insumo.tipo === "consumible" ? "consumibles" : null;
+    if (!tabla) continue;
+    const id = await resolveItemId(s, tabla, insumo.ref);
+    const cantidad = toPositiveFloat(insumo.cantidad);
+    if (!id || !cantidad) continue;
+    const clave = `${tabla}:${id}`;
+    const actual = pedidos.get(clave);
+    if (actual) actual.cantidad += cantidad;
+    else pedidos.set(clave, { tabla, id, cantidad });
+  }
+  const faltantes: string[] = [];
+  for (const pedido of pedidos.values()) {
+    const fila =
+      pedido.tabla === "reactivos"
+        ? await s.queryOne<{ nombre: string | null; disponible: number | null; unidad: string | null }>("SELECT COALESCE(NULLIF(nombre, ''), NULLIF(producto, ''), item_name) AS nombre, cantidad_actual AS disponible, unidad FROM reactivos WHERE id = :id", { id: pedido.id })
+        : await s.queryOne<{ nombre: string | null; disponible: number | null; unidad: string | null }>("SELECT producto AS nombre, existencia AS disponible, 'unidades' AS unidad FROM consumibles WHERE id = :id", { id: pedido.id });
+    if (!fila) continue;
+    const disponible = Number(fila.disponible || 0);
+    if (pedido.cantidad <= disponible + 1e-9) continue;
+    const unidad = fila.unidad ? ` ${fila.unidad}` : "";
+    faltantes.push(`${fila.nombre || `${pedido.tabla === "reactivos" ? "Reactivo" : "Consumible"} ${pedido.id}`}: disponible ${fmtCantidad(disponible)}${unidad}, se requieren ${fmtCantidad(pedido.cantidad)}${unidad}`);
+  }
+  if (faltantes.length) throw new HttpError(409, { message: faltantes.length === 1 ? faltantes[0] : `No hay existencia suficiente. ${faltantes.join("; ")}`, codigo: "existencia_insuficiente", faltantes });
 }
 
 interface ConsumeOptions {
@@ -134,14 +259,14 @@ interface ConsumeOptions {
 /*
  * Descuenta un reactivo y registra el movimiento de salida.
  * 1. Resolver el reactivo por id, codigo, catalogo, lote, CAS o nombre.
- * 2. Validar cantidad positiva y referencia no usada.
+ * 2. Validar cantidad positiva (la existencia ya la valido exigirExistencias).
  * 3. Restar cantidad del inventario disponible.
  * 4. Insertar movimiento para trazabilidad.
  */
 export async function consumeReactivo(s: Session, referenceValue: unknown, cantidad: unknown, options: ConsumeOptions): Promise<boolean> {
   const itemId = await resolveItemId(s, "reactivos", referenceValue);
   const amount = toPositiveFloat(cantidad);
-  if (!itemId || !amount || (await movementExists(s, options.referencia))) return false;
+  if (!itemId || !amount) return false;
   if (!options.permitirInactivo) await assertActive(s, "reactivos", itemId);
 
   await s.execute(
@@ -163,7 +288,7 @@ export async function consumeReactivo(s: Session, referenceValue: unknown, canti
 export async function consumeConsumible(s: Session, referenceValue: unknown, cantidad: unknown, options: ConsumeOptions): Promise<boolean> {
   const itemId = await resolveItemId(s, "consumibles", referenceValue);
   const amount = toPositiveFloat(cantidad);
-  if (!itemId || !amount || (await movementExists(s, options.referencia))) return false;
+  if (!itemId || !amount) return false;
   if (!options.permitirInactivo) await assertActive(s, "consumibles", itemId);
 
   await s.execute(
@@ -194,7 +319,7 @@ async function insertMovement(s: Session, tableName: string, itemId: number, can
       id_item: itemId,
       cantidad,
       motivo: options.motivo,
-      referencia: options.referencia,
+      referencia: await referenciaLibre(s, options.referencia),
       id_usuario: options.userId,
       unidad,
       vinculo_tipo: options.vinculoTipo ?? null,

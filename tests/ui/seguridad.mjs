@@ -16,6 +16,7 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { autorizarTodo } from "../lib/autorizar.mjs";
+import { liberar } from "../lib/envio.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright-core");
 
@@ -41,7 +42,6 @@ const rolId = (nombre) => roles.find((r) => r.nombre === nombre)?.id;
 const inspeccion = { checklist: Array.from({ length: 7 }, (_, i) => ({ requisito: `Requisito ${i + 1}`, estado: i === 6 ? "NA" : "C", observacion: null })), observaciones_generales: null };
 const aceptada = (id) => ({ fecha_recepcion: "2026-09-20", hora_recepcion: "09:00", recibido_por: "QA", medio_recepcion: "directa", solicitante: "Cliente UI seguridad", muestra_unica: true, id_interno: id, fecha_muestra: "2026-09-19", analisis: { tipos: ["toxinas_lipofilicas"], metodos: ["cromatografia_liquidos"], tipos_muestra: ["organismo_completo"] }, inspeccion, decision_aceptacion: "aceptada", aceptacion: { fecha: "2026-09-20", responsable: "QA" } });
 const R1 = (await api("POST", "/samples/reception", aceptada(`SEGUI-A-${stamp}`), QA)).data?.id;
-const R2 = (await api("POST", "/samples/reception", aceptada(`SEGUI-D-${stamp}`), QA)).data?.id;
 // Cadena para un informe en borrador (revision con cargo).
 const R3 = (await api("POST", "/samples/reception", aceptada(`SEGUI-I-${stamp}`), QA)).data?.id;
 const P3 = (await api("POST", "/samples/processing", { recepcion_id: R3, muestra_tipo: "unica", id_interno: `SEGUI-I-${stamp}`, fecha_procesamiento: "2026-09-20", tipo_organismo: ["bivalvos"], nombre_quien_proceso: "QA" }, QA)).data?.id;
@@ -55,11 +55,29 @@ await api("POST", `/samples/analysis/${A3}/enviar-revision`, {}, QA);
 await api("POST", `/samples/analysis/${A3}/revisar`, {}, TR);
 await api("POST", `/samples/analysis/${A3}/aprobar`, {}, TR);
 const INF = (await api("POST", "/informes", { recepcion_id: R3, analisis_ids: [A3], cliente: { nombre: "Cliente UI" } }, QA)).data?.id;
+// La disposicion final exige el informe liberado (correcciones V1): R2 llega con su informe liberado.
+const TP = (await api("POST", "/auth/login", { email: "patricia.luna@ficotox.local", password: credenciales["patricia.luna@ficotox.local"] })).data?.token;
+const cadenaLiberada = async (idInt) => {
+  const R = (await api("POST", "/samples/reception", aceptada(idInt), QA)).data?.id;
+  const P = (await api("POST", "/samples/processing", { recepcion_id: R, muestra_tipo: "unica", id_interno: idInt, fecha_procesamiento: "2026-09-20", tipo_organismo: ["bivalvos"], nombre_quien_proceso: "QA" }, QA)).data?.id;
+  const E = (await api("POST", "/samples/extraction", { tipo_registro: "E-D", procesamiento_id: P, tipo_molienda: "fresca", id_interno: idInt, fecha_extraccion: "2026-09-20", registro_pesos: [{ id_muestra: "M1", replica: "M1_R1", peso_muestra: 2.01 }], nombre_quien_extrajo: "QA" }, QA)).data?.id;
+  const A = (await api("POST", "/samples/analysis", { tipo_analisis: "toxinas_lipofilicas", metodo: "hplc_ms_ms", extraccion_id: E, fecha_analisis: "2026-09-20", analista_nombre: "QA", resultados: [{ id_muestra: "M1", resultado: 50, unidad: "µg/kg", limite_regulatorio: 160, cumple: "cumple" }] }, QA)).data?.id;
+  await api("POST", `/samples/analysis/${A}/enviar-revision`, {}, QA);
+  await api("POST", `/samples/analysis/${A}/revisar`, {}, TR);
+  await api("POST", `/samples/analysis/${A}/aprobar`, {}, TR);
+  const inf = (await api("POST", "/informes", { recepcion_id: R, analisis_ids: [A], cliente: { nombre: "Cliente UI", correo: "cliente@ejemplo.mx" } }, QA)).data?.id;
+  await api("POST", `/informes/${inf}/revisar`, {}, TR);
+  await api("POST", `/informes/${inf}/autorizar`, {}, TP);
+  return (await liberar(API, TP, inf)).status === 200 ? R : undefined;
+};
+const R2 = await cadenaLiberada(`SEGUI-D-${stamp}`);
 const PWD = "Seguridad-UI-2026";
 const alta = async (prefijo, rol) => {
   const email = `${prefijo}.${stamp}@cicese.mx`;
   const r = await api("POST", "/admin/usuarios", { nombre: `${prefijo} ui`, email, activo: true, rol_id: rolId(rol), password: PWD, motivo: "Alta de prueba UI" }, QA);
   await autorizarTodo(API, QA, r.data?.id);
+  // R10: la cuenta nueva debe cambiar su contrasena al entrar; esta entrada por la API la cambia (envoltorio de pruebas) y conserva PWD.
+  await api("POST", "/auth/login", { email, password: PWD });
   return { email, id: r.data?.id };
 };
 const cargo = await alta("cargo", "Responsable General");
@@ -196,9 +214,17 @@ try {
       await aviso.getByRole("button", { name: "Seguir trabajando" }).click();
       await aviso.waitFor({ state: "hidden" });
       check("'Seguir trabajando' mantiene la sesion", (await page.getByText("Sesión cerrada por inactividad").count()) === 0);
+      const previo = await page.evaluate(() => window.localStorage.getItem("ficotox_access_token"));
       await page.getByText("Sesión cerrada por inactividad").waitFor({ timeout: 25_000 });
       const token = await page.evaluate(() => window.localStorage.getItem("ficotox_access_token"));
       check("al cerrarse por inactividad se descarta el token", !token);
+      // R5: el token tambien queda revocado en el servidor (no solo borrado del navegador).
+      let revocado = null;
+      for (let i = 0; i < 20 && revocado?.status !== 401; i += 1) {
+        revocado = await api("GET", "/auth/me", undefined, previo);
+        if (revocado.status !== 401) await page.waitForTimeout(250);
+      }
+      check("al cerrarse por inactividad el servidor revoca ese token (401 sesion_revocada)", !!previo && revocado?.status === 401 && revocado?.data?.codigo === "sesion_revocada", `${revocado?.status} ${revocado?.data?.codigo}`);
       await page.fill("#bloqueo-password", QA_PWD);
       await page.getByRole("button", { name: "Volver a entrar" }).click();
       await page.getByText("Sesión cerrada por inactividad").waitFor({ state: "hidden" });

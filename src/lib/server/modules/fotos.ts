@@ -25,7 +25,7 @@ import { getConfig } from "../config";
 import { type Row } from "../db";
 import { HttpError, intParam, json, readJson, type RouteContext } from "../http";
 import { searchParam } from "./helpers";
-import { cargarAutorizacion, requirePermission } from "../rbac";
+import { cargarAutorizacion, exigirSesionVigente, requirePermission } from "../rbac";
 import { problemaDeContenido } from "../../shared/adjuntos";
 
 const MAX_MB = 5;
@@ -167,7 +167,7 @@ export async function quitarFotoDe({ request, s, params }: RouteContext): Promis
 
 /* GET /api/cuentas/:id/foto?tam=128|512&v=<version>: la foto con sesion iniciada. */
 export async function servirFoto({ request, s, params }: RouteContext): Promise<Response> {
-  await requireUser(request);
+  await exigirSesionVigente(s, await requireUser(request));
   const id = intParam(params.id);
   const tam = searchParam(request, "tam") === "512" ? 512 : 128;
   const fila = await s.queryOne<Row>("SELECT foto FROM usuarios WHERE id = :id", { id });

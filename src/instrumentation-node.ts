@@ -36,6 +36,13 @@ export async function verificarArranque(): Promise<void> {
     if (e.respaldo) console.error(`[migraciones] Respaldo previo a la migración: ${e.respaldo}`);
     process.exit(SALIDA_FATAL);
   }
+  // Vencimientos (roles, solicitudes, autorizaciones y mantenimientos) al arrancar; si falla, se reintenta en la primera peticion.
+  try {
+    const { barrerVencimientos } = await import("./lib/server/bootstrap");
+    await barrerVencimientos();
+  } catch (error) {
+    console.error("[arranque] No se pudo hacer el barrido de vencimientos:", error);
+  }
 }
 
 /*

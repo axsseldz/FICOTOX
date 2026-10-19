@@ -62,6 +62,7 @@ export type AuditAction =
   | "rechazar_solicitud"
   | "cancelar_solicitud"
   | "vencer_solicitud"
+  | "vencer_mantenimiento"
   | "otorgar_autorizacion"
   | "revocar_autorizacion"
   | "vencer_autorizacion"
