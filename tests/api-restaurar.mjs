@@ -127,7 +127,8 @@ const nuevoNombre = `${nombreOriginal} (editado tras el respaldo)`;
 }
 
 /* ---------- Solicitud, autoaprobacion rechazada y aprobacion ---------- */
-const motivo = "Prueba: volver al estado del respaldo";
+// Un motivo que parece una opcion del script no la activa ni se pierde (va en el entorno, no en los argumentos).
+const motivo = "--aceptar-llave-del-respaldo Prueba: volver al estado del respaldo";
 let solicitud = null;
 {
   const r = await api("POST", `/respaldos/${respaldo}/restaurar`, { motivo }, tJ, SIN_APROBAR);

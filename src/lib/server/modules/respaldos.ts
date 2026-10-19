@@ -598,7 +598,7 @@ async function correrScriptRestauracion(trabajo: Trabajo, argumentos: string[], 
 
 async function ejecutarPrueba(user: CurrentUser, trabajo: Trabajo, id: string): Promise<void> {
   const responsable = String(user.nombre || user.email || "—");
-  const acta = await correrScriptRestauracion(trabajo, ["--respaldo", id, "--responsable", responsable]);
+  const acta = await correrScriptRestauracion(trabajo, ["--respaldo", id], { FICOTOX_RESTAURAR_SOLICITUD: JSON.stringify({ responsable }) });
   // La copia restaurada tiene todos los datos del laboratorio: se borra siempre; el acta queda.
   if (acta) borrarCopiaRestaurada(acta.destino);
   if (!acta) {
@@ -705,8 +705,9 @@ async function restaurarAhora(r: Restauracion): Promise<void> {
       trabajo.fase = "Verificando el respaldo";
       const resultado = await correrScriptRestauracion(
         trabajo,
-        ["--respaldo", r.respaldoId, "--destino", "instance", "--confirmar", "--responsable", r.aprobador, "--solicitante", r.solicitante, "--aprobador", r.aprobador, "--motivo", r.motivo, "--solicitud", String(r.solicitudId)],
-        { FICOTOX_RESTAURAR_DESDE_SERVIDOR: String(process.pid) },
+        // Solo opciones fijas en los argumentos; lo que escribieron las personas va en el entorno (no puede parecer una opcion).
+        ["--respaldo", r.respaldoId, "--destino", "instance", "--confirmar"],
+        { FICOTOX_RESTAURAR_DESDE_SERVIDOR: String(process.pid), FICOTOX_RESTAURAR_SOLICITUD: JSON.stringify({ responsable: r.aprobador, solicitante: r.solicitante, aprobador: r.aprobador, motivo: r.motivo, solicitud: r.solicitudId }) },
       );
       // La base queda en la version de la aplicacion aunque el script se hubiera interrumpido (sin pendientes no hace nada).
       await migrarAlArrancar().catch((error: unknown) => console.error("[respaldos] Migración tras restaurar:", error));

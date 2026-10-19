@@ -21,8 +21,10 @@
  * FICOTOX_RESTAURAR_DESDE_SERVIDOR=<su pid> despues de cerrar su conexion a la
  * base y de dejar de atender (503). Solo entonces se acepta el modo real con el
  * servidor encendido: el bloqueo vivo debe ser de ese pid y ese pid debe ser el
- * proceso padre. --solicitante, --aprobador, --motivo y --solicitud quedan en la
- * entrada de la bitacora.
+ * proceso padre. Los datos de la solicitud (responsable, solicitante, aprobador,
+ * motivo y numero) llegan en FICOTOX_RESTAURAR_SOLICITUD (JSON), nunca como
+ * argumentos: un motivo escrito por una persona no puede parecer una opcion.
+ * Por terminal, --solicitante, --aprobador, --motivo y --solicitud.
  *
  * Verificaciones (en ambos modos, cada una en el acta con ✅/❌):
  *   1. manifest valido y SHA-256 de cada archivo del respaldo
@@ -79,12 +81,21 @@ const respaldo = fs.existsSync(path.resolve(respaldoArg)) ? path.resolve(respald
 if (!fs.existsSync(respaldo)) salir(`No existe el respaldo: ${respaldoArg}`);
 const destinoArg = valor("--destino");
 const modoReal = destinoArg === "instance";
-const responsable = valor("--responsable") || process.env.USER || os.userInfo().username || "—";
+const solicitudServidor = (() => {
+  try {
+    const datos = JSON.parse(process.env.FICOTOX_RESTAURAR_SOLICITUD || "{}");
+    return datos && typeof datos === "object" ? datos : {};
+  } catch {
+    return {};
+  }
+})();
+const textoDe = (v) => (v === undefined || v === null || v === "" ? null : String(v));
+const responsable = textoDe(solicitudServidor.responsable) || valor("--responsable") || process.env.USER || os.userInfo().username || "—";
 const confirmar = args.includes("--confirmar");
-const solicitante = valor("--solicitante");
-const aprobador = valor("--aprobador");
-const motivoArg = valor("--motivo");
-const solicitudArg = valor("--solicitud");
+const solicitante = textoDe(solicitudServidor.solicitante) || valor("--solicitante");
+const aprobador = textoDe(solicitudServidor.aprobador) || valor("--aprobador");
+const motivoArg = textoDe(solicitudServidor.motivo) || valor("--motivo");
+const solicitudArg = textoDe(solicitudServidor.solicitud) || valor("--solicitud");
 
 /* ---------- Guardas del modo real ---------- */
 
