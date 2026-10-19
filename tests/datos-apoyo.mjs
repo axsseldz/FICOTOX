@@ -45,10 +45,11 @@ if (process.env.CREDENCIALES_ROLES) {
     if (destino) await api("POST", `/admin/usuarios/${destino}/autorizaciones`, { tipo: "equipo", clave: String(centrifuga.id), folio_fx_thf_ap: "FX-THF-AP-PRUEBAS", motivo: "Equipo dado de alta para las pruebas" }, coord.token);
   }
 }
-const metanol = await api("POST", "/inventory/reactivos", { tipo_reactivo: "alcoholes_solventes", nombre: "Metanol HPLC", producto: "Metanol HPLC", cantidad_actual: 8, unidad: "litros" }, T);
-const acetico = await api("POST", "/inventory/reactivos", { tipo_reactivo: "acidos", nombre: "Acido acetico", producto: "Acido acetico", cantidad_actual: 2.5, unidad: "litros" }, T);
+// La existencia inicial es capacidad × piezas (cantidad_actual no se captura): sin existencia no se puede consumir.
+const metanol = await api("POST", "/inventory/reactivos", { tipo_reactivo: "alcoholes_solventes", nombre: "Metanol HPLC", producto: "Metanol HPLC", capacidad: 1, unidad_capacidad: "L", piezas: 8 }, T);
+const acetico = await api("POST", "/inventory/reactivos", { tipo_reactivo: "acidos", nombre: "Acido acetico", producto: "Acido acetico", capacidad: 2.5, unidad_capacidad: "L", piezas: 1 }, T);
 // La prueba de navegador da de baja y reactiva este reactivo.
-await api("POST", "/inventory/reactivos", { tipo_reactivo: "alcoholes_solventes", nombre: "2-Propanol (Alcohol isopropilico)", producto: "2-Propanol (Alcohol isopropilico)", cantidad_actual: 4, unidad: "litros" }, T);
+await api("POST", "/inventory/reactivos", { tipo_reactivo: "alcoholes_solventes", nombre: "2-Propanol (Alcohol isopropilico)", producto: "2-Propanol (Alcohol isopropilico)", capacidad: 1, unidad_capacidad: "L", piezas: 4 }, T);
 const bolsa = await api("POST", "/consumables", { producto: "Bolsa roja RPBI", piezas: 20, stock_maximo: 20 }, T);
 
 const inspeccion = {

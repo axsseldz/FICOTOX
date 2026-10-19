@@ -132,7 +132,7 @@ if (!T.qa || !T.ricardo || !T.patricia) {
 const ricardoId = ((await api("preparar", "GET", "/admin/usuarios", undefined, T.qa)).data?.items || []).find((u) => u.email === "ricardo.medina@ficotox.local")?.id;
 const INICIAL = 100000;
 const CONSUMO = 0.01;
-const reactivo = (await api("preparar", "POST", "/inventory/reactivos", { tipo_reactivo: "alcoholes_solventes", nombre: "Metanol carga", producto: "Metanol carga", cantidad_actual: INICIAL, unidad: "litros" }, T.qa)).data?.id;
+const reactivo = (await api("preparar", "POST", "/inventory/reactivos", { tipo_reactivo: "alcoholes_solventes", nombre: "Metanol carga", producto: "Metanol carga", capacidad: INICIAL, unidad_capacidad: "L", piezas: 1 }, T.qa)).data?.id;
 const inspeccion = { checklist: Array.from({ length: 7 }, (_, i) => ({ requisito: `Requisito ${i + 1}`, estado: i === 6 ? "NA" : "C", observacion: null })), observaciones_generales: null };
 const pdf = (texto, kb) => Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.from(`% ${texto}\n`), randomBytes(kb * 1024).map((b) => 32 + (b % 90))]);
 let extraccionesOk = 0;

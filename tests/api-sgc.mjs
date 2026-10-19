@@ -251,7 +251,7 @@ let informeId = null;
   const folioRech = (await api("GET", `/samples/reception/${rech.data?.id}`)).data?.item?.folio_num;
   const reacept = await api("PUT", `/samples/reception/${rech.data?.id}`, { ...recepcionBase, id_interno: "D26-RECH", folio_num: folioRech, decision_aceptacion: "aceptada", inspeccion: inspeccionOk(), aceptacion: { fecha: "2026-09-10", responsable: "Ana QA" } });
   check("editar recepcion rechazada -> 409", reacept.status === 409, `status ${reacept.status} ${reacept.data?.message}`);
-  const dispRech = await api("POST", `/samples/reception/${rech.data?.id}/disposicion`, { tipo: "devuelto_cliente", fecha: "2026-09-11", responsable: "Ana QA" });
+  const dispRech = await api("POST", `/samples/reception/${rech.data?.id}/disposicion`, { tipo: "devuelto_cliente", fecha: "2026-09-11", responsable: "Ana QA", motivo: "Rechazada en la recepción: se devuelve al cliente" });
   check("disposicion de una muestra rechazada (devuelta) -> cerrada", dispRech.status === 200 && dispRech.data?.item?.estado === "cerrada", `status ${dispRech.status} ${dispRech.data?.message}`);
 
   // Analisis anulado: ni edicion ni doble anulacion; restaurar regresa al estado previo.

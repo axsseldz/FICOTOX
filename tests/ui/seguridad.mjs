@@ -60,6 +60,8 @@ const alta = async (prefijo, rol) => {
   const email = `${prefijo}.${stamp}@cicese.mx`;
   const r = await api("POST", "/admin/usuarios", { nombre: `${prefijo} ui`, email, activo: true, rol_id: rolId(rol), password: PWD, motivo: "Alta de prueba UI" }, QA);
   await autorizarTodo(API, QA, r.data?.id);
+  // R10: la cuenta nueva debe cambiar su contrasena al entrar; esta entrada por la API la cambia (envoltorio de pruebas) y conserva PWD.
+  await api("POST", "/auth/login", { email, password: PWD });
   return { email, id: r.data?.id };
 };
 const cargo = await alta("cargo", "Responsable General");
@@ -196,9 +198,17 @@ try {
       await aviso.getByRole("button", { name: "Seguir trabajando" }).click();
       await aviso.waitFor({ state: "hidden" });
       check("'Seguir trabajando' mantiene la sesion", (await page.getByText("Sesión cerrada por inactividad").count()) === 0);
+      const previo = await page.evaluate(() => window.localStorage.getItem("ficotox_access_token"));
       await page.getByText("Sesión cerrada por inactividad").waitFor({ timeout: 25_000 });
       const token = await page.evaluate(() => window.localStorage.getItem("ficotox_access_token"));
       check("al cerrarse por inactividad se descarta el token", !token);
+      // R5: el token tambien queda revocado en el servidor (no solo borrado del navegador).
+      let revocado = null;
+      for (let i = 0; i < 20 && revocado?.status !== 401; i += 1) {
+        revocado = await api("GET", "/auth/me", undefined, previo);
+        if (revocado.status !== 401) await page.waitForTimeout(250);
+      }
+      check("al cerrarse por inactividad el servidor revoca ese token (401 sesion_revocada)", !!previo && revocado?.status === 401 && revocado?.data?.codigo === "sesion_revocada", `${revocado?.status} ${revocado?.data?.codigo}`);
       await page.fill("#bloqueo-password", QA_PWD);
       await page.getByRole("button", { name: "Volver a entrar" }).click();
       await page.getByText("Sesión cerrada por inactividad").waitFor({ state: "hidden" });

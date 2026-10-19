@@ -17,10 +17,16 @@
  * (`resultado`) fusionado, mas la `solicitud` aprobada.
  * Fase 10: si enviar un analisis a revision responde 409 `evidencia_requerida`,
  * adjunta un cromatograma PDF de prueba con el mismo usuario y repite el envio.
+ * Correcciones V1 (R10): una cuenta creada por la API (o restablecida) entra con
+ * cambio de contrasena obligatorio. Si /auth/login responde con
+ * `debe_cambiar_password`, el envoltorio la cambia a otra y de vuelta a la misma
+ * (la contrasena de la prueba no cambia) y devuelve la sesion ya sin el cambio
+ * pendiente.
  * Encabezados de control (se quitan antes de enviar):
  *  - `X-Sin-Reauth-Auto: 1`: no reintenta la reautenticacion (para probar el 401).
  *  - `X-Sin-Aprobar-Auto: 1`: no aprueba la solicitud (para probar el flujo).
  *  - `X-Sin-Evidencia-Auto: 1`: no adjunta evidencia (para probar el 409).
+ *  - `X-Sin-Cambio-Auto: 1`: no cambia la contrasena temporal (para probar R10).
  * Importarlo al inicio de cada suite: `import "./lib/reauth-auto.mjs";`
  */
 import { readFileSync } from "node:fs";
@@ -90,6 +96,8 @@ globalThis.fetch = async (input, init = {}) => {
   const sinAuto = headers.get("x-sin-reauth-auto") === "1";
   const sinAprobar = headers.get("x-sin-aprobar-auto") === "1";
   const sinEvidencia = headers.get("x-sin-evidencia-auto") === "1";
+  const sinCambio = headers.get("x-sin-cambio-auto") === "1";
+  headers.delete("x-sin-cambio-auto");
   headers.delete("x-sin-reauth-auto");
   headers.delete("x-sin-aprobar-auto");
   headers.delete("x-sin-evidencia-auto");
@@ -103,6 +111,25 @@ globalThis.fetch = async (input, init = {}) => {
       for (const h of ["x-forwarded-for", "x-actuar-como"]) if (headers.get(h)) extra[h] = headers.get(h);
       const subida = await adjuntarEvidencia(url.slice(0, url.indexOf("/api/") + 5), token, Number(envio[1]), { headers: extra, fetchFn: original });
       if (subida.ok) res = await original(input, { ...init, headers });
+    }
+  }
+  if (/\/api\/auth\/login$/.test(url) && res.ok && !sinCambio) {
+    const data = await res.clone().json().catch(() => null);
+    const pendiente = data?.debe_cambiar_password ?? data?.user?.debe_cambiar_password;
+    const body = (() => {
+      try {
+        return JSON.parse(String(init.body || "{}"));
+      } catch {
+        return {};
+      }
+    })();
+    if (pendiente && data?.token && body.password) {
+      const cambiar = (token, actual, nueva) => original(url.replace(/login$/, "password"), { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ actual, nueva }) });
+      const intermedia = `${body.password}·Cambio-1`;
+      const paso1 = await cambiar(data.token, body.password, intermedia);
+      const t1 = paso1.ok ? (await paso1.json().catch(() => null))?.token : null;
+      const paso2 = t1 ? await cambiar(t1, intermedia, body.password) : null;
+      if (paso2?.ok) res = paso2;
     }
   }
   const esLogin = /\/api\/auth\/(login|password)$/.test(url) && String(init.method || "GET").toUpperCase() === "POST";
