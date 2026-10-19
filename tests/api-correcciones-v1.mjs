@@ -243,6 +243,24 @@ const altaCuenta = (nombre, email, password) => api("POST", "/admin/usuarios", {
   const trasQuitar = (await detalle()).permisos || [];
   check("3c quitar permisos es directo (200, con motivo y bitácora) y no crea solicitud", quita.status === 200 && !quita.data?.solicitud && !tiene(trasQuitar, nueva) && trasQuitar.length === inicial.length, `${quita.status} ${quita.data?.message} ${trasQuitar.length}`);
 
+  // Cambiar el alcance: ampliarlo va a solicitud y conserva el alcance anterior mientras tanto; reducirlo es directo.
+  const parcial = inicial.find((p) => p.alcance !== "total" && !inicial.some((q) => q.modulo === p.modulo && q.accion === p.accion && q.alcance === "total"));
+  const aTotal = { ...parcial, alcance: "total" };
+  const conTotal = inicial.map((p) => (p === parcial ? aTotal : p));
+  const pideTotal = await guardar(conTotal, "Ampliar el alcance (prueba R8)");
+  const pendiente = (await detalle()).permisos || [];
+  check("3c ampliar el alcance de un permiso → 202 solicitud; mientras tanto conserva el alcance anterior (no lo pierde)", pideTotal.status === 202 && tiene(pendiente, parcial) && !tiene(pendiente, aTotal) && pendiente.length === inicial.length, `${pideTotal.status} ${pideTotal.data?.message} ${JSON.stringify(parcial)} ${pendiente.length}/${inicial.length}`);
+  const rechaza = await api("POST", `/solicitudes/${pideTotal.data?.solicitud?.id}/rechazar`, { motivo: "No procede ampliar el alcance" }, t.patricia);
+  const trasRechazo = (await detalle()).permisos || [];
+  check("3c si la solicitud se rechaza, el rol queda como estaba (con su alcance anterior)", rechaza.status === 200 && tiene(trasRechazo, parcial) && !tiene(trasRechazo, aTotal) && trasRechazo.length === inicial.length, `${rechaza.status} ${rechaza.data?.message} ${trasRechazo.length}`);
+  const otraVez = await guardar(conTotal, "Ampliar el alcance (prueba R8, aprobada)");
+  const apruebaAlcance = await api("POST", `/solicitudes/${otraVez.data?.solicitud?.id}/aprobar`, { motivo: "Procede" }, t.patricia);
+  const trasAlcance = (await detalle()).permisos || [];
+  check("3c aprobada: el permiso queda con alcance total y sin el alcance anterior", apruebaAlcance.status === 200 && tiene(trasAlcance, aTotal) && !tiene(trasAlcance, parcial) && trasAlcance.length === inicial.length, `${apruebaAlcance.status} ${apruebaAlcance.data?.message} ${trasAlcance.length}`);
+  const reduce = await guardar(inicial, "Reducir el alcance (prueba R8)");
+  const trasReducir = (await detalle()).permisos || [];
+  check("3c reducir el alcance (de total a uno parcial) es quitar: directo (200), sin solicitud", reduce.status === 200 && !reduce.data?.solicitud && tiene(trasReducir, parcial) && !tiene(trasReducir, aTotal), `${reduce.status} ${reduce.data?.message}`);
+
   const sinMotivo = await guardar([...inicial, nueva], "");
   check("3c el motivo sigue siendo obligatorio al cambiar permisos (400)", sinMotivo.status === 400, `${sinMotivo.status} ${sinMotivo.data?.message}`);
   const sinReauth = await api("PUT", `/admin/roles/${rol.id}`, { nombre: rol.nombre, descripcion: rol.descripcion || "", activo: true, permisos: inicial.slice(1), motivo: "Sin reautenticación" }, t.jorge, { ...MANUAL, "X-Sin-Reauth-Auto": "1" });

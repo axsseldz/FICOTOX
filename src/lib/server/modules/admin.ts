@@ -189,11 +189,22 @@ export async function updateRole({ request, s, params }: RouteContext): Promise<
    * descripcion) se aplica de inmediato, con reautenticacion y bitacora.
    */
   const claveFila = (f: { modulo: string; accion: string; alcance: string }) => `${f.modulo}:${f.accion}:${f.alcance}`;
+  const claveAccion = (f: { modulo: string; accion: string }) => `${f.modulo}:${f.accion}`;
   const antesClaves = new Set(permisosAntes.map(claveFila));
-  const nuevasClaves = new Set(data.permisos.map(claveFila));
-  const agregadas = data.permisos.filter((f) => !antesClaves.has(claveFila(f)));
+  const alcancesAntes = new Map<string, Set<string>>();
+  for (const f of permisosAntes) alcancesAntes.set(claveAccion(f), (alcancesAntes.get(claveAccion(f)) || new Set()).add(f.alcance));
+  /*
+   * Cambiar el alcance de un permiso que ya tenia: pasar a uno mas reducido que
+   * "total" es quitar (directo); cualquier otro cambio de alcance amplia y va a
+   * la solicitud, y mientras tanto el rol conserva el alcance anterior (si la
+   * solicitud se rechaza no pierde el permiso).
+   */
+  const reduce = (f: { modulo: string; accion: string; alcance: string }) => f.alcance !== "total" && !!alcancesAntes.get(claveAccion(f))?.has("total");
+  const agregadas = data.permisos.filter((f) => !antesClaves.has(claveFila(f)) && !reduce(f));
+  const accionesAmpliadas = new Set(agregadas.map(claveAccion));
+  const conservadas = permisosAntes.filter((f) => accionesAmpliadas.has(claveAccion(f)) && !data.permisos.some((n) => claveFila(n) === claveFila(f)));
   const reactiva = Number(antes.activo) === 0 && data.activo === 1;
-  const permisosInmediatos = agregadas.length || reactiva ? permisosAntes.filter((f) => nuevasClaves.has(claveFila(f))) : data.permisos;
+  const permisosInmediatos = agregadas.length || reactiva ? normalizarFilas([...data.permisos.filter((f) => !agregadas.includes(f)), ...conservadas]) : data.permisos;
   const activoInmediato = reactiva ? 0 : data.activo;
 
   const adminsAntes = await countActiveAdministrators(s);
@@ -219,11 +230,13 @@ export async function updateRole({ request, s, params }: RouteContext): Promise<
     entidadId: roleId,
     referencia: data.nombre,
     accion: "ampliar_permisos",
-    datos: { rol: data.nombre, agregar: agregadas, activar: reactiva },
+    // reemplazar: el alcance anterior que se conserva mientras la solicitud esta pendiente y se quita al aprobarla.
+    datos: { rol: data.nombre, agregar: agregadas, reemplazar: conservadas, activar: reactiva },
     motivo,
   });
   await s.commit();
-  const quitadas = permisosAntes.length - permisosInmediatos.length;
+  const inmediatasClaves = new Set(permisosInmediatos.map(claveFila));
+  const quitadas = permisosAntes.filter((f) => !inmediatasClaves.has(claveFila(f))).length;
   const respuesta = respuestaSolicitud(solicitud, `la ampliación de permisos del rol «${data.nombre}»`);
   if (!quitadas) return respuesta;
   const cuerpo = (await respuesta.json()) as Record<string, unknown>;
@@ -240,7 +253,8 @@ export async function ejecutarAmpliacionPermisosRol(ctx: ContextoEjecucion): Pro
     throw new HttpError(409, { message: "Tienes este rol vigente: la ampliación de sus permisos la debe aprobar otra persona", codigo: "rol_propio" });
   }
   const permisosAntes = (await filasDeRoles(ctx.s, [roleId])).get(roleId) || [];
-  const permisos = normalizarFilas([...permisosAntes, ...(Array.isArray(ctx.datos.agregar) ? ctx.datos.agregar : [])]);
+  const reemplazar = new Set(normalizarFilas(ctx.datos.reemplazar).map((f) => `${f.modulo}:${f.accion}:${f.alcance}`));
+  const permisos = normalizarFilas([...permisosAntes.filter((f) => !reemplazar.has(`${f.modulo}:${f.accion}:${f.alcance}`)), ...(Array.isArray(ctx.datos.agregar) ? ctx.datos.agregar : [])]);
   const activo = ctx.datos.activar ? 1 : Number(antes.activo) ? 1 : 0;
   const nombre = String(antes.nombre || "");
   const afectados = await afectadosPorCambioDeRol(ctx.s, roleId, permisos, !!activo, (antes.clave as string | null) || null, nombre);
