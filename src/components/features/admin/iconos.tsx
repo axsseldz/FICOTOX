@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Books, Crown, Database, Flask, GearSix, GraduationCap, Medal, MagnifyingGlass, Package, ShieldCheck, ShoppingCart, TestTube, Users, Wrench, Archive, ClipboardText, FileText, SealCheck, Microscope } from "@phosphor-icons/react";
 import { cn } from "@/components/ui/cn";
 import type { IconoRol as ClaveIcono } from "@/lib/shared/roles-descripcion";
+import { Badge } from "@/components/ui/Primitives";
 
 /* Iconos de los roles (roles-descripcion.ts) y de las areas de la plataforma. */
 const ICONOS_ROL: Record<ClaveIcono, (size: number) => ReactNode> = {
@@ -53,5 +54,5 @@ export function IconoArea({ clave }: { clave: string }) {
 
 /* Etiqueta de un rol con su nombre completo: nunca se recorta; si no cabe, pasa a la siguiente linea. */
 export function EtiquetaRol({ children }: { children: ReactNode }) {
-  return <span className="inline-flex min-h-6 items-center rounded-full bg-surface-3 px-2.5 py-0.5 text-xs leading-snug font-medium text-ink-2">{children}</span>;
+  return <Badge wrap>{children}</Badge>;
 }

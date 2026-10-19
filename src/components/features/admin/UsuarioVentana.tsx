@@ -406,10 +406,9 @@ function AsignarRolDialog({ usuarioId, nombre, onCerrar, onListo }: { usuarioId:
             </Select>
           </Field>
           {elegido ? (
-            <p className="flex items-start gap-2 rounded-box bg-brand-faint px-3 py-2.5 text-sm text-ink-2 sm:col-span-2">
-              <ShieldCheck size={16} weight="duotone" className="mt-0.5 shrink-0 text-brand" />
+            <Callout icon={<ShieldCheck size={18} weight="duotone" />} className="sm:col-span-2">
               {descripcionDeRol(elegido).proposito}
-            </p>
+            </Callout>
           ) : null}
           <Field label="Motivo" htmlFor="u-asignar-motivo" required className="sm:col-span-2">
             <Textarea id="u-asignar-motivo" rows={2} maxLength={300} value={nueva.motivo} onChange={(event) => setNueva((prev) => ({ ...prev, motivo: event.target.value }))} placeholder="Ej. Cambio de funciones" />

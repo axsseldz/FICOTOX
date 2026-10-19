@@ -42,8 +42,8 @@ export function StatusFlag({ kind = "pendiente", label, detail, className, onCli
         content={
           <span className="flex flex-col gap-0.5">
             <span className="font-medium">{label}</span>
-            {detail ? <span className="text-on-deep/80">{detail}</span> : null}
-            <span className="text-on-deep/70">Clic para ver y atender</span>
+            {detail ? <span className="text-ink-3">{detail}</span> : null}
+            <span className="text-ink-4">Clic para ver y atender</span>
           </span>
         }
       >
@@ -68,7 +68,7 @@ export function StatusFlag({ kind = "pendiente", label, detail, className, onCli
       content={
         <span className="flex flex-col gap-0.5">
           <span className="font-medium">{label}</span>
-          {detail ? <span className="text-on-deep/80">{detail}</span> : null}
+          {detail ? <span className="text-ink-3">{detail}</span> : null}
         </span>
       }
     >

@@ -5,6 +5,7 @@ import { Dialog as RadixDialog } from "radix-ui";
 import { CaretDown, X } from "@phosphor-icons/react";
 import { IconButton } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
+import { VELO_VENTANA, TITULO_VENTANA, DESCRIPCION_VENTANA } from "@/components/ui/Overlay";
 
 /*
  * Formularios de Documentos SGC en ventana centrada, como el resto de la
@@ -37,7 +38,7 @@ export function VentanaFormulario({
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-[var(--z-ventana)] bg-deep/45 backdrop-blur-md data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out" />
+        <RadixDialog.Overlay className={VELO_VENTANA} />
         <div className="pointer-events-none fixed inset-0 z-[var(--z-ventana)] flex items-stretch justify-center sm:items-center sm:p-6">
           <RadixDialog.Content
             data-testid="ventana-formulario"
@@ -50,8 +51,8 @@ export function VentanaFormulario({
           >
             <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4 sm:px-6">
               <div className="flex min-w-0 flex-col gap-1">
-                <RadixDialog.Title className="text-xl leading-snug font-semibold tracking-snug text-ink">{title}</RadixDialog.Title>
-                {description ? <RadixDialog.Description className="text-sm leading-snug text-ink-3">{description}</RadixDialog.Description> : <RadixDialog.Description className="sr-only">{title}</RadixDialog.Description>}
+                <RadixDialog.Title className={TITULO_VENTANA}>{title}</RadixDialog.Title>
+                {description ? <RadixDialog.Description className={DESCRIPCION_VENTANA}>{description}</RadixDialog.Description> : <RadixDialog.Description className="sr-only">{title}</RadixDialog.Description>}
               </div>
               <RadixDialog.Close asChild>
                 <IconButton label="Cerrar">

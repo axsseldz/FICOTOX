@@ -160,7 +160,7 @@ function MovimientosContent() {
           ) : null
         }
       >
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por insumo, referencia o motivo" className="w-full md:w-[340px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por insumo, referencia o motivo" className="min-w-0 flex-1 md:w-[340px] md:flex-none" />
         <FilterMenu groups={groups} gruposFinales={ordenar} />
       </Toolbar>
 

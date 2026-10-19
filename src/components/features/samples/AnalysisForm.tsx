@@ -566,7 +566,7 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
           <Button variant="secondary" onClick={() => router.push("/muestras/analisis")}>
             {readOnly ? "Volver" : "Cancelar"}
           </Button>
-          {moreItems.length ? <ActionMenu items={moreItems} label="Más acciones" header={folioLabel} /> : null}
+          {moreItems.length ? <ActionMenu items={moreItems} label="Más acciones" size="lg" header={folioLabel} /> : null}
           {editing && estado === "registrado" && canEdit && !item?.solicitud_pendiente ? (
             faltaEvidencia ? (
               <Tooltip content="Adjunta al menos una evidencia instrumental (sección “Evidencia instrumental”) antes de enviar a revisión.">

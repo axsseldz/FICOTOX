@@ -9,7 +9,7 @@ import { ArrowsLeftRight, CaretRight, ClockCounterClockwise, Cube, FileText, Fla
 import { reportarIncidencia, ReportarIncidenciaHost, usePuedeReportar } from "@/components/features/calidad/ReportarIncidencia";
 import { useSession } from "@/components/session/SessionProvider";
 import { cn } from "@/components/ui/cn";
-import { Dropdown, Tooltip } from "@/components/ui/Overlay";
+import { Dropdown, Tooltip, VELO_VENTANA } from "@/components/ui/Overlay";
 import { Avatar } from "@/components/ui/Primitives";
 import { coincideAtajo, useAtajo } from "@/lib/client/atajos";
 import { isActivePath, isItemActive, visibleNav, type NavChild, type NavIcon, type NavItem } from "@/lib/client/nav";
@@ -186,7 +186,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Barra lateral móvil: panel con foco atrapado, Escape y bloqueo de scroll (Radix Dialog). Siempre expandida. */}
       <RadixDialog.Root open={mobileOpen} onOpenChange={setMobileOpen}>
         <RadixDialog.Portal>
-          <RadixDialog.Overlay className="fixed inset-0 z-[var(--z-ventana)] bg-deep/35 backdrop-blur-[3px] data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out lg:hidden" />
+          <RadixDialog.Overlay className={cn(VELO_VENTANA, "lg:hidden")} />
           <RadixDialog.Content className="bg-sidebar fixed inset-y-0 left-0 z-[var(--z-ventana)] flex w-[280px] max-w-[85vw] flex-col shadow-panel outline-none data-[state=open]:animate-sheet-in-left data-[state=closed]:animate-sheet-out-left lg:hidden" aria-label="Navegación principal">
             <RadixDialog.Title className="sr-only">Navegación principal</RadixDialog.Title>
             <RadixDialog.Description className="sr-only">Secciones del sistema</RadixDialog.Description>

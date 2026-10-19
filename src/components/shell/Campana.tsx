@@ -142,7 +142,7 @@ export function Campana({ compacta = false }: { compacta?: boolean }) {
             side={compacta ? "right" : "bottom"}
             sideOffset={8}
             collisionPadding={12}
-            className="bg-popover border border-line z-[var(--z-popover)] flex max-h-[min(var(--radix-popover-content-available-height),620px)] w-[370px] max-w-[calc(100vw-24px)] flex-col rounded-card shadow-panel outline-none data-[state=closed]:animate-dematerialize data-[state=open]:animate-materialize"
+            className="bg-popover border border-line z-[var(--z-popover)] flex max-h-[min(var(--radix-popover-content-available-height),620px)] w-[370px] max-w-[calc(100vw-24px)] flex-col rounded-card shadow-pop outline-none data-[state=closed]:animate-dematerialize data-[state=open]:animate-materialize"
           >
             <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
               <p className="text-base font-semibold text-ink">Notificaciones</p>

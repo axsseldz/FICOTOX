@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { ArrowRight, ArrowsLeftRight, ClockCounterClockwise, Cube, Eye, FileText, Flask, IdentificationBadge, ListChecks, Package, Plus, Question, Stamp, TestTube, User, Warning, WarningDiamond, Wrench, X } from "@phosphor-icons/react";
 import { cn } from "@/components/ui/cn";
 import { norm, type TipoResultado } from "@/lib/shared/busqueda";
+import { Badge } from "@/components/ui/Primitives";
 
 /* Fila de resultado de la búsqueda universal: la misma en el Inicio y en la ventana ⌘K. */
 
@@ -102,7 +103,7 @@ export function BusquedaFila({ fila, consulta, onQuitar, className }: { fila: Fi
           </span>
         ) : null}
       </span>
-      {fila.etiqueta ? <span className="hidden shrink-0 rounded-full bg-surface-3 px-2 py-0.5 text-2xs font-medium text-ink-3 sm:inline">{fila.etiqueta}</span> : null}
+      {fila.etiqueta ? <Badge size="sm" className="hidden shrink-0 sm:inline-flex">{fila.etiqueta}</Badge> : null}
       {onQuitar ? (
         <button
           type="button"

@@ -231,7 +231,7 @@ function ReactivosContent() {
           </>
         }
       >
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre, lote, CAS o catálogo" className="w-full md:w-[340px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre, lote, CAS o catálogo" className="min-w-0 flex-1 md:w-[340px] md:flex-none" />
         <FilterMenu groups={groups} toggles={toggles} gruposFinales={ordenar} vistaAlFinal />
       </Toolbar>
 

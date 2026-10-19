@@ -112,7 +112,7 @@ function InformesContent() {
           ) : null
         }
       >
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por folio, cliente o ID interno" className="w-full md:w-[340px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por folio, cliente o ID interno" className="min-w-0 flex-1 md:w-[340px] md:flex-none" />
         <FilterMenu groups={groups} toggles={toggles} />
         <FilterChips groups={groups} toggles={toggles} />
         {recepcionId ? <Badge tone="brand">Recepción #{recepcionId}</Badge> : null}

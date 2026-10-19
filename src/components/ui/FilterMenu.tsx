@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Popover as RadixPopover } from "radix-ui";
 import { SlidersHorizontal } from "@phosphor-icons/react";
 import { cn } from "./cn";
+import { Badge } from "./Primitives";
 
 /*
  * Menu de filtros compacto: un boton "Filtros" con el numero de filtros
@@ -66,7 +67,7 @@ function FilterSwitchRow({ label, hint, checked, disabled, onChange }: { label: 
       className={cn("press flex min-h-9 w-full items-center gap-2.5 rounded-field px-2 py-1.5 text-left text-sm", disabled ? "cursor-not-allowed text-ink-4" : checked ? "text-ink" : "text-ink-2 hover:bg-surface-3/80 hover:text-ink")}
     >
       <span className={cn("min-w-0 flex-1 truncate", checked && "font-medium")}>{label}</span>
-      {hint ? <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-2xs font-medium uppercase tracking-wide text-ink-4">{hint}</span> : null}
+      {hint ? <Badge size="sm">{hint}</Badge> : null}
       <span aria-hidden="true" className={cn("relative h-[20px] w-[34px] shrink-0 rounded-full transition-colors duration-200 ease-[var(--ease-spring)]", checked ? "bg-success" : "bg-line-strong", disabled && "opacity-50")}>
         <span className={cn("absolute top-[2px] left-[2px] h-[16px] w-[16px] rounded-full bg-knob shadow-knob transition-transform duration-200 ease-[var(--ease-spring)]", checked && "translate-x-[14px]")} />
       </span>

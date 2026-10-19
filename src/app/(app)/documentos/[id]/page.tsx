@@ -288,7 +288,7 @@ function Ficha({ id }: { id: string }) {
                   {principal.etiqueta}
                 </Button>
               ) : null}
-              {menu.length ? <ActionMenu items={menu} label="Más acciones" /> : null}
+              {menu.length ? <ActionMenu items={menu} label="Más acciones" size="lg" /> : null}
             </div>
           ) : null}
         </div>
@@ -463,8 +463,8 @@ function Lista({ datos, columnas = 2 }: { datos: Array<[string, ReactNode]>; col
     <dl className={cn("grid gap-x-6 gap-y-3", columnas === 3 ? "sm:grid-cols-3" : columnas === 2 ? "sm:grid-cols-2" : "")}>
       {llenos.map(([etiqueta, valor]) => (
         <div key={etiqueta} className="flex min-w-0 flex-col gap-0.5">
-          <dt className="text-2xs font-medium uppercase tracking-wide text-ink-3">{etiqueta}</dt>
-          <dd className="break-words text-sm text-ink">{valor}</dd>
+          <dt className="text-xs text-ink-3">{etiqueta}</dt>
+          <dd className="break-words text-base text-ink">{valor}</dd>
         </div>
       ))}
     </dl>

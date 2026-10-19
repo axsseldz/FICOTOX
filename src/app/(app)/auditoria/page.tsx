@@ -228,7 +228,7 @@ function AuditoriaContent() {
       ) : null}
 
       <Toolbar>
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por folio, persona o motivo" className="w-full md:w-[340px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por folio, persona o motivo" className="min-w-0 flex-1 md:w-[340px] md:flex-none" />
         <FilterMenu groups={groups} toggles={toggles} vistaAlFinal />
       </Toolbar>
 

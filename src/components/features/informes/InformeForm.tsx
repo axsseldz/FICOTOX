@@ -386,7 +386,7 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
               Ver informe
             </Button>
           ) : null}
-          {moreItems.length ? <ActionMenu items={moreItems} label="Más acciones" header={editing ? String(item!.folio) : undefined} /> : null}
+          {moreItems.length ? <ActionMenu items={moreItems} label="Más acciones" size="lg" header={editing ? String(item!.folio) : undefined} /> : null}
           {editing && estado === "borrador" && canReview ? (
             <BotonSegregado bloqueo={segregacion.revisar} onSolicitar={() => solicitarExcepcion("revisar")}>
               <Button variant="soft" icon={<PaperPlaneTilt size={16} />} onClick={() => setSign("revisar")} disabled={!!segregacion.revisar}>

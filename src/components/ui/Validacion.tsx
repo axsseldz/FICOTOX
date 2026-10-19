@@ -6,6 +6,7 @@ import { WarningCircle } from "@phosphor-icons/react";
 import { Button } from "./Button";
 import { cn } from "./cn";
 import { esCancelacion, explicarError, type Problema } from "@/lib/client/mensajes";
+import { TITULO_VENTANA, VELO_VENTANA } from "./capas";
 
 /*
  * Validacion compartida de formularios y hojas de captura.
@@ -198,20 +199,20 @@ function DialogoValidacion({ titulo, dato, modo, onCerrar }: { titulo: string; d
   return (
     <RadixDialog.Root open={!!modo} onOpenChange={(open) => !open && onCerrar()}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-[var(--z-ventana)] bg-deep/30 data-[state=open]:animate-fade-in motion-reduce:animate-none" />
+        <RadixDialog.Overlay className={VELO_VENTANA} />
         <div className="fixed inset-0 z-[var(--z-ventana)] flex items-end justify-center p-3 sm:items-center sm:p-6">
           <RadixDialog.Content
             role="alertdialog"
             data-validacion={modo?.tipo}
             onCloseAutoFocus={(event) => event.preventDefault()}
-            className="flex max-h-full w-full max-w-[460px] flex-col overflow-hidden rounded-panel bg-surface shadow-panel outline-none data-[state=open]:animate-pop-in motion-reduce:animate-none"
+            className="flex max-h-full w-full max-w-[460px] flex-col overflow-hidden rounded-panel bg-surface-elevated shadow-panel outline-none data-[state=open]:animate-pop-in data-[state=closed]:animate-pop-out"
           >
             <header className="flex items-start gap-3 px-5 pt-5 pb-2">
               <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-danger-soft text-danger-text" aria-hidden="true">
                 <WarningCircle size={18} weight="bold" />
               </span>
               <div className="flex min-w-0 flex-col gap-1">
-                <RadixDialog.Title className="text-lg font-semibold leading-snug text-ink">{encabezado}</RadixDialog.Title>
+                <RadixDialog.Title className={TITULO_VENTANA}>{encabezado}</RadixDialog.Title>
                 <RadixDialog.Description className={cn(modo?.tipo === "faltan" ? "sr-only" : "text-base leading-relaxed text-ink")}>{modo && modo.tipo !== "faltan" ? modo.que : "Corrige los datos marcados en rojo."}</RadixDialog.Description>
               </div>
             </header>

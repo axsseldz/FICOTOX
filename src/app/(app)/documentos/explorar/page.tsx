@@ -203,7 +203,7 @@ function Explorador() {
           />
         }
       >
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por clave, título o palabras clave" className="w-full md:w-[360px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por clave, título o palabras clave" className="min-w-0 flex-1 md:w-[360px] md:flex-none" />
         <FilterMenu groups={groups} toggles={data?.puede.ver_obsoletos ? [{ key: "obsoletos", label: "Mostrar obsoletos", description: "Fuera de los puntos de uso; solo para consulta histórica", checked: obsoletos, onChange: setObsoletos }] : []} />
       </Toolbar>
 

@@ -109,7 +109,7 @@ function Solicitudes() {
         />
       </div>
       <Toolbar end={<SegmentedTabs<Filtro> value={filtro} onChange={setFiltro} options={[{ value: "pendiente", label: "Pendientes" }, { value: "todas", label: "Todas" }]} label="Solicitudes" />}>
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por título, clave o solicitante" className="w-full md:w-[340px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por título, clave o solicitante" className="min-w-0 flex-1 md:w-[340px] md:flex-none" />
         <FilterMenu groups={groups} />
       </Toolbar>
       <ListaCuadricula

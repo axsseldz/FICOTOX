@@ -149,7 +149,7 @@ function RolesContent() {
           ) : null
         }
       >
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre" className="w-full md:w-[320px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre" className="min-w-0 flex-1 md:w-[320px] md:flex-none" />
         <FilterMenu groups={groups} />
       </Toolbar>
 

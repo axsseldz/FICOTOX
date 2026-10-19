@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft, ArrowRight } from "@phosphor-icons/react";
 import { EXTRACTION_TYPE_LIST, PLANNED_EXTRACTION_TYPES } from "@/lib/shared/extraction";
+import { Badge } from "@/components/ui/Primitives";
 
 /*
  * Paso previo a una nueva extraccion: elegir el formato (ASP o DSP). Cada
@@ -48,7 +49,7 @@ export function ExtractionTypeChooser({ procesamiento }: { procesamiento: number
           <div key={meta.tipo} className="flex flex-col gap-1.5 rounded-card border border-dashed border-line-strong p-4 text-ink-4" aria-disabled="true">
             <div className="flex items-center justify-between gap-2">
               <span className="text-base font-medium">{meta.label}</span>
-              <span className="rounded-full bg-surface-3 px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide">Próximamente</span>
+              <Badge size="sm">Próximamente</Badge>
             </div>
             <span className="text-xs">{meta.toxina}</span>
           </div>

@@ -164,7 +164,7 @@ export function DateInput({ id, value, onChange, disabled, readOnly, required, i
           </button>
         </RadixPopover.Trigger>
         <RadixPopover.Portal>
-          <RadixPopover.Content align="end" sideOffset={6} collisionPadding={12} onOpenAutoFocus={(event) => event.preventDefault()} className="bg-popover border border-line z-[var(--z-popover)] origin-[var(--radix-popover-content-transform-origin)] rounded-card p-3 shadow-panel outline-none data-[state=open]:animate-materialize data-[state=closed]:animate-dematerialize">
+          <RadixPopover.Content align="end" sideOffset={6} collisionPadding={12} onOpenAutoFocus={(event) => event.preventDefault()} className="bg-popover border border-line z-[var(--z-popover)] origin-[var(--radix-popover-content-transform-origin)] rounded-card p-3 shadow-pop outline-none data-[state=open]:animate-materialize data-[state=closed]:animate-dematerialize">
             {abierto ? <Calendario valor={valor} min={min} max={max} onElegir={elegir} onCerrar={() => setAbierto(false)} /> : null}
           </RadixPopover.Content>
         </RadixPopover.Portal>

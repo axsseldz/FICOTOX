@@ -257,7 +257,7 @@ function Contenido() {
           </>
         }
       >
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por folio, descripción, persona o requisito" className="w-full md:w-[340px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por folio, descripción, persona o requisito" className="min-w-0 flex-1 md:w-[340px] md:flex-none" />
         <FilterMenu toggles={toggles} gruposAntesDeVista={[grupoPeriodo]} gruposFinales={[grupoOrden]} vistaAlFinal />
       </Toolbar>
       <ListaCuadricula

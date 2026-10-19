@@ -126,7 +126,7 @@ function Externos() {
         />
       </div>
       <Toolbar>
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por identificador, título o emisor" className="w-full md:w-[360px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por identificador, título o emisor" className="min-w-0 flex-1 md:w-[360px] md:flex-none" />
         <FilterMenu groups={groups} toggles={data?.puede.ver_obsoletos ? [{ key: "obsoletos", label: "Mostrar obsoletos", description: "Versiones retiradas, solo para consulta histórica", checked: obsoletos, onChange: setObsoletos }] : []} />
       </Toolbar>
       {/* Ancho de las acciones del renglon: solo icono en tableta, con texto desde xl (encabezados y renglones alineados). */}

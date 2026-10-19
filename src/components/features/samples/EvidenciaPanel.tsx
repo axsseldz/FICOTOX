@@ -323,7 +323,7 @@ export function AdjuntosPanel({ registroId, base, token, onResumen, clave = "mue
                       </Badge>
                     ) : null}
                   </div>
-                  <span className="truncate text-xs text-ink-3">
+                  <span className="break-words text-xs text-ink-3">
                     {String(a.nombre_original)} · {fmtBytes(Number(a.tamano_bytes))} · {String(a.subido_por_nombre || "—")} · {formatearFechaHora(a.subido_en)} ·{" "}
                     <Tooltip content={<span className="font-mono text-2xs break-all">SHA-256 {String(a.sha256)}</span>}>
                       <span className="font-mono" tabIndex={0}>

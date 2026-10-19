@@ -136,7 +136,7 @@ function GrupoTareas({ grupo, total, id, testid, children }: { grupo: Grupo; tot
   const I = grupo.icono;
   return (
     <section id={id} className="flex scroll-mt-20 flex-col gap-2" aria-label={`${grupo.titulo}: ${total}`} data-testid={testid || "bandeja-grupo"} data-grupo={grupo.clave}>
-      <h2 className="flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-wide text-ink-3">
+      <h2 className="eyebrow flex items-center gap-2 px-1 text-ink-3">
         <I size={15} weight="bold" aria-hidden="true" />
         {grupo.titulo}
         <span className="tnum flex h-[18px] min-w-[20px] items-center justify-center rounded-full bg-surface-3 px-1.5 text-2xs text-ink-2" data-testid="bandeja-contador" data-valor={total}>

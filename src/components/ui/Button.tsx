@@ -62,7 +62,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 
 export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   label: string;
-  size?: "sm" | "md";
+  /* sm 28 px (filas compactas), md 32 px (por omisión), lg 40 px (junto a botones medianos). */
+  size?: "sm" | "md" | "lg";
   tone?: "neutral" | "danger";
 }
 
@@ -78,7 +79,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       title={label}
       className={cn(
         "press inline-flex items-center justify-center rounded-control text-ink-2 hover:bg-surface-3/80 hover:text-ink disabled:cursor-not-allowed disabled:text-ink-4 disabled:hover:bg-transparent",
-        size === "sm" ? "h-7 w-7" : "h-8 w-8",
+        size === "sm" ? "h-7 w-7" : size === "lg" ? "h-10 w-10 rounded-field" : "h-8 w-8",
         tone === "danger" && "hover:bg-danger-soft hover:text-danger",
         className,
       )}

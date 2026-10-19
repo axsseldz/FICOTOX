@@ -204,7 +204,7 @@ export function NcForm({ item }: { item: ApiRecord }) {
       readOnly={false}
       actions={
         <>
-          <ActionMenu items={mas} label="Más acciones" header={String(item.folio)} />
+          <ActionMenu items={mas} label="Más acciones" size="lg" header={String(item.folio)} />
           {item.pdf_disponible ? (
             <Button variant="secondary" icon={<FilePdf size={16} />} onClick={() => pdf(false)}>
               PDF final

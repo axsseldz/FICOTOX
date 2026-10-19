@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, CaretDown, Check, CheckCircle, Clock, Info, ListNumbers, LockSimple, Rows, SealCheck, Warning, WarningCircle } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, CaretDown, Check, Clock, ListNumbers, LockSimple, Rows, SealCheck } from "@phosphor-icons/react";
 import { cn } from "@/components/ui/cn";
 import { CampoValidado, MensajeCampo, ValidacionAmbito, type Validacion } from "@/components/ui/Validacion";
 import { checkboxClass, radioClass } from "@/components/ui/Field";
@@ -261,7 +261,7 @@ export function FormPage({ backHref, backLabel, code, title, status, statusTone 
                     >
                       <span className={cn("tnum flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-2xs font-semibold", section.complete ? "bg-success text-on-accent" : missing ? "bg-warning-soft text-warning-text" : active ? "bg-brand-soft text-brand-strong ring-1 ring-inset ring-brand/25" : "bg-surface-3 text-ink-3")}>{section.complete ? <Check size={11} weight="bold" /> : index + 1}</span>
                       <span className="truncate">{section.label}</span>
-                      {section.optional ? <span className="ml-auto shrink-0 text-2xs font-medium uppercase tracking-wide text-ink-3">{section.optionalLabel ? "después" : "opcional"}</span> : null}
+                      {section.optional ? <span className="eyebrow ml-auto shrink-0 text-ink-3">{section.optionalLabel ? "después" : "opcional"}</span> : null}
                     </button>
                   </li>
                 );
@@ -346,8 +346,8 @@ export function FormCard({ id, title, description, children, aside, optional }: 
           {badge}
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold tracking-snug text-ink">{title}</h2>
-              {isOptional ? <span className="rounded-full bg-surface-3 px-2 py-0.5 text-2xs font-medium text-ink-3">{meta?.optionalLabel || "Opcional"}</span> : null}
+              <h2 className="title-3 text-ink">{title}</h2>
+              {isOptional ? <Badge size="sm">{meta?.optionalLabel || "Opcional"}</Badge> : null}
               {meta?.optionalNote ? <span className="text-xs text-ink-3">{meta.optionalNote}</span> : null}
             </div>
             {description ? <p className="text-sm leading-snug text-ink-3">{description}</p> : null}
@@ -360,8 +360,8 @@ export function FormCard({ id, title, description, children, aside, optional }: 
           {badge}
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="flex flex-wrap items-center gap-2">
-              <span className="text-md font-semibold tracking-snug text-ink">{title}</span>
-              {missing ? <span className="rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-medium text-warning-text">Faltan datos</span> : null}
+              <span className="title-3 text-ink">{title}</span>
+              {missing ? <Badge size="sm" tone="warning">Faltan datos</Badge> : null}
             </span>
             {description ? <span className="truncate text-xs text-ink-3">{description}</span> : null}
           </span>
@@ -414,25 +414,8 @@ export function FieldGroup({ label, hint, children, className }: { label: ReactN
   );
 }
 
-/* Aviso dentro de un formato: un solo estilo para informacion, advertencia, error o confirmacion. */
-export function Callout({ tone = "info", title, children, className }: { tone?: "info" | "warning" | "danger" | "success"; title?: ReactNode; children: ReactNode; className?: string }) {
-  const styles = {
-    info: { wrap: "bg-brand-faint text-ink", icon: "text-brand", Icon: Info },
-    warning: { wrap: "bg-warning-soft text-ink", icon: "text-warning", Icon: Warning },
-    danger: { wrap: "bg-danger-soft text-ink", icon: "text-danger", Icon: WarningCircle },
-    success: { wrap: "bg-success-soft text-ink", icon: "text-success", Icon: CheckCircle },
-  }[tone];
-  const Icon = styles.Icon;
-  return (
-    <div className={cn("flex gap-3 rounded-box px-4 py-3 text-sm leading-relaxed", styles.wrap, className)} role={tone === "danger" ? "alert" : "status"}>
-      <Icon size={18} weight="fill" className={cn("mt-0.5 shrink-0", styles.icon)} />
-      <div className="min-w-0">
-        {title ? <p className="font-medium">{title}</p> : null}
-        <div className={cn(title && "mt-0.5 text-ink-2")}>{children}</div>
-      </div>
-    </div>
-  );
-}
+/* El aviso oficial vive en ui/Callout; se reexporta aquí porque muchos formatos lo importan de este módulo. */
+export { Callout } from "@/components/ui/Callout";
 
 /* Fila de un paso con casilla, texto y campos adicionales alineados. */
 export function StepRow({ number, label, checked, onCheckedChange, children, disabled }: { number?: ReactNode; label: ReactNode; checked: boolean; onCheckedChange: (checked: boolean) => void; children?: ReactNode; disabled?: boolean }) {

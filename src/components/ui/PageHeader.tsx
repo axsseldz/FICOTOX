@@ -112,6 +112,7 @@ export function SegmentedTabs<T extends string>({ value, onChange, options, clas
   );
 }
 
+/* Buscador de lista (versión oficial): pastilla de 40 px con lupa y botón para limpiar. `className` va al contenedor (ancho y lugar en la fila). */
 export function SearchInput({ value, onChange, placeholder, className, autoFocus }: { value: string; onChange: (value: string) => void; placeholder?: string; className?: string; autoFocus?: boolean }) {
   return (
     <Input
@@ -130,7 +131,8 @@ export function SearchInput({ value, onChange, placeholder, className, autoFocus
           </button>
         ) : null
       }
-      className={cn("rounded-full [&::-webkit-search-cancel-button]:hidden", className)}
+      wrapperClassName={className}
+      className="rounded-full [&::-webkit-search-cancel-button]:hidden"
     />
   );
 }

@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowRight, ArrowsClockwise, BookOpenText, ClockCounterClockwise, Cube, FileText, Files, Flask, Keyboard, MagnifyingGlass, Prohibit, SealCheck, TestTube, UserCircle, WarningCircle } from "@phosphor-icons/react";
+import { ArrowRight, ArrowsClockwise, BookOpenText, ClockCounterClockwise, Cube, FileText, Files, Flask, Keyboard, MagnifyingGlass, Prohibit, SealCheck, TestTube, UserCircle } from "@phosphor-icons/react";
 import { PageBody } from "@/components/shell/AppShell";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { useSession } from "@/components/session/SessionProvider";
 import { cn } from "@/components/ui/cn";
 import { Atajo, Kbd } from "@/components/ui/Primitives";
 import { HELP_TOPICS } from "@/lib/shared/busqueda";
+import { Callout } from "@/components/ui/Callout";
 
 /*
  * Ayuda: el manual de uso resumido, dentro de la plataforma. Una columna con
@@ -92,12 +94,7 @@ function Steps({ items }: { items: ReactNode[] }) {
 }
 
 function Tip({ tone = "info", children }: { tone?: "info" | "warn"; children: ReactNode }) {
-  return (
-    <p className={cn("flex gap-2.5 rounded-field px-3.5 py-3 text-sm", tone === "warn" ? "bg-warning-soft text-warning-text" : "bg-brand-faint text-brand-strong")}>
-      <WarningCircle size={17} className="mt-0.5 shrink-0" />
-      <span>{children}</span>
-    </p>
-  );
+  return <Callout tone={tone === "warn" ? "warning" : "info"}>{children}</Callout>;
 }
 
 function Go({ href, children }: { href: string; children: ReactNode }) {
@@ -115,11 +112,7 @@ export default function AyudaPage() {
 
   return (
     <PageBody className="gap-6">
-      <header className="flex flex-col gap-1">
-        <p className="eyebrow text-brand-strong">Ayuda</p>
-        <h1 className="display text-4xl text-ink sm:text-5xl">Cómo se usa FICOTOX</h1>
-        <p className="max-w-[62ch] text-base text-ink-3">Lo esencial de cada parte del sistema en pasos cortos. Si buscas algo concreto, escríbelo en el buscador: los temas de esta guía también aparecen ahí.</p>
-      </header>
+      <PageHeader eyebrow="Ayuda" title="Cómo se usa FICOTOX" description="Lo esencial de cada parte del sistema en pasos cortos. Si buscas algo concreto, escríbelo en el buscador: los temas de esta guía también aparecen ahí." />
 
       <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
         <nav aria-label="Índice" className="min-w-0 lg:sticky lg:top-6 lg:self-start">
@@ -328,7 +321,7 @@ export default function AyudaPage() {
                 <b>Crear y probar:</b> quien administra el sistema crea un respaldo con <b>Crear respaldo</b> y comprueba que se puede recuperar con <b>Probar restauración</b>: se restaura en una copia aparte, corre 8 verificaciones y deja un acta, sin tocar los datos en uso.
               </li>
               <li>
-                <b>Restaurar un respaldo:</b> en el respaldo elegido, <b>Restaurar este respaldo</b> con el motivo. Queda en <b>Por autorizar</b> hasta que otra persona de Calidad lo apruebe. Al aprobarse, la plataforma muestra «Restaurando» unos momentos, guarda antes un respaldo del estado actual, reemplaza los datos y cierra todas las sesiones: hay que volver a entrar.
+                <b>Restaurar un respaldo:</b> en el respaldo elegido, <b>Restaurar este respaldo</b> con el motivo. Queda en <b>Por autorizar</b> hasta que otra persona con autoridad (Responsable General) lo apruebe. Al aprobarse, la plataforma muestra «Restaurando» unos momentos, guarda antes un respaldo del estado actual, reemplaza los datos y cierra todas las sesiones: hay que volver a entrar.
               </li>
               <li>
                 <b>Avisos:</b> si pasa más de un día sin respaldo o mucho tiempo sin una prueba de restauración, el Inicio lo avisa.

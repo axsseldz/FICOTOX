@@ -27,9 +27,15 @@ const TONES: Record<Tone, string> = {
   ink: "bg-surface-3 text-ink-2 ring-1 ring-inset ring-line-strong/50",
 };
 
-export function Badge({ tone = "neutral", dot, className, children }: { tone?: Tone; dot?: boolean; className?: string; children: ReactNode }) {
+/*
+ * Etiqueta (versión oficial de chips y estados): md 24 px y texto xs para
+ * estados y datos; sm 20 px y texto 2xs para marcas secundarias («Opcional»,
+ * «Pronto», tipo de resultado). `wrap`: el texto largo pasa de línea (nombres
+ * de rol) en lugar de recortarse.
+ */
+export function Badge({ tone = "neutral", dot, size = "md", wrap, className, children }: { tone?: Tone; dot?: boolean; size?: "sm" | "md"; wrap?: boolean; className?: string; children: ReactNode }) {
   return (
-    <span className={cn("inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-xs font-medium", TONES[tone], className)}>
+    <span className={cn("inline-flex items-center rounded-full font-medium", size === "sm" ? "gap-1 px-2 text-2xs" : "gap-1.5 px-2.5 text-xs", wrap ? cn("py-0.5 leading-snug", size === "sm" ? "min-h-5" : "min-h-6") : cn("whitespace-nowrap", size === "sm" ? "h-5" : "h-6"), TONES[tone], className)}>
       {dot ? <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" aria-hidden="true" /> : null}
       {children}
     </span>

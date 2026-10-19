@@ -403,7 +403,7 @@ export function SeguimientoExterno({ docId, clave, ext, catalogos, sinAcciones =
   const [editar, setEditar] = useState(false);
   const dato = (etiqueta: string, valor: React.ReactNode) => (
     <div className="flex flex-col gap-0.5">
-      <dt className="text-2xs font-medium uppercase tracking-wide text-ink-4">{etiqueta}</dt>
+      <dt className="text-xs text-ink-3">{etiqueta}</dt>
       <dd className="break-words text-sm text-ink">{valor || "—"}</dd>
     </div>
   );

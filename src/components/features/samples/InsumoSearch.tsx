@@ -200,7 +200,7 @@ export function InsumoSearch({ tipo, value, onChange, placeholder = "Buscar insu
         ) : null}
       </div>
       {open ? (
-        <div ref={listRef} id={listId} role="listbox" className="scroll-thin absolute top-[calc(100%+4px)] left-0 z-[var(--z-popover)] max-h-[220px] w-full min-w-[260px] overflow-y-auto rounded-control border border-line bg-popover p-1 shadow-pop">
+        <div ref={listRef} id={listId} role="listbox" className="scroll-thin absolute top-[calc(100%+4px)] left-0 z-[var(--z-popover)] max-h-[220px] w-full min-w-[260px] overflow-y-auto rounded-card border border-line bg-popover p-1.5 shadow-pop">
           {!shown.length ? (
             <div className="px-2.5 py-2 text-xs text-ink-3">{!isInsumoCacheLoaded() ? "Cargando inventario…" : "Sin resultados"}</div>
           ) : (

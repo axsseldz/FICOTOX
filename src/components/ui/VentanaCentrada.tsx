@@ -5,6 +5,7 @@ import { Dialog as RadixDialog } from "radix-ui";
 import { CaretDown, CaretUp, X } from "@phosphor-icons/react";
 import { IconButton } from "./Button";
 import { cn } from "./cn";
+import { TITULO_VENTANA, VELO_VENTANA } from "./capas";
 
 /*
  * Ventana centrada sobre la pagina difuminada y oscurecida (Auditoria,
@@ -47,7 +48,7 @@ export function VentanaCentrada({
   return (
     <RadixDialog.Root open={abierta} onOpenChange={(open) => !open && onCerrar()}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-[var(--z-ventana)] bg-deep/45 backdrop-blur-md data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out" />
+        <RadixDialog.Overlay className={VELO_VENTANA} />
         <div className="pointer-events-none fixed inset-0 z-[var(--z-ventana)] flex items-stretch justify-center sm:items-center sm:p-6">
           <RadixDialog.Content
             aria-describedby={undefined}
@@ -96,5 +97,5 @@ export function VentanaCentrada({
 
 /* Titulo accesible de la ventana. */
 export function VentanaTitulo({ children, className }: { children: ReactNode; className?: string }) {
-  return <RadixDialog.Title className={cn("text-xl leading-snug font-semibold tracking-snug text-ink", className)}>{children}</RadixDialog.Title>;
+  return <RadixDialog.Title className={cn(TITULO_VENTANA, className)}>{children}</RadixDialog.Title>;
 }

@@ -78,9 +78,11 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   mono?: boolean;
   /* Variante compacta (32 px) para filas y tablas. */
   small?: boolean;
+  /* Con icono (leading/trailing): clases del contenedor (ancho y lugar en la fila). */
+  wrapperClassName?: string;
 }
 
-export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({ className, invalid, leading, trailing, mono, small, ...rest }, ref) {
+export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({ className, invalid, leading, trailing, mono, small, wrapperClassName, ...rest }, ref) {
   const input = (
     <input
       ref={ref}
@@ -91,7 +93,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({ c
   );
   if (!leading && !trailing) return input;
   return (
-    <div className="relative">
+    <div className={cn("relative", wrapperClassName)}>
       {leading ? <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-ink-3">{leading}</span> : null}
       {input}
       {trailing ? <span className="absolute inset-y-0 right-2 flex items-center text-ink-3">{trailing}</span> : null}

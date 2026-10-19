@@ -19,6 +19,7 @@ import { formatearFecha, formatearFechaHora } from "@/lib/shared/fechas";
 import type { Catalogos, Distribucion, FilaDistribucion, Puede } from "./comun";
 import { confirmarConCheck } from "./Confirmacion";
 import { conDato, MasOpciones, VentanaFormulario } from "./VentanaFormulario";
+import { Callout } from "@/components/ui/Callout";
 
 /*
  * Distribucion y lectura controlada (Fase 3, CA-11): destinatarios por rol o
@@ -230,10 +231,9 @@ export function AcuseLectura({ dist, sinBoton = false }: { dist: Distribucion; s
   if (!mia?.requiere) return null;
   if (mia.leido_en)
     return (
-      <p className="flex items-center gap-2 rounded-box bg-success-soft px-3.5 py-2.5 text-sm text-success-text" data-testid="acuse-hecho">
-        <CheckCircle size={17} weight="fill" aria-hidden="true" />
+      <Callout tone="success" data-testid="acuse-hecho">
         Confirmaste la lectura de la revisión {dist.numero} el {formatearFechaHora(mia.leido_en)}.
-      </p>
+      </Callout>
     );
   return (
     <div id="acuse" className="flex scroll-mt-24 flex-wrap items-center gap-3 rounded-box bg-brand-soft px-4 py-3 ring-1 ring-brand/25" data-testid="acuse-pendiente">

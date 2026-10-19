@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Archive, CaretDown, ClockCounterClockwise, Database, Flask, Key, Plus, ShieldCheck, Warning } from "@phosphor-icons/react";
+import { Archive, CaretDown, ClockCounterClockwise, Database, Flask, Key, Plus, ShieldCheck } from "@phosphor-icons/react";
 import { ActaVentana, RespaldoVentana } from "@/components/features/respaldos/RespaldoVentana";
 import { archivosTexto, ConfirmarRespaldo, FRASE_OCUPADO, Girando, hace, InsigniaVerificacion, MarcaProtegido, mb, TIPOS_RESPALDO } from "@/components/features/respaldos/comun";
 import { Callout } from "@/components/features/samples/FormLayout";
@@ -271,7 +271,7 @@ function Contenido() {
           ) : null
         }
       >
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por fecha o nota" className="w-full md:w-[320px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por fecha o nota" className="min-w-0 flex-1 md:w-[320px] md:flex-none" />
         <FilterMenu groups={groups} gruposFinales={[grupoOrden]} />
       </Toolbar>
 
@@ -309,12 +309,11 @@ function Contenido() {
           titulo="Restaurar este respaldo"
           descripcion={`Respaldo del ${fmtDateTime(confirmar.creado_en)}. Se crea una solicitud: la plataforma se restaura cuando otra persona con autoridad (Responsable General) la aprueba.`}
           aviso={
-            <div role="alert" data-aviso-restaurar className="flex items-start gap-2.5 rounded-box bg-danger-soft px-3.5 py-3 text-sm leading-normal text-danger-text">
-              <Warning size={18} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0" />
+            <Callout tone="danger" data-aviso-restaurar>
               <span>
                 <strong className="font-semibold">Se perderá todo lo registrado después del {fmtDateTime(confirmar.creado_en)}.</strong> Antes se guarda un respaldo «Previo a restauración» para poder volver atrás, y al terminar todos vuelven a iniciar sesión.
               </span>
-            </div>
+            </Callout>
           }
           confirmar="Solicitar restauración"
           conMotivo

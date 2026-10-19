@@ -276,7 +276,7 @@ function UsuariosContent() {
           ) : null
         }
       >
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre o correo" className="w-full md:w-[340px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre o correo" className="min-w-0 flex-1 md:w-[340px] md:flex-none" />
         {!propio ? <FilterMenu groups={groups} toggles={toggles} gruposFinales={ordenar} /> : null}
       </Toolbar>
 
@@ -401,10 +401,10 @@ function celdasUsuario(item: ApiRecord, todos: ApiRecord[], yo: boolean) {
       {item.ultimo_acceso ? haceCuantoCorto(item.ultimo_acceso) : <span className="text-ink-3">Nunca</span>}
     </span>,
     autorizaciones ? (
-      <span key="z" className="inline-flex items-center gap-1 rounded-full bg-brand-faint px-2 py-0.5 text-xs font-medium text-brand-strong">
+      <Badge key="z" tone="brand">
         <Certificate size={13} weight="duotone" />
         {autorizaciones === 1 ? "1 vigente" : `${autorizaciones} vigentes`}
-      </span>
+      </Badge>
     ) : (
       <span key="z" className="text-sm text-ink-4">—</span>
     ),

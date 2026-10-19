@@ -5,6 +5,7 @@ import { Dialog as RadixDialog, DropdownMenu as RadixDropdown, Tooltip as RadixT
 import { DotsThreeCircle, X } from "@phosphor-icons/react";
 import { Button, IconButton } from "./Button";
 import { cn } from "./cn";
+import { DESCRIPCION_VENTANA, TITULO_VENTANA, VELO_VENTANA } from "./capas";
 import { Field, Textarea } from "./Field";
 import { useValidacion, ValidacionAmbito } from "./Validacion";
 import { msg, type Problema } from "@/lib/client/mensajes";
@@ -17,8 +18,7 @@ import { armarCargo, armarReauth } from "@/lib/client/api";
  * y animaciones CSS por data-state.
  */
 
-/* Velo: oscurece y empuja el fondo hacia atras para enfocar la tarea. */
-const OVERLAY_CLASS = "fixed inset-0 z-[var(--z-ventana)] bg-deep/35 backdrop-blur-[3px] data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out";
+export { DESCRIPCION_VENTANA, TITULO_VENTANA, VELO_VENTANA };
 
 export interface SheetProps {
   open: boolean;
@@ -36,7 +36,7 @@ export function Sheet({ open, onOpenChange, title, description, children, footer
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className={OVERLAY_CLASS} />
+        <RadixDialog.Overlay className={VELO_VENTANA} />
         <RadixDialog.Content
           className={cn(
             "fixed inset-y-0 right-0 z-[var(--z-ventana)] flex w-full flex-col bg-surface-elevated shadow-panel outline-none sm:inset-y-3 sm:right-3 sm:rounded-panel",
@@ -46,8 +46,8 @@ export function Sheet({ open, onOpenChange, title, description, children, footer
         >
           <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4 sm:px-6">
             <div className="flex min-w-0 flex-col gap-0.5">
-              <RadixDialog.Title className="title-2 text-ink">{title}</RadixDialog.Title>
-              {description ? <RadixDialog.Description className="text-sm text-ink-3">{description}</RadixDialog.Description> : <RadixDialog.Description className="sr-only">{title}</RadixDialog.Description>}
+              <RadixDialog.Title className={TITULO_VENTANA}>{title}</RadixDialog.Title>
+              {description ? <RadixDialog.Description className={DESCRIPCION_VENTANA}>{description}</RadixDialog.Description> : <RadixDialog.Description className="sr-only">{title}</RadixDialog.Description>}
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {headerExtra}
@@ -81,7 +81,7 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className={OVERLAY_CLASS} />
+        <RadixDialog.Overlay className={VELO_VENTANA} />
         <div className="fixed inset-0 z-[var(--z-ventana)] flex items-end justify-center p-3 sm:items-center sm:p-6">
           <RadixDialog.Content
             className={cn(
@@ -92,8 +92,8 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
           >
             <header className="flex items-start justify-between gap-4 px-5 pt-5 pb-3">
               <div className="flex min-w-0 flex-col gap-1">
-                <RadixDialog.Title className="title-2 text-ink">{title}</RadixDialog.Title>
-                {description ? <RadixDialog.Description className="text-sm text-ink-2">{description}</RadixDialog.Description> : <RadixDialog.Description className="sr-only">{title}</RadixDialog.Description>}
+                <RadixDialog.Title className={TITULO_VENTANA}>{title}</RadixDialog.Title>
+                {description ? <RadixDialog.Description className={DESCRIPCION_VENTANA}>{description}</RadixDialog.Description> : <RadixDialog.Description className="sr-only">{title}</RadixDialog.Description>}
               </div>
               <RadixDialog.Close asChild>
                 <IconButton label="Cerrar">
@@ -372,7 +372,8 @@ export function Dropdown({ trigger, items, align = "end", label, header }: { tri
 /* ---------- Menu de acciones de una fila ---------- */
 
 /* Un solo boton "⋯" por fila que agrupa todas las acciones (abrir, editar, avanzar de etapa, anular...). */
-export function ActionMenu({ items, header, label = "Acciones" }: { items: MenuItem[]; header?: ReactNode; label?: string }) {
+/* `size="lg"`: en encabezados, junto a botones medianos (misma altura de 40 px). */
+export function ActionMenu({ items, header, label = "Acciones", size = "md" }: { items: MenuItem[]; header?: ReactNode; label?: string; size?: "md" | "lg" }) {
   // Sin acciones (p. ej. un rol de solo lectura) no se muestra un menu vacio.
   if (!items.length) return null;
   return (
@@ -380,7 +381,7 @@ export function ActionMenu({ items, header, label = "Acciones" }: { items: MenuI
       label={label}
       header={header}
       trigger={
-        <IconButton label={label} className="text-ink-3 hover:bg-surface-3 hover:text-ink data-[state=open]:bg-surface-3 data-[state=open]:text-ink">
+        <IconButton label={label} size={size} className="text-ink-3 hover:bg-surface-3 hover:text-ink data-[state=open]:bg-surface-3 data-[state=open]:text-ink">
           <DotsThreeCircle size={22} weight="regular" />
         </IconButton>
       }
