@@ -84,7 +84,10 @@ Abre <http://localhost:5000> (en Mac, si el puerto 5000 está ocupado por AirPla
 define `PORT=5055` en el `.env`). Como la base no tiene cuentas, aparece la
 **Configuración inicial**:
 
-1. Escribe el código de instalación (5 intentos fallidos la bloquean 15 minutos).
+1. Escribe el código de instalación. Cinco intentos fallidos, desde cualquier
+   equipo, la bloquean 15 minutos para todos: si se bloquea sin que hayas sido
+   tú, alguien en la red está probando códigos (desconecta la computadora de la
+   red mientras terminas la configuración).
 2. Elige **Restaurar desde respaldo**, sube el `.ficotox` y escribe su contraseña.
 3. La plataforma descifra el archivo, corre las 8 verificaciones de siempre y,
    solo si todas pasan, recupera la base, los archivos y la llave del registro

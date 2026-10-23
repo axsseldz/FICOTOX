@@ -101,6 +101,8 @@ export function prepararDescarga(request: Request, params: { id?: string }): Pro
     for (const [token, d] of descargas) if (d.expira <= ahora) descargas.delete(token);
     const token = randomBytes(32).toString("base64url");
     descargas.set(token, { respaldoId: id, carpeta, cifrado, usuario: user, expira: ahora + DESCARGA_VIGENCIA_MS });
+    // Si nadie usa el enlace, la clave derivada no se queda en memoria.
+    setTimeout(() => descargas.delete(token), DESCARGA_VIGENCIA_MS + 1000).unref?.();
     return json({ url: `/api/respaldos/descargas/${token}`, nombre: nombreDescarga(id), vence_en: new Date(ahora + DESCARGA_VIGENCIA_MS).toISOString() });
   });
 }
@@ -223,6 +225,20 @@ export function importarRespaldoPost(request: Request): Promise<Response> {
   });
 }
 
+/* Windows: un antivirus o el indexador pueden tener abierta la carpeta recien escrita (EPERM/EBUSY): se reintenta unos segundos. */
+async function renombrarConReintentos(origen: string, destino: string): Promise<void> {
+  for (let intento = 1; ; intento += 1) {
+    try {
+      fs.renameSync(origen, destino);
+      return;
+    } catch (error) {
+      const codigo = (error as NodeJS.ErrnoException)?.code || "";
+      if (intento >= 20 || !["EPERM", "EBUSY", "EACCES"].includes(codigo) || process.platform !== "win32") throw error;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+}
+
 /* Carpeta libre para un respaldo importado: su id original o, si ya hay uno con ese id aqui, <id>-2, <id>-3… */
 function carpetaLibre(id: string): { id: string; carpeta: string } {
   for (let n = 1; n < 1000; n += 1) {
@@ -255,7 +271,7 @@ export async function colocarImportado(subida: { ruta: string; nombre: string },
     const destino = carpetaLibre(origenId);
     // Marca «verificando» antes de moverlo: mientras tanto no se lista ni cuenta como dañado.
     fs.writeFileSync(path.join(/*turbopackIgnore: true*/ staging, ARCHIVO_IMPORTADO), `${JSON.stringify({ estado: "verificando", modo, importado_en: new Date().toISOString(), importado_por: quien, archivo: subida.nombre, origen_id: origenId, host_origen: abierto.manifest.host || null }, null, 2)}\n`, { mode: 0o600 });
-    fs.renameSync(staging, destino.carpeta);
+    await renombrarConReintentos(staging, destino.carpeta);
     hacerPrivado(destino.carpeta);
     return { id: destino.id, carpeta: destino.carpeta, manifest: abierto.manifest, archivos: abierto.archivos, bytes: abierto.bytes };
   } catch (error) {

@@ -445,7 +445,9 @@ if (modoReal && db && !fallidas.length) {
       const salto = contenido?.includes("\r\n") ? "\r\n" : "\n";
       const lineas = contenido === null ? [] : contenido.split(/\r?\n/);
       const i = lineaSecretKey(lineas, configurada);
-      if (i < 0) falla4("la SECRET_KEY de esta instalación viene del entorno del sistema (no del archivo .env), así que no se puede reemplazar desde aquí. Cámbiala por la llave del respaldo (o quítala) y reinicia FICOTOX", "SECRET_KEY no viene del .env: no se puede adoptar la llave del respaldo.");
+      const definiciones = lineas.filter((l) => /^\s*(?:export\s+)?SECRET_KEY\s*=/.test(l)).length;
+      if (definiciones > 1) falla4(`el archivo ${path.basename(env)} define SECRET_KEY ${definiciones} veces: deja una sola línea (la que está en uso) y vuelve a intentarlo, para que todos lean la misma llave`, "SECRET_KEY aparece más de una vez en el .env: no se adopta la llave del respaldo.");
+      else if (i < 0) falla4("la SECRET_KEY de esta instalación viene del entorno del sistema (no del archivo .env), así que no se puede reemplazar desde aquí. Cámbiala por la llave del respaldo (o quítala) y reinicia FICOTOX", "SECRET_KEY no viene del .env: no se puede adoptar la llave del respaldo.");
       else {
         lineas.splice(i, 1, `# SECRET_KEY anterior (huella ${huellaLlave(configurada).slice(0, 12)}…) reemplazada el ${new Date().toISOString()} por la configuración inicial: ahora es la llave de la bitácora del respaldo ${respaldoId}. La anterior queda en el respaldo «Previo a restauración».`, `SECRET_KEY=${llave}`);
         nuevoEnv = { ruta: env, temporal: `${env}.restaurando-${sello}`, contenido: lineas.join(salto) };

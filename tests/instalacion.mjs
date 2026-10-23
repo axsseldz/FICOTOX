@@ -403,6 +403,20 @@ try {
     check("el intento fallido queda en la bitácora", falla === 1, `${falla}`);
     await detener();
   }
+
+  /* ---------- 7. SECRET_KEY dos veces en el .env: no se adopta (cada lector tomaria una distinta) ---------- */
+  {
+    const r = rutasDe("env-doble");
+    fs.mkdirSync(r.dir, { recursive: true });
+    const archivoEnv = path.join(r.dir, "ficotox.env");
+    const llave = randomBytes(32).toString("hex");
+    fs.writeFileSync(archivoEnv, `SECRET_KEY=${llave}\nFICOTOX_CODIGO_INSTALACION=${CODIGO}\nSECRET_KEY=${llave}\n`);
+    await arrancar("env-doble", { FICOTOX_ENV_FILE: archivoEnv, SECRET_KEY: llave, FICOTOX_CODIGO_INSTALACION: CODIGO });
+    const res = await restaurarPorApi(esperado.contrasena);
+    const t = res.fin?.trabajo;
+    check("SECRET_KEY repetida en el .env: no se restaura, se explica y el .env queda igual", res.fin?.terminado === false && /más de una vez|2 veces/.test(String(t?.mensaje)) && fs.readFileSync(archivoEnv, "utf8").split(llave).length === 3 && leer(r.db, "SELECT COUNT(*) AS n FROM usuarios")[0].n === 0, `${t?.estado} ${String(t?.mensaje).slice(0, 160)}`);
+    await detener();
+  }
 } catch (error) {
   console.error(error);
   await ultimaPagina?.screenshot({ path: path.join(here, "ui", "fail-instalacion.png"), fullPage: true }).catch(() => {});

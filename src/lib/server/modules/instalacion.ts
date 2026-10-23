@@ -57,9 +57,15 @@ interface EstadoInstalacion {
   terminada: boolean;
   /* Alta del catalogo de roles en curso (una sola a la vez). */
   sembrando: Promise<void> | null;
+  /*
+   * «Desde cero» o el arranque de una restauracion en curso (antes de que
+   * exista su trabajo): se toma y se revisa sin await de por medio, asi que los
+   * dos caminos nunca avanzan a la vez.
+   */
+  reservada: boolean;
 }
 const global = globalThis as unknown as { __ficotoxInstalacion?: EstadoInstalacion };
-const memoria = (global.__ficotoxInstalacion ||= { fallos: [], bloqueadaHasta: 0, trabajo: null, terminada: false, sembrando: null });
+const memoria = (global.__ficotoxInstalacion ||= { fallos: [], bloqueadaHasta: 0, trabajo: null, terminada: false, sembrando: null, reservada: false });
 
 const NO_ENCONTRADA = () => new HttpError(404, { message: "Ruta no encontrada" });
 const codigoConfigurado = () => String(process.env.FICOTOX_CODIGO_INSTALACION || "").trim();
@@ -228,51 +234,56 @@ export function empezarDesdeCeroPost(request: Request): Promise<Response> {
     await exigirPendiente();
     const payload = await readJson(request);
     await exigirCodigo(request, payload.codigo);
-    if (trabajoEnCurso()) throw new HttpError(409, { message: MENSAJE_OCUPADO, codigo: "respaldo_en_curso" });
+    if (trabajoEnCurso() || memoria.reservada) throw new HttpError(409, { message: MENSAJE_OCUPADO, codigo: "respaldo_en_curso" });
     const cuentas = [cuentaDe(payload.administrador, "admin_tecnico", "Administrador técnico", "administrador"), cuentaDe(payload.responsable, "responsable_general", "Responsable General", "responsable")];
     if (cuentas[0].email === cuentas[1].email) throw new HttpError(400, { message: "El Administrador técnico y la Responsable General deben ser dos personas distintas (correos distintos).", campo: "responsable-email" });
     const ip = ipDe(request);
-    await asegurarRoles();
-    const creadas = await withSession(async (s) => {
-      try {
-        // Dentro de la transaccion: si otra peticion ya creo cuentas, esta no hace nada.
-        if (Number(await s.scalar("SELECT COUNT(*) FROM usuarios")) !== 0) throw NO_ENCONTRADA();
-        // Y si mientras se daban de alta los roles empezo una restauracion, gana ella (no se crean cuentas que luego pisaria).
-        if (trabajoEnCurso()) throw new HttpError(409, { message: MENSAJE_OCUPADO, codigo: "respaldo_en_curso" });
-        const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Tijuana" });
-        const out: Array<CuentaNueva & { contrasena: string }> = [];
-        for (const c of cuentas) {
-          const rolId = await s.scalar("SELECT id FROM roles WHERE clave = :clave AND activo = 1", { clave: c.clave });
-          if (!rolId) throw new HttpError(500, { message: `Falta el rol «${c.rol}» en la base: las migraciones no terminaron. Reinicia FICOTOX y vuelve a intentarlo.`, codigo: "faltan_roles" });
-          const contrasena = temporal();
-          let id: number;
-          try {
-            const r = await s.execute(
-              `INSERT INTO usuarios (nombre, email, activo, id_rol, password_hash, avatar, tipo_cuenta, motivo_ultimo_cambio, debe_cambiar_password)
-               VALUES (:nombre, :email, 1, :rol, :hash, :avatar, 'permanente', :motivo, 1)`,
-              { nombre: c.nombre, email: c.email, rol: Number(rolId), hash: hashPassword(contrasena), avatar: randomAvatar(), motivo: "Configuración inicial" },
-            );
-            id = Number(r.lastrowid);
-          } catch (error) {
-            if (isIntegrityError(error)) throw new HttpError(409, { message: "Ya existe una cuenta con ese correo" });
-            throw error;
+    memoria.reservada = true;
+    try {
+      await asegurarRoles();
+      const creadas = await withSession(async (s) => {
+        try {
+          // Dentro de la transaccion: si otra peticion ya creo cuentas, esta no hace nada.
+          if (Number(await s.scalar("SELECT COUNT(*) FROM usuarios")) !== 0) throw NO_ENCONTRADA();
+          // Y si mientras se daban de alta los roles empezo una restauracion, gana ella (no se crean cuentas que luego pisaria).
+          if (trabajoEnCurso()) throw new HttpError(409, { message: MENSAJE_OCUPADO, codigo: "respaldo_en_curso" });
+          const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Tijuana" });
+          const out: Array<CuentaNueva & { contrasena: string }> = [];
+          for (const c of cuentas) {
+            const rolId = await s.scalar("SELECT id FROM roles WHERE clave = :clave AND activo = 1", { clave: c.clave });
+            if (!rolId) throw new HttpError(500, { message: `Falta el rol «${c.rol}» en la base: las migraciones no terminaron. Reinicia FICOTOX y vuelve a intentarlo.`, codigo: "faltan_roles" });
+            const contrasena = temporal();
+            let id: number;
+            try {
+              const r = await s.execute(
+                `INSERT INTO usuarios (nombre, email, activo, id_rol, password_hash, avatar, tipo_cuenta, motivo_ultimo_cambio, debe_cambiar_password)
+                 VALUES (:nombre, :email, 1, :rol, :hash, :avatar, 'permanente', :motivo, 1)`,
+                { nombre: c.nombre, email: c.email, rol: Number(rolId), hash: hashPassword(contrasena), avatar: randomAvatar(), motivo: "Configuración inicial" },
+              );
+              id = Number(r.lastrowid);
+            } catch (error) {
+              if (isIntegrityError(error)) throw new HttpError(409, { message: "Ya existe una cuenta con ese correo" });
+              throw error;
+            }
+            const asignacion = await s.execute("INSERT INTO usuario_roles (usuario_id, rol_id, vigente_desde, vigente_hasta, motivo, asignado_por, asignado_en) VALUES (:usuario, :rol, :desde, NULL, :motivo, NULL, :en)", { usuario: id, rol: Number(rolId), desde: hoy, motivo: "Configuración inicial", en: new Date().toISOString() });
+            await registrarAuditoria(s, null, { accion: "crear", entidad: "usuarios", entidadId: id, referencia: c.email, motivo: "Configuración inicial: contraseña temporal que se cambia al primer acceso", detalle: { rol: c.rol, debe_cambiar_password: true } });
+            await registrarAuditoria(s, null, { accion: "asignar_rol", entidad: "usuarios", entidadId: id, referencia: c.email, motivo: "Configuración inicial", detalle: { rol: c.rol, rol_id: Number(rolId), asignacion_id: Number(asignacion.lastrowid), vigente_desde: hoy, sin_solicitud: "configuración inicial (no hay otra cuenta que apruebe)" } });
+            out.push({ ...c, contrasena });
           }
-          const asignacion = await s.execute("INSERT INTO usuario_roles (usuario_id, rol_id, vigente_desde, vigente_hasta, motivo, asignado_por, asignado_en) VALUES (:usuario, :rol, :desde, NULL, :motivo, NULL, :en)", { usuario: id, rol: Number(rolId), desde: hoy, motivo: "Configuración inicial", en: new Date().toISOString() });
-          await registrarAuditoria(s, null, { accion: "crear", entidad: "usuarios", entidadId: id, referencia: c.email, motivo: "Configuración inicial: contraseña temporal que se cambia al primer acceso", detalle: { rol: c.rol, debe_cambiar_password: true } });
-          await registrarAuditoria(s, null, { accion: "asignar_rol", entidad: "usuarios", entidadId: id, referencia: c.email, motivo: "Configuración inicial", detalle: { rol: c.rol, rol_id: Number(rolId), asignacion_id: Number(asignacion.lastrowid), vigente_desde: hoy, sin_solicitud: "configuración inicial (no hay otra cuenta que apruebe)" } });
-          out.push({ ...c, contrasena });
+          await registrarAuditoria(s, null, { accion: "configuracion_inicial", entidad: "instalacion", entidadId: null, referencia: "Configuración inicial", motivo: "Instalación nueva desde cero", detalle: { modo: "cero", administrador: cuentas[0].email, responsable: cuentas[1].email, ip } });
+          await s.commit();
+          return out;
+        } catch (error) {
+          await s.rollback();
+          throw error;
         }
-        await registrarAuditoria(s, null, { accion: "configuracion_inicial", entidad: "instalacion", entidadId: null, referencia: "Configuración inicial", motivo: "Instalación nueva desde cero", detalle: { modo: "cero", administrador: cuentas[0].email, responsable: cuentas[1].email, ip } });
-        await s.commit();
-        return out;
-      } catch (error) {
-        await s.rollback();
-        throw error;
-      }
-    });
-    memoria.terminada = true;
-    invalidarIndice();
-    return json({ cuentas: creadas.map((c) => ({ rol: c.rol, nombre: c.nombre, email: c.email, contrasena_temporal: c.contrasena })) }, 201);
+      });
+      memoria.terminada = true;
+      invalidarIndice();
+      return json({ cuentas: creadas.map((c) => ({ rol: c.rol, nombre: c.nombre, email: c.email, contrasena_temporal: c.contrasena })) }, 201);
+    } finally {
+      memoria.reservada = false;
+    }
   });
 }
 
@@ -331,12 +342,21 @@ export function restaurarInicialPost(request: Request): Promise<Response> {
     await exigirCodigo(request, payload.codigo);
     const contrasena = String(payload.contrasena ?? "");
     if (!contrasena) throw new HttpError(400, { message: "Escribe la contraseña de cifrado del archivo", campo: "contrasena" });
-    if (trabajoEnCurso()) throw new HttpError(409, { message: MENSAJE_OCUPADO, codigo: "respaldo_en_curso" });
-    await comprobarContrasenaSubida(payload.subida, DUENO, contrasena);
-    const subida = tomarSubida(payload.subida, DUENO);
-    const trabajo = iniciarTrabajo({ tipo: "restauracion", respaldo_id: null, usuario: "Configuración inicial", etiqueta: null, fase: "Descifrando el archivo" });
-    trabajo.progreso = 0;
-    memoria.trabajo = trabajo;
+    if (trabajoEnCurso() || memoria.reservada) throw new HttpError(409, { message: MENSAJE_OCUPADO, codigo: "respaldo_en_curso" });
+    memoria.reservada = true;
+    let trabajo: Trabajo;
+    let subida: { ruta: string; nombre: string; tamano: number };
+    try {
+      await comprobarContrasenaSubida(payload.subida, DUENO, contrasena);
+      // Mientras se comprobaba la contraseña pudo terminar otra configuracion.
+      await exigirPendiente();
+      subida = tomarSubida(payload.subida, DUENO);
+      trabajo = iniciarTrabajo({ tipo: "restauracion", respaldo_id: null, usuario: "Configuración inicial", etiqueta: null, fase: "Descifrando el archivo" });
+      trabajo.progreso = 0;
+      memoria.trabajo = trabajo;
+    } finally {
+      memoria.reservada = false;
+    }
     void ejecutarRestauracionInicial(subida, contrasena, trabajo, ipDe(request));
     return json({ trabajo: trabajoPublico(trabajo) }, 202);
   });
