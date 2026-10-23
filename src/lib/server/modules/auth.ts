@@ -80,11 +80,14 @@ async function perfilSesion(s: Session, user: CurrentUser) {
 }
 
 /* Configuracion publica del acceso: solo usuario y contrasena del sistema (Fase 3). */
-export async function authConfig(): Promise<Response> {
+export async function authConfig({ s }: RouteContext): Promise<Response> {
   const config = getConfig();
+  // Instalacion nueva sin ninguna cuenta: el acceso lleva a la Configuracion inicial (src/lib/server/modules/instalacion.ts).
+  const instalacionPendiente = Number(await s.scalar("SELECT COUNT(*) FROM usuarios").catch(() => 1)) === 0;
   return json({
     dominios_permitidos: config.ALLOWED_EMAIL_DOMAINS,
     sesion: { inactividad_min: config.SESION_INACTIVIDAD_MIN, expira_horas: config.JWT_EXPIRES_HOURS },
+    instalacion_pendiente: instalacionPendiente,
   });
 }
 

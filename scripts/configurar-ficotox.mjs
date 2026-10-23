@@ -149,6 +149,17 @@ if (huella) {
   else if (!previa) fs.writeFileSync(registro, `${huella}\n`);
 }
 
+// Codigo de instalacion (Configuracion inicial, src/lib/server/modules/instalacion.ts): se genera si falta. Solo sirve mientras la base no tiene cuentas.
+const codigoActual = leer("FICOTOX_CODIGO_INSTALACION") || "";
+if (codigoActual.length >= 12) console.log(`✅ FICOTOX_CODIGO_INSTALACION: ${oculto(codigoActual)}; se conserva.`);
+else {
+  const letras = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const codigo = Array.from(randomBytes(16), (b) => letras[b % letras.length]).join("").replace(/(.{4})(?!$)/g, "$1-");
+  escribir("FICOTOX_CODIGO_INSTALACION", codigo);
+  console.log(`✅ FICOTOX_CODIGO_INSTALACION: ${codigo}`);
+  console.log("   Se pide en la Configuración inicial (la primera vez que se abre FICOTOX sin cuentas). Después ya no sirve para nada.");
+}
+
 // Escribir .env con permisos restrictivos.
 fs.mkdirSync(path.dirname(archivoEnv), { recursive: true });
 fs.writeFileSync(archivoEnv, `${lineas.join("\n").replace(/\n+$/, "")}\n`, { mode: 0o600 });

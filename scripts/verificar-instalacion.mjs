@@ -192,6 +192,16 @@ if (base) {
     } catch (error) {
       marcar(MAL, "Cuentas de administración", error.message);
     }
+
+    // 17. Configuracion inicial: abierta mientras la base no tiene cuentas (protegida por FICOTOX_CODIGO_INSTALACION)
+    try {
+      const cuentas = Number((await db.get("SELECT COUNT(*) AS n FROM usuarios"))?.n || 0);
+      const codigo = String(env.FICOTOX_CODIGO_INSTALACION || "").trim();
+      if (cuentas > 0) marcar(OK, "Configuración inicial", `cerrada (${cuentas} cuenta(s)); FICOTOX_CODIGO_INSTALACION ya no se usa${codigo ? " y se puede quitar del .env" : ""}`);
+      else marcar(AVISO, "Configuración inicial", codigo.length >= 12 ? "la base no tiene cuentas: termina la configuración inicial en /configuracion-inicial (empezar desde cero o restaurar un respaldo .ficotox)" : "la base no tiene cuentas y falta FICOTOX_CODIGO_INSTALACION (12+ caracteres) en el .env: corre npm run configurar y reinicia");
+    } catch (error) {
+      marcar(MAL, "Configuración inicial", error.message);
+    }
   } finally {
     await cerrar();
   }

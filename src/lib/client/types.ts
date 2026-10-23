@@ -45,6 +45,8 @@ export interface AuthConfig {
   dominios_permitidos?: string[];
   /* Fase 2: cierre por inactividad (minutos) y duracion maxima de la sesion (horas). */
   sesion?: { inactividad_min?: number; expira_horas?: number };
+  /* Instalacion nueva sin ninguna cuenta: el acceso lleva a /configuracion-inicial. */
+  instalacion_pendiente?: boolean;
 }
 
 

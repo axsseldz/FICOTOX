@@ -20,7 +20,11 @@ export const TIPOS_RESPALDO: Record<string, string> = {
   pre_actualizacion: "Antes de actualizar",
   pre_migracion: "Antes de migrar",
   pre_restauracion: "Previo a restauración",
+  importado: "Importado",
 };
+
+/* Por qué no se puede restaurar un respaldo sellado con otra llave (lo explica el servidor igual: 409 llave_distinta). */
+export const FRASE_LLAVE_DISTINTA = "Se selló con otra llave del registro de actividad: no se puede restaurar en esta instalación. Solo se puede recuperar en una instalación nueva (Configuración inicial) o por terminal con su llave.";
 
 export const FRASE_OCUPADO = "Hay un respaldo en curso";
 

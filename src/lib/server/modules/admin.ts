@@ -26,14 +26,14 @@ import { randomBytes } from "node:crypto";
 const MOTIVO_MIN = 5;
 
 /* Dominios de correo admitidos (ALLOWED_EMAIL_DOMAINS); lista vacia = cualquiera. */
-function emailDomainAllowed(email: string): boolean {
+export function emailDomainAllowed(email: string): boolean {
   const dominios = getConfig().ALLOWED_EMAIL_DOMAINS;
   if (!email) return false;
   if (!dominios.length) return true;
   return dominios.some((d) => email.toLowerCase().endsWith(`@${d}`));
 }
 
-function domainErrorMessage(): string {
+export function domainErrorMessage(): string {
   return `Solo puedes dar de alta correos de ${getConfig().ALLOWED_EMAIL_DOMAINS.map((d) => `@${d}`).join(", ")}`;
 }
 

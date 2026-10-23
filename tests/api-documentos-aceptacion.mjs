@@ -80,13 +80,15 @@ const recorrer = (dir) => {
     if (e.isDirectory()) recorrer(p);
     else if (e.name === "route.ts") {
       const rel = path.relative(path.join(root, "src", "app", "api"), path.dirname(p)).split(path.sep).join("/");
-      const metodos = [...fs.readFileSync(p, "utf8").matchAll(/export const (GET|POST|PUT|PATCH|DELETE)\b/g)].map((m) => m[1]);
+      const metodos = [...fs.readFileSync(p, "utf8").matchAll(/export (?:const|async function) (GET|POST|PUT|PATCH|DELETE)\b/g)].map((m) => m[1]);
       rutas.push({ ruta: `/${rel.replace(/\[\.\.\.[^\]]+\]/g, "x/y").replace(/\[[^\]]+\]/g, "1")}`, metodos });
     }
   }
 };
 recorrer(path.join(root, "src", "app", "api"));
 // Unicas rutas sin sesion: iniciar sesion, la configuracion de la pantalla de inicio de sesion y las comprobaciones de salud (sin datos).
+// Las de /instalacion (configuracion inicial) solo atienden con la base sin cuentas y el codigo de instalacion: aqui responden 404.
+// /respaldos/descargas/<token> exige un enlace de un solo uso creado con sesion y reautenticacion: uno inventado responde 404.
 const PUBLICAS = new Set(["POST /auth/login", "GET /auth/config", "GET /health", "GET /health/db"]);
 const abiertas = [];
 let probadas = 0;
@@ -99,6 +101,9 @@ for (const r of rutas) {
     if (res.status < 400 || ![401, 403, 404, 405, 410].includes(res.status)) abiertas.push(`${clave} → ${res.status}`);
   }
 }
+const instalacion = rutas.filter((r) => r.ruta.startsWith("/instalacion"));
+const cerradas = await Promise.all(instalacion.flatMap((r) => r.metodos.map(async (m) => (await fetch(`${BASE}${r.ruta}`, { method: m, headers: { "Content-Type": "application/json" }, body: m === "GET" ? undefined : "{}" })).status)));
+check("CA-16: con cuentas, la configuración inicial no existe (404 en todas sus rutas)", cerradas.length >= 6 && cerradas.every((st) => st === 404), cerradas.join(" "));
 check(`CA-16: ninguna de las ${probadas} combinaciones ruta × método de la API responde sin sesión`, probadas > 150 && abiertas.length === 0, abiertas.slice(0, 8).join(" | "));
 const sinSesion = (await Promise.all(["/health", "/health/db", "/auth/config"].map(async (r) => (await fetch(`${BASE}${r}`)).text()))).join(" ");
 check("CA-16: las rutas sin sesión (salud y configuración del inicio de sesión) no exponen documentos, informes ni usuarios", !/sgc|clave|informe|FX-|@ficotox|usuario|token/i.test(sinSesion), sinSesion.slice(0, 200));

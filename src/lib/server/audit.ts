@@ -96,6 +96,12 @@ export type AuditAction =
   | "probar_restauracion"
   | "restaurar_respaldo"
   | "restauracion_fallida"
+  | "descargar_respaldo"
+  | "importar_respaldo"
+  | "importar_respaldo_fallido"
+  | "configuracion_inicial"
+  | "configuracion_inicial_fallida"
+  | "codigo_instalacion_incorrecto"
   | "reportar"
   | "evaluar"
   | "cerrar_sin_nc"
@@ -200,7 +206,12 @@ export async function registrarAuditoria(s: Session, user: CurrentUser | null | 
   );
 }
 
-let claveCache: string | null = null;
+/*
+ * La llave se recuerda mientras no cambie SECRET_KEY ni instance/auditoria.key
+ * (la Configuracion inicial puede adoptar la de un respaldo sin reiniciar; cada
+ * ruta puede tener su propia copia de este modulo, asi que no basta con olvidarla).
+ */
+let claveCache: { firma: string; clave: string } | null = null;
 
 /*
  * Advertencias sobre la llave del sello (SECRET_KEY ausente o corta). Solo
@@ -220,8 +231,16 @@ export function origenLlaveBitacora(): "SECRET_KEY" | "auditoria.key" {
 
 /* Llave del sello (SECRET_KEY o <instance>/auditoria.key); ver audit-chain.mjs. */
 export function claveSello(): string {
-  if (!claveCache) claveCache = resolverClaveSello(process.env.SECRET_KEY, getConfig().INSTANCE_DIR);
-  return claveCache;
+  const dir = getConfig().INSTANCE_DIR;
+  let mtime = 0;
+  try {
+    mtime = fs.statSync(path.join(/*turbopackIgnore: true*/ dir, "auditoria.key")).mtimeMs;
+  } catch {
+    mtime = 0;
+  }
+  const firma = `${process.env.SECRET_KEY || ""}|${mtime}`;
+  if (claveCache?.firma !== firma) claveCache = { firma, clave: resolverClaveSello(process.env.SECRET_KEY, dir) };
+  return claveCache.clave;
 }
 
 /* Lee un registro completo para tomar la foto antes/despues de un cambio. */

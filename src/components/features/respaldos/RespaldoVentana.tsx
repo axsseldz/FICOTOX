@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, Archive, CheckCircle, ClockCounterClockwise, Database, Files, Flask, Key, WarningCircle, XCircle } from "@phosphor-icons/react";
+import { ArrowLeft, Archive, CheckCircle, ClockCounterClockwise, Database, DownloadSimple, Files, Flask, Key, WarningCircle, XCircle } from "@phosphor-icons/react";
 import { useSession } from "@/components/session/SessionProvider";
 import { Button } from "@/components/ui/Button";
 import { Badge, ErrorState, Skeleton } from "@/components/ui/Primitives";
@@ -10,7 +10,7 @@ import { Callout } from "@/components/features/samples/FormLayout";
 import { API_BASE_URL, getJsonAuth } from "@/lib/client/api";
 import { fmtDateTime } from "@/lib/client/format";
 import type { ApiRecord } from "@/lib/client/types";
-import { archivosTexto, FRASE_OCUPADO, InsigniaVerificacion, MarcaProtegido, mb, TIPOS_RESPALDO } from "./comun";
+import { archivosTexto, FRASE_LLAVE_DISTINTA, FRASE_OCUPADO, InsigniaVerificacion, MarcaProtegido, mb, TIPOS_RESPALDO } from "./comun";
 
 /* Un recurso que se pide al abrir la ventana (no se comparte con la lista). */
 function useRegistro(url: string | null) {
@@ -88,7 +88,7 @@ export function ActaVentana({ archivo, onCerrar }: { archivo: string | null; onC
 
 /* ---------- Un respaldo ---------- */
 
-function FichaRespaldo({ id, puedeGestionar, ocupado, onProbar, onRestaurar, onAbrirActa }: { id: string; puedeGestionar: boolean; ocupado: boolean; onProbar: (id: string) => void; onRestaurar: (id: string) => void; onAbrirActa: (archivo: string) => void }) {
+function FichaRespaldo({ id, puedeGestionar, ocupado, onProbar, onRestaurar, onDescargar, onAbrirActa }: { id: string; puedeGestionar: boolean; ocupado: boolean; onProbar: (id: string) => void; onRestaurar: (id: string) => void; onDescargar: (id: string) => void; onAbrirActa: (archivo: string) => void }) {
   const { item, error, recargar } = useRegistro(`/respaldos/${encodeURIComponent(id)}`);
   if (error) return <ErrorState message={error} onRetry={recargar} />;
   if (!item) return <Skeleton className="h-72 w-full" />;
@@ -176,7 +176,13 @@ function FichaRespaldo({ id, puedeGestionar, ocupado, onProbar, onRestaurar, onA
           </VentanaSeccion>
 
           <VentanaSeccion titulo="Recuperar la plataforma" i={3}>
-            <p className="text-sm leading-normal text-ink-3">El administrador técnico puede pedir «Restaurar este respaldo». Se restaura cuando otra persona con autoridad (Responsable General) lo aprueba; antes se guarda un respaldo «Previo a restauración» y se pierde lo registrado después de la fecha de este respaldo.</p>
+            {item.llave_coincide === false ? (
+              <Callout tone="warning" title="No se puede restaurar en esta instalación" data-llave-distinta>
+                {FRASE_LLAVE_DISTINTA}
+              </Callout>
+            ) : (
+              <p className="text-sm leading-normal text-ink-3">El administrador técnico puede pedir «Restaurar este respaldo». Se restaura cuando otra persona con autoridad (Responsable General) lo aprueba; antes se guarda un respaldo «Previo a restauración» y se pierde lo registrado después de la fecha de este respaldo.</p>
+            )}
           </VentanaSeccion>
         </>
       )}
@@ -186,9 +192,14 @@ function FichaRespaldo({ id, puedeGestionar, ocupado, onProbar, onRestaurar, onA
           <Button icon={<Flask size={16} />} onClick={() => onProbar(id)} disabled={ocupado} title={ocupado ? FRASE_OCUPADO : undefined}>
             Probar restauración
           </Button>
-          <Button variant="secondary" icon={<ClockCounterClockwise size={16} />} onClick={() => onRestaurar(id)} disabled={ocupado} title={ocupado ? FRASE_OCUPADO : undefined} data-restaurar-respaldo>
+          <Button variant="secondary" icon={<ClockCounterClockwise size={16} />} onClick={() => onRestaurar(id)} disabled={ocupado || item.llave_coincide === false} title={item.llave_coincide === false ? FRASE_LLAVE_DISTINTA : ocupado ? FRASE_OCUPADO : undefined} data-restaurar-respaldo>
             Restaurar este respaldo
           </Button>
+          {item.puede_descargar ? (
+            <Button variant="secondary" icon={<DownloadSimple size={16} />} onClick={() => onDescargar(id)} data-descargar-respaldo>
+              Descargar
+            </Button>
+          ) : null}
           {ocupado ? <span className="text-sm text-ink-3">{FRASE_OCUPADO}</span> : <span className="text-sm text-ink-3">Se hace en una copia aparte y no toca la plataforma.</span>}
         </VentanaAcciones>
       ) : null}
@@ -205,6 +216,7 @@ export function RespaldoVentana({
   ocupado,
   onProbar,
   onRestaurar,
+  onDescargar,
 }: {
   ids: string[];
   indice: number | null;
@@ -214,6 +226,7 @@ export function RespaldoVentana({
   ocupado: boolean;
   onProbar: (id: string) => void;
   onRestaurar: (id: string) => void;
+  onDescargar: (id: string) => void;
 }) {
   const id = indice !== null ? ids[indice] : undefined;
   const [acta, setActa] = useState<{ para: string; archivo: string } | null>(null);
@@ -241,7 +254,7 @@ export function RespaldoVentana({
       ) : verActa ? (
         <ActaContenido key={verActa} archivo={verActa} />
       ) : (
-        <FichaRespaldo key={id} id={id} puedeGestionar={puedeGestionar} ocupado={ocupado} onProbar={onProbar} onRestaurar={onRestaurar} onAbrirActa={(archivo) => setActa({ para: id, archivo })} />
+        <FichaRespaldo key={id} id={id} puedeGestionar={puedeGestionar} ocupado={ocupado} onProbar={onProbar} onRestaurar={onRestaurar} onDescargar={onDescargar} onAbrirActa={(archivo) => setActa({ para: id, archivo })} />
       )}
     </VentanaCentrada>
   );

@@ -129,7 +129,10 @@ export function getConfig(): AppConfig {
   cached = {
     BASE_DIR,
     INSTANCE_DIR: instanceDir,
-    SECRET_KEY: process.env.SECRET_KEY || "ficotox-dev-secret",
+    // Se lee en cada uso: la Configuracion inicial puede adoptar la llave de un respaldo sin reiniciar (y cada ruta puede tener su copia de este modulo).
+    get SECRET_KEY() {
+      return process.env.SECRET_KEY || "ficotox-dev-secret";
+    },
     DATABASE_URL: url,
     SQLITE_PATH: sqlitePath,
     JWT_SECRET: process.env.JWT_SECRET || "ficotox-jwt-secret",

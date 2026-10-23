@@ -143,13 +143,21 @@ try {
 
   if (solo) {
     console.log(`\n=== ${solo}`);
+    // instalacion.mjs necesita el puerto libre y el archivo de api-respaldos-portables.mjs (instance/test/murio).
+    if (solo === "instalacion.mjs") {
+      failed += (await run(path.join(here, "api-respaldos-portables.mjs"), api)) ? 1 : 0;
+      stop();
+      await new Promise((r) => setTimeout(r, 1500));
+      failed += (await run(path.join(here, solo), { TEST_PORT: String(PORT), CHROME_PATH: chrome, CREDENCIALES_ROLES: CREDENCIALES, BETTER_SQLITE3: path.join(root, "node_modules/better-sqlite3") })) ? 1 : 0;
+      throw new Error("__solo__");
+    }
     const esUi = solo.startsWith("ui/") || solo.startsWith("e2e/");
     failed += (await run(path.join(here, solo), esUi ? entornoUi() : api)) ? 1 : 0;
     throw new Error("__solo__");
   }
 
   // api-roles corre despues de api-dsp y api-sgc: crea registros y personas de prueba que alterarian los folios que esas suites esperan.
-  for (const file of ["api-dsp.mjs", "api-sgc.mjs", "api-roles.mjs", "api-seguridad.mjs", "api-segregacion.mjs", "api-autorizaciones.mjs", "api-muestras.mjs", "api-informes.mjs", "api-documentos.mjs", "api-documentos-flujo.mjs", "api-documentos-fase3.mjs", "api-documentos-aceptacion.mjs", "api-cierre.mjs", "api-evidencias.mjs", "api-incidencias.mjs", "api-no-conformidades.mjs", "api-produccion.mjs", "api-mantenimiento-reportes.mjs", "api-correcciones-v1.mjs", "respaldos.mjs", "api-restaurar.mjs"]) {
+  for (const file of ["api-dsp.mjs", "api-sgc.mjs", "api-roles.mjs", "api-seguridad.mjs", "api-segregacion.mjs", "api-autorizaciones.mjs", "api-muestras.mjs", "api-informes.mjs", "api-documentos.mjs", "api-documentos-flujo.mjs", "api-documentos-fase3.mjs", "api-documentos-aceptacion.mjs", "api-cierre.mjs", "api-evidencias.mjs", "api-incidencias.mjs", "api-no-conformidades.mjs", "api-produccion.mjs", "api-mantenimiento-reportes.mjs", "api-correcciones-v1.mjs", "respaldos.mjs", "api-respaldos-portables.mjs", "api-restaurar.mjs"]) {
     console.log(`\n=== ${file}`);
     failed += (await run(path.join(here, file), api)) ? 1 : 0;
   }
@@ -172,7 +180,7 @@ try {
     if (!existsSync(chrome)) {
       console.log(`\n(navegador omitido: no se encontro Chrome en ${chrome}; define CHROME_PATH)`);
     } else {
-      for (const file of ["roles.mjs", "dsp.mjs", "sgc.mjs", "seguridad.mjs", "fechas.mjs", "segregacion.mjs", "autorizaciones.mjs", "etiquetas.mjs", "auditoria.mjs", "evidencias.mjs", "no-conformidades.mjs", "validacion.mjs", "documentos.mjs", "documentos-flujo.mjs", "documentos-fase3.mjs", "documentos-ficha.mjs", "documentos-listas.mjs", "documentos-inicio.mjs", "visor.mjs", "animaciones.mjs", "estilos-atajos.mjs", "firmantes.mjs", "mantenimiento-reporte.mjs", "calidad-visor.mjs", "respaldos-restaurar.mjs"]) {
+      for (const file of ["roles.mjs", "dsp.mjs", "sgc.mjs", "seguridad.mjs", "fechas.mjs", "segregacion.mjs", "autorizaciones.mjs", "etiquetas.mjs", "auditoria.mjs", "evidencias.mjs", "no-conformidades.mjs", "validacion.mjs", "documentos.mjs", "documentos-flujo.mjs", "documentos-fase3.mjs", "documentos-ficha.mjs", "documentos-listas.mjs", "documentos-inicio.mjs", "visor.mjs", "animaciones.mjs", "estilos-atajos.mjs", "firmantes.mjs", "mantenimiento-reporte.mjs", "calidad-visor.mjs", "respaldos-portables.mjs", "respaldos-restaurar.mjs"]) {
         console.log(`\n=== ui/${file}`);
         failed += (await run(path.join(here, "ui", file), entornoUi())) ? 1 : 0;
       }
@@ -187,7 +195,7 @@ try {
   failed += (await run(path.join(here, "standalone.mjs"))) ? 1 : 0;
 
   // Fase 12: migraciones, instalacion/operacion y concurrencia entre procesos (bases y carpetas temporales propias).
-  for (const file of ["migraciones.mjs", "operacion.mjs", "concurrencia.mjs"]) {
+  for (const file of ["migraciones.mjs", "operacion.mjs", "concurrencia.mjs", "respaldo-portable.mjs"]) {
     console.log(`\n=== ${file}`);
     failed += (await run(path.join(here, file))) ? 1 : 0;
   }
@@ -195,6 +203,13 @@ try {
   // Al final: rompe la bitacora a proposito, asi que nada puede correr despues.
   console.log("\n=== api-integridad.mjs");
   failed += (await run(path.join(here, "api-integridad.mjs"), api)) ? 1 : 0;
+
+  // Configuracion inicial: levanta sus propios servidores sobre instancias vacias en el mismo puerto (el de las pruebas se detiene).
+  // Usa el respaldo descargado por api-respaldos-portables.mjs («la computadora murió»).
+  console.log("\n=== instalacion.mjs");
+  stop();
+  await new Promise((r) => setTimeout(r, 1500));
+  failed += (await run(path.join(here, "instalacion.mjs"), { TEST_PORT: String(PORT), CHROME_PATH: chrome, CREDENCIALES_ROLES: CREDENCIALES, BETTER_SQLITE3: path.join(root, "node_modules/better-sqlite3") })) ? 1 : 0;
 } catch (error) {
   if (error.message !== "__solo__") throw error;
 } finally {
