@@ -29,13 +29,14 @@ src/app/(app)/          pantallas: muestras, informes, inventario, movimientos, 
 src/app/api/**/route.ts envoltorios finos: export const GET = apiRoute(handler)
 src/lib/server/         db.ts (conexión, sesiones, transacciones), http.ts (apiRoute, errores, 503 restaurando),
                         rbac.ts, password.ts, audit.ts, pendientes.ts, migrar-arranque.ts,
-                        solicitudes-ejecutar.ts, migraciones/ (motor.mjs, pasos.mjs, 0009…0026)
+                        solicitudes-ejecutar.ts, subidas.ts (subidas por partes), migraciones/ (motor.mjs, pasos.mjs, 0009…0026)
 src/lib/server/modules/ admin, auth, audit, samples/ (recepcion, procesamiento, extraccion, analisis…),
                         informes, inventory, consumables, calidad/ (incidencias, nc, automaticas…),
-                        sgc/ (acceso, documentos, flujo, externos, lecturas, lista-maestra), respaldos…
+                        sgc/ (acceso, documentos, flujo, externos, lecturas, lista-maestra), respaldos,
+                        respaldos-portables, instalacion (configuración inicial)…
 src/lib/client/         atajos.ts (Mac/Windows), tema.ts, session.ts, nav.ts…
 src/lib/shared/         código común cliente/servidor: permisos.ts, acciones-criticas.ts, segregacion.ts,
-                        folios.ts, fechas.ts, audit-chain.mjs, respaldo.mjs, secretos.mjs, documentos.ts…
+                        folios.ts, fechas.ts, audit-chain.mjs, respaldo.mjs, respaldo-portable.mjs, secretos.mjs, documentos.ts…
 src/components/         ui/ (Primitives, Button/boton, Field, Callout, capas, ListaCuadricula), shell/, session/ (SessionProvider, pantalla «Restaurando»), features/
 scripts/                operación (.mjs): configurar, instancia-nueva, respaldar, restaurar, migrar, actualizar,
                         verificar-instalacion, start-ficotox, detener, servicio, importar-respaldo-railway…
@@ -61,7 +62,7 @@ backups/                (ignorado) respaldos AAAAMMDD-HHMMSS y actas de pruebas-
 | `npm run cargar-inventario -- <ruta.xlsx>` | Carga inicial repetible del Inventario General (Excel) a SQLite, con la plataforma detenida. `--simular`, `--db`, `--usuario`, `--reporte`. Escribe `~/Downloads/CARGA_INVENTARIO.md`. |
 | `npm run instancia-nueva [-- --confirmar]` | Instancia de producción vacía con las dos cuentas mínimas (mueve la anterior a `backups/pre-produccion-<fecha>/`). Solo SQLite. |
 | `npm run preparar-importacion` | Respaldo sin llave en `~/Downloads/ficotox-respaldo.tar.gz` + su SHA-256, para importar en Railway. |
-| `npm run configurar` | Escribe `.env` (genera `JWT_SECRET` y, si falta, `SECRET_KEY`; nunca reemplaza una existente). |
+| `npm run configurar` | Escribe `.env` (genera `JWT_SECRET` y, si faltan, `SECRET_KEY` y `FICOTOX_CODIGO_INSTALACION`; nunca reemplaza una existente). |
 | `npm run migrar` | `--estado`, `--simular`, sin opciones aplica; en MySQL `--respaldo-hecho`. |
 | `npm run actualizar [-- --git]` | Respalda, detiene, compila (revierte si falla), migra, arranca y verifica. |
 | `npm run verificar-instalacion` | Reporte ✅/⚠️/❌ en `instance/verificaciones/<fecha>.md`. |
@@ -135,7 +136,17 @@ Cuentas de la base de prueba: `jorge.ramirez` (Administrador técnico), `patrici
 - **Prueba de restauración:** `npm run restaurar -- --respaldo <id> --responsable "Nombre"` restaura en `instance-restaurada/<fecha>/` (junto a la instancia; `carpetaRestauradas()`) y corre **8 verificaciones**: manifest y SHA-256, `integrity_check`, esquema compatible, llave coincide, cadena íntegra, conteos por tabla, archivos vs BD por SHA-256, tiempo. Acta en `backups/pruebas-restauracion/<fecha>.md/.json`; la copia se borra.
 - **Restauración real por terminal** (plataforma detenida): `npm run restaurar -- --respaldo <id> --destino instance --confirmar --responsable "…"` (`--llave <ruta>`, `--aceptar-llave-del-respaldo`). Respalda antes la instancia actual; se niega si la llave no es la del respaldo.
 - **Desde la plataforma (Calidad › Respaldos):** `respaldos:V` ve la lista; `respaldos:G` (Administrador técnico) crea respaldos y prueba la restauración (en copia aparte). «Restaurar este respaldo» crea la solicitud `restaurar_respaldo` (pide `respaldos:G`, aprueba `calidad:A` + `respaldos:V`). Al aprobar, `restaurarAhora` corre con `conBaseCerrada` (`db.ts`): la API responde 503 `restaurando`, vuelca el WAL y cierra la conexión; ejecuta `scripts/restaurar-ficotox.mjs` como hijo con `FICOTOX_RESTAURAR_DESDE_SERVIDOR=<pid del lock>` y los datos de la solicitud en `FICOTOX_RESTAURAR_SOLICITUD` (JSON en el entorno, **nunca como argumentos**: había inyección de opciones). El script verifica, guarda un respaldo «Previo a restauración», reemplaza base y archivos, registra quién pidió/aprobó/motivo, migra y cierra todas las sesiones (`token_version` + 1; conserva `sqlite_sequence` salvo `auditoria`). Si falla, no toca nada: solicitud «fallida» y acción `restauracion_fallida`. La pantalla de espera vive en `SessionProvider`. Funciona con `next dev`, `next start` y el lanzador. Con MySQL la pantalla solo avisa que se respalda con `mysqldump`.
-- Pruebas: `tests/respaldos.mjs`, `api-restaurar.mjs`, `ui/respaldos-restaurar.mjs` (estas dos restauran o cierran sesiones: deben ir al final de `run.mjs`). `respaldos.mjs` con `--solo` falla 2 checks SGC porque depende de otras suites (no es regresión).
+- **Respaldos portables (`.ficotox`)** — formato y cifrado en `src/lib/shared/respaldo-portable.mjs`; servidor en `modules/respaldos-portables.ts`, `modules/instalacion.ts` y `subidas.ts`:
+  - Formato v1: `FICOTOXP` + versión + JSON de parámetros (scrypt N=2^17 r=8 p=1 con sal aleatoria; AES-256-GCM en trozos de 1 MiB, nonce = prefijo ‖ contador ‖ marca de último trozo, AAD = SHA-256 del encabezado) y un verificador que distingue «contraseña incorrecta» de «alterado». Dentro: el respaldo completo (manifest primero, datos, archivos, llave). Todo por flujos (memoria constante). Rutas validadas al abrir (nada fuera de la carpeta, nombres válidos en Windows).
+  - **Descargar** (`respaldos:G` + reauth `respaldos:descargar`, solo SQLite, solo respaldos con llave): `POST /api/respaldos/:id/descargar` con contraseña ≥ 12 escrita dos veces → enlace `GET /api/respaldos/descargas/<token>` de un solo uso (2 min; guarda en memoria la clave derivada, nunca la contraseña). Bitácora `descargar_respaldo` sin la contraseña.
+  - **Subidas por partes** (el cuerpo de `apiRoute` va completo a memoria): `POST …/subidas` + `PUT …/subidas/:id?desde=N` (8 MiB, máx. 16) en `backups/.importando/`; límite `RESPALDO_IMPORTAR_MAX_MB` (4096) y espacio libre; se borran al terminar, al fallar y a las 2 h. La contraseña del archivo se comprueba antes de la reautenticación: si es incorrecta, la subida se conserva para reintentar.
+  - **Importar** (`respaldos:G` + reauth `respaldos:importar`): descifra a `backups/<id>` (`-2`, `-3`… si ya existe), `importado.json`, prueba de restauración en copia aparte; si falla se borra. Tipo «Importado»; la retención no los borra. Restaurarlo = el flujo de siempre con segundo usuario; con otra llave (`llave_coincide=false`) la solicitud responde 409 `llave_distinta`.
+  - **Configuración inicial** (`/configuracion-inicial`, `/api/instalacion/*`): solo con 0 cuentas; después 404 siempre (y `memoria.terminada`). Exige `FICOTOX_CODIGO_INSTALACION` (≥ 12, comparación de digestos con `timingSafeEqual`; 5 fallos en 15 min bloquean 15 min, en memoria, cada fallo en la bitácora con la IP). «Empezar desde cero» da de alta los roles del catálogo si faltan (`seed-roles-usuarios.mjs` con la base cerrada) y crea **dos** cuentas (Administrador técnico y Responsable General, quien aprueba altas) con contraseña temporal mostrada una vez y cambio obligatorio. «Restaurar desde respaldo» corre `restaurar-ficotox.mjs` real con `adoptar_llave` en `FICOTOX_RESTAURAR_SOLICITUD`.
+  - **Adopción de la llave** (solo si la base actual no tiene cuentas): `SECRET_KEY` del `.env` → se reescribe esa línea (temporal + rename) y se recarga en el proceso (`config.SECRET_KEY` es getter; `claveSello` se cachea por `SECRET_KEY` + mtime de `auditoria.key`); sin `SECRET_KEY` → `auditoria.key` (la anterior queda `.anterior-<sello>`); `SECRET_KEY` del entorno del sistema → se niega y no se toca nada.
+  - El lanzador (`start-ficotox.mjs`) vuelve a leer `SECRET_KEY` del `.env` antes de cada relanzamiento (si vino del archivo): tras adoptar una llave, una caída no relanza con la vieja. La configuración inicial solo restaura con 0 cuentas aunque la llave coincida; la llave adoptada se valida (ASCII imprimible sin espacios; en el `.env`, sin comillas, `#`, `$` ni `\`).
+  - scrypt (descargar, comprobar contraseña al importar) corre fuera de la sesión de BD (esas rutas no usan `apiRoute`). El enlace de descarga vuelve a exigir sesión vigente y `respaldos:G` de quien lo pidió. Importados que quedaron «verificando» sin trabajo en curso se borran al empezar otra subida. «Desde cero» y el arranque de una restauración inicial se excluyen con `memoria.reservada` (sin await entre revisar y tomar). Con `SECRET_KEY` repetida en el `.env` no se adopta la llave.
+  - Windows: sin probar en un equipo real (rutas con `path.join`, nombres de archivo válidos, reintento de `rename` en EPERM/EBUSY).
+- Pruebas: `tests/respaldos.mjs`, `respaldo-portable.mjs` (sin servidor: formato, ida y vuelta byte a byte, alterado, truncado, 600 MB), `api-respaldos-portables.mjs` (deja `instance/test/murio/`, y termina restaurando: va justo antes de `api-restaurar.mjs`), `instalacion.mjs` (levanta sus propios `next dev` sobre instancias vacías en el mismo puerto: corre tras detener el servidor de pruebas, después de `api-integridad`; con `--solo=instalacion.mjs` corre antes la de API), `api-restaurar.mjs`, `ui/respaldos-portables.mjs`, `ui/respaldos-restaurar.mjs` (estas restauran o cierran sesiones: deben ir al final de `run.mjs`). `respaldos.mjs` con `--solo` falla 2 checks SGC porque depende de otras suites (no es regresión).
 
 ## Despliegue
 
@@ -145,11 +156,12 @@ Cuentas de la base de prueba: `jorge.ramirez` (Administrador técnico), `patrici
   - Antes del servidor corre `scripts/importar-respaldo-railway.mjs`: si la base existe no hace nada; si no, importa `/data/import/ficotox-respaldo.tar.gz` o descarga `IMPORTAR_URL` (acepta ligas de Google Drive), verifica el SHA-256 y restaura con las mismas verificaciones. Si algo falla, el servidor no arranca. Sin base ni respaldo arranca vacía (migraciones + roles).
   - Preparar: `npm run preparar-importacion`, subir el `.tar.gz` a un lugar privado, poner la liga y el SHA-256. Tras la primera importación quitar `IMPORTAR_URL`/`IMPORTAR_SHA256`.
   - Bajar un respaldo: `railway ssh`, `node scripts/respaldar-ficotox.mjs --sin-llave`, empaquetar con tar. Empezar de cero: vaciar el volumen.
-- Salud: `GET /api/health` y `/api/health/db` (sin datos, sin sesión). Únicas rutas sin sesión: login, `GET /auth/config` y salud (lo verifica `tests/api-documentos-aceptacion.mjs`).
+- Salud: `GET /api/health` y `/api/health/db` (sin datos, sin sesión). Únicas rutas sin sesión: login, `GET /auth/config` y salud; además `/api/instalacion/*` (solo con la base sin cuentas y el código de instalación; si no, 404) y `/api/respaldos/descargas/<token>` (enlace de un solo uso). Lo verifica `tests/api-documentos-aceptacion.mjs`.
+- **Computadora nueva** (guía Mac/Windows en `README.md`): `npm ci` → `npm run configurar` (genera `FICOTOX_CODIGO_INSTALACION`) → `npm run build` → `npm run start:standalone` → Configuración inicial con el `.ficotox`.
 
 ## Variables de entorno
 
-`.env.example` documenta todas. Principales: `SECRET_KEY`, `JWT_SECRET`, `HOST`/`PORT` (`0.0.0.0`/`5000`), `ALLOWED_EMAIL_DOMAINS`, `FICOTOX_INSTANCE_DIR`, `SQLITE_PATH`/`DATABASE_URL`, `SMTP_*` (todas o ninguna), `TLS_*`, `AUTORIZACIONES_OBLIGATORIAS`, `EVIDENCIA_MAX_MB` (25), `DOCUMENTOS_MAX_MB` (50), `RESPALDO_*`, `PRUEBA_RESTAURACION_AVISO_DIAS`, `MIGRAR_AL_ARRANCAR`, `LOG_MAX_MB` (10), `LOG_RETENCION_DIAS` (90), `REAUTH_TTL_MIN`.
+`.env.example` documenta todas. Principales: `SECRET_KEY`, `JWT_SECRET`, `FICOTOX_CODIGO_INSTALACION`, `RESPALDO_IMPORTAR_MAX_MB` (4096), `HOST`/`PORT` (`0.0.0.0`/`5000`), `ALLOWED_EMAIL_DOMAINS`, `FICOTOX_INSTANCE_DIR`, `SQLITE_PATH`/`DATABASE_URL`, `SMTP_*` (todas o ninguna), `TLS_*`, `AUTORIZACIONES_OBLIGATORIAS`, `EVIDENCIA_MAX_MB` (25), `DOCUMENTOS_MAX_MB` (50), `RESPALDO_*`, `PRUEBA_RESTAURACION_AVISO_DIAS`, `MIGRAR_AL_ARRANCAR`, `LOG_MAX_MB` (10), `LOG_RETENCION_DIAS` (90), `REAUTH_TTL_MIN`.
 
 ## Pruebas: trampas conocidas
 
@@ -166,6 +178,7 @@ Cuentas de la base de prueba: `jorge.ramirez` (Administrador técnico), `patrici
 - Biblioteca y el flujo viejo de Documentos SGC retirados; sus tablas y archivos se conservan y se respaldan.
 - Documentos SGC: avisos solo dentro de la plataforma; firma = reautenticación (sin PAdES); Lista Maestra en PDF sin firma; sin suplentes (se reasigna con motivo); sin copias controladas.
 - Restauración desde la plataforma sin reiniciar el servidor, con segundo usuario y respaldo previo.
+- Respaldos portables: formato propio con `crypto` de Node (sin dependencias nuevas); la configuración inicial crea dos cuentas, no una (con una sola nadie podría aprobar altas); la llave se adopta solo en una instalación sin cuentas.
 
 ## Pendientes conocidos
 
@@ -175,3 +188,4 @@ Cuentas de la base de prueba: `jorge.ramirez` (Administrador técnico), `patrici
 - No está claro si una NC aún puede generar `propuesta_documento_id`; el PDF de un informe podría quedar huérfano si la liberación falla tras escribirlo.
 - Documentos SGC: CA-17 (validación escrita de Mejora Continua), colores HEX por validar, correo/escalamiento, suplentes, copias controladas y firma avanzada para V2.
 - «A confirmar» de la auditoría V1 §9.
+- Respaldos portables: sin probar en Windows real; descarga e importación solo con SQLite; el bloqueo de la configuración inicial vive en memoria (se reinicia con el servidor).

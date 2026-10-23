@@ -26,6 +26,20 @@
  * argumentos: un motivo escrito por una persona no puede parecer una opcion.
  * Por terminal, --solicitante, --aprobador, --motivo y --solicitud.
  *
+ * Configuracion inicial (respaldos portables): en una instalacion recien hecha
+ * (la base no tiene ninguna cuenta), el servidor pide ademas `adoptar_llave` en
+ * FICOTOX_RESTAURAR_SOLICITUD. Solo entonces, si la llave de esta instalacion no
+ * es la del respaldo, la instalacion adopta la del respaldo de forma permanente:
+ * con SECRET_KEY definida en el .env (FICOTOX_ENV_FILE o <raiz>/.env) se
+ * reescribe esa linea; sin SECRET_KEY, se escribe instance/auditoria.key y la
+ * anterior se conserva como auditoria.key.anterior-<fecha>. La llave anterior
+ * tambien queda en el respaldo «Previo a restauracion». Si SECRET_KEY viene del
+ * entorno del sistema (no del .env), no se puede adoptar y no se restaura.
+ * Nunca se adopta sobre una base que ya tiene cuentas.
+ *
+ * Windows: un archivo abierto no se puede borrar ni renombrar; el servidor
+ * cierra su conexion antes y aqui cada reemplazo se reintenta unos segundos.
+ *
  * Verificaciones (en ambos modos, cada una en el acta con ✅/❌):
  *   1. manifest valido y SHA-256 de cada archivo del respaldo
  *   2. PRAGMA integrity_check = ok
@@ -50,7 +64,7 @@ import { fileURLToPath } from "node:url";
 import { COLUMNAS_AUDITORIA, construirRegistro, evaluarCadena, leerClaveSello, sellar } from "../src/lib/shared/audit-chain.mjs";
 import { adaptadorSqlite, aplicarMigraciones, estadoMigraciones } from "../src/lib/server/migraciones/motor.mjs";
 import { bloqueoVivo as bloqueoCompartido } from "../src/lib/shared/bloqueo.mjs";
-import { ARCHIVO_LLAVE, CARPETA_ACTAS, CARPETAS_ARCHIVOS, ESQUEMA_VERSION, RUTA_BASE, carpetaRestauradas, crearRespaldo, hacerPrivado, huellaLlave, huellaManifest, inspeccionarBase, leerManifest, resolverEntorno, rutaArchivoValida, sellarManifest, sha256Archivo, versionApp } from "../src/lib/shared/respaldo.mjs";
+import { ARCHIVO_LLAVE, CARPETA_ACTAS, CARPETAS_ARCHIVOS, ESQUEMA_VERSION, RUTA_BASE, archivoEnv, carpetaRestauradas, crearRespaldo, hacerPrivado, huellaLlave, huellaManifest, inspeccionarBase, leerManifest, resolverEntorno, rutaArchivoValida, sellarManifest, sha256Archivo, versionApp } from "../src/lib/shared/respaldo.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -59,6 +73,23 @@ function liberarBloqueoMigracion(conexion) {
   if (conexion.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'schema_migraciones_bloqueo'").get()) conexion.prepare("UPDATE schema_migraciones_bloqueo SET pid = NULL, host = NULL, desde = NULL WHERE id = 1").run();
 }
 const Sqlite = createRequire(import.meta.url)("better-sqlite3");
+
+/*
+ * Windows: un archivo que otro proceso tiene abierto (la base, un antivirus o el indexador) da EBUSY/EPERM al
+ * borrarlo, renombrarlo o sobrescribirlo. Se reintenta hasta ~10 s antes de rendirse. En macOS y Linux no pasa.
+ */
+const ERRORES_TRANSITORIOS = new Set(["EBUSY", "EPERM", "EACCES", "ENOTEMPTY", "EMFILE", "ENFILE"]);
+function conReintentos(fn) {
+  for (let intento = 1; ; intento += 1) {
+    try {
+      return fn();
+    } catch (error) {
+      if (intento >= 20 || !ERRORES_TRANSITORIOS.has(error?.code) || (process.platform !== "win32" && error?.code !== "EBUSY")) throw error;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100 * Math.min(intento, 5));
+    }
+  }
+}
+const borrar = (ruta) => conReintentos(() => fs.rmSync(ruta, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 const args = process.argv.slice(2);
 const valor = (nombre) => {
   const i = args.indexOf(nombre);
@@ -93,6 +124,9 @@ const textoDe = (v) => (v === undefined || v === null || v === "" ? null : Strin
 const responsable = textoDe(solicitudServidor.responsable) || valor("--responsable") || process.env.USER || os.userInfo().username || "—";
 const confirmar = args.includes("--confirmar");
 const solicitante = textoDe(solicitudServidor.solicitante) || valor("--solicitante");
+// Configuracion inicial: solo la pide el servidor (nunca por terminal) y solo vale con el servidor dueño del bloqueo.
+const pideAdoptarLlave = solicitudServidor.adoptar_llave === true;
+let pedidoPorServidor = false;
 const aprobador = textoDe(solicitudServidor.aprobador) || valor("--aprobador");
 const motivoArg = textoDe(solicitudServidor.motivo) || valor("--motivo");
 const solicitudArg = textoDe(solicitudServidor.solicitud) || valor("--solicitud");
@@ -134,7 +168,7 @@ if (modoReal) {
   const vivo = bloqueoVivo(entorno.instanceDir);
   // Desde la plataforma: el servidor dueño del bloqueo es quien ejecuta este script (ya cerro su conexion y no atiende).
   const desdeServidor = Number(process.env.FICOTOX_RESTAURAR_DESDE_SERVIDOR || 0);
-  const pedidoPorServidor = !!vivo && desdeServidor > 0 && Number(vivo.pid) === desdeServidor && process.ppid === desdeServidor;
+  pedidoPorServidor = !!vivo && desdeServidor > 0 && Number(vivo.pid) === desdeServidor && process.ppid === desdeServidor;
   if (vivo && !pedidoPorServidor) salir(`Modo real rechazado: el servidor está encendido (archivo de bloqueo ${path.join(entorno.instanceDir, "servidor.lock")}, pid ${vivo.pid}). Detenlo y vuelve a intentarlo.`);
   if (!pedidoPorServidor && (await puertoOcupado(entorno.puerto))) {
     // En macOS el 5000 lo usa AirPlay: solo se rechaza si quien responde es FICOTOX (o si no se puede saber).
@@ -350,6 +384,38 @@ const fallidas = verificaciones.filter((v) => !v.ok);
 let restaurado = false;
 let respaldoPrevio = null;
 let entradaRestauracion = null;
+let llaveAdoptada = null;
+let nuevoEnv = null;
+
+/* Formato de una llave que se puede adoptar: ASCII imprimible sin espacios (auditoria.key) y, en el .env, ademas sin comillas, #, $ ni \. */
+const LLAVE_ARCHIVO_RE = /^[\x21-\x7e]{16,1024}$/;
+const LLAVE_ENV_RE = /^[^\s"'`#$\\]{16,1024}$/;
+
+/* Cuentas de la base actual (0 si no existe o no tiene la tabla): solo una instalacion sin cuentas adopta la llave de un respaldo. */
+function cuentasActuales() {
+  if (!fs.existsSync(entorno.sqlitePath)) return 0;
+  const actual = new Sqlite(entorno.sqlitePath, { readonly: true, fileMustExist: true });
+  try {
+    return actual.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'usuarios'").get() ? Number(actual.prepare("SELECT COUNT(*) AS n FROM usuarios").get().n) : 0;
+  } finally {
+    actual.close();
+  }
+}
+
+/* Linea del .env con SECRET_KEY igual a `valor` (indice), o -1: asi se sabe que la llave en uso viene de ese archivo y no del entorno del sistema. */
+function lineaSecretKey(lineas, valor) {
+  return lineas.findIndex((l) => {
+    const m = /^\s*(?:export\s+)?SECRET_KEY\s*=(.*)$/.exec(l);
+    return !!m && m[1].trim().replace(/^(["'])(.*)\1$/, "$2") === valor;
+  });
+}
+
+const falla4 = (detalle, consola) => {
+  const f = { n: 4, nombre: "Llave de la bitácora", ok: false, detalle };
+  fallidas.push(f);
+  verificaciones.push(f);
+  console.log(`❌ ${consola || detalle}`);
+};
 
 /* ---------- Modo real: aplicar sobre la instancia ---------- */
 
@@ -358,14 +424,50 @@ if (modoReal && db && !fallidas.length) {
   const configurada = String(entorno.secretKey || "").trim();
   const usaSecretKey = configurada && configurada !== "ficotox-dev-secret";
   const llaveArchivo = !usaSecretKey ? leerClaveSello("", entorno.instanceDir) : null;
-  if (llaveArchivo && huellaLlave(llaveArchivo.clave) !== huellaLlave(llave) && !args.includes("--aceptar-llave-del-respaldo")) {
-    fallidas.push({ n: 4, nombre: "Llave de la bitácora", ok: false, detalle: "instance/auditoria.key es distinta de la llave del respaldo; para reemplazarla indica --aceptar-llave-del-respaldo (tras confirmar el respaldo con la llave guardada aparte)" });
-    verificaciones.push(fallidas[fallidas.length - 1]);
-    console.log("❌ instance/auditoria.key no es la llave del respaldo; no se restaura sin --aceptar-llave-del-respaldo.");
-  } else if (usaSecretKey && huellaLlave(configurada) !== manifest.llave?.huella) {
-    fallidas.push({ n: 4, nombre: "Llave de la bitácora", ok: false, detalle: "SECRET_KEY del .env no es la llave del respaldo; configura la llave del respaldo antes de restaurar" });
-    verificaciones.push(fallidas[fallidas.length - 1]);
-    console.log("❌ La SECRET_KEY configurada no es la llave con que se selló la bitácora del respaldo; no se restaura.");
+  const distinta = usaSecretKey ? huellaLlave(configurada) !== manifest.llave?.huella : !!llaveArchivo && huellaLlave(llaveArchivo.clave) !== huellaLlave(llave);
+  // Configuracion inicial: solo sobre una instalacion sin cuentas (aunque la llave ya coincida: nunca pisa cuentas
+  // creadas mientras tanto), que adopta la llave del respaldo. Se prepara antes de tocar nada.
+  const cuentas = pideAdoptarLlave && pedidoPorServidor ? cuentasActuales() : 0;
+  if (cuentas > 0) falla4(`la instalación ya tiene ${cuentas} cuenta(s): la configuración inicial solo restaura sobre una instalación nueva, sin cuentas`);
+  else if (distinta && pideAdoptarLlave && pedidoPorServidor) {
+    // La llave se escribe tal cual en el .env o en auditoria.key: sin espacios, saltos de linea ni caracteres de control
+    // (y en el .env, sin comillas, #, $ ni \, que se leerian distinto).
+    if (!LLAVE_ARCHIVO_RE.test(llave)) falla4("la llave del respaldo tiene un formato que no se puede guardar (espacios, saltos de línea o caracteres de control, o menos de 16 caracteres)");
+    else if (usaSecretKey && !LLAVE_ENV_RE.test(llave)) falla4("la llave del respaldo tiene caracteres que no se pueden escribir sin riesgo en el .env (comillas, #, $ o \\). Escribe SECRET_KEY a mano en el .env con la llave guardada aparte y reinicia FICOTOX");
+    else if (usaSecretKey) {
+      const env = archivoEnv(root);
+      let contenido = null;
+      try {
+        contenido = fs.readFileSync(env, "utf8");
+      } catch {
+        contenido = null;
+      }
+      const salto = contenido?.includes("\r\n") ? "\r\n" : "\n";
+      const lineas = contenido === null ? [] : contenido.split(/\r?\n/);
+      const i = lineaSecretKey(lineas, configurada);
+      const definiciones = lineas.filter((l) => /^\s*(?:export\s+)?SECRET_KEY\s*=/.test(l)).length;
+      if (definiciones > 1) falla4(`el archivo ${path.basename(env)} define SECRET_KEY ${definiciones} veces: deja una sola línea (la que está en uso) y vuelve a intentarlo, para que todos lean la misma llave`, "SECRET_KEY aparece más de una vez en el .env: no se adopta la llave del respaldo.");
+      else if (i < 0) falla4("la SECRET_KEY de esta instalación viene del entorno del sistema (no del archivo .env), así que no se puede reemplazar desde aquí. Cámbiala por la llave del respaldo (o quítala) y reinicia FICOTOX", "SECRET_KEY no viene del .env: no se puede adoptar la llave del respaldo.");
+      else {
+        lineas.splice(i, 1, `# SECRET_KEY anterior (huella ${huellaLlave(configurada).slice(0, 12)}…) reemplazada el ${new Date().toISOString()} por la configuración inicial: ahora es la llave de la bitácora del respaldo ${respaldoId}. La anterior queda en el respaldo «Previo a restauración».`, `SECRET_KEY=${llave}`);
+        nuevoEnv = { ruta: env, temporal: `${env}.restaurando-${sello}`, contenido: lineas.join(salto) };
+        // Se comprueba que se puede escribir antes de reemplazar la base (si no, no se toca nada).
+        try {
+          fs.writeFileSync(nuevoEnv.temporal, nuevoEnv.contenido, { mode: 0o600 });
+          llaveAdoptada = { origen: "SECRET_KEY", archivo: path.basename(env), huella: huellaLlave(llave), huella_anterior: huellaLlave(configurada) };
+        } catch (error) {
+          nuevoEnv = null;
+          falla4(`no se pudo escribir el archivo ${path.basename(env)} para adoptar la llave del respaldo (${error.code || error.message})`);
+        }
+      }
+    } else llaveAdoptada = { origen: "auditoria.key", archivo: "auditoria.key", huella: huellaLlave(llave), huella_anterior: huellaLlave(llaveArchivo.clave) };
+  }
+  if (fallidas.length) {
+    /* ya se explico arriba por que no se restaura */
+  } else if (!llaveAdoptada && llaveArchivo && distinta && !args.includes("--aceptar-llave-del-respaldo")) {
+    falla4("instance/auditoria.key es distinta de la llave del respaldo; para reemplazarla indica --aceptar-llave-del-respaldo (tras confirmar el respaldo con la llave guardada aparte)", "instance/auditoria.key no es la llave del respaldo; no se restaura sin --aceptar-llave-del-respaldo.");
+  } else if (!llaveAdoptada && usaSecretKey && distinta) {
+    falla4("SECRET_KEY del .env no es la llave del respaldo; configura la llave del respaldo antes de restaurar", "La SECRET_KEY configurada no es la llave con que se selló la bitácora del respaldo; no se restaura.");
   } else {
     db.close();
     db = null;
@@ -390,15 +492,25 @@ if (modoReal && db && !fallidas.length) {
       console.log(`Respaldo previo de la instancia actual: ${respaldoPrevio.carpeta}`);
     }
     fs.mkdirSync(entorno.instanceDir, { recursive: true });
-    for (const sufijo of ["-wal", "-shm", "-journal"]) fs.rmSync(`${entorno.sqlitePath}${sufijo}`, { force: true });
-    fs.copyFileSync(restauradaDb, entorno.sqlitePath);
+    for (const sufijo of ["-wal", "-shm", "-journal"]) borrar(`${entorno.sqlitePath}${sufijo}`);
+    conReintentos(() => fs.copyFileSync(restauradaDb, entorno.sqlitePath));
     // Carpetas de archivos: se reemplazan por las del respaldo (las actuales quedaron en el respaldo previo).
     for (const carpeta of CARPETAS_ARCHIVOS) {
-      fs.rmSync(path.join(entorno.instanceDir, carpeta), { recursive: true, force: true });
-      if (fs.existsSync(path.join(preparacion, carpeta))) fs.cpSync(path.join(preparacion, carpeta), path.join(entorno.instanceDir, carpeta), { recursive: true });
+      borrar(path.join(entorno.instanceDir, carpeta));
+      if (fs.existsSync(path.join(preparacion, carpeta))) conReintentos(() => fs.cpSync(path.join(preparacion, carpeta), path.join(entorno.instanceDir, carpeta), { recursive: true }));
     }
-    // Llave en archivo: se deja la del respaldo para que el servidor la use.
-    if (!usaSecretKey) fs.writeFileSync(path.join(entorno.instanceDir, "auditoria.key"), `${llave}\n`, { mode: 0o600 });
+    // Llave en archivo: se deja la del respaldo para que el servidor la use (la adoptada conserva la anterior a un lado).
+    const archivoLlave = path.join(entorno.instanceDir, "auditoria.key");
+    if (!usaSecretKey && llaveAdoptada && fs.existsSync(archivoLlave)) conReintentos(() => fs.renameSync(archivoLlave, `${archivoLlave}.anterior-${sello}`));
+    if (!usaSecretKey) conReintentos(() => fs.writeFileSync(archivoLlave, `${llave}\n`, { mode: 0o600 }));
+    // SECRET_KEY del .env: el archivo ya preparado reemplaza al anterior de una vez (renombrar es atomico).
+    if (nuevoEnv) conReintentos(() => fs.renameSync(nuevoEnv.temporal, nuevoEnv.ruta));
+    // La huella registrada (la compara npm run verificar-instalacion) es la de la llave adoptada.
+    if (llaveAdoptada) {
+      fs.writeFileSync(path.join(entorno.instanceDir, "llave-bitacora.huella"), `${llaveAdoptada.huella}\n`);
+      observaciones.push(`Configuración inicial: la instalación adoptó la llave de la bitácora del respaldo (${llaveAdoptada.origen === "SECRET_KEY" ? `SECRET_KEY en ${llaveAdoptada.archivo}` : "instance/auditoria.key"}; huella ${llaveAdoptada.huella.slice(0, 12)}…). La llave anterior (huella ${llaveAdoptada.huella_anterior.slice(0, 12)}…) quedó en el respaldo previo${llaveAdoptada.origen === "auditoria.key" ? ` y como auditoria.key.anterior-${sello}` : ""}.`);
+      console.log(`Llave de la bitácora adoptada del respaldo (${llaveAdoptada.origen}).`);
+    }
     // Entrada de la restauracion en la bitacora restaurada (actor: sistema), encadenada con audit-chain.mjs.
     const real = new Sqlite(entorno.sqlitePath);
     try {
@@ -421,6 +533,7 @@ if (modoReal && db && !fallidas.length) {
             ...(aprobador ? { aprobado_por: aprobador } : {}),
             ...(solicitudArg ? { solicitud_id: Number(solicitudArg) || solicitudArg } : {}),
             ...(motivoArg ? { motivo: motivoArg } : {}),
+            ...(llaveAdoptada ? { llave_adoptada: { origen: llaveAdoptada.origen, huella: llaveAdoptada.huella.slice(0, 12), huella_anterior: llaveAdoptada.huella_anterior.slice(0, 12) } } : {}),
           },
         },
         null,
@@ -466,8 +579,9 @@ if (!modoReal && db && !fallidas.length && planMigracion && (planMigracion.pendi
   }
 }
 if (db) db.close();
-// Modo real: la carpeta de preparacion (con todos los datos) ya no sirve, se haya aplicado o no.
-if (modoReal) fs.rmSync(preparacion, { recursive: true, force: true });
+// Modo real: la carpeta de preparacion (con todos los datos) ya no sirve, se haya aplicado o no; tampoco el .env preparado si no se uso.
+if (modoReal) borrar(preparacion);
+if (nuevoEnv && fs.existsSync(nuevoEnv.temporal)) borrar(nuevoEnv.temporal);
 
 /* ---------- Acta ---------- */
 
@@ -501,6 +615,8 @@ const acta = {
   restaurado,
   respaldo_previo: respaldoPrevio?.id || null,
   entrada_bitacora: entradaRestauracion,
+  // Sin la llave: solo de donde se tomo y huellas.
+  llave_adoptada: restaurado && llaveAdoptada ? { origen: llaveAdoptada.origen, archivo: llaveAdoptada.archivo, huella: llaveAdoptada.huella, huella_anterior: llaveAdoptada.huella_anterior } : null,
   observaciones,
 };
 fs.writeFileSync(path.join(actasDir, `${nombreActa}.json`), `${JSON.stringify(acta, null, 2)}\n`);

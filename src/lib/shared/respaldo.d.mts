@@ -6,6 +6,7 @@ export const TABLAS_PRINCIPALES: string[];
 export const CARPETAS_ARCHIVOS: string[];
 export const ARCHIVO_LLAVE: string;
 export const CARPETA_ACTAS: string;
+export const ARCHIVO_IMPORTADO: string;
 
 export interface Entorno {
   baseDir: string;
@@ -51,6 +52,8 @@ export interface RespaldoListado {
   incluye_llave: boolean;
   bitacora: Manifest["bitacora"];
   verificacion: { resultado: string; fecha: string; acta: string } | null;
+  huella_llave: string | null;
+  importado: { en: string | null; por: string | null; origen_id: string | null; host: string | null } | null;
 }
 
 export interface Acta {
@@ -64,6 +67,8 @@ export interface Acta {
   [clave: string]: unknown;
 }
 
+export function archivoEnv(baseDir: string, env?: Record<string, string | undefined>): string;
+export function leerImportado(carpeta: string): Record<string, unknown> | null;
 export function resolverEntorno(baseDir: string, env?: Record<string, string | undefined>): Entorno;
 export function sha256Archivo(ruta: string): Promise<string>;
 export function huellaLlave(clave: string): string;

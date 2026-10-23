@@ -89,6 +89,13 @@ export const CARPETAS_ARCHIVOS = ["informes", "evidencias", "documentos_sgc", "b
 
 export const ARCHIVO_LLAVE = path.join(/*turbopackIgnore: true*/ "llave", "llave-bitacora.txt");
 export const CARPETA_ACTAS = "pruebas-restauracion";
+/*
+ * Respaldos portables: un respaldo traido de otra computadora (archivo .ficotox)
+ * lleva junto a su manifest un importado.json (fuera del manifest y de su sello)
+ * con quien lo importo y cuando. Mientras se verifica dice estado "verificando" y
+ * no aparece en la lista; la retencion nunca borra uno importado.
+ */
+export const ARCHIVO_IMPORTADO = "importado.json";
 const ID_RE = /^\d{8}-\d{6}(-\d+)?$/;
 
 /* ---------- Entorno (misma resolucion que src/lib/server/config.ts) ---------- */
@@ -110,13 +117,18 @@ function cargarArchivoEnv(archivo, env) {
   }
 }
 
+/* Archivo .env que leen el servidor y los scripts: FICOTOX_ENV_FILE o <raiz>/.env. */
+export function archivoEnv(baseDir, env = process.env) {
+  const configurado = String(env.FICOTOX_ENV_FILE || "").trim();
+  return configurado ? path.resolve(/*turbopackIgnore: true*/ baseDir, configurado) : path.join(/*turbopackIgnore: true*/ baseDir, ".env");
+}
+
 /*
  * Rutas y variables como las ve el servidor: .env (o FICOTOX_ENV_FILE) sin
  * pisar lo ya definido, SQLITE_PATH, FICOTOX_INSTANCE_DIR y FICOTOX_BACKUP_DIR.
  */
 export function resolverEntorno(baseDir, env = process.env) {
-  const configurado = String(env.FICOTOX_ENV_FILE || "").trim();
-  cargarArchivoEnv(configurado ? path.resolve(/*turbopackIgnore: true*/ baseDir, configurado) : path.join(/*turbopackIgnore: true*/ baseDir, ".env"), env);
+  cargarArchivoEnv(archivoEnv(baseDir, env), env);
   const databaseUrl = String(env.DATABASE_URL || "").trim();
   const motor = databaseUrl && !databaseUrl.startsWith("sqlite:") ? "mysql" : "sqlite";
   let sqlitePath = null;
@@ -424,6 +436,16 @@ export function listarActas(respaldosDir) {
   return actas.sort((a, b) => String(b.fecha || "").localeCompare(String(a.fecha || "")));
 }
 
+/* Datos de importacion de un respaldo traido en un archivo portable (null si se creo aqui o si no se pueden leer). */
+export function leerImportado(carpeta) {
+  try {
+    const datos = JSON.parse(fs.readFileSync(path.join(/*turbopackIgnore: true*/ carpeta, ARCHIVO_IMPORTADO), "utf8"));
+    return datos && typeof datos === "object" ? datos : null;
+  } catch {
+    return null;
+  }
+}
+
 /* Respaldos locales (carpetas con manifest), el mas reciente primero, con su estado de verificacion segun las actas. */
 export function listarRespaldos(respaldosDir) {
   let nombres = [];
@@ -438,6 +460,10 @@ export function listarRespaldos(respaldosDir) {
     const carpeta = path.join(/*turbopackIgnore: true*/ respaldosDir, id);
     try {
       const m = leerManifest(carpeta);
+      // Uno importado se lista solo cuando su verificacion termino bien (con la marca ilegible, tampoco).
+      const conMarca = fs.existsSync(path.join(/*turbopackIgnore: true*/ carpeta, ARCHIVO_IMPORTADO));
+      const importado = conMarca ? leerImportado(carpeta) : null;
+      if (conMarca && importado?.estado !== "listo") continue;
       const tamano = (m.base?.tamano || 0) + (m.archivos || []).reduce((t, a) => t + (a.tamano || 0), 0);
       // Una prueba cuenta para este respaldo solo si se hizo sobre esta carpeta y este manifest exacto (no sobre una copia).
       let huella = null;
@@ -446,7 +472,8 @@ export function listarRespaldos(respaldosDir) {
       } catch {
         huella = null;
       }
-      const pruebas = actas.filter((a) => a.respaldo_id === id && a.manifest_sha256 === huella && path.resolve(/*turbopackIgnore: true*/ String(a.respaldo_ruta || "")) === path.resolve(/*turbopackIgnore: true*/ carpeta));
+      // El acta nombra el respaldo por el id de su manifest (uno importado puede vivir en una carpeta con otro nombre si ese id ya existia aqui).
+      const pruebas = actas.filter((a) => (a.respaldo_id === id || a.respaldo_id === m.id) && a.manifest_sha256 === huella && path.resolve(/*turbopackIgnore: true*/ String(a.respaldo_ruta || "")) === path.resolve(/*turbopackIgnore: true*/ carpeta));
       out.push({
         id,
         carpeta,
@@ -459,6 +486,8 @@ export function listarRespaldos(respaldosDir) {
         archivos: (m.archivos || []).length,
         incluye_llave: !!m.llave?.incluida && fs.existsSync(path.join(/*turbopackIgnore: true*/ carpeta, ARCHIVO_LLAVE)),
         bitacora: m.bitacora,
+        huella_llave: m.llave?.huella || null,
+        importado: importado ? { en: importado.importado_en || null, por: importado.importado_por || null, origen_id: m.id || null, host: m.host || null } : null,
         verificacion: pruebas.length ? { resultado: pruebas[0].resultado, fecha: pruebas[0].fecha, acta: pruebas[0].archivo } : null,
       });
     } catch {
@@ -471,10 +500,11 @@ export function listarRespaldos(respaldosDir) {
 /*
  * Conserva los `retencion` respaldos mas recientes y borra los demas, salvo el
  * ultimo respaldo verificado (con una prueba de restauracion aprobada), que
- * nunca se elimina. Devuelve los ids eliminados.
+ * nunca se elimina. Los importados de otra computadora no cuentan ni se borran
+ * (alguien los trajo a proposito). Devuelve los ids eliminados.
  */
 export function aplicarRetencion(respaldosDir, retencion) {
-  const lista = listarRespaldos(respaldosDir);
+  const lista = listarRespaldos(respaldosDir).filter((r) => !r.importado);
   const verificado = lista.find((r) => r.verificacion?.resultado === "aprobada")?.id || null;
   const eliminados = [];
   lista.forEach((r, i) => {

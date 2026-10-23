@@ -20,7 +20,11 @@ export const TIPOS_RESPALDO: Record<string, string> = {
   pre_actualizacion: "Antes de actualizar",
   pre_migracion: "Antes de migrar",
   pre_restauracion: "Previo a restauración",
+  importado: "Importado",
 };
+
+/* Por qué no se puede restaurar un respaldo sellado con otra llave (lo explica el servidor igual: 409 llave_distinta). */
+export const FRASE_LLAVE_DISTINTA = "Se selló con otra llave del registro de actividad: no se puede restaurar en esta instalación. Solo se puede recuperar en una instalación nueva (Configuración inicial) o por terminal con su llave.";
 
 export const FRASE_OCUPADO = "Hay un respaldo en curso";
 
@@ -30,6 +34,9 @@ export function mb(bytes: unknown): string {
   if (!n) return "—";
   return n < 0.1 ? "< 0.1 MB" : `${n.toLocaleString("es-MX", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} MB`;
 }
+
+/* Límite en MB escrito como lo dice la configuración inicial: "4 GB", "1.5 GB", "512 MB". */
+export const limiteTexto = (limiteMb: number): string => (limiteMb >= 1024 ? `${(limiteMb / 1024).toLocaleString("es-MX", { maximumFractionDigits: 1 })} GB` : `${limiteMb.toLocaleString("es-MX")} MB`);
 
 export const archivosTexto = (n: unknown): string => (Number(n) === 1 ? "1 archivo" : `${Number(n || 0).toLocaleString("es-MX")} archivos`);
 

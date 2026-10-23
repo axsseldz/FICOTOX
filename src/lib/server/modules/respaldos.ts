@@ -32,10 +32,12 @@ import { crearSolicitud, respuestaSolicitud, type Ejecutores } from "../solicitu
 import { HttpError, json, readJson, type RouteContext } from "../http";
 import { cargarAutorizacion, permisoDe, requirePermission, type Autorizacion } from "../rbac";
 import { exigirReauth } from "../seguridad";
-import { aplicarRetencion, carpetaRestauradas, completarRespaldo, huellaManifest, iniciarRespaldo, leerManifest, listarActas, listarRespaldos, RUTA_BASE, type Acta, type Manifest, type RespaldoListado } from "../../shared/respaldo.mjs";
+import { limiteImportarBytes } from "../subidas";
+import { leerClaveSello } from "../../shared/audit-chain.mjs";
+import { ARCHIVO_IMPORTADO, aplicarRetencion, carpetaRestauradas, huellaLlave, completarRespaldo, huellaManifest, iniciarRespaldo, leerManifest, listarActas, listarRespaldos, RUTA_BASE, type Acta, type Manifest, type RespaldoListado } from "../../shared/respaldo.mjs";
 import { formatearFechaHora } from "../../shared/fechas";
 
-const ID_RE = /^\d{8}-\d{6}(-\d+)?$/;
+export const ID_RE = /^\d{8}-\d{6}(-\d+)?$/;
 const ACTA_RE = ID_RE;
 
 /* ---------- Permisos ---------- */
@@ -50,7 +52,7 @@ async function exigirVer(request: Request, s: RouteContext["s"]): Promise<Autori
 
 /* ---------- Tipo de respaldo (por su etiqueta) ---------- */
 
-export type TipoRespaldo = "manual" | "automatico" | "pre_actualizacion" | "pre_migracion" | "pre_restauracion";
+export type TipoRespaldo = "manual" | "automatico" | "pre_actualizacion" | "pre_migracion" | "pre_restauracion" | "importado";
 
 /*
  * El tipo sale de la etiqueta que le pone quien lo crea: los scripts usan
@@ -88,7 +90,7 @@ export interface PasoPrueba {
 
 export interface Trabajo {
   id: number;
-  tipo: "respaldo" | "prueba" | "restauracion";
+  tipo: "respaldo" | "prueba" | "restauracion" | "importacion";
   respaldo_id: string | null;
   usuario: string;
   etiqueta: string | null;
@@ -101,24 +103,31 @@ export interface Trabajo {
   resultado: "aprobada" | "fallida" | null;
   acta: string | null;
   mensaje: string | null;
+  /* Avance de 0 a 1 cuando se conoce (descifrar un archivo importado). */
+  progreso?: number | null;
 }
 
 /* Un solo servidor, pero cada ruta puede cargar su propia copia del modulo: el estado va en globalThis. */
 const global = globalThis as unknown as { __ficotoxRespaldos?: { trabajo: Trabajo | null; cache: { en: number; datos: Estado | null } } };
 const memoria = (global.__ficotoxRespaldos ||= { trabajo: null, cache: { en: 0, datos: null } });
 
-const trabajoEnCurso = (): Trabajo | null => (memoria.trabajo?.estado === "en_curso" ? memoria.trabajo : null);
+export const trabajoEnCurso = (): Trabajo | null => (memoria.trabajo?.estado === "en_curso" ? memoria.trabajo : null);
 
-function iniciarTrabajo(datos: Pick<Trabajo, "tipo" | "respaldo_id" | "usuario" | "etiqueta" | "fase">): Trabajo {
+export function iniciarTrabajo(datos: Pick<Trabajo, "tipo" | "respaldo_id" | "usuario" | "etiqueta" | "fase">): Trabajo {
   const trabajo: Trabajo = { id: Date.now(), ...datos, inicio: new Date().toISOString(), fin: null, estado: "en_curso", pasos: [], resultado: null, acta: null, mensaje: null };
   memoria.trabajo = trabajo;
   return trabajo;
 }
 
-function terminarTrabajo(trabajo: Trabajo, cambios: Partial<Trabajo>): void {
+export function terminarTrabajo(trabajo: Trabajo, cambios: Partial<Trabajo>): void {
   Object.assign(trabajo, cambios, { fin: new Date().toISOString() });
   memoria.cache.datos = null;
 }
+
+/* La lista se vuelve a leer de disco en la siguiente consulta. */
+export const olvidarListaRespaldos = (): void => {
+  memoria.cache.datos = null;
+};
 
 /* ---------- Lectura de respaldos y actas ---------- */
 
@@ -162,8 +171,8 @@ function leerEstado(forzar = false): Estado {
   } catch {
     nombres = [];
   }
-  // Carpetas con id de respaldo pero con la ficha ilegible: no las lista listarRespaldos.
-  for (const id of nombres) if (!conocidos.has(id)) danados.push({ id, creado_en: instanteDeId(id) });
+  // Carpetas con id de respaldo pero con la ficha ilegible: no las lista listarRespaldos. Una importacion en curso (o fallida) no es un respaldo dañado.
+  for (const id of nombres) if (!conocidos.has(id) && !fs.existsSync(path.join(/*turbopackIgnore: true*/ dir, id, ARCHIVO_IMPORTADO))) danados.push({ id, creado_en: instanteDeId(id) });
   const datos: Estado = { respaldos: sanos, danados, actas: listarActas(dir) };
   memoria.cache = { en: ahora, datos };
   return datos;
@@ -174,9 +183,18 @@ const restaurable = (r: RespaldoListado) => r.verificacion?.resultado === "aprob
 /* Respaldo que la retencion nunca borra: el mas reciente con una restauracion aprobada. */
 const protegidoDe = (respaldos: RespaldoListado[]): string | null => respaldos.find(restaurable)?.id || null;
 
+/* Huella de la llave con que sella esta instalacion (null si todavia no tiene). */
+export function huellaLlaveInstalacion(): string | null {
+  const llave = leerClaveSello(process.env.SECRET_KEY || "", getConfig().INSTANCE_DIR);
+  return llave ? huellaLlave(llave.clave) : null;
+}
+
 /* Resumen de un respaldo para la lista (sin rutas, huellas ni sellos). */
-function resumen(r: RespaldoListado, protegido: string | null) {
-  const { tipo, nota } = tipoDe(r.etiqueta);
+function resumen(r: RespaldoListado, protegido: string | null, huellaInstalacion: string | null = null) {
+  const { tipo: tipoEtiqueta, nota: notaEtiqueta } = tipoDe(r.etiqueta);
+  // Importado de otra computadora: se dice de cuándo es el original y de dónde viene.
+  const tipo: TipoRespaldo = r.importado ? "importado" : tipoEtiqueta;
+  const nota = r.importado ? `Traído de ${r.importado.host || "otra computadora"}${r.importado.en ? ` el ${formatearFechaHora(r.importado.en)}` : ""}` : notaEtiqueta;
   return {
     id: r.id,
     creado_en: r.creado_en,
@@ -191,6 +209,9 @@ function resumen(r: RespaldoListado, protegido: string | null) {
     bitacora_entradas: Number(r.bitacora?.entradas || 0),
     verificacion: r.verificacion ? { resultado: r.verificacion.resultado, fecha: r.verificacion.fecha } : null,
     protegido: r.id === protegido,
+    // Restaurarlo exige que su llave sea la de esta instalacion (si no, la bitacora restaurada no se podria verificar).
+    llave_coincide: !r.huella_llave || !huellaInstalacion ? null : r.huella_llave === huellaInstalacion,
+    puede_descargar: r.incluye_llave,
   };
 }
 
@@ -267,9 +288,10 @@ export async function listarRespaldosApi({ request, s }: RouteContext): Promise<
   if (!cfg.SQLITE_PATH) return json({ motor: "mysql", respaldos: [], puede_gestionar: false, trabajo: null });
   const { respaldos, danados, actas } = leerEstado(true);
   const protegido = protegidoDe(respaldos);
+  const huella = huellaLlaveInstalacion();
   const items = [
-    ...respaldos.map((r) => resumen(r, protegido)),
-    ...danados.map((d) => ({ id: d.id, creado_en: d.creado_en, estado: "danado" as const, tipo: "manual" as TipoRespaldo, nota: null, tamano: 0, archivos: 0, incluye_llave: false, version_app: null, registros: null, bitacora_entradas: 0, verificacion: null, protegido: false })),
+    ...respaldos.map((r) => resumen(r, protegido, huella)),
+    ...danados.map((d) => ({ id: d.id, creado_en: d.creado_en, estado: "danado" as const, tipo: "manual" as TipoRespaldo, nota: null, tamano: 0, archivos: 0, incluye_llave: false, version_app: null, registros: null, bitacora_entradas: 0, verificacion: null, protegido: false, llave_coincide: null, puede_descargar: false })),
   ].sort((a, b) => String(b.id).localeCompare(String(a.id)));
   const ultimaPrueba = actas[0] || null;
   const aprobada = actas.find((a) => a.resultado === "aprobada") || null;
@@ -284,6 +306,7 @@ export async function listarRespaldosApi({ request, s }: RouteContext): Promise<
     prueba_dias: cfg.PRUEBA_RESTAURACION_AVISO_DIAS,
     puede_gestionar: puedeGestionar,
     trabajo: memoria.trabajo,
+    limite_importar_mb: Math.round(limiteImportarBytes() / 1048576),
   });
 }
 
@@ -311,7 +334,7 @@ const VERIFICACIONES: Record<number, { titulo: string; bien: string; mal: string
   8: { titulo: "Duración de la prueba", bien: "", mal: "" },
 };
 
-function fraseDeVerificacion(v: { n: number; ok: boolean; detalle?: string }): PasoPrueba {
+export function fraseDeVerificacion(v: { n: number; ok: boolean; detalle?: string }): PasoPrueba {
   const def = VERIFICACIONES[v.n] || { titulo: `Verificación ${v.n}`, bien: "Pasó la verificación.", mal: "No pasó la verificación." };
   const noEjecutada = /^No se ejecut/i.test(String(v.detalle || ""));
   if (v.n === 8) {
@@ -322,7 +345,7 @@ function fraseDeVerificacion(v: { n: number; ok: boolean; detalle?: string }): P
 }
 
 /* Datos de una prueba (acta) en palabras simples. */
-function actaLegible(acta: Acta) {
+export function actaLegible(acta: Acta) {
   const verificaciones = ((acta.verificaciones as Array<{ n: number; ok: boolean; detalle?: string }> | undefined) || []).map(fraseDeVerificacion);
   return {
     archivo: acta.archivo,
@@ -390,11 +413,12 @@ export async function detalleRespaldoApi({ request, s, params }: RouteContext): 
   const pruebas = actas.filter((a) => a.respaldo_id === id && (!huella || a.manifest_sha256 === huella)).map((a) => ({ archivo: a.archivo, fecha: a.fecha, responsable: a.responsable, modo: a.modo === "real" ? "real" : "prueba", resultado: a.resultado, duracion_ms: Number(a.duracion_ms || 0) }));
   const { tipo, nota } = tipoDe(manifest.etiqueta);
   const totalArchivos = (manifest.archivos || []).length;
+  const base = resumen(listado, protegido, huellaLlaveInstalacion());
   return json({
     item: {
-      ...resumen(listado, protegido),
-      tipo,
-      nota,
+      ...base,
+      tipo: base.tipo === "importado" ? "importado" : tipo,
+      nota: base.tipo === "importado" ? base.nota : nota,
       registros: registros.reduce((t, [cantidad]) => t + cantidad, 0),
       contenido: {
         registros: registros.filter(([cantidad]) => cantidad > 0).map(([cantidad, uno, varios]) => ({ cantidad, texto: cantidad === 1 ? uno : varios })),
@@ -425,7 +449,7 @@ export async function estadoTrabajoApi({ request, s }: RouteContext): Promise<Re
 
 /* ---------- Crear respaldo ---------- */
 
-const MENSAJE_OCUPADO = "Hay un respaldo en curso: espera a que termine.";
+export const MENSAJE_OCUPADO = "Hay un respaldo en curso: espera a que termine.";
 
 /*
  * POST /api/respaldos { etiqueta? } (respaldos:G + reautenticacion respaldos:crear).
@@ -500,7 +524,7 @@ async function terminarRespaldo(user: CurrentUser, iniciado: Awaited<ReturnType<
 /* ---------- Probar restauracion ---------- */
 
 /* Borra la copia restaurada de una prueba (contiene todos los datos), solo si esta dentro de instance-restaurada/ (la misma carpeta que usa el script). */
-function borrarCopiaRestaurada(destino: unknown): void {
+export function borrarCopiaRestaurada(destino: unknown): void {
   const base = carpetaRestauradas(getConfig().INSTANCE_DIR);
   const objetivo = path.resolve(/*turbopackIgnore: true*/ String(destino || ""));
   if (!destino || !objetivo.startsWith(base + path.sep)) return;
@@ -551,7 +575,7 @@ export async function probarRestauracionPost(request: Request, params: { id?: st
  * cada verificacion (✅/❌) se agrega al avance del trabajo. Devuelve el acta que
  * escribio el script, o null si no termino.
  */
-async function correrScriptRestauracion(trabajo: Trabajo, argumentos: string[], entorno: Record<string, string> = {}): Promise<Acta | null> {
+export async function correrScriptRestauracion(trabajo: Trabajo, argumentos: string[], entorno: Record<string, string> = {}): Promise<Acta | null> {
   const cfg = getConfig();
   const script = path.join(/*turbopackIgnore: true*/ cfg.BASE_DIR, "scripts", "restaurar-ficotox.mjs");
   let actaNombre: string | null = null;
@@ -635,6 +659,7 @@ export async function solicitarRestauracion({ request, s, params }: RouteContext
   const payload = await readJson(request);
   const motivo = String(payload.motivo || "").trim();
   if (motivo.length < 5) throw new HttpError(400, { message: "Indica el motivo de la restauración (al menos 5 caracteres)", campo: "motivo" });
+  exigirLlaveDeLaInstalacion(manifest);
   if (trabajoEnCurso()) throw new HttpError(409, { message: MENSAJE_OCUPADO, codigo: "respaldo_en_curso" });
   await exigirReauth(s, request, user, "respaldos:restaurar");
   const creado = manifest.creado_en || instanteDeId(id);
@@ -649,6 +674,18 @@ export async function solicitarRestauracion({ request, s, params }: RouteContext
   });
   await s.commit();
   return respuestaSolicitud(solicitud, `la restauración del respaldo del ${creado ? formatearFechaHora(creado) : id}`);
+}
+
+/*
+ * Un respaldo sellado con otra llave (traido de otra instalacion) no se restaura
+ * aqui: el registro de actividad restaurado no se podria verificar con la llave
+ * de esta instalacion. Solo se resuelve en una instalacion nueva (Configuracion
+ * inicial) o por terminal (npm run restaurar).
+ */
+export const MENSAJE_LLAVE_DISTINTA = "Este respaldo se selló con otra llave del registro de actividad (viene de otra instalación). Restaurarlo aquí dejaría el registro de actividad sin poder verificarse, así que no se permite. Solo se puede usar en una instalación nueva, desde la Configuración inicial, o por terminal con «npm run restaurar».";
+function exigirLlaveDeLaInstalacion(manifest: Manifest): void {
+  const instalacion = huellaLlaveInstalacion();
+  if (manifest.llave?.huella && instalacion && manifest.llave.huella !== instalacion) throw new HttpError(409, { message: MENSAJE_LLAVE_DISTINTA, codigo: "llave_distinta" });
 }
 
 function manifestDe(id: string): Manifest | null {
@@ -673,7 +710,9 @@ export const ejecutarRestauracionRespaldo: NonNullable<Ejecutores["restaurar_res
   const auth = await cargarAutorizacion(ctx.s, ctx.user);
   if (!puedeVerRespaldos(auth)) throw new HttpError(403, { message: "Para aprobar una restauración necesitas poder ver los respaldos", required: { module: "respaldos", action: "V" } });
   const id = String(ctx.datos.respaldo_id || ctx.solicitud.entidad_id);
-  if (!ID_RE.test(id) || !manifestDe(id)) throw new HttpError(409, { message: "El respaldo ya no existe o está dañado: no se puede restaurar. Rechaza la solicitud.", codigo: "respaldo_no_disponible" });
+  const manifest = ID_RE.test(id) ? manifestDe(id) : null;
+  if (!manifest) throw new HttpError(409, { message: "El respaldo ya no existe o está dañado: no se puede restaurar. Rechaza la solicitud.", codigo: "respaldo_no_disponible" });
+  exigirLlaveDeLaInstalacion(manifest);
   if (trabajoEnCurso()) throw new HttpError(409, { message: MENSAJE_OCUPADO, codigo: "respaldo_en_curso" });
   const solicitante = await nombreDe(ctx.s, ctx.solicitud.solicitado_por);
   const aprobador = String(ctx.user.nombre || ctx.user.email || "");

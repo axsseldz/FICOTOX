@@ -324,10 +324,20 @@ export default function AyudaPage() {
                 <b>Restaurar un respaldo:</b> en el respaldo elegido, <b>Restaurar este respaldo</b> con el motivo. Queda en <b>Por autorizar</b> hasta que otra persona con autoridad (Responsable General) lo apruebe. Al aprobarse, la plataforma muestra «Restaurando» unos momentos, guarda antes un respaldo del estado actual, reemplaza los datos y cierra todas las sesiones: hay que volver a entrar.
               </li>
               <li>
+                <b>Descargar (copia fuera de la computadora):</b> en el menú ⋯ o en la ficha del respaldo, <b>Descargar</b>. Pide una contraseña de cifrado (12 caracteres o más, escrita dos veces) y la tuya. Se descarga un archivo <b>.ficotox</b> cifrado con la base, los PDF, las evidencias y la llave del registro de actividad. Guárdalo en una memoria USB o en la nube del laboratorio.
+              </li>
+              <li>
+                <b>Importar respaldo:</b> sube un archivo .ficotox con su contraseña. Se descifra, pasa las 8 verificaciones y aparece en la lista como «Importado». Para usarlo se pide <b>Restaurar este respaldo</b> como cualquier otro (con la aprobación de otra persona). Si se selló con otra llave (de otra instalación) aparece «Llave distinta» y no se puede restaurar aquí.
+              </li>
+              <li>
+                <b>Si la computadora se descompone:</b> instala FICOTOX en otra, ejecuta <code>npm run configurar</code> (anota el <b>código de instalación</b> que muestra) y ábrelo. Como no hay cuentas, aparece la <b>Configuración inicial</b>: escribe el código, elige «Restaurar desde respaldo» y sube el .ficotox con su contraseña. Todo vuelve como estaba, con las mismas cuentas y contraseñas. La guía paso a paso para Mac y Windows está en el README.
+              </li>
+              <li>
                 <b>Avisos:</b> si pasa más de un día sin respaldo o mucho tiempo sin una prueba de restauración, el Inicio lo avisa.
               </li>
             </ul>
             <Tip tone="warn">Restaurar regresa la plataforma al momento del respaldo: lo capturado después se pierde (queda en el respaldo previo que se guarda antes).</Tip>
+            <Tip tone="warn">La contraseña de cifrado de un archivo descargado no se guarda en ningún lado: sin ella el archivo no se puede abrir. Anótala en un lugar seguro, separado del archivo.</Tip>
           </Section>
 
           <Section anchor="documentos" title="Documentos SGC" lead="Los documentos controlados del laboratorio, en seis carpetas por gestión (el color es de la gestión, nunca del estado).">

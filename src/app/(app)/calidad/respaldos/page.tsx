@@ -2,9 +2,10 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Archive, CaretDown, ClockCounterClockwise, Database, Flask, Key, Plus, ShieldCheck } from "@phosphor-icons/react";
+import { Archive, CaretDown, ClockCounterClockwise, Database, DownloadSimple, Flask, Key, Plus, ShieldCheck, UploadSimple } from "@phosphor-icons/react";
 import { ActaVentana, RespaldoVentana } from "@/components/features/respaldos/RespaldoVentana";
-import { archivosTexto, ConfirmarRespaldo, FRASE_OCUPADO, Girando, hace, InsigniaVerificacion, MarcaProtegido, mb, TIPOS_RESPALDO } from "@/components/features/respaldos/comun";
+import { DescargarRespaldo, ImportarRespaldo } from "@/components/features/respaldos/Portables";
+import { archivosTexto, ConfirmarRespaldo, FRASE_LLAVE_DISTINTA, FRASE_OCUPADO, Girando, hace, InsigniaVerificacion, MarcaProtegido, mb, TIPOS_RESPALDO } from "@/components/features/respaldos/comun";
 import { Callout } from "@/components/features/samples/FormLayout";
 import { TONO } from "@/components/features/inicio/pendientes";
 import { PageBody } from "@/components/shell/AppShell";
@@ -31,7 +32,9 @@ import { fechaSola, formatearFecha, hoyLocal, sumarDias } from "@/lib/shared/fec
  * que comprueban que se pueden recuperar. Quien tiene respaldos:V lo ve todo en
  * solo lectura; quien tiene respaldos:G crea respaldos, prueba la restauración
  * (con su contraseña) y pide restaurar uno de verdad: la solicitud la aprueba
- * otra persona (Responsable General) en «Por autorizar».
+ * otra persona (Responsable General) en «Por autorizar». También descarga un
+ * respaldo en un archivo cifrado (.ficotox) e importa uno traído de otra
+ * computadora (queda como «Importado»; ver Portables.tsx).
  */
 
 export default function RespaldosPage() {
@@ -91,7 +94,7 @@ function Contenido() {
   const [orden, setOrden] = useState<Orden>("recientes");
   const [abierto, setAbierto] = useState<number | null>(null);
   const [acta, setActa] = useState<string | null>(null);
-  const [confirmar, setConfirmar] = useState<null | { tipo: "crear" } | { tipo: "probar"; id: string } | { tipo: "restaurar"; id: string; creado_en: unknown }>(null);
+  const [confirmar, setConfirmar] = useState<null | { tipo: "crear" } | { tipo: "probar"; id: string } | { tipo: "restaurar"; id: string; creado_en: unknown } | { tipo: "descargar"; id: string; creado_en: unknown; tamano: unknown } | { tipo: "importar" }>(null);
   const [trabajo, setTrabajo] = useState<ApiRecord | null>(null);
   const [resultado, setResultado] = useState<ApiRecord | null>(null);
   const miTrabajo = useRef<number | null>(null);
@@ -131,6 +134,7 @@ function Contenido() {
             miTrabajo.current = null;
             if (nuevo.estado === "fallido") toast.error(String(nuevo.mensaje || "No se pudo terminar"));
             else if (nuevo.tipo === "respaldo") toast.success("Respaldo creado");
+            else if (nuevo.tipo === "importacion") toast.success(nuevo.mensaje ? String(nuevo.mensaje) : "Respaldo importado: ya está en la lista");
             else toast[nuevo.resultado === "aprobada" ? "success" : "error"](nuevo.resultado === "aprobada" ? "La prueba salió bien" : "La prueba encontró problemas");
             if (nuevo.tipo === "prueba") setResultado(nuevo);
           }
@@ -219,12 +223,17 @@ function Contenido() {
     toast.success("Solicitud enviada: otra persona con autoridad (Responsable General) debe aprobarla en «Por autorizar».");
   };
   const pedirRestauracion = (id: string) => setConfirmar({ tipo: "restaurar", id, creado_en: respaldos.find((r) => String(r.id) === id)?.creado_en });
+  const pedirDescarga = (id: string) => {
+    const r = respaldos.find((x) => String(x.id) === id);
+    setConfirmar({ tipo: "descargar", id, creado_en: r?.creado_en, tamano: r?.tamano });
+  };
 
   const menuFor = (r: ApiRecord): MenuItem[] =>
     puedeGestionar && r.estado === "ok"
       ? [
           { label: "Probar restauración", description: enCurso ? FRASE_OCUPADO : "Comprueba que se puede recuperar, sin tocar la plataforma", icon: <Flask size={16} weight="duotone" />, tone: "brand", disabled: enCurso, onSelect: () => setConfirmar({ tipo: "probar", id: String(r.id) }) },
-          { label: "Restaurar este respaldo", description: enCurso ? FRASE_OCUPADO : "Recupera la plataforma tal como estaba; requiere la aprobación de otra persona", icon: <ClockCounterClockwise size={16} weight="duotone" />, tone: "danger", disabled: enCurso, onSelect: () => pedirRestauracion(String(r.id)) },
+          ...(r.puede_descargar ? [{ label: "Descargar", description: "Archivo cifrado con una contraseña, para guardarlo fuera de esta computadora", icon: <DownloadSimple size={16} weight="duotone" />, onSelect: () => pedirDescarga(String(r.id)) } satisfies MenuItem] : []),
+          { label: "Restaurar este respaldo", description: r.llave_coincide === false ? FRASE_LLAVE_DISTINTA : enCurso ? FRASE_OCUPADO : "Recupera la plataforma tal como estaba; requiere la aprobación de otra persona", icon: <ClockCounterClockwise size={16} weight="duotone" />, tone: "danger", disabled: enCurso || r.llave_coincide === false, onSelect: () => pedirRestauracion(String(r.id)) },
         ]
       : [];
 
@@ -263,7 +272,10 @@ function Contenido() {
       <Toolbar
         end={
           puedeGestionar ? (
-            <span title={enCurso ? FRASE_OCUPADO : undefined}>
+            <span className="flex flex-wrap gap-2" title={enCurso ? FRASE_OCUPADO : undefined}>
+              <Button variant="secondary" icon={<UploadSimple size={16} weight="bold" />} onClick={() => setConfirmar({ tipo: "importar" })} disabled={enCurso} data-importar-respaldo>
+                Importar respaldo
+              </Button>
               <Button icon={<Plus size={16} weight="bold" />} onClick={() => setConfirmar({ tipo: "crear" })} disabled={enCurso} data-crear-respaldo>
                 Crear respaldo ahora
               </Button>
@@ -295,7 +307,7 @@ function Contenido() {
 
       <ComoRecuperar />
 
-      <RespaldoVentana ids={filas.map((r) => String(r.id))} indice={abierto} onIndice={setAbierto} onCerrar={() => setAbierto(null)} puedeGestionar={puedeGestionar} ocupado={enCurso} onProbar={(id) => setConfirmar({ tipo: "probar", id })} onRestaurar={pedirRestauracion} />
+      <RespaldoVentana ids={filas.map((r) => String(r.id))} indice={abierto} onIndice={setAbierto} onCerrar={() => setAbierto(null)} puedeGestionar={puedeGestionar} ocupado={enCurso} onProbar={(id) => setConfirmar({ tipo: "probar", id })} onRestaurar={pedirRestauracion} onDescargar={pedirDescarga} />
       <ActaVentana archivo={acta} onCerrar={() => setActa(null)} />
 
       {confirmar?.tipo === "crear" ? (
@@ -303,6 +315,19 @@ function Contenido() {
       ) : null}
       {confirmar?.tipo === "probar" ? (
         <ConfirmarRespaldo titulo="Probar restauración" descripcion="Se recupera este respaldo en una copia aparte y se comprueba que todo coincide. No se toca la plataforma y la copia se borra al terminar. Confirma con tu contraseña." confirmar="Probar restauración" onCerrar={() => setConfirmar(null)} onConfirmar={() => probar(confirmar.id)} />
+      ) : null}
+      {confirmar?.tipo === "descargar" ? <DescargarRespaldo token={token} respaldo={confirmar} onCerrar={() => setConfirmar(null)} /> : null}
+      {confirmar?.tipo === "importar" ? (
+        <ImportarRespaldo
+          token={token}
+          limiteMb={Number(datos?.limite_importar_mb || 4096)}
+          onCerrar={() => setConfirmar(null)}
+          onIniciado={(t) => {
+            miTrabajo.current = Number(t?.id);
+            setResultado(null);
+            setTrabajo(t);
+          }}
+        />
       ) : null}
       {confirmar?.tipo === "restaurar" ? (
         <ConfirmarRespaldo
@@ -337,6 +362,7 @@ function celdas(r: ApiRecord) {
     <span key="t" className="flex flex-col gap-0.5 text-sm text-ink">
       {TIPOS_RESPALDO[String(r.tipo)] || "Manual"}
       {r.nota ? <span className="text-xs text-ink-3">{String(r.nota)}</span> : null}
+      {r.llave_coincide === false ? <Badge tone="warning" size="sm" wrap>Llave distinta</Badge> : null}
     </span>,
     <span key="s" className="tnum text-sm text-ink-2">{danado ? "—" : mb(r.tamano)}</span>,
     <span key="c" className="text-sm text-ink-2">{danado ? "—" : `Base + ${archivosTexto(r.archivos)}`}</span>,
@@ -356,10 +382,10 @@ function Progreso({ trabajo, resultado, onActa, onCerrar }: { trabajo: ApiRecord
     return (
       <div role="status" aria-live="polite" className="entrada-escalonada flex flex-col gap-3 rounded-card bg-surface px-5 py-4 shadow-card ring-1 ring-brand/15" data-progreso>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-base font-medium text-ink">
-          <Girando texto={trabajo.tipo === "prueba" ? "Probando la restauración…" : "Creando el respaldo…"} />
+          <Girando texto={trabajo.tipo === "prueba" ? "Probando la restauración…" : trabajo.tipo === "importacion" ? "Importando el respaldo…" : "Creando el respaldo…"} />
           <span className="text-sm font-normal text-ink-3">{String(trabajo.fase || "")}</span>
         </div>
-        {trabajo.tipo === "prueba" && pasos.length ? (
+        {(trabajo.tipo === "prueba" || trabajo.tipo === "importacion") && pasos.length ? (
           <ul className="flex flex-col gap-1 text-sm text-ink-2">
             {pasos.map((p) => (
               <li key={String(p.n)} className="flex items-center gap-2">
@@ -370,7 +396,7 @@ function Progreso({ trabajo, resultado, onActa, onCerrar }: { trabajo: ApiRecord
           </ul>
         ) : null}
         <div className="h-1 w-full overflow-hidden rounded-full bg-surface-3" aria-hidden="true">
-          <div className="h-full w-1/3 animate-pulse rounded-full bg-brand motion-reduce:animate-none" />
+          {typeof trabajo.progreso === "number" ? <div className="h-full origin-left rounded-full bg-brand transition-transform duration-300 motion-reduce:transition-none" style={{ transform: `scaleX(${Math.max(0.02, Number(trabajo.progreso))})` }} /> : <div className="h-full w-1/3 animate-pulse rounded-full bg-brand motion-reduce:animate-none" />}
         </div>
       </div>
     );
@@ -408,6 +434,7 @@ function ComoRecuperar() {
         <li>Otra persona con autoridad (Responsable General) aprueba la solicitud en «Por autorizar». Nadie aprueba la suya.</li>
         <li>Primero se comprueba el respaldo; si no pasa, no se toca nada. Si pasa, se guarda un respaldo «Previo a restauración» de lo que había, por si hace falta volver atrás.</li>
         <li>La recuperación queda en el registro de actividad: quién la pidió, quién la aprobó, desde qué respaldo y por qué. Sin la plataforma encendida, el administrador técnico puede restaurar por terminal con «npm run restaurar».</li>
+        <li>Para no depender de esta computadora, usa «Descargar» (⋯) y guarda el archivo cifrado y su contraseña en otro lugar. Si la computadora se pierde, una instalación nueva lo recupera en la Configuración inicial; en una que ya está en uso, entra con «Importar respaldo».</li>
       </ol>
     </details>
   );

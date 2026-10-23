@@ -21,7 +21,7 @@ export const CATEGORIAS: Array<{ value: Categoria; label: string; acciones: stri
   { value: "anular", label: "Anulaciones y rechazos", acciones: ["anular", "rechazar", "baja", "eliminar", "devolver", "sustituir", "regresar_supervision", "revocar_autorizacion", "revocar_rol", "anular_adjunto", "escalar", "cancelar", "suspender", "retener"] },
   { value: "solicitudes", label: "Solicitudes", acciones: ["solicitar", "aprobar_solicitud", "rechazar_solicitud", "cancelar_solicitud", "vencer_solicitud"] },
   { value: "imprimir", label: "Impresiones y descargas", acciones: ["imprimir_etiquetas", "descargar", "exportar"] },
-  { value: "sistema", label: "Sistema", acciones: ["migrar", "respaldar", "respaldo_fallido", "probar_restauracion", "restaurar_respaldo", "restauracion_fallida", "alerta_integridad", "vencer_rol", "vencer_autorizacion", "vencer_mantenimiento", "requiere_enmienda"] },
+  { value: "sistema", label: "Sistema", acciones: ["migrar", "respaldar", "respaldo_fallido", "probar_restauracion", "restaurar_respaldo", "restauracion_fallida", "descargar_respaldo", "importar_respaldo", "importar_respaldo_fallido", "configuracion_inicial", "configuracion_inicial_fallida", "codigo_instalacion_incorrecto", "alerta_integridad", "vencer_rol", "vencer_autorizacion", "vencer_mantenimiento", "requiere_enmienda"] },
 ];
 
 const POR_ACCION = new Map<string, Categoria>(CATEGORIAS.flatMap((c) => c.acciones.map((a) => [a, c.value] as [string, Categoria])));
@@ -80,6 +80,12 @@ const ICONO_ACCION: Record<string, ReactNode> = {
   probar_restauracion: <Database weight="bold" />,
   restaurar_respaldo: <Database weight="bold" />,
   restauracion_fallida: <Database weight="bold" />,
+  descargar_respaldo: <DownloadSimple weight="bold" />,
+  importar_respaldo: <Database weight="bold" />,
+  importar_respaldo_fallido: <Database weight="bold" />,
+  configuracion_inicial: <Gear weight="bold" />,
+  configuracion_inicial_fallida: <Gear weight="bold" />,
+  codigo_instalacion_incorrecto: <ShieldWarning weight="bold" />,
   migrar: <Gear weight="bold" />,
   solicitar: <ChatCircleDots weight="bold" />,
   aprobar_solicitud: <CheckCircle weight="bold" />,

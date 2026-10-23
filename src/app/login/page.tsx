@@ -23,7 +23,7 @@ const SALIDA_MS = 460;
 
 export default function LoginPage() {
   const router = useRouter();
-  const { status, permissions, loginWithEmail } = useSession();
+  const { status, permissions, loginWithEmail, authConfig } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -49,6 +49,11 @@ export default function LoginPage() {
       /* sin almacenamiento */
     }
   }, []);
+
+  // Instalacion nueva sin cuentas: en lugar del acceso, la Configuracion inicial.
+  useEffect(() => {
+    if (authConfig.instalacion_pendiente) router.replace("/configuracion-inicial");
+  }, [authConfig.instalacion_pendiente, router]);
 
   useEffect(() => {
     if (status !== "authenticated") return;

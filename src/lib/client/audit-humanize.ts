@@ -1008,8 +1008,23 @@ function redactar(record: ApiRecord, actor: string, sistema: boolean): Partes {
       const pidio = d.solicitado_por ? ` La pidió ${texto(d.solicitado_por)}${d.aprobado_por ? ` y la aprobó ${texto(d.aprobado_por)}` : ""}.` : d.responsable ? ` Lo hizo ${texto(d.responsable)}.` : "";
       const motivo = d.motivo ? ` Motivo: «${texto(d.motivo)}».` : "";
       const previo = d.respaldo_previo ? " Antes se guardó un respaldo «Previo a restauración» para poder volver atrás." : "";
-      return { accion: "Se restauró la plataforma desde un respaldo", quePaso: `La información de la plataforma se recuperó desde una copia de seguridad; se perdió lo registrado después de su fecha y todos volvieron a iniciar sesión.${pidio}${motivo}${previo}`, sinActor: true };
+      const llave = d.llave_adoptada ? " Era una instalación nueva: adoptó la llave del registro de actividad del respaldo." : "";
+      return { accion: "Se restauró la plataforma desde un respaldo", quePaso: `La información de la plataforma se recuperó desde una copia de seguridad; se perdió lo registrado después de su fecha y todos volvieron a iniciar sesión.${pidio}${motivo}${previo}${llave}`, sinActor: true };
     }
+    case "descargar_respaldo":
+      return { accion: "descargó un respaldo", quePaso: `${quien} descargó el respaldo ${texto(d.respaldo_id || record.referencia)} en un archivo cifrado con contraseña (${texto(d.archivo)}), para guardarlo fuera de esta computadora.` };
+    case "importar_respaldo":
+      return { accion: "importó un respaldo", quePaso: `${quien} importó un respaldo traído de ${texto(d.host_origen) || "otra computadora"} (archivo ${texto(d.archivo)}). Pasó las verificaciones y quedó en la lista de respaldos.${d.llave_coincide === false ? " Se selló con otra llave: no se puede restaurar en esta instalación." : ""}` };
+    case "importar_respaldo_fallido":
+      return { accion: "no se pudo importar un respaldo", quePaso: `${quien} intentó importar un respaldo desde un archivo (${texto(d.archivo)}), pero no se guardó nada: ${texto(d.razon || "no pasó las verificaciones").replace(/\.$/, "")}.` };
+    case "configuracion_inicial":
+      return d.modo === "restaurar"
+        ? { accion: "Se configuró la instalación desde un respaldo", quePaso: `La instalación nueva se configuró recuperando el respaldo ${texto(d.respaldo_id)} desde un archivo${d.llave_adoptada ? " y adoptó su llave del registro de actividad" : ""}.`, sinActor: true }
+        : { accion: "Se configuró la instalación desde cero", quePaso: `La instalación nueva se configuró desde cero: se crearon las cuentas de ${texto(d.administrador)} (Administrador técnico) y ${texto(d.responsable)} (Responsable General), con contraseña temporal.`, sinActor: true };
+    case "configuracion_inicial_fallida":
+      return { accion: "falló la configuración inicial", quePaso: `Se intentó configurar la instalación desde un respaldo, pero no se tocó nada: ${texto(d.razon || "el respaldo no pasó las verificaciones").replace(/\.$/, "")}.`, sinActor: true };
+    case "codigo_instalacion_incorrecto":
+      return { accion: "Código de instalación incorrecto", quePaso: `Alguien escribió un código de instalación incorrecto en la Configuración inicial${d.ip ? ` desde ${texto(d.ip)}` : ""}${d.bloqueada ? "; la configuración quedó bloqueada unos minutos por demasiados intentos" : ""}.`, sinActor: true };
     case "restauracion_fallida":
       return { accion: "no se pudo restaurar un respaldo", quePaso: `Se intentó restaurar la plataforma desde un respaldo, pero no se reemplazó nada: ${texto(d.razon || "el respaldo no pasó las verificaciones")}. La plataforma siguió como estaba.`, sinActor: true };
     case "reportar":
