@@ -387,6 +387,10 @@ let entradaRestauracion = null;
 let llaveAdoptada = null;
 let nuevoEnv = null;
 
+/* Formato de una llave que se puede adoptar: ASCII imprimible sin espacios (auditoria.key) y, en el .env, ademas sin comillas, #, $ ni \. */
+const LLAVE_ARCHIVO_RE = /^[\x21-\x7e]{16,1024}$/;
+const LLAVE_ENV_RE = /^[^\s"'`#$\\]{16,1024}$/;
+
 /* Cuentas de la base actual (0 si no existe o no tiene la tabla): solo una instalacion sin cuentas adopta la llave de un respaldo. */
 function cuentasActuales() {
   if (!fs.existsSync(entorno.sqlitePath)) return 0;
@@ -421,10 +425,15 @@ if (modoReal && db && !fallidas.length) {
   const usaSecretKey = configurada && configurada !== "ficotox-dev-secret";
   const llaveArchivo = !usaSecretKey ? leerClaveSello("", entorno.instanceDir) : null;
   const distinta = usaSecretKey ? huellaLlave(configurada) !== manifest.llave?.huella : !!llaveArchivo && huellaLlave(llaveArchivo.clave) !== huellaLlave(llave);
-  // Configuracion inicial: la instalacion (sin cuentas) adopta la llave del respaldo. Se prepara antes de tocar nada.
-  if (distinta && pideAdoptarLlave && pedidoPorServidor) {
-    const cuentas = cuentasActuales();
-    if (cuentas > 0) falla4(`la instalación ya tiene ${cuentas} cuenta(s): solo una instalación nueva, sin cuentas, adopta la llave de un respaldo`);
+  // Configuracion inicial: solo sobre una instalacion sin cuentas (aunque la llave ya coincida: nunca pisa cuentas
+  // creadas mientras tanto), que adopta la llave del respaldo. Se prepara antes de tocar nada.
+  const cuentas = pideAdoptarLlave && pedidoPorServidor ? cuentasActuales() : 0;
+  if (cuentas > 0) falla4(`la instalación ya tiene ${cuentas} cuenta(s): la configuración inicial solo restaura sobre una instalación nueva, sin cuentas`);
+  else if (distinta && pideAdoptarLlave && pedidoPorServidor) {
+    // La llave se escribe tal cual en el .env o en auditoria.key: sin espacios, saltos de linea ni caracteres de control
+    // (y en el .env, sin comillas, #, $ ni \, que se leerian distinto).
+    if (!LLAVE_ARCHIVO_RE.test(llave)) falla4("la llave del respaldo tiene un formato que no se puede guardar (espacios, saltos de línea o caracteres de control, o menos de 16 caracteres)");
+    else if (usaSecretKey && !LLAVE_ENV_RE.test(llave)) falla4("la llave del respaldo tiene caracteres que no se pueden escribir sin riesgo en el .env (comillas, #, $ o \\). Escribe SECRET_KEY a mano en el .env con la llave guardada aparte y reinicia FICOTOX");
     else if (usaSecretKey) {
       const env = archivoEnv(root);
       let contenido = null;

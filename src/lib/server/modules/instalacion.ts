@@ -38,7 +38,7 @@ import { invalidarIndice } from "../busqueda/version";
 import { agregarTrozo, comprobarContrasenaSubida, iniciarSubida, limiteImportarBytes, TROZO_SUBIDA, tomarSubida, borrarArchivo } from "../subidas";
 import { domainErrorMessage, emailDomainAllowed } from "./admin";
 import { actaLegible, correrScriptRestauracion, iniciarTrabajo, MENSAJE_OCUPADO, olvidarListaRespaldos, terminarTrabajo, trabajoEnCurso, type Trabajo } from "./respaldos";
-import { colocarImportado, confirmarImportado, razonDeActa, type Importado } from "./respaldos-portables";
+import { colocarImportado, confirmarImportado, limpiarImportadosHuerfanos, razonDeActa, type Importado } from "./respaldos-portables";
 import { randomAvatar } from "../../shared/avatars";
 import { archivoEnv } from "../../shared/respaldo.mjs";
 import { CONTRASENA_MIN, ErrorPortable } from "../../shared/respaldo-portable.mjs";
@@ -237,6 +237,8 @@ export function empezarDesdeCeroPost(request: Request): Promise<Response> {
       try {
         // Dentro de la transaccion: si otra peticion ya creo cuentas, esta no hace nada.
         if (Number(await s.scalar("SELECT COUNT(*) FROM usuarios")) !== 0) throw NO_ENCONTRADA();
+        // Y si mientras se daban de alta los roles empezo una restauracion, gana ella (no se crean cuentas que luego pisaria).
+        if (trabajoEnCurso()) throw new HttpError(409, { message: MENSAJE_OCUPADO, codigo: "respaldo_en_curso" });
         const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Tijuana" });
         const out: Array<CuentaNueva & { contrasena: string }> = [];
         for (const c of cuentas) {
@@ -287,6 +289,7 @@ export function iniciarSubidaInstalacion(request: Request): Promise<Response> {
     exigirSqlite();
     const payload = await readJson(request);
     await exigirCodigo(request, payload.codigo);
+    limpiarImportadosHuerfanos();
     return json(iniciarSubida(DUENO, payload.tamano, payload.nombre), 201);
   });
 }

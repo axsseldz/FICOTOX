@@ -35,6 +35,9 @@ export function mb(bytes: unknown): string {
   return n < 0.1 ? "< 0.1 MB" : `${n.toLocaleString("es-MX", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} MB`;
 }
 
+/* Límite en MB escrito como lo dice la configuración inicial: "4 GB", "1.5 GB", "512 MB". */
+export const limiteTexto = (limiteMb: number): string => (limiteMb >= 1024 ? `${(limiteMb / 1024).toLocaleString("es-MX", { maximumFractionDigits: 1 })} GB` : `${limiteMb.toLocaleString("es-MX")} MB`);
+
 export const archivosTexto = (n: unknown): string => (Number(n) === 1 ? "1 archivo" : `${Number(n || 0).toLocaleString("es-MX")} archivos`);
 
 /* "hace 2 horas", "hace 12 días": tiempo transcurrido en palabras completas. */

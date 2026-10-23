@@ -195,8 +195,12 @@ const original = fs.readFileSync(archivo);
 }
 const importado = `${respaldo}-2`;
 {
+  // Un importado que quedo a medias (el servidor se detuvo mientras se verificaba): se borra al empezar otra subida.
+  const huerfano = path.join(BACKUPS, "20200101-000000-9");
+  fs.mkdirSync(path.join(huerfano, "datos"), { recursive: true });
+  fs.writeFileSync(path.join(huerfano, "importado.json"), JSON.stringify({ estado: "verificando" }));
   // Alterado: un byte cambiado a la mitad del archivo; truncado; algo que no es un respaldo (120 MB: varias partes).
-  const antes = carpetasRespaldo();
+  const antes = carpetasRespaldo().filter((x) => x !== "20200101-000000-9");
   const alterado = Buffer.from(original);
   alterado[Math.floor(alterado.length / 2)] ^= 0x01;
   const a = await importar(tJ, alterado);
@@ -206,6 +210,7 @@ const importado = `${respaldo}-2`;
   const basura = randomBytes(120 * 1024 * 1024);
   const n = await importar(tJ, basura, CONTRASENA, "fotos.zip");
   check("un archivo grande que no es un respaldo sube por partes y se rechaza: 400 no_es_respaldo", n.subida.status === 201 && n.r?.status === 400 && n.r?.data?.codigo === "no_es_respaldo", `${n.subida.status} ${n.r?.status} ${n.r?.data?.codigo}`);
+  check("un importado que quedó a medias («verificando», sin trabajo en curso) se borra al empezar otra subida", !fs.existsSync(huerfano));
   check("tras los rechazos no quedó ningún respaldo nuevo ni temporales", carpetasRespaldo().join() === antes.join() && importando().length === 0, `${carpetasRespaldo().filter((x) => !antes.includes(x))} ${importando()}`);
   const fallidas = leer("SELECT COUNT(*) AS n FROM auditoria WHERE accion = 'importar_respaldo_fallido'")[0].n;
   check("el intento fallido queda en la bitácora", fallidas >= 1, `${fallidas}`);

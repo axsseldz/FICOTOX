@@ -14,7 +14,7 @@ import { msg, type Problema } from "@/lib/client/mensajes";
 import { subirPorPartes } from "@/lib/client/subida-partes";
 import type { ApiRecord } from "@/lib/client/types";
 import { fmtDateTime } from "@/lib/client/format";
-import { mb } from "./comun";
+import { limiteTexto, mb } from "./comun";
 
 /*
  * Respaldos portables (Calidad › Respaldos, solo respaldos:G):
@@ -127,7 +127,7 @@ export function ImportarRespaldo({ token, limiteMb, onCerrar, onIniciado }: { to
     reglas: () => {
       const out: Problema[] = [];
       if (!archivo) out.push({ campo: "importar-archivo", mensaje: "Elige el archivo .ficotox del respaldo" });
-      else if (archivo.size > limiteMb * 1048576) out.push({ campo: "importar-archivo", mensaje: `El archivo pesa ${mb(archivo.size)} y el límite es de ${limiteMb.toLocaleString("es-MX")} MB` });
+      else if (archivo.size > limiteMb * 1048576) out.push({ campo: "importar-archivo", mensaje: `El archivo pesa ${mb(archivo.size)} y el límite es de ${limiteTexto(limiteMb)}` });
       if (!contrasena) out.push({ campo: "importar-contrasena", mensaje: msg.escribe("la contraseña de cifrado del archivo") });
       if (!password) out.push({ campo: "importar-password", mensaje: msg.password });
       return out;
@@ -179,7 +179,7 @@ export function ImportarRespaldo({ token, limiteMb, onCerrar, onIniciado }: { to
     >
       <ValidacionAmbito v={v}>
         <div className="flex flex-col gap-4">
-          <Field label="Archivo del respaldo" htmlFor="importar-archivo" required hint={`Archivo .ficotox, hasta ${limiteMb.toLocaleString("es-MX")} MB.`}>
+          <Field label="Archivo del respaldo" htmlFor="importar-archivo" required hint={`Archivo .ficotox, hasta ${limiteTexto(limiteMb)}.`}>
             <div className="flex items-center gap-3 rounded-field bg-surface-2 p-3 ring-1 ring-line">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-box bg-brand-soft text-brand-strong" aria-hidden="true">
                 <FileArrowUp size={20} weight="duotone" />

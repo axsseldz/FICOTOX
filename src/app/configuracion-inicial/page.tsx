@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AppleLogo, ArrowLeft, ArrowRight, CheckCircle, ClockCounterClockwise, Copy, Eye, EyeSlash, FileArrowUp, Key, Sparkle, WindowsLogo } from "@phosphor-icons/react";
+import { limiteTexto } from "@/components/features/respaldos/comun";
 import { PantallaAcceso, TarjetaAcceso } from "@/components/session/PantallaAcceso";
 import { Button } from "@/components/ui/Button";
 import { Callout } from "@/components/ui/Callout";
@@ -164,7 +165,7 @@ function PestanasSistema({ children }: { children: (sistema: "mac" | "windows") 
   );
 }
 
-const Comando = ({ children }: { children: ReactNode }) => <code className="block overflow-x-auto rounded-sm bg-surface-2 px-2.5 py-1.5 font-mono text-xs whitespace-pre text-ink ring-1 ring-line">{children}</code>;
+const Comando = ({ children }: { children: ReactNode }) => <code className="block rounded-sm bg-surface-2 px-2.5 py-1.5 font-mono text-xs break-all whitespace-pre-wrap text-ink ring-1 ring-line">{children}</code>;
 
 function SinCodigo({ estado, onReintentar }: { estado: ApiRecord; onReintentar: () => void }) {
   const corto = !!estado.codigo_configurado && !estado.codigo_valido;
@@ -446,7 +447,7 @@ function PasoRestaurar({ codigo, estado, fallo, onVolver, onIniciado }: { codigo
     event.preventDefault();
     const e: Record<string, string> = {};
     if (!archivo) e.archivo = "Elige el archivo .ficotox del respaldo";
-    else if (archivo.size > limiteMb * 1048576) e.archivo = `El archivo pesa ${tamanoLegible(archivo.size)} y el límite es de ${limiteMb} MB`;
+    else if (archivo.size > limiteMb * 1048576) e.archivo = `El archivo pesa ${tamanoLegible(archivo.size)} y el límite es de ${limiteTexto(limiteMb)}`;
     if (!contrasena) e.contrasena = "Escribe la contraseña de cifrado del archivo";
     setErrores(e);
     setGeneral(null);
@@ -499,7 +500,7 @@ function PasoRestaurar({ codigo, estado, fallo, onVolver, onIniciado }: { codigo
           ) : null}
         </Callout>
       ) : null}
-      <Field label="Archivo del respaldo" htmlFor="instalacion-archivo" error={errores.archivo} hint={`Archivo .ficotox, hasta ${limiteMb >= 1024 ? `${(limiteMb / 1024).toFixed(0)} GB` : `${limiteMb} MB`}.`}>
+      <Field label="Archivo del respaldo" htmlFor="instalacion-archivo" error={errores.archivo} hint={`Archivo .ficotox, hasta ${limiteTexto(limiteMb)}.`}>
         <div className={cn("flex items-center gap-3 rounded-field bg-surface-2 p-3 ring-1", errores.archivo ? "ring-danger" : "ring-line")}>
           <span className="flex size-10 shrink-0 items-center justify-center rounded-box bg-brand-soft text-brand-strong" aria-hidden="true">
             <FileArrowUp size={20} weight="duotone" />

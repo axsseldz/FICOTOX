@@ -17,6 +17,7 @@
  * Las pruebas con servidor usan el build standalone (npm run build); sin build se omiten.
  */
 import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import net from "node:net";
@@ -327,6 +328,21 @@ try {
       const segundo = arrancar(nuevaInst.env, { PORT: String(await puertoLibre()) });
       const codigoSegundo = await segundo.fin;
       check("  … un segundo servidor sobre la misma instancia no arranca (exit 78, «ya hay un servidor») y el bloqueo sigue siendo del primero", codigoSegundo === 78 && /ya hay un (servidor|lanzador)/.test(segundo.salida()) && servidorEncendido(nuevaInst.instancia)?.pid === pidNuevo, `exit ${codigoSegundo}`);
+      // Llave adoptada en el .env (configuracion inicial): si el servidor se cae despues, el relanzamiento usa la SECRET_KEY
+      // del archivo y no la que leyo el lanzador al arrancar. Se cambia y se devuelve (sin peticiones de por medio).
+      const original = fs.readFileSync(nuevaInst.env, "utf8");
+      const relanzarCon = async (llave) => {
+        fs.writeFileSync(nuevaInst.env, original.replace(/^SECRET_KEY=.*$/m, `SECRET_KEY=${llave}`));
+        process.kill(Number(servidorEncendido(nuevaInst.instancia)?.pid), "SIGKILL");
+        await new Promise((r) => setTimeout(r, 1500));
+        return (await esperarSalud(envHttps, 90)).ok;
+      };
+      const huella = (llave) => createHash("sha256").update(llave).digest("hex").slice(0, 12);
+      const conNueva = await relanzarCon("e".repeat(64));
+      const avisoNueva = s.salida().includes(`SECRET_KEY cambió en ${path.basename(nuevaInst.env)}`) && s.salida().includes(huella("e".repeat(64)));
+      const conOriginal = await relanzarCon("b".repeat(64));
+      fs.writeFileSync(nuevaInst.env, original);
+      check("  … si SECRET_KEY cambió en el .env (llave adoptada), el servidor relanzado usa la del archivo", conNueva && avisoNueva && conOriginal && s.salida().includes(huella("b".repeat(64))), `${conNueva} ${avisoNueva} ${conOriginal}`);
 
       // verificar-instalacion sobre esta instancia (encendida): sin ❌.
       const v = nodo("scripts/verificar-instalacion.mjs", [], { FICOTOX_ENV_FILE: nuevaInst.env });

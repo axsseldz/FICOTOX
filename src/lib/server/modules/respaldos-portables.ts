@@ -25,7 +25,7 @@ import { requireUser, type CurrentUser } from "../auth";
 import { registrarAuditoria, type AuditAction } from "../audit";
 import { getConfig } from "../config";
 import { plataformaRestaurando, withSession } from "../db";
-import { HttpError, json, readJson, type RouteContext } from "../http";
+import { HttpError, json, readJson } from "../http";
 import { requirePermission } from "../rbac";
 import { exigirReauth } from "../seguridad";
 import { agregarTrozo, borrarArchivo, comprobarContrasenaSubida, carpetaImportando, iniciarSubida, limiteImportarBytes, limpiarSubidas, tomarSubida } from "../subidas";
@@ -59,43 +59,50 @@ const nombreDescarga = (id: string) => `ficotox-respaldo-${id}${EXTENSION}`;
  * POST /api/respaldos/:id/descargar { contrasena, confirmacion } (respaldos:G +
  * reautenticacion respaldos:descargar): deriva la clave y devuelve el enlace de
  * un solo uso. Solo respaldos que incluyen la llave (sin ella no se pueden
- * restaurar en otra computadora).
+ * restaurar en otra computadora). No pasa por apiRoute: la clave (scrypt, ~0.3 s)
+ * se deriva con la base libre, no dentro de la sesion que atiende a todos.
  */
-export async function prepararDescarga({ request, s, params }: RouteContext): Promise<Response> {
-  const user = await requireUser(request);
-  await requirePermission(s, user, "respaldos", "G");
-  exigirSqlite();
-  const id = String(params.id || "");
-  const carpeta = path.join(/*turbopackIgnore: true*/ respaldosDir(), id);
-  let manifest: Manifest | null = null;
-  try {
-    manifest = ID_RE.test(id) ? leerManifest(carpeta) : null;
-  } catch {
-    manifest = null;
-  }
-  if (!manifest) throw new HttpError(404, { message: "Respaldo no encontrado o dañado: no se puede descargar." });
-  if (!manifest.llave?.incluida) throw new HttpError(409, { message: "Este respaldo no incluye la llave del registro de actividad: sin ella no se podría restaurar en otra computadora. Descarga uno que la incluya.", codigo: "sin_llave" });
-  const payload = await readJson(request);
-  const contrasena = String(payload.contrasena ?? "");
-  const debil = validarContrasena(contrasena);
-  if (debil) throw new HttpError(400, { message: debil, campo: "contrasena" });
-  if (String(payload.confirmacion ?? "") !== contrasena) throw new HttpError(400, { message: "Las dos contraseñas de cifrado no coinciden", campo: "confirmacion" });
-  await exigirReauth(s, request, user, "respaldos:descargar");
-  // Se comprueba que el respaldo esta completo antes de entregar el enlace.
-  try {
-    entradasDeRespaldo(carpeta);
-  } catch (error) {
-    if (error instanceof ErrorPortable) throw new HttpError(409, { message: error.message, codigo: error.codigo });
-    throw error;
-  }
-  const cifrado = await prepararCifrado(contrasena);
-  const ahora = Date.now();
-  for (const [token, d] of descargas) if (d.expira <= ahora) descargas.delete(token);
-  const token = randomBytes(32).toString("base64url");
-  descargas.set(token, { respaldoId: id, carpeta, cifrado, usuario: user, expira: ahora + DESCARGA_VIGENCIA_MS });
-  // La reautenticacion quedo usada: se confirma.
-  await s.commit();
-  return json({ url: `/api/respaldos/descargas/${token}`, nombre: nombreDescarga(id), vence_en: new Date(ahora + DESCARGA_VIGENCIA_MS).toISOString() });
+export function prepararDescarga(request: Request, params: { id?: string }): Promise<Response> {
+  return responder(request, async () => {
+    const user = await gestorDe(request);
+    const id = String(params.id || "");
+    const carpeta = path.join(/*turbopackIgnore: true*/ respaldosDir(), id);
+    let manifest: Manifest | null = null;
+    try {
+      manifest = ID_RE.test(id) ? leerManifest(carpeta) : null;
+    } catch {
+      manifest = null;
+    }
+    if (!manifest) throw new HttpError(404, { message: "Respaldo no encontrado o dañado: no se puede descargar." });
+    if (!manifest.llave?.incluida) throw new HttpError(409, { message: "Este respaldo no incluye la llave del registro de actividad: sin ella no se podría restaurar en otra computadora. Descarga uno que la incluya.", codigo: "sin_llave" });
+    const payload = await readJson(request);
+    const contrasena = String(payload.contrasena ?? "");
+    const debil = validarContrasena(contrasena);
+    if (debil) throw new HttpError(400, { message: debil, campo: "contrasena" });
+    if (String(payload.confirmacion ?? "") !== contrasena) throw new HttpError(400, { message: "Las dos contraseñas de cifrado no coinciden", campo: "confirmacion" });
+    // Se comprueba que el respaldo esta completo antes de usar la reautenticacion y entregar el enlace.
+    try {
+      entradasDeRespaldo(carpeta);
+    } catch (error) {
+      if (error instanceof ErrorPortable) throw new HttpError(409, { message: error.message, codigo: error.codigo });
+      throw error;
+    }
+    await withSession(async (s) => {
+      try {
+        await exigirReauth(s, request, user, "respaldos:descargar");
+        await s.commit();
+      } catch (error) {
+        await s.rollback();
+        throw error;
+      }
+    });
+    const cifrado = await prepararCifrado(contrasena);
+    const ahora = Date.now();
+    for (const [token, d] of descargas) if (d.expira <= ahora) descargas.delete(token);
+    const token = randomBytes(32).toString("base64url");
+    descargas.set(token, { respaldoId: id, carpeta, cifrado, usuario: user, expira: ahora + DESCARGA_VIGENCIA_MS });
+    return json({ url: `/api/respaldos/descargas/${token}`, nombre: nombreDescarga(id), vence_en: new Date(ahora + DESCARGA_VIGENCIA_MS).toISOString() });
+  });
 }
 
 /*
@@ -114,6 +121,8 @@ export async function descargarArchivo(_request: Request, params: { token?: stri
     const entradas = entradasDeRespaldo(descarga.carpeta);
     const { archivo: tamano } = tamanoPortable(entradas, descarga.cifrado);
     await withSession(async (s) => {
+      // Quien pidio el enlace debe seguir activo, con su sesion vigente y con respaldos:G (se revisa al usarlo).
+      await requirePermission(s, descarga.usuario, "respaldos", "G");
       await registrarAuditoria(s, descarga.usuario, { accion: "descargar_respaldo", entidad: "respaldos", entidadId: descarga.respaldoId, referencia: descarga.respaldoId, detalle: { respaldo_id: descarga.respaldoId, archivo: nombreDescarga(descarga.respaldoId), tamano, archivos: entradas.length, cifrado: "AES-256-GCM, clave derivada con scrypt" } });
       await s.commit();
     });
@@ -129,6 +138,7 @@ export async function descargarArchivo(_request: Request, params: { token?: stri
     });
   } catch (error) {
     if (error instanceof ErrorPortable) return json({ message: error.message, codigo: error.codigo }, 409);
+    if (error instanceof HttpError) return json(error.body, error.status);
     console.error("[respaldos] No se pudo preparar la descarga:", error);
     return json({ message: "No se pudo preparar la descarga" }, 500);
   }
@@ -166,6 +176,7 @@ export function iniciarSubidaImportar(request: Request): Promise<Response> {
   return responder(request, async () => {
     const user = await gestorDe(request);
     const payload = await readJson(request);
+    limpiarImportadosHuerfanos();
     return json(iniciarSubida(duenoDe(user), payload.tamano, payload.nombre), 201);
   });
 }
@@ -187,16 +198,16 @@ export function importarRespaldoPost(request: Request): Promise<Response> {
   return responder(request, async () => {
     const payload = await readJson(request);
     const contrasena = String(payload.contrasena ?? "");
+    const user = await gestorDe(request);
+    if (!contrasena) throw new HttpError(400, { message: "Escribe la contraseña de cifrado del archivo", campo: "contrasena" });
+    if (trabajoEnCurso()) throw new HttpError(409, { message: MENSAJE_OCUPADO, codigo: "respaldo_en_curso" });
+    // La contraseña del archivo se comprueba antes de usar la reautenticacion (si esta mal, se corrige sin volver a
+    // subir) y fuera de la sesion (scrypt no detiene a la plataforma).
+    await comprobarContrasenaSubida(payload.subida, duenoDe(user), contrasena);
     const inicio = await withSession(async (s) => {
       try {
-        const user = await requireUser(request);
-        await requirePermission(s, user, "respaldos", "G");
-        exigirSqlite();
-        if (!contrasena) throw new HttpError(400, { message: "Escribe la contraseña de cifrado del archivo", campo: "contrasena" });
-        if (trabajoEnCurso()) throw new HttpError(409, { message: MENSAJE_OCUPADO, codigo: "respaldo_en_curso" });
-        // La contraseña del archivo se comprueba antes de usar la reautenticacion (si esta mal, se corrige sin volver a subir).
-        await comprobarContrasenaSubida(payload.subida, duenoDe(user), contrasena);
         await exigirReauth(s, request, user, "respaldos:importar");
+        if (trabajoEnCurso()) throw new HttpError(409, { message: MENSAJE_OCUPADO, codigo: "respaldo_en_curso" });
         const subida = tomarSubida(payload.subida, duenoDe(user));
         const trabajo = iniciarTrabajo({ tipo: "importacion", respaldo_id: null, usuario: String(user.nombre || user.email || ""), etiqueta: null, fase: "Descifrando el archivo" });
         trabajo.progreso = 0;
@@ -253,6 +264,34 @@ export async function colocarImportado(subida: { ruta: string; nombre: string },
   } finally {
     borrarArchivo(subida.ruta);
     limpiarSubidas();
+  }
+}
+
+/*
+ * Importados que quedaron a medias (el servidor se detuvo mientras se
+ * verificaban): siguen marcados «verificando», no se listan y nadie mas los
+ * borraria. Sin ningun trabajo en curso no hay quien los vaya a terminar: se
+ * borran al empezar otra subida.
+ */
+export function limpiarImportadosHuerfanos(): void {
+  if (trabajoEnCurso()) return;
+  let nombres: string[] = [];
+  try {
+    nombres = fs.readdirSync(respaldosDir());
+  } catch {
+    return;
+  }
+  for (const nombre of nombres) {
+    if (!ID_RE.test(nombre)) continue;
+    const carpeta = path.join(/*turbopackIgnore: true*/ respaldosDir(), nombre);
+    try {
+      const marca = JSON.parse(fs.readFileSync(path.join(/*turbopackIgnore: true*/ carpeta, ARCHIVO_IMPORTADO), "utf8"));
+      if (marca?.estado !== "verificando") continue;
+      fs.rmSync(carpeta, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+      console.error(`[respaldos] se borró el importado a medias ${nombre} (quedó sin verificar)`);
+    } catch {
+      /* sin marca o ilegible: no es un importado a medias */
+    }
   }
 }
 

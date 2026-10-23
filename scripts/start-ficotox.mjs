@@ -30,6 +30,7 @@
  * Codigos de salida: 0 detenido; 1 error de arranque del lanzador; 78 fatal.
  */
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -39,23 +40,26 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SALIDA_FATAL = 78;
 
-function loadEnvFile(file) {
-  if (!fs.existsSync(file)) return;
+function readEnvFile(file) {
+  const valores = new Map();
+  if (!fs.existsSync(file)) return valores;
   for (const rawLine of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line || line.startsWith("#") || !line.includes("=")) continue;
     const [key, ...rest] = line.split("=");
-    const name = key.trim();
-    const value = rest.join("=").trim().replace(/^["']|["']$/g, "");
-    if (!(name in process.env)) process.env[name] = value;
+    if (!valores.has(key.trim())) valores.set(key.trim(), rest.join("=").trim().replace(/^["']|["']$/g, ""));
   }
+  return valores;
 }
 
 const configuredEnv = (process.env.FICOTOX_ENV_FILE || "").trim();
-if (configuredEnv) {
-  loadEnvFile(path.resolve(configuredEnv));
-} else {
-  loadEnvFile(path.join(rootDir, ".env"));
+const envFile = configuredEnv ? path.resolve(configuredEnv) : path.join(rootDir, ".env");
+// Variables que vinieron del archivo (no del entorno del sistema): SECRET_KEY se vuelve a leer antes de cada relanzamiento.
+const desdeArchivo = new Set();
+for (const [name, value] of readEnvFile(envFile)) {
+  if (name in process.env) continue;
+  process.env[name] = value;
+  desdeArchivo.add(name);
 }
 
 const truthy = (name, fallback = "false") => ["1", "true", "yes", "on"].includes(String(process.env[name] ?? fallback).trim().toLowerCase());
@@ -258,7 +262,24 @@ async function anunciarCuandoResponda(proceso) {
   }
 }
 
+/*
+ * La configuracion inicial puede adoptar la llave de la bitacora de un respaldo
+ * reescribiendo SECRET_KEY en el .env (scripts/restaurar-ficotox.mjs): el
+ * servidor la recarga en caliente, pero si despues se cae, el relanzamiento
+ * debe usar la del archivo y no la que se leyo al arrancar el lanzador (con la
+ * vieja sellaria entradas que ya no verifican). Solo si vino del archivo: una
+ * SECRET_KEY del entorno del sistema no se toca.
+ */
+function releerLlave() {
+  if (!desdeArchivo.has("SECRET_KEY")) return;
+  const valor = readEnvFile(envFile).get("SECRET_KEY");
+  if (valor === undefined || valor === process.env.SECRET_KEY) return;
+  process.env.SECRET_KEY = valor;
+  avisar(`SECRET_KEY cambió en ${path.basename(envFile)} (llave de la bitácora adoptada de un respaldo); el servidor arranca con la nueva (huella ${createHash("sha256").update(valor).digest("hex").slice(0, 12)}…).`);
+}
+
 function arrancarServidor() {
+  releerLlave();
   const inicio = Date.now();
   const proceso = spawn(process.execPath, [...precargas, serverFile], {
     cwd: standaloneDir,
