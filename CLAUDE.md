@@ -170,6 +170,8 @@ Cuentas de la base de prueba: `jorge.ramirez` (Administrador técnico), `patrici
 - Pruebas que programan mantenimientos deben usar un equipo propio (rompen `ui/dsp`).
 - Retener la capa de las ventanas al cerrar rompe el menú ⋯.
 - Chrome de Playwright desde la caché o `CHROME_PATH`.
+- **Decidir sobre la vista vieja:** tras guardar, el aviso (toast) sale antes de que la pantalla recargue sus datos (`invalidate` → `useResource`). No se elige botón/menú ni se cuenta nada en ese instante: `useResource` expone `actualizando` (desde el mismo render de la invalidación) y la ficha SGC lo publica como `aria-busy`; `tests/lib/ficha.mjs` espera a que se quite. Esperar siempre una condición real (nunca `waitFor(…).catch(() => {})` como pausa ni ventanas fijas «si aparece en 4 s»).
+- E2E: `E2E_SECCIONES=e`, `E2E_LATENCIA_MS=400` (retrasa los GET del navegador; simula el servidor cargado de la corrida completa) y `tiempos.json` por paso en `E2E_CAPTURAS` (por omisión `$TMPDIR/ficotox-e2e`).
 
 ## Decisiones tomadas
 

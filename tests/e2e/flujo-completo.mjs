@@ -155,10 +155,13 @@ const bloque = async (nombre, fn) => {
 
 /* ---------- Utilidades de pantalla ---------- */
 const toast = (page, re, timeout = 30_000) => page.locator("[data-sonner-toast]").filter({ hasText: re }).last().waitFor({ timeout });
-/* Los formatos abren «paso a paso»; para llenar con selectores fijos se muestra completo (control «Todo»). */
+/*
+ * Los formatos abren «paso a paso»; para llenar con selectores fijos se muestra completo (control «Todo»).
+ * La guía de secciones siempre se dibuja; el control solo si el formato no es de solo lectura (revisor).
+ */
 const mostrarTodo = async (page) => {
   const todo = page.getByRole("radio", { name: "Todo" }).first();
-  await todo.waitFor({ timeout: 20_000 }).catch(() => {});
+  await page.getByRole("navigation", { name: "Secciones del formato" }).waitFor();
   if (!(await todo.count())) return;
   for (let i = 0; i < 5 && (await todo.getAttribute("aria-checked")) !== "true"; i += 1) {
     await todo.click();
@@ -179,11 +182,6 @@ const firmar = async (page, etiqueta) => {
 const contrasena = async (page, quien, valor = pwd(quien)) => {
   await page.locator("#reauth-password").fill(valor);
   await page.getByRole("dialog", { name: "Confirma tu identidad" }).getByRole("button", { name: "Confirmar", exact: true }).click();
-};
-/* Si aparece «Confirma tu identidad» (la acción la pide), se confirma; si no, sigue. */
-const contrasenaSiSePide = async (page, quien, ms = 4000) => {
-  const campo = page.locator("#reauth-password");
-  if (await campo.waitFor({ timeout: ms }).then(() => true).catch(() => false)) await contrasena(page, quien);
 };
 /* Diálogo de motivo (y contraseña si es crítico). */
 const dialogoMotivo = async (page, motivo, confirmar, quien) => {
@@ -1077,7 +1075,8 @@ async function documentos() {
     await page.goto(`${BASE}/documentos/${E.docId}`);
     await (await accion(page, "sgc-renovacion-autorizar")).click();
     await page.getByTestId("decision-guardar").click();
-    await contrasenaSiSePide(page, "patricia");
+    // Autorizar la renovación siempre pide la contraseña (documentos:autorizar).
+    await contrasena(page, "patricia");
     await page.getByTestId("sgc-renovacion-autorizar").waitFor({ state: "detached" });
     const vig = ((await docDe())?.revisiones || []).find((r) => r.estado === "vigente");
     check("e) renovación autorizada: la próxima revisión se recorre (deja de estar pendiente)", String(vig?.fecha_proxima_revision || "") > enDias(40), String(vig?.fecha_proxima_revision));
