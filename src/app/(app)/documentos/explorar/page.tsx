@@ -208,7 +208,7 @@ function Explorador() {
       </Toolbar>
 
       {recurso.error ? (
-        <ErrorState message={recurso.error} onRetry={recurso.reload} />
+        <ErrorState message={recurso.error} status={recurso.errorStatus} onRetry={recurso.reload} />
       ) : !data ? (
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-label="Cargando documentos">
           {Array.from({ length: 8 }).map((_, i) => (

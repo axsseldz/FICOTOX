@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useSession } from "@/components/session/SessionProvider";
 import { ErrorState, Skeleton } from "@/components/ui/Primitives";
-import { API_BASE_URL, getJsonAuth, resolveApiEntity } from "@/lib/client/api";
+import { API_BASE_URL, ApiError, getJsonAuth, resolveApiEntity } from "@/lib/client/api";
 import { useVersions } from "@/lib/client/store";
 import type { ApiRecord } from "@/lib/client/types";
 
@@ -14,7 +14,7 @@ import type { ApiRecord } from "@/lib/client/types";
  */
 export function RecordLoader({ url, keys = [], children }: { url: string; keys?: string[]; children: (item: ApiRecord) => ReactNode }) {
   const { token } = useSession();
-  const [state, setState] = useState<{ item: ApiRecord | null; error: string | null }>({ item: null, error: null });
+  const [state, setState] = useState<{ item: ApiRecord | null; error: string | null; status?: number | null }>({ item: null, error: null });
   const version = useVersions(keys);
 
   useEffect(() => {
@@ -22,7 +22,7 @@ export function RecordLoader({ url, keys = [], children }: { url: string; keys?:
     let cancelled = false;
     getJsonAuth(`${API_BASE_URL}${url}`, token)
       .then((data) => !cancelled && setState({ item: resolveApiEntity(data), error: null }))
-      .catch((err) => !cancelled && setState({ item: null, error: err instanceof Error ? err.message : "No se pudo cargar el registro" }));
+      .catch((err) => !cancelled && setState({ item: null, error: err instanceof Error ? err.message : "No se pudo cargar el registro", status: err instanceof ApiError ? err.status : null }));
     return () => {
       cancelled = true;
     };
@@ -31,7 +31,7 @@ export function RecordLoader({ url, keys = [], children }: { url: string; keys?:
   if (state.error) {
     return (
       <div className="mx-auto w-full max-w-[1216px]">
-        <ErrorState message={state.error} />
+        <ErrorState message={state.error} status={state.status} />
       </div>
     );
   }

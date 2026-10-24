@@ -3,6 +3,7 @@
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { InformeForm } from "@/components/features/informes/InformeForm";
+import { RequiereCrear } from "@/components/session/RequiereCrear";
 import { RequireModule } from "@/components/session/RequireModule";
 import { Skeleton } from "@/components/ui/Primitives";
 
@@ -16,7 +17,9 @@ export default function NuevoInformePage() {
   return (
     <RequireModule modules="informes">
       <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-        <NuevoInforme />
+        <RequiereCrear tipo="informe">
+          <NuevoInforme />
+        </RequiereCrear>
       </Suspense>
     </RequireModule>
   );

@@ -3,6 +3,7 @@
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { AnalysisForm } from "@/components/features/samples/AnalysisForm";
+import { RequiereCrear } from "@/components/session/RequiereCrear";
 import { RequireModule } from "@/components/session/RequireModule";
 import { Skeleton } from "@/components/ui/Primitives";
 
@@ -16,7 +17,9 @@ export default function NuevoAnalisisPage() {
   return (
     <RequireModule modules="ensayos">
       <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-        <NuevoAnalisis />
+        <RequiereCrear tipo="analisis">
+          <NuevoAnalisis />
+        </RequiereCrear>
       </Suspense>
     </RequireModule>
   );

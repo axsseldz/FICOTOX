@@ -40,7 +40,7 @@ const COLUMNAS: ColumnaLista[] = [
 
 export default function SolicitudesPage() {
   return (
-    <RequireDocumentos>
+    <RequireDocumentos diagnostico={false}>
       <Suspense fallback={<Skeleton className="h-[320px]" />}>
         <Solicitudes />
       </Suspense>

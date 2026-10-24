@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Field, Input, Select } from "@/components/ui/Field";
 import { ErrorState, Skeleton } from "@/components/ui/Primitives";
-import { API_BASE_URL, getJsonAuth, sendJsonAuth } from "@/lib/client/api";
+import { API_BASE_URL, ApiError, getJsonAuth, sendJsonAuth } from "@/lib/client/api";
 import { formatearFecha } from "@/lib/shared/fechas";
 import { acomodar, ORDEN, porHoja, TAMANOS, type TamanoEtiqueta } from "@/lib/client/etiquetas";
 
@@ -56,7 +56,7 @@ function Etiquetas({ id }: { id: string }) {
   const { token, user } = useSession();
   const usuario = String(user?.id || user?.email || "");
   const [data, setData] = useState<{ folio: string; items: Etiqueta[] } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ mensaje: string; status: number | null } | null>(null);
   const [tamanoElegido, setTamano] = useState<TamanoEtiqueta | null>(null);
   const [copiasTexto, setCopias] = useState("1");
   const [inicioTexto, setInicio] = useState("1");
@@ -79,7 +79,7 @@ function Etiquetas({ id }: { id: string }) {
     let cancelled = false;
     getJsonAuth(`${API_BASE_URL}/samples/reception/${id}/etiquetas`, token)
       .then((res) => !cancelled && setData({ folio: String(res.folio || ""), items: (res.items as Etiqueta[]) || [] }))
-      .catch((err) => !cancelled && setError(err instanceof Error ? err.message : "No se pudieron cargar las etiquetas"));
+      .catch((err) => !cancelled && setError({ mensaje: err instanceof Error ? err.message : "No se pudieron cargar las etiquetas", status: err instanceof ApiError ? err.status : null }));
     return () => {
       cancelled = true;
     };
@@ -131,7 +131,7 @@ function Etiquetas({ id }: { id: string }) {
   if (error) {
     return (
       <PageBody>
-        <ErrorState message={error} />
+        <ErrorState message={error.mensaje} status={error.status} />
       </PageBody>
     );
   }

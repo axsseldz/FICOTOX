@@ -142,7 +142,7 @@ function AnalisisList() {
 
       <TableShell footer={loaded ? contar(items.length, "análisis", "análisis") : undefined}>
         {resource.error ? (
-          <ErrorState message={resource.error} onRetry={resource.reload} />
+          <ErrorState message={resource.error} status={resource.errorStatus} onRetry={resource.reload} />
         ) : !loaded ? (
           <TableSkeleton cols={7} />
         ) : !items.length ? (

@@ -120,7 +120,7 @@ function InformesContent() {
 
       <TableShell footer={items ? contar(items.length, "informe", "informes") : undefined}>
         {resource.error ? (
-          <ErrorState message={resource.error} onRetry={resource.reload} />
+          <ErrorState message={resource.error} status={resource.errorStatus} onRetry={resource.reload} />
         ) : !items ? (
           <TableSkeleton cols={7} />
         ) : !items.length ? (

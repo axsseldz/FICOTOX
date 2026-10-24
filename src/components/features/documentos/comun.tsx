@@ -259,9 +259,14 @@ export function useCatalogos() {
 }
 
 /* Acceso a las pantallas: alguna accion documental, o administracion tecnica (solo metadatos). */
-export function RequireDocumentos({ children }: { children: ReactNode }) {
+/*
+ * `diagnostico` (por omision si): la administracion tecnica (usuarios:G) entra a las carpetas y fichas
+ * solo para diagnostico (metadatos). Bandeja, Solicitudes, Externos y Lista Maestra no son para ese
+ * papel (el menu tampoco las ofrece): con `diagnostico={false}` exigen acciones documentales.
+ */
+export function RequireDocumentos({ children, diagnostico = true }: { children: ReactNode; diagnostico?: boolean }) {
   const { can } = useSession();
-  if (!can("documentos") && !can("usuarios", "G")) {
+  if (!can("documentos") && !(diagnostico && can("usuarios", "G"))) {
     return <EmptyState icon={<LockKey size={20} />} title="Sin acceso a Documentos SGC" description="Tus roles no tienen acciones documentales. Pide a la administración que revise tus roles." />;
   }
   return <>{children}</>;
