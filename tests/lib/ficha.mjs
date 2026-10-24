@@ -6,8 +6,12 @@
  */
 
 const menu = (page) => page.getByRole("menu");
-/* El encabezado (con la accion principal y el menu ⋯) se dibuja cuando llegan los datos de la ficha. */
-const ficha = (page) => page.getByTestId("sgc-ficha").waitFor();
+/*
+ * El encabezado (con la accion principal y el menu ⋯) se dibuja cuando llegan los datos de la ficha.
+ * Tras guardar algo la ficha se recarga (aria-busy) y la accion principal puede cambiar: se espera a
+ * los datos nuevos antes de decidir entre el boton principal y el menu.
+ */
+const ficha = (page) => page.locator('[data-testid="sgc-ficha"]:not([aria-busy="true"])').waitFor();
 const botonMenu = (page) => page.getByRole("button", { name: "Más acciones" });
 
 export async function abrirMenu(page) {

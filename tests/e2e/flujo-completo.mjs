@@ -29,10 +29,11 @@
  *
  * Corre sobre la base de prueba de tests/run.mjs, después de las demás suites:
  * no depende de folios exactos (usa sellos únicos). E2E_SECCIONES=a,b,... corre
- * solo esas secciones (para depurar).
+ * solo esas secciones (para depurar). E2E_LATENCIA_MS=1500 retrasa cada GET del
+ * navegador a la API (simula el servidor cargado de la corrida completa).
  */
 import "../lib/reauth-auto.mjs";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
@@ -76,11 +77,26 @@ const pantalla = (page) => {
   }
 };
 const AVISO_REACT = /Warning:|React|hydrat|unique "key"|act\(|Cannot update a component/i;
+const LATENCIA = Number(process.env.E2E_LATENCIA_MS || 0);
+/* Tiempos de cada paso y bloque, con la petición a la API más lenta (tiempos.json en la carpeta de capturas). */
+const TIEMPOS = [];
 const nueva = async (opciones = {}) => {
   const context = await browser.newContext({ viewport: { width: 1360, height: 900 }, acceptDownloads: true, ...opciones });
+  if (LATENCIA > 0) {
+    await context.route("**/api/**", async (route) => {
+      if (route.request().method() === "GET") await new Promise((r) => setTimeout(r, LATENCIA));
+      await route.continue();
+    });
+  }
   const page = await context.newPage();
   page.setDefaultTimeout(45_000);
   const descargas = [];
+  const peticiones = [];
+  page.on("requestfinished", (req) => {
+    if (!req.url().includes("/api/")) return;
+    const ms = Math.round(req.timing().responseEnd);
+    if (ms > 0) peticiones.push({ ms, ruta: `${req.method()} ${new URL(req.url()).pathname}` });
+  });
   page.on("download", (d) => descargas.push(d.suggestedFilename()));
   page.on("console", (msg) => {
     const tipo = msg.type();
@@ -93,7 +109,7 @@ const nueva = async (opciones = {}) => {
   page.on("response", (r) => {
     if (r.status() >= 500 && r.url().includes("/api/")) errores500.push(`${r.status()} ${r.request().method()} ${new URL(r.url()).pathname} [${pantalla(page)}]`);
   });
-  return { context, page, descargas };
+  return { context, page, descargas, peticiones };
 };
 const entrar = async (page, quien) => {
   await page.goto(`${BASE}/login`);
@@ -106,33 +122,46 @@ const entrar = async (page, quien) => {
 const captura = async (page, nombre) => page.screenshot({ path: path.join(CAPTURAS, `fallo-${nombre.replace(/[^a-z0-9]/gi, "").slice(0, 40)}.png`), fullPage: true }).catch(() => {});
 /* Un paso = una persona en su propia sesión del navegador; si algo truena, el paso queda FAIL con el motivo y la pantalla. */
 const paso = async (quien, nombre, fn, opciones) => {
-  const { context, page, descargas } = await nueva(opciones);
+  const { context, page, descargas, peticiones } = await nueva(opciones);
+  const inicio = Date.now();
+  let ok = true;
   try {
     await entrar(page, quien);
     await fn(page, { context, descargas });
   } catch (err) {
+    ok = false;
     await captura(page, nombre);
     const linea = err instanceof Error ? (err.stack || "").split("\n").find((l) => l.includes("flujo-completo.mjs")) || "" : "";
     check(nombre, false, `${err instanceof Error ? err.message.split("\n")[0] : String(err)} ${linea.trim()} [pantalla ${pantalla(page)}]`);
   } finally {
+    const lenta = peticiones.reduce((a, b) => (b.ms > a.ms ? b : a), { ms: 0, ruta: "" });
+    TIEMPOS.push({ nombre, quien, ms: Date.now() - inicio, ok, api_lenta: lenta, api_peticiones: peticiones.length });
     await context.close();
   }
 };
 /* Bloque sin navegador (API): si truena, queda FAIL con el motivo. */
 const bloque = async (nombre, fn) => {
+  const inicio = Date.now();
+  let ok = true;
   try {
     await fn();
   } catch (err) {
+    ok = false;
     check(nombre, false, err instanceof Error ? `${err.message} ${(err.stack || "").split("\n").find((l) => l.includes("flujo-completo.mjs"))?.trim() || ""}` : String(err));
+  } finally {
+    TIEMPOS.push({ nombre, quien: "api", ms: Date.now() - inicio, ok });
   }
 };
 
 /* ---------- Utilidades de pantalla ---------- */
 const toast = (page, re, timeout = 30_000) => page.locator("[data-sonner-toast]").filter({ hasText: re }).last().waitFor({ timeout });
-/* Los formatos abren «paso a paso»; para llenar con selectores fijos se muestra completo (control «Todo»). */
+/*
+ * Los formatos abren «paso a paso»; para llenar con selectores fijos se muestra completo (control «Todo»).
+ * La guía de secciones siempre se dibuja; el control solo si el formato no es de solo lectura (revisor).
+ */
 const mostrarTodo = async (page) => {
   const todo = page.getByRole("radio", { name: "Todo" }).first();
-  await todo.waitFor({ timeout: 20_000 }).catch(() => {});
+  await page.getByRole("navigation", { name: "Secciones del formato" }).waitFor();
   if (!(await todo.count())) return;
   for (let i = 0; i < 5 && (await todo.getAttribute("aria-checked")) !== "true"; i += 1) {
     await todo.click();
@@ -153,11 +182,6 @@ const firmar = async (page, etiqueta) => {
 const contrasena = async (page, quien, valor = pwd(quien)) => {
   await page.locator("#reauth-password").fill(valor);
   await page.getByRole("dialog", { name: "Confirma tu identidad" }).getByRole("button", { name: "Confirmar", exact: true }).click();
-};
-/* Si aparece «Confirma tu identidad» (la acción la pide), se confirma; si no, sigue. */
-const contrasenaSiSePide = async (page, quien, ms = 4000) => {
-  const campo = page.locator("#reauth-password");
-  if (await campo.waitFor({ timeout: ms }).then(() => true).catch(() => false)) await contrasena(page, quien);
 };
 /* Diálogo de motivo (y contraseña si es crítico). */
 const dialogoMotivo = async (page, motivo, confirmar, quien) => {
@@ -1051,7 +1075,8 @@ async function documentos() {
     await page.goto(`${BASE}/documentos/${E.docId}`);
     await (await accion(page, "sgc-renovacion-autorizar")).click();
     await page.getByTestId("decision-guardar").click();
-    await contrasenaSiSePide(page, "patricia");
+    // Autorizar la renovación siempre pide la contraseña (documentos:autorizar).
+    await contrasena(page, "patricia");
     await page.getByTestId("sgc-renovacion-autorizar").waitFor({ state: "detached" });
     const vig = ((await docDe())?.revisiones || []).find((r) => r.estado === "vigente");
     check("e) renovación autorizada: la próxima revisión se recorre (deja de estar pendiente)", String(vig?.fecha_proxima_revision || "") > enDias(40), String(vig?.fecha_proxima_revision));
@@ -1262,6 +1287,10 @@ try {
   if (SECCIONES.has("g")) await auditoria();
 } finally {
   await browser.close();
+  writeFileSync(path.join(CAPTURAS, "tiempos.json"), JSON.stringify(TIEMPOS, null, 2));
+  const total = TIEMPOS.reduce((a, x) => a + x.ms, 0);
+  console.log(`\nTiempos: ${TIEMPOS.length} pasos en ${(total / 1000).toFixed(1)} s (detalle en ${path.join(CAPTURAS, "tiempos.json")}); los más lentos:`);
+  for (const x of [...TIEMPOS].sort((a, b) => b.ms - a.ms).slice(0, 5)) console.log(`  ${(x.ms / 1000).toFixed(1)} s  ${x.nombre}${x.api_lenta?.ms ? ` (API más lenta ${x.api_lenta.ms} ms ${x.api_lenta.ruta})` : ""}`);
 }
 
 check("sin errores de consola ni avisos de React en las pantallas recorridas", consola.length === 0, consola.slice(0, 5).join(" | "));
