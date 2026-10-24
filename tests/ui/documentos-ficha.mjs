@@ -9,6 +9,7 @@
  * - ficha: una acción principal según el papel (elaborador, revisor, autorizador, Mejora Continua,
  *   destinatario) o ninguna; el resto en el menú ⋯; pestañas Detalles, Revisiones y Lecturas con
  *   historial plegado y sin la sección de bitácora; «Ver en Auditoría» abre la bitácora filtrada;
+ * - con la ficha recargándose lento, la acción principal se decide con los datos nuevos (aria-busy);
  * - oscuro, tableta y reduced-motion; sin errores de consola.
  */
 import "../lib/reauth-auto.mjs";
@@ -40,6 +41,8 @@ async function ficha(campos, paginas = 1) {
 const responsables = { elaborador_id: id.luis, revisor_id: id.ricardo, autorizador_id: id.patricia };
 // F: en elaboracion, con PDF y datos del cambio: recorre el flujo (elaborador → revisor → autorizador → Mejora Continua).
 const F = await ficha({ clave: `FX-TCP-F${stamp}`, titulo: `Procedimiento del flujo de la ficha ${stamp}`, area_codigo: "TC", tipo_codigo: "P", ...responsables, apartados_afectados: "Todo el documento", descripcion_cambio: "Emisión inicial" });
+// G: en elaboracion con PDF pero sin los datos del cambio («Enviar a revisión» deshabilitado hasta guardarlos).
+const G = await ficha({ clave: `FX-TCP-G${stamp}`, titulo: `Procedimiento con datos pendientes ${stamp}`, area_codigo: "TC", tipo_codigo: "P", ...responsables });
 // D: vigente de uso interno, distribuido a Luis con lectura requerida.
 const D = await ficha({ clave: `FX-TCI-D${stamp}`, titulo: `Instrucción distribuida ${stamp}`, area_codigo: "TC", tipo_codigo: "I", ...responsables }, 3);
 await api("POST", `/sgc/revisiones/${D.revision_id}/registrar-vigente`, { fecha_emision: "2025-02-01", fecha_proxima_revision: "2028-02-01" }, t.ana);
@@ -132,6 +135,34 @@ try {
     check("elaborador: «Cargar o sustituir archivo» en el menú ⋯", (await contarAccion(page, "sgc-subir-archivo")) === 1);
   });
   await api("POST", `/sgc/revisiones/${F.revision_id}/enviar-revision`, {}, t.luis);
+  /*
+   * Ficha que se recarga lento (servidor cargado): al guardar los datos del cambio, «Enviar a revisión»
+   * pasa del menu ⋯ (deshabilitado) a accion principal cuando llegan los datos nuevos; mientras tanto la
+   * ficha queda aria-busy y la prueba no decide sobre la vista vieja.
+   */
+  await paso("luis", "ficha que se recarga lento", async (page, context) => {
+    let cargas = 0;
+    await context.route(new RegExp(`/api/sgc/documentos/${G.id}(\\?|$)`), async (route) => {
+      if (route.request().method() === "GET" && (cargas += 1) > 1) await new Promise((r) => setTimeout(r, 1500));
+      await route.continue();
+    });
+    await page.goto(`${BASE}/documentos/${G.id}`);
+    check("sin los datos del cambio: «Enviar a revisión» no es la acción principal", (await principal(page)) === null, String(await principal(page)));
+    await (await accion(page, "sgc-editar-revision")).click();
+    const motivo = page.locator("#rev-motivo");
+    await motivo.waitFor();
+    if ((await motivo.inputValue()).trim().length < 15) await motivo.fill("Emisión inicial del procedimiento");
+    if (!(await page.locator("#rev-apartados").isVisible())) await page.getByRole("dialog").getByRole("button", { name: /Más opciones/ }).click();
+    await page.locator("#rev-apartados").fill("Todo el documento");
+    await page.locator("#rev-descripcion").fill("Emisión inicial");
+    await page.getByTestId("revision-guardar").click();
+    await page.locator("[data-sonner-toast]").filter({ hasText: /actualizada/ }).waitFor();
+    check("tras guardar, la ficha queda aria-busy hasta que llegan los datos nuevos", (await page.getByTestId("sgc-ficha").getAttribute("aria-busy")) === "true");
+    await (await accion(page, "sgc-enviar-revision")).click();
+    await page.getByRole("button", { name: "Enviar a revisión", exact: true }).last().waitFor();
+    check("con los datos nuevos, «Enviar a revisión» es la acción principal y abre la confirmación", (await page.locator('[data-principal="1"][data-testid="sgc-enviar-revision"]').count()) === 1 && (await page.getByTestId("sgc-ficha").getAttribute("aria-busy")) === null && cargas >= 2, `cargas=${cargas}`);
+    await page.keyboard.press("Escape");
+  });
 
   /* ---------- Carpeta: tarjetas (con F en revision) ---------- */
   await paso("ana", "carpeta con tarjetas", async (page) => {

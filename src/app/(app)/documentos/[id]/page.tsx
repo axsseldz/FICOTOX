@@ -260,7 +260,8 @@ function Ficha({ id }: { id: string }) {
     <PageBody>
       <RutaDocumentos area={item.area} tipo={item.tipo} documento={item.clave} />
 
-      <header className="flex overflow-hidden rounded-card bg-surface shadow-card" data-testid="sgc-ficha" data-clave={item.clave}>
+      {/* aria-busy: tras una accion, hasta que llegan los datos nuevos (la accion principal puede cambiar). */}
+      <header className="flex overflow-hidden rounded-card bg-surface shadow-card" data-testid="sgc-ficha" data-clave={item.clave} aria-busy={recurso.actualizando || undefined}>
         <span className="w-1.5 shrink-0" style={{ backgroundColor: item.area.color }} aria-hidden="true" />
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5 sm:px-5">
           {/* Base minima del titulo: en pantallas angostas las acciones bajan de renglon en vez de aplastarlo. */}
