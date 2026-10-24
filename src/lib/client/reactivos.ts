@@ -19,7 +19,10 @@ export const getReactivoLocation = (item: ApiRecord): string => [item.localizaci
  * vacío; por debajo del mínimo si hay mínimo; o ≤ 20 % del máximo si no lo hay.
  */
 export const isReactivoLow = (item: ApiRecord): boolean => {
-  const { current, max } = getReactivoStockInfo(item);
+  // Solo la existencia canónica y el máximo guardado, como el servidor: un reactivo sin
+  // `cantidad_actual` (pendiente de ajuste por conteo) no cuenta como bajo en ningún lado.
+  const current = parseNumberOrNull(item.cantidad_actual);
+  const max = parseNumberOrNull(item.stock_maximo);
   const min = parseNumberOrNull(item.stock_minimo);
   if (current === null) return false;
   if (current <= 0) return true;

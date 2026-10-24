@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { ArrowDown, ArrowUp, ArrowsLeftRight, Atom, Truck, Bag, ChartLine, CheckSquare, Cylinder, Diamond, Disc, Drop, Eyedropper, Fire, FirstAid, Flask, Funnel, Gauge, HandPalm, Jar, Lightbulb, Microscope, Monitor, Package, Ruler, Scales, Scroll, SealCheck, ShieldCheck, Snowflake, Spinner, Syringe, Tag, TestTube, Thermometer, Toolbox, Tornado, Tray, Vibrate, Waves, Wind, Wrench } from "@phosphor-icons/react";
 import { useSession } from "@/components/session/SessionProvider";
 import { cn } from "@/components/ui/cn";
-import { Skeleton } from "@/components/ui/Primitives";
+import { Badge, Skeleton } from "@/components/ui/Primitives";
 import { API_BASE_URL, getJsonAuth } from "@/lib/client/api";
 import { deadlineTone, fmt } from "@/lib/client/format";
 import { useResource } from "@/lib/client/store";
@@ -182,6 +182,9 @@ export const esEntrada = (m: ApiRecord) => {
 /* Cantidad sin signo (el signo lo da la flecha y el color) y rotulo del tipo. */
 export const cantidadMovimiento = (m: ApiRecord): number => Math.abs(Number(m.cantidad) || 0);
 
+/* Signo de la cantidad: un ajuste sin diferencia no lleva «−0». */
+export const signoMovimiento = (m: ApiRecord): string => (cantidadMovimiento(m) === 0 ? "" : esEntrada(m) ? "+" : "−");
+
 /* Cantidad con su unidad en singular cuando es exactamente 1 ("1 unidad", "1 litro"); las abreviaturas (L, mL, g) no cambian. */
 export function conUnidad(cantidad: number, unidad: string | null | undefined): string {
   const u = String(unidad || "").trim();
@@ -190,7 +193,7 @@ export function conUnidad(cantidad: number, unidad: string | null | undefined): 
   return `${fmt(cantidad)} ${singular}`;
 }
 export const TIPO_MOVIMIENTO: Record<string, string> = { entrada: "Entrada", salida: "Salida", consumo: "Consumo", ajuste: "Ajuste por conteo" };
-export const tipoMovimiento = (m: ApiRecord): string => TIPO_MOVIMIENTO[String(m.tipo || "").toLowerCase()] || (esEntrada(m) ? "Entrada" : "Salida");
+export const tipoMovimiento = (m: ApiRecord): string => (m.revierte_id ? "Reversión" : TIPO_MOVIMIENTO[String(m.tipo || "").toLowerCase()] || (esEntrada(m) ? "Entrada" : "Salida"));
 
 /* Fecha principal del movimiento (la que ocurrio) y si difiere del dia de captura. */
 export function fechaDelMovimiento(m: ApiRecord): { fecha: string; captura: string; distinta: boolean } {
@@ -233,15 +236,15 @@ export function IconoOrigen({ m }: { m: ApiRecord }) {
   );
 }
 
-/* Movimientos (los ultimos de la plataforma) de un insumo, para su ventana. */
-function useMovimientos(): { items: ApiRecord[] | null; error: string | null } {
+/* Los últimos movimientos de un insumo, para su ventana (filtrados en el servidor: no dependen de los recientes de toda la plataforma). */
+function useMovimientos(tabla: string, id: unknown): { items: ApiRecord[] | null; error: string | null } {
   const { token } = useSession();
-  const recurso = useResource<ApiRecord[]>(["movimientos", "movimientos-ventana"], async () => ((await getJsonAuth(`${API_BASE_URL}/inventory/movimientos`, token)).items || []) as ApiRecord[], { enabled: !!token });
+  const recurso = useResource<ApiRecord[]>(["movimientos", "movimientos-ventana"], async () => ((await getJsonAuth(`${API_BASE_URL}/inventory/movimientos?tabla=${tabla}&id=${Number(id)}&limite=6`, token)).items || []) as ApiRecord[], { enabled: !!token, deps: [tabla, Number(id)] });
   return { items: recurso.data || null, error: recurso.error || null };
 }
 
 export function MovimientosRecientes({ tabla, id, unidad }: { tabla: "reactivos" | "consumibles"; id: unknown; unidad?: string }) {
-  const { items, error } = useMovimientos();
+  const { items, error } = useMovimientos(tabla, id);
   if (error) return <p className="text-sm text-ink-3">No se pudieron cargar los movimientos.</p>;
   if (!items) return <Skeleton className="h-16 w-full" />;
   const propios = items.filter((m) => m.tabla_origen === tabla && Number(m.id_item) === Number(id)).slice(0, 6);
@@ -264,6 +267,7 @@ export function MovimientosRecientes({ tabla, id, unidad }: { tabla: "reactivos"
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="text-sm font-medium text-ink">
                 {tipoMovimiento(m)} de {conUnidad(cantidadMovimiento(m), String(unidad || m.unidad || ""))}
+                {m.revertido_por ? <Badge size="sm" tone="neutral" className="ml-2 align-middle">Revertido</Badge> : null}
               </span>
               <span className="break-words text-xs text-ink-3">
                 {origen.href ? (

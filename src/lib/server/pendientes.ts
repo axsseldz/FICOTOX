@@ -172,7 +172,8 @@ export async function pendientesDe(s: Session, auth: Autorizacion): Promise<Grup
     const TIPO_MANT: Record<string, string> = { preventivo: "Preventivo", correctivo: "Correctivo", calibracion: "Calibración", verificacion: "Verificación" };
     const mant = await s.query<Row>(
       `SELECT mt.id, mt.tipo, mt.estado, mt.fecha_programada, e.nombre AS equipo FROM mantenimientos mt LEFT JOIN equipos e ON e.id = mt.id_equipo
-       WHERE mt.estado = 'vencido' OR (mt.estado IN ('programado', 'en_proceso') AND mt.fecha_programada <= :en30) ORDER BY mt.fecha_programada LIMIT ${MAX}`,
+       WHERE (mt.estado = 'vencido' OR (mt.estado IN ('programado', 'en_proceso') AND mt.fecha_programada <= :en30))
+         AND COALESCE(e.activo, 1) = 1 ORDER BY mt.fecha_programada LIMIT ${MAX}`,
       { en30 },
     );
     const vencido = (m: Row) => String(m.estado) === "vencido" || String(m.fecha_programada || "") < hoy;

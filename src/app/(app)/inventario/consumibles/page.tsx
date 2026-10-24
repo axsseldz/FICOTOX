@@ -4,7 +4,8 @@ import { Suspense, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ArrowCounterClockwise, ArrowsClockwise, Package, PencilSimple, Plus, Trash } from "@phosphor-icons/react";
 import { useMenuReportar } from "@/components/features/calidad/ReportarIncidencia";
-import { Caducidad, IconoConsumible } from "@/components/features/inventory/ventanas/comun";
+import { IconoConsumible } from "@/components/features/inventory/ventanas/comun";
+import { formatearFechaCorta } from "@/lib/shared/fechas";
 import { InsumoVentana } from "@/components/features/inventory/ventanas/InsumoVentana";
 import { ConsumibleSheet } from "@/components/features/inventory/ConsumibleSheet";
 import { StockRefillSheet, type StockRefillTarget } from "@/components/features/inventory/StockRefillSheet";
@@ -22,11 +23,11 @@ import { useDebouncedValue, useInitialParam, useOpenState, useParamChange, useUr
 import { invalidate, useResource } from "@/lib/client/store";
 import type { ApiRecord } from "@/lib/client/types";
 
-/* Columnas fijas: producto y marca, ubicacion, caducidad en color y existencia en unidades con barra. */
+/* Columnas fijas: producto y marca, ubicacion, fecha de ingreso y existencia en unidades con barra (los consumibles no llevan caducidad). */
 const COLUMNAS: ColumnaLista[] = [
   { clave: "producto", titulo: "Producto", ancho: "minmax(260px,1.7fr)" },
   { clave: "ubicacion", titulo: "Ubicación", ancho: "minmax(140px,0.8fr)" },
-  { clave: "caducidad", titulo: "Caducidad", ancho: "150px" },
+  { clave: "ingreso", titulo: "Ingreso", ancho: "150px" },
   { clave: "existencia", titulo: "Existencia", ancho: "minmax(180px,1fr)" },
 ];
 
@@ -48,7 +49,7 @@ function celdasConsumible(item: ApiRecord) {
       </span>
     </span>,
     <span key="u" className="text-sm text-ink-2">{ubicacion ? String(ubicacion) : <span className="text-ink-4">—</span>}</span>,
-    <Caducidad key="c" value={item.caducidad} />,
+    <span key="c" className="text-sm text-ink-2">{item.fecha_ingreso ? formatearFechaCorta(item.fecha_ingreso) : <span className="text-ink-4">—</span>}</span>,
     <StockMeter key="e" current={pieces} max={max} min={minimo} unit="unidades" low={pieces <= minimo} />,
   ];
 }

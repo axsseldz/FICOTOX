@@ -313,7 +313,8 @@ export function MantenimientoSheet({ open, item, onClose }: { open: boolean; ite
           </Field>
           <Field label="Estado" htmlFor="m-estado" required>
             <Select id="m-estado" value={form.estado} onChange={set("estado")}>
-              {MANTENIMIENTO_ESTADOS.map((estado) => (
+              {/* «Vencido» lo marca el sistema y «Cancelado» tiene su acción (motivo y contraseña); lo completado no se reabre. */}
+              {MANTENIMIENTO_ESTADOS.filter((estado) => (item?.estado === "completado" ? estado.value === "completado" : ["programado", "en_proceso", "completado"].includes(estado.value) || estado.value === item?.estado)).map((estado) => (
                 <option key={estado.value} value={estado.value}>
                   {estado.label}
                 </option>

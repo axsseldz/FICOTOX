@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 /* Valor con retardo: evita una peticion por cada tecla en las busquedas. */
 export function useDebouncedValue<T>(value: T, delay = 250): T {
@@ -105,6 +106,8 @@ export function useAbrirDesdeUrl<T extends { id?: unknown }>(filas: T[] | null |
     const indice = filas.findIndex((fila) => String(fila.id) === valor);
     void Promise.resolve().then(() => {
       if (indice >= 0) abrirRef.current(indice);
+      // Antes no pasaba nada: se avisa que el registro no está entre lo que se ve (filtro, baja o sin acceso).
+      else toast.info("Ese registro no aparece en la lista con los filtros actuales", { description: "Puede estar dado de baja, cancelado o fuera de los filtros elegidos." });
       const next = new URLSearchParams(params.toString());
       next.delete(parametro);
       const query = next.toString();

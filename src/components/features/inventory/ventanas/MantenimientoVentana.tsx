@@ -9,7 +9,7 @@ import { FiguraPersona } from "@/components/ui/FiguraPersona";
 import { Badge } from "@/components/ui/Primitives";
 import { ColumnasVentana, DatoLateral, DatosLista, DatosRapidos, TarjetaLateral, VentanaAcciones, VentanaCentrada, VentanaEncabezado, VentanaSeccion, VentanaTarjeta, VentanaTitulo } from "@/components/ui/Ventana";
 import { fmt } from "@/lib/client/format";
-import { cantidadMovimiento, fechaDelMovimiento, origenDeMovimiento, esEntrada, tipoMovimiento, IconoEquipo, IconoMantenimiento, IconoMovimientoInsumo, IconoOrigen, moverEn } from "./comun";
+import { cantidadMovimiento, fechaDelMovimiento, origenDeMovimiento, esEntrada, signoMovimiento, tipoMovimiento, IconoEquipo, IconoMantenimiento, IconoMovimientoInsumo, IconoOrigen, moverEn } from "./comun";
 import { cn } from "@/components/ui/cn";
 import { haceCuantoCorto } from "@/lib/client/tiempo";
 import type { ApiRecord } from "@/lib/client/types";
@@ -98,14 +98,14 @@ export function MantenimientoVentana({ items, indice, onIndice, onCerrar, puedeE
               </>
             }
           />
-          {puedeEditar || (puedeCancelar && m.estado !== "cancelado") ? (
+          {(puedeEditar && m.estado !== "cancelado") || (puedeCancelar && !["cancelado", "completado"].includes(String(m.estado))) ? (
             <VentanaAcciones>
-              {puedeEditar ? (
+              {puedeEditar && m.estado !== "cancelado" ? (
                 <Button icon={<PencilSimple size={16} />} onClick={() => editar(m)}>
                   Editar
                 </Button>
               ) : null}
-              {puedeCancelar && m.estado !== "cancelado" ? (
+              {puedeCancelar && !["cancelado", "completado"].includes(String(m.estado)) ? (
                 <Button variant="ghost" className="text-danger hover:bg-danger-soft hover:text-danger" icon={<Prohibit size={16} />} onClick={() => cancelar(m)}>
                   Cancelar mantenimiento
                 </Button>
@@ -162,9 +162,9 @@ function FichaMovimiento({ m }: { m: ApiRecord }) {
       <VentanaSeccion i={0}>
         <div className={cn("flex flex-wrap items-center justify-between gap-4 rounded-card px-5 py-4 ring-1", entrada ? "bg-success-soft/60 ring-success/20" : "bg-warning-soft/60 ring-warning/20")}>
           <div className="flex flex-col gap-0.5">
-            <span className="text-xs text-ink-3">{entrada ? "Entró al inventario" : "Salió del inventario"}</span>
+            <span className="text-xs text-ink-3">{cantidadMovimiento(m) === 0 ? "Conteo sin diferencia" : entrada ? "Entró al inventario" : "Salió del inventario"}</span>
             <span className={cn("tnum text-4xl leading-none font-semibold tracking-tight", entrada ? "text-success-text" : "text-warning-text")}>
-              {entrada ? "+" : "−"}
+              {signoMovimiento(m)}
               {fmt(cantidadMovimiento(m))}
               {m.unidad ? <span className="ml-1.5 text-md font-medium">{String(m.unidad)}</span> : null}
             </span>
@@ -205,7 +205,7 @@ function FichaMovimiento({ m }: { m: ApiRecord }) {
             ) : (
               <p className="break-words text-base font-medium text-ink">{origen.texto}</p>
             )}
-            <p className="text-xs text-ink-3">{origen.href ? "Se descontó al capturar ese formato." : entrada ? "Entrada registrada en el inventario." : "Movimiento registrado en el inventario."}</p>
+            <p className="text-xs text-ink-3">{m.revierte_id ? "Devuelve lo que se descontó: el formato se anuló o se volvió a capturar." : m.revertido_por ? "Se descontó al capturar ese formato y después se revirtió." : origen.href ? "Se descontó al capturar ese formato." : entrada ? "Entrada registrada en el inventario." : "Movimiento registrado en el inventario."}</p>
           </div>
         </div>
       </VentanaSeccion>

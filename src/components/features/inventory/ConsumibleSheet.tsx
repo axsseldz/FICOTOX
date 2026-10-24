@@ -155,7 +155,7 @@ export function ConsumibleSheet({ open, item, onClose }: { open: boolean; item: 
           <Field label="Localización" htmlFor="c-localizacion">
             <Input id="c-localizacion" maxLength={150} value={form.localizacion} onChange={set("localizacion")} />
           </Field>
-          <Field label="Stock mínimo" htmlFor="c-minimo" hint="Opcional. Opcional, en unidades. Al llegar a esta cantidad aparece el aviso de stock bajo (sin mínimo, con 5 unidades o menos).">
+          <Field label="Stock mínimo" htmlFor="c-minimo" hint="Opcional, en unidades. Al llegar a esta cantidad aparece el aviso de stock bajo (sin mínimo, con 5 unidades o menos).">
             <Input id="c-minimo" type="number" min="0" step="any" inputMode="decimal" value={form.stockMinimo} onChange={set("stockMinimo")} />
           </Field>
         </FormGrid>

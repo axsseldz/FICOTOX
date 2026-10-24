@@ -153,7 +153,8 @@ const altaCuenta = (nombre, email, password) => api("POST", "/admin/usuarios", {
   check("2f idempotente: consultar otra vez no duplica el evento", eventos().length === 1, `${eventos().length}`);
   const equipoVencido = fila("SELECT estado FROM equipos WHERE id = ?", equipoId)?.estado;
   check("2f el equipo sigue «en mantenimiento» mientras hay uno vencido", equipoVencido === "mantenimiento", `${equipoVencido}`);
-  await api("PUT", `/inventory/mantenimientos/${futuro}`, { id_equipo: equipoId, tipo: "preventivo", fecha_programada: "2027-06-01", estado: "cancelado" }, t.carmen);
+  // Cancelar es la acción con motivo y contraseña (equipos:AN); por el formulario ya no se cancela.
+  await api("DELETE", `/inventory/mantenimientos/${futuro}`, { motivo: "Prueba: ya no hace falta el preventivo" }, t.qa);
   const completa = await api("PUT", `/inventory/mantenimientos/${pasado}`, { id_equipo: equipoId, tipo: "preventivo", fecha_programada: "2026-01-15", fecha_realizado: "2026-10-18", estado: "completado", tecnico_proveedor: "Servicio externo" }, t.carmen);
   const despues = fila("SELECT m.estado AS m, e.estado AS e FROM mantenimientos m JOIN equipos e ON e.id = m.id_equipo WHERE m.id = ?", pasado);
   check("2f completar el vencido sigue el flujo normal: completado y el equipo vuelve a operativo", completa.status === 200 && despues?.m === "completado" && despues?.e === "operativo", `${completa.status} ${completa.data?.message} ${JSON.stringify(despues)}`);

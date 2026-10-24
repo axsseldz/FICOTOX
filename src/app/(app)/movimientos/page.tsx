@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ArrowsLeftRight } from "@phosphor-icons/react";
-import { cantidadMovimiento, esEntrada, fechaDelMovimiento, IconoMovimientoInsumo, origenDeMovimiento, tipoMovimiento } from "@/components/features/inventory/ventanas/comun";
+import { cantidadMovimiento, esEntrada, signoMovimiento, fechaDelMovimiento, IconoMovimientoInsumo, origenDeMovimiento, tipoMovimiento } from "@/components/features/inventory/ventanas/comun";
 import { MovimientoVentana, nombreInsumo } from "@/components/features/inventory/ventanas/MantenimientoVentana";
 import { PageBody } from "@/components/shell/AppShell";
 import { RequireModule } from "@/components/session/RequireModule";
@@ -52,13 +52,16 @@ function MovimientosContent() {
   useParamChange("buscar", setSearch);
   const [abierta, setAbierta] = useState<number | null>(null);
 
+  // Insumo y tipo se filtran en el servidor; con un filtro o búsqueda se piden hasta 1000 (sin filtro, los 200 más recientes).
+  // El texto se busca aquí, sin acentos, sobre lo que llega.
+  const consulta = new URLSearchParams({ ...(origin !== "todos" ? { tabla: origin } : {}), ...(tipo ? { tipo } : {}), limite: search.trim() || origin !== "todos" || tipo ? "1000" : "200" }).toString();
   const resource = useResource<{ items: ApiRecord[]; summary: ApiRecord }>(
     "movimientos",
     async () => {
-      const data = await getJsonAuth(`${API_BASE_URL}/inventory/movimientos`, token);
+      const data = await getJsonAuth(`${API_BASE_URL}/inventory/movimientos?${consulta}`, token);
       return { items: (data.items || []) as ApiRecord[], summary: (data.summary || {}) as ApiRecord };
     },
-    { enabled: !!token },
+    { enabled: !!token, deps: [consulta] },
   );
 
   const rows = useMemo(() => {
@@ -135,7 +138,7 @@ function MovimientosContent() {
         </span>
       </span>,
       <span key="c" className={entrada ? "text-base font-semibold text-success-text" : "text-base font-semibold text-warning-text"}>
-        {entrada ? "+" : "−"}
+        {signoMovimiento(item)}
         {fmt(cantidadMovimiento(item))}
         {item.unidad ? <span className="ml-1 text-xs font-normal">{String(item.unidad)}</span> : null}
       </span>,

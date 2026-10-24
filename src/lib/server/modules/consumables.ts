@@ -184,10 +184,11 @@ export async function refillConsumable({ request, s, params }: RouteContext): Pr
   const data = await readJson(request);
   // Corregir la existencia por conteo es una edición: pide además el permiso de editar movimientos.
   if (tipoDeMovimiento(data) === "ajuste") await requirePermission(s, user, "inventario", "E", { objeto: "movimiento" });
-  const row = await s.queryOne<Record<string, unknown>>("SELECT existencia, stock_maximo FROM consumibles WHERE id = :id LIMIT 1", { id: consumableId });
+  const row = await s.queryOne<Record<string, unknown>>("SELECT existencia, stock_maximo, activo FROM consumibles WHERE id = :id LIMIT 1", { id: consumableId });
   if (!row) {
     return json({ message: "Consumible no encontrado" }, 404);
   }
+  if (Number(row.activo ?? 1) === 0) return json({ message: "El consumible está dado de baja; reactívalo para registrar movimientos", codigo: "dado_de_baja" }, 409);
   const existencia = toFloatOrNull(row.existencia) || 0;
   const mov = await interpretarMovimiento(s, await cargarAutorizacion(s, user), data, existencia);
   const userId = userIdFromClaims(user);

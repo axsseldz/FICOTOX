@@ -90,20 +90,22 @@ export async function interpretarMovimiento(s: Session, auth: Autorizacion, payl
   if (tipo === "ajuste" && !motivoLibre) throw new HttpError(400, { message: "Indica el motivo del ajuste (por ejemplo, «Conteo físico de enero»)" });
   const motivo = motivoLibre || (tipo === "entrada" ? "Relleno manual de stock" : tipo === "consumo" ? "Consumo registrado" : "Salida registrada");
 
-  let delta = cantidad;
-  let registrada = cantidad;
-  if (tipo === "salida" || tipo === "consumo") {
-    if (cantidad > existencia + 1e-9) throw new HttpError(400, { message: "No hay existencia suficiente para esa cantidad" });
-    delta = -cantidad;
-  } else if (tipo === "ajuste") {
-    delta = Math.round((cantidad - existencia) * 1e6) / 1e6;
-    registrada = delta;
-  }
-
   const fechaTexto = String(payload.fecha_movimiento ?? "").trim();
   const fechaMovimiento = fechaTexto ? fechaValida(fechaTexto) : hoyLocal();
   if (!fechaMovimiento) throw new HttpError(400, { message: "La fecha del movimiento no es válida" });
   if (fechaMovimiento > hoyLocal()) throw new HttpError(400, { message: "La fecha del movimiento no puede ser futura" });
+
+  let delta = cantidad;
+  let registrada = cantidad;
+  if (tipo === "salida" || tipo === "consumo") {
+    // Como en los formatos: nunca existencia negativa (409 existencia_insuficiente).
+    if (cantidad > existencia + 1e-9) throw new HttpError(409, { message: `No hay existencia suficiente para esa cantidad (hay ${existencia})`, codigo: "existencia_insuficiente" });
+    delta = -cantidad;
+  } else if (tipo === "ajuste") {
+    // Lo contado es la existencia de hoy (la fecha documenta cuándo se contó). Sin diferencia se guarda 0, no «−0».
+    delta = Math.round((cantidad - existencia) * 1e6) / 1e6 || 0;
+    registrada = delta;
+  }
 
   const vinculoTipo = String(payload.vinculo_tipo || "").trim().toLowerCase() || null;
   const folio = toIntOrNull(payload.vinculo_folio);

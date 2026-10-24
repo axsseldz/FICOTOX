@@ -4,7 +4,7 @@ import { folioNc } from "../../shared/calidad";
 import { registrarAuditoria, snapshotRow } from "../audit";
 import { isIntegrityError, isSqlite, type Row, type Session } from "../db";
 import { darDeBaja, itemRef, reactivarItem } from "../inventory-baja";
-import { intParam, json, readJson, type RouteContext } from "../http";
+import { HttpError, intParam, json, readJson, type RouteContext } from "../http";
 
 import { cargarAutorizacion, recortarPorModulo, requirePermission } from "../rbac";
 import { exigirReauth } from "../seguridad";
@@ -13,7 +13,7 @@ import { aplicarSupervision, exigirSinSupervisionPendiente, marcaSupervision } f
 import { interpretarMovimiento, tipoDeMovimiento } from "../inventory-movimientos";
 import { firstTruthy, searchParam, toFloatOrNull, toIntOrNull, toStrOrNull, utcTimestampReference } from "./helpers";
 
-import { finDiaLocal, hoyLocal, inicioDiaLocal, sumarDias } from "../../shared/fechas";
+import { fechaValida, finDiaLocal, hoyLocal, inicioDiaLocal, sumarDias } from "../../shared/fechas";
 import { autorizarEquipoA } from "../autorizaciones";
 
 /* Portado de modules/inventory/endpoints.py del backend Flask original. */
@@ -400,6 +400,7 @@ export async function refillReactivo({ request, s, params }: RouteContext): Prom
   if (row.tipo_reactivo === "columnas_cromatograficas") {
     return json({ message: "Las columnas cromatográficas no llevan existencias" }, 400);
   }
+  if (Number(row.activo ?? 1) === 0) return json({ message: "El reactivo está dado de baja; reactívalo para registrar movimientos", codigo: "dado_de_baja" }, 409);
 
   // `cantidad_actual` es la existencia canónica; las columnas heredadas solo se acompañan
   // cuando ya la reflejaban (mismo valor), para no inventar existencias en piezas o volumen.
@@ -558,6 +559,9 @@ export async function createEquipo({ request, s }: RouteContext): Promise<Respon
   if (!data.nombre) {
     return json({ message: "El nombre del equipo es obligatorio" }, 400);
   }
+  // «En mantenimiento» lo pone Mantenimiento (no se elige al dar de alta).
+  if (!ESTADOS_EQUIPO.has(String(data.estado)) || data.estado === "mantenimiento") return json({ message: "El estado debe ser operativo, calibración pendiente o fuera de servicio", campo: "estado" }, 400);
+  data.fecha_prox_calibracion = fechaOpcional(data.fecha_prox_calibracion, "Próxima calibración", "fecha_prox_calibracion");
   const autorizarA = Array.isArray(payload.autorizar_a) ? (payload.autorizar_a as unknown[]) : [];
 
   let insertedId: number | null;
@@ -585,7 +589,7 @@ export async function createEquipo({ request, s }: RouteContext): Promise<Respon
   } catch (error) {
     if (isIntegrityError(error)) {
       await s.rollback();
-      return json({ message: "Ya existe un equipo con ese numero de serie" }, 409);
+      return json({ message: "Ya existe un equipo con ese número de serie" }, 409);
     }
     throw error;
   }
@@ -601,6 +605,8 @@ export async function updateEquipo({ request, s, params }: RouteContext): Promis
   if (!data.nombre) {
     return json({ message: "El nombre del equipo es obligatorio" }, 400);
   }
+  if (!ESTADOS_EQUIPO.has(String(data.estado))) return json({ message: "El estado debe ser operativo, en mantenimiento, calibración pendiente o fuera de servicio", campo: "estado" }, 400);
+  data.fecha_prox_calibracion = fechaOpcional(data.fecha_prox_calibracion, "Próxima calibración", "fecha_prox_calibracion");
   // Fase 11: un equipo suspendido por una NC sigue "fuera de servicio" hasta que Calidad lo reanude.
   const suspendido = await suspensionesActivas(s, { tipo: "equipo", clave: String(equipoId) });
   if (suspendido.length && data.estado !== "fuera_servicio") {
@@ -637,7 +643,7 @@ export async function updateEquipo({ request, s, params }: RouteContext): Promis
   } catch (error) {
     if (isIntegrityError(error)) {
       await s.rollback();
-      return json({ message: "Ya existe un equipo con ese numero de serie" }, 409);
+      return json({ message: "Ya existe un equipo con ese número de serie" }, 409);
     }
     throw error;
   }
@@ -684,10 +690,39 @@ export async function listMovimientos({ request, s }: RouteContext): Promise<Res
   const user = await requireUser(request);
   await requirePermission(s, user, "inventario", "V");
 
+  // Filtros en el servidor (antes solo se filtraban los 200 más recientes en la pantalla):
+  // ?tabla=reactivos|consumibles&id=<insumo>&tipo=<tipo>&buscar=<texto>&limite=<n, máx. 1000>.
+  const where: string[] = [];
+  const filtros: Record<string, unknown> = {};
+  const tabla = searchParam(request, "tabla");
+  if (tabla === "reactivos" || tabla === "consumibles") {
+    where.push("m.tabla_origen = :tabla");
+    filtros.tabla = tabla;
+  }
+  const item = toIntOrNull(searchParam(request, "id"));
+  if (item !== null) {
+    where.push("m.id_item = :item");
+    filtros.item = item;
+  }
+  const tipo = searchParam(request, "tipo").toLowerCase();
+  if (tipo) {
+    where.push("LOWER(m.tipo) = :tipo");
+    filtros.tipo = tipo;
+  }
+  const buscar = searchParam(request, "buscar").toLowerCase().slice(0, 100);
+  if (buscar) {
+    const campos = ["r.nombre", "r.producto", "r.item_name", "c.producto", "r.id_interno", "c.id_interno", "m.referencia", "m.motivo"].map((c) => `COALESCE(${c}, '')`);
+    const texto = isSqlite() ? campos.join(" || ' ' || ") : `CONCAT_WS(' ', ${campos.join(", ")})`;
+    where.push(`LOWER(${texto}) LIKE :buscar ESCAPE '!'`);
+    filtros.buscar = `%${buscar.replace(/[!%_]/g, (x) => `!${x}`)}%`;
+  }
+  const limite = Math.min(Math.max(toIntOrNull(searchParam(request, "limite")) || 200, 1), 1000);
+
   const rows = await s.query(
     `
     SELECT m.id, m.referencia, m.tipo, m.tabla_origen, m.id_item, m.cantidad,
            m.motivo, m.creado_en AS fecha_hora, m.fecha_movimiento, m.unidad, m.vinculo_tipo, m.vinculo_id,
+           m.revierte_id, (SELECT MIN(rv.id) FROM movimientos rv WHERE rv.revierte_id = m.id) AS revertido_por,
            u.nombre AS usuario,
            COALESCE(r.nombre, r.producto, r.item_name, r.nombre_crm, c.producto) AS item_nombre,
            COALESCE(r.codigo_interno, r.id_interno, c.id_interno, r.catalogo, r.catalogo_parte_cas_lote, c.catalogo_parte_cas) AS item_codigo
@@ -695,9 +730,11 @@ export async function listMovimientos({ request, s }: RouteContext): Promise<Res
     LEFT JOIN reactivos r ON m.tabla_origen = 'reactivos' AND m.id_item = r.id
     LEFT JOIN consumibles c ON m.tabla_origen = 'consumibles' AND m.id_item = c.id
     LEFT JOIN usuarios u ON u.id = m.id_usuario
-    ORDER BY COALESCE(m.fecha_movimiento, SUBSTR(m.creado_en, 1, 10)) DESC, m.creado_en DESC
-    LIMIT 200
+    ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+    ORDER BY COALESCE(m.fecha_movimiento, SUBSTR(m.creado_en, 1, 10)) DESC, m.creado_en DESC, m.id DESC
+    LIMIT ${limite}
     `,
+    filtros,
   );
 
   // Fase 3: "hoy", "semana" y "mes" son del calendario del laboratorio (America/Tijuana) y cuentan por la fecha del movimiento (si no la tiene, por la de captura, que esta en UTC).
@@ -833,6 +870,44 @@ export async function getMantenimiento({ request, s, params }: RouteContext): Pr
  * hay mantenimiento pendiente que lo sustituya. Al completar una calibración se
  * puede fijar la próxima fecha.
  */
+/*
+ * Catálogos y reglas de Mantenimiento que también valida el servidor:
+ * - tipos: preventivo, correctivo, calibración (los heredados se conservan si no cambian);
+ * - por formulario solo se programa, se pone en proceso o se completa: «vencido» lo pone el sistema
+ *   y «cancelado» se hace con motivo, contraseña y equipos:AN (DELETE);
+ * - lo cancelado ya no se edita y lo completado no se reabre;
+ * - el equipo existe y está activo; las fechas son AAAA-MM-DD y la de realización no es futura.
+ */
+const TIPOS_MANTENIMIENTO = new Set(["preventivo", "correctivo", "calibracion"]);
+const ESTADOS_MANTENIMIENTO_FORMULARIO = new Set(["programado", "en_proceso", "completado"]);
+const ESTADOS_EQUIPO = new Set(["operativo", "mantenimiento", "calibracion_pendiente", "fuera_servicio"]);
+
+function fechaOpcional(valor: unknown, etiqueta: string, campo: string, { noFutura = false } = {}): string | null {
+  if (valor === null || valor === undefined || String(valor).trim() === "") return null;
+  const fecha = fechaValida(valor);
+  if (!fecha) throw new HttpError(400, { message: `${etiqueta}: la fecha no es válida (AAAA-MM-DD)`, campo });
+  if (noFutura && fecha > hoyLocal()) throw new HttpError(400, { message: `${etiqueta}: no puede ser futura`, campo });
+  return fecha;
+}
+
+async function validarMantenimiento(s: Session, data: ReturnType<typeof normalizeMantenimientoPayload>, antes: Row | null, proxima: unknown): Promise<string | null> {
+  if (antes && String(antes.estado) === "cancelado") throw new HttpError(409, { message: "El mantenimiento está cancelado; ya no se edita", codigo: "cancelado" });
+  if (!TIPOS_MANTENIMIENTO.has(String(data.tipo)) && !(antes && String(antes.tipo) === String(data.tipo))) throw new HttpError(400, { message: "El tipo debe ser preventivo, correctivo o calibración", campo: "tipo" });
+  const estado = String(data.estado);
+  if (!ESTADOS_MANTENIMIENTO_FORMULARIO.has(estado) && !(antes && String(antes.estado) === estado)) {
+    throw new HttpError(400, { message: estado === "cancelado" ? "Para cancelar usa «Cancelar mantenimiento» (con motivo y tu contraseña)" : "El estado debe ser programado, en proceso o completado (el vencimiento lo marca el sistema)", campo: "estado" });
+  }
+  if (antes && String(antes.estado) === "completado" && estado !== "completado") throw new HttpError(409, { message: "El mantenimiento ya se completó; no se reabre (programa otro si hace falta)", codigo: "completado" });
+  data.fecha_programada = fechaOpcional(data.fecha_programada, "Fecha programada", "fecha_programada");
+  data.fecha_realizado = fechaOpcional(data.fecha_realizado, "Fecha de realización", "fecha_realizado", { noFutura: true });
+  if (!antes || Number(antes.id_equipo) !== Number(data.id_equipo)) {
+    const equipo = await s.queryOne<Row>("SELECT id, activo FROM equipos WHERE id = :id", { id: data.id_equipo });
+    if (!equipo) throw new HttpError(404, { message: "El equipo no existe", campo: "id_equipo" });
+    if (Number(equipo.activo ?? 1) === 0) throw new HttpError(409, { message: "El equipo está dado de baja; no se le programan mantenimientos", codigo: "dado_de_baja", campo: "id_equipo" });
+  }
+  return fechaOpcional(proxima, "Próxima calibración", "proxima_calibracion");
+}
+
 export async function syncEquipoEstado(s: Session, equipoId: number, proximaCalibracion?: string | null, calibracionCompletada = false): Promise<void> {
   const equipo = await s.queryOne<{ estado: string }>("SELECT estado FROM equipos WHERE id = :id", { id: equipoId });
   if (!equipo) return;
@@ -861,13 +936,14 @@ export async function createMantenimiento({ request, s }: RouteContext): Promise
 
   const payload = await readJson(request);
   const data = normalizeMantenimientoPayload(payload);
-  const proximaCalibracion = data.estado === "completado" && data.tipo === "calibracion" ? toStrOrNull(payload.proxima_calibracion, 10) : null;
   if (!data.id_equipo) {
     return json({ message: "Selecciona un equipo" }, 400);
   }
   if (!data.fecha_programada) {
     return json({ message: "La fecha programada es obligatoria" }, 400);
   }
+  const proximaValida = await validarMantenimiento(s, data, null, payload.proxima_calibracion);
+  const proximaCalibracion = data.estado === "completado" && data.tipo === "calibracion" ? proximaValida : null;
   if (data.estado === "completado" && !data.fecha_realizado) {
     return json({ message: "Indica la fecha en que se realizó para marcarlo como completado" }, 400);
   }
@@ -901,18 +977,20 @@ export async function updateMantenimiento({ request, s, params }: RouteContext):
 
   const payload = await readJson(request);
   const data = normalizeMantenimientoPayload(payload);
-  const proximaCalibracion = data.estado === "completado" && data.tipo === "calibracion" ? toStrOrNull(payload.proxima_calibracion, 10) : null;
   if (!data.id_equipo) {
     return json({ message: "Selecciona un equipo" }, 400);
   }
   if (!data.fecha_programada) {
     return json({ message: "La fecha programada es obligatoria" }, 400);
   }
+  const antesMantenimiento = await snapshotRow(s, "mantenimientos", mantenimientoId);
+  if (!antesMantenimiento) return json({ message: "Mantenimiento no encontrado" }, 404);
+  const proximaValida = await validarMantenimiento(s, data, antesMantenimiento, payload.proxima_calibracion);
+  const proximaCalibracion = data.estado === "completado" && data.tipo === "calibracion" ? proximaValida : null;
   if (data.estado === "completado" && !data.fecha_realizado) {
     return json({ message: "Indica la fecha en que se realizó para marcarlo como completado" }, 400);
   }
 
-  const antesMantenimiento = await snapshotRow(s, "mantenimientos", mantenimientoId);
   if (data.estado === "completado" && String(antesMantenimiento?.estado || "") !== "completado") {
     if (supervision) return json({ message: "Lo que capturas bajo supervisión no se marca como completado: queda pendiente del visto bueno de tu supervisor", codigo: "supervision_pendiente" }, 409);
     exigirSinSupervisionPendiente(antesMantenimiento, "El mantenimiento", "marcar como completado");
@@ -956,11 +1034,13 @@ export async function deleteMantenimiento({ request, s, params }: RouteContext):
     // Los mantenimientos son registros del historial del equipo: se cancelan con motivo, no se borran.
     const payload = await readJson(request);
     const motivo = String(payload.motivo || "").trim();
-    if (motivo.length < 5) return json({ message: "Indica el motivo de la cancelacion (al menos 5 caracteres)" }, 400);
+    if (motivo.length < 5) return json({ message: "Indica el motivo de la cancelación (al menos 5 caracteres)" }, 400);
     await exigirReauth(s, request, user, "equipos:AN");
     const antes = await snapshotRow(s, "mantenimientos", mantenimientoId);
     // `||` es concatenacion en SQLite pero OR logico en MySQL: se usa CONCAT en ese motor.
     const observaciones = isSqlite() ? "TRIM(COALESCE(observaciones, '') || :nota)" : "TRIM(CONCAT(COALESCE(observaciones, ''), :nota))";
+    // Lo completado es historia del equipo (y puede tener su reporte): no se cancela.
+    if (antes && String(antes.estado) === "completado") return json({ message: "El mantenimiento ya se completó; no se cancela", codigo: "completado" }, 409);
     const result = await s.execute(`UPDATE mantenimientos SET estado = 'cancelado', observaciones = ${observaciones} WHERE id = :id AND estado <> 'cancelado'`, { id: mantenimientoId, nota: `\n[Cancelado: ${motivo}]` });
     if (result.rowcount > 0) {
       await registrarAuditoria(s, user, { accion: "anular", entidad: "mantenimientos", entidadId: mantenimientoId, referencia: `mantenimiento ${antes?.tipo || ""} equipo ${antes?.id_equipo || ""}`, motivo, antes, despues: await snapshotRow(s, "mantenimientos", mantenimientoId) });
