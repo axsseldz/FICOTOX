@@ -571,7 +571,7 @@ function Suspensiones({ item, suspensiones }: { item: ApiRecord; suspensiones: A
       {suspensiones.length ? (
         <ul className="flex flex-col gap-2">
           {suspensiones.map((su) => {
-            const propia = Number(su.suspendida_por) === Number(user?.id);
+            const propia = Number(su.suspendida_por) === Number(user?.id) && !su.excepcion_reanudar;
             return (
               <li key={String(su.id)} className="flex flex-wrap items-center justify-between gap-2 rounded-field bg-surface px-3 py-2 ring-1 ring-line" data-suspension={String(su.id)}>
                 <span className="flex flex-col">
@@ -909,7 +909,9 @@ function Verificar({ item, bloqueo, onExcepcion }: { item: ApiRecord; bloqueo: s
     void enviar("POST", `/calidad/nc/${item.id}/verificar`, { resultado, comentarios }, undefined, (err) => vVer.errorServidor(err));
   };
   if (!puede.verificar) {
-    return item.estado === "en_verificacion" ? <p className="text-sm text-ink-3">Pendiente: la verifica quien revisa en calidad.</p> : null;
+    if (item.estado !== "en_verificacion") return null;
+    const verificada = ((item.verificaciones || []) as ApiRecord[]).at(-1)?.resultado === "eficaz";
+    return <p className="text-sm text-ink-3" data-verificada={verificada ? "" : undefined}>{verificada ? "Eficacia verificada: la NC está lista para cerrarse." : "Pendiente: la verifica quien revisa en calidad."}</p>;
   }
   if (bloqueo) return <SegregacionCallout bloqueo={bloqueo} accion="verificar" onSolicitar={onExcepcion} />;
   return (

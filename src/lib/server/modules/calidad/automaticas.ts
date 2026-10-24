@@ -11,6 +11,7 @@
  * - uso confirmado de un equipo no apto o con calibracion vencida (extraccion, analisis);
  * - alerta_integridad (PDF de informe, evidencia instrumental, respaldo).
  */
+import { createHash } from "node:crypto";
 import type { CurrentUser } from "../../auth";
 import { registrarAuditoria } from "../../audit";
 import { type Row, type Session } from "../../db";
@@ -42,9 +43,13 @@ interface NuevaAutomatica {
  * - Alerta de integridad: tambien las anuladas. La clave identifica un hecho unico e inmutable (acta, PDF o adjunto con su huella);
  *   anularla como falso positivo no debe hacerla renacer en cada consulta o descarga.
  */
+/* La columna guarda 200 caracteres: una clave más larga se acorta con su huella para que la búsqueda y lo guardado coincidan. */
+export const claveAutomatica = (clave: string): string => (clave.length <= 200 ? clave : `${clave.slice(0, 135)}:${createHash("sha256").update(clave).digest("hex")}`);
+
 export async function registrarIncidenciaAutomatica(s: Session, nueva: NuevaAutomatica): Promise<number | null> {
   const incluirAnuladas = nueva.origen === "alerta_integridad";
-  const existente = await s.scalar(`SELECT id FROM ${T.incidencias} WHERE clave_automatica = :clave${incluirAnuladas ? "" : " AND estado <> 'anulada'"} LIMIT 1`, { clave: nueva.clave });
+  const clave = claveAutomatica(nueva.clave);
+  const existente = await s.scalar(`SELECT id FROM ${T.incidencias} WHERE clave_automatica = :clave${incluirAnuladas ? "" : " AND estado <> 'anulada'"} LIMIT 1`, { clave });
   if (existente) return null;
   const folio = await siguienteFolio(s, T.incidencias);
   const en = ahora();
@@ -52,7 +57,7 @@ export async function registrarIncidenciaAutomatica(s: Session, nueva: NuevaAuto
   const r = await s.execute(
     `INSERT INTO ${T.incidencias} (folio_num, tipo, fecha_hora_ocurrencia, descripcion, impacto_resultados, estado, reportada_por, reportada_nombre, reportada_rol, reportada_en, origen_automatico, clave_automatica)
      VALUES (:folio, :tipo, :ocurrencia, :descripcion, :impacto, 'reportada', :por, :nombre, :rol, :en, :origen, :clave)`,
-    { folio, tipo: nueva.tipo, ocurrencia: en, descripcion: nueva.descripcion, impacto: nueva.impacto || "desconocido", por: porId, nombre: nueva.actor ? String(nueva.actor.nombre || nueva.actor.email || "") : "Sistema", rol: nueva.actor ? nueva.rol || null : "Sistema", en, origen: nueva.origen, clave: nueva.clave.slice(0, 200) },
+    { folio, tipo: nueva.tipo, ocurrencia: en, descripcion: nueva.descripcion, impacto: nueva.impacto || "desconocido", por: porId, nombre: nueva.actor ? String(nueva.actor.nombre || nueva.actor.email || "") : "Sistema", rol: nueva.actor ? nueva.rol || null : "Sistema", en, origen: nueva.origen, clave },
   );
   const id = Number(r.lastrowid);
   for (const reg of nueva.registros) {

@@ -67,6 +67,9 @@ export function hrefDeSolicitud(item: ApiRecord): string | null {
       return `/calidad/incidencias/${id}`;
     case "no_conformidades":
       return `/calidad/nc/${id}`;
+    // La excepción para reanudar una suspensión lleva a su NC (la suspensión no tiene ficha propia).
+    case "suspensiones":
+      return (item.datos as ApiRecord | undefined)?.nc_id ? `/calidad/nc/${(item.datos as ApiRecord).nc_id}` : null;
     case "usuarios":
       return "/administracion/usuarios";
     case "roles":

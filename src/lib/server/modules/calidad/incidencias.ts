@@ -56,12 +56,13 @@ export async function listarIncidencias({ request, s }: RouteContext): Promise<R
     where.push("i.tipo = :tipo");
     valores.tipo = tipo;
   }
+  // El periodo es el de la ocurrencia, como en la lista de Calidad (antes este listado y su CSV usaban la fecha de reporte).
   if (desde) {
-    where.push("i.reportada_en >= :desde");
+    where.push("i.fecha_hora_ocurrencia >= :desde");
     valores.desde = inicioDiaLocal(desde);
   }
   if (hasta) {
-    where.push("i.reportada_en <= :hasta");
+    where.push("i.fecha_hora_ocurrencia <= :hasta");
     valores.hasta = finDiaLocal(hasta);
   }
   // Alcance "incidencias": solo las propias, por cualquier via (lista, busqueda, registro, CSV).
