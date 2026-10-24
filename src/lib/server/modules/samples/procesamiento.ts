@@ -273,6 +273,8 @@ export async function updateProcessingSample({ request, s, params }: RouteContex
   exigirSupervisorDistinto(data);
   // Fase 5: solo quien esta asignado a la muestra (o la coordinacion).
   await exigirAsignacion(s, user, data.recepcion_id, permiso.auth);
+  // Con extracciones vigentes la recepción de origen ya no cambia: la cadena R → P → E quedaría cruzada.
+  if (antes && Number(data.recepcion_id) !== Number(antes.recepcion_id) && Number((await s.scalar("SELECT COUNT(*) FROM muestras_extraccion WHERE procesamiento_id = :id AND estado <> 'anulada'", { id: processingId })) || 0)) return json({ message: "El procesamiento ya tiene extracciones; su recepción de origen no cambia", campo: "recepcion_id" }, 409);
   // El origen se valida tambien al editar (no se puede quitar ni cambiar por uno invalido).
   const origen = await assertOrigin(s, "muestras_recepcion", data.recepcion_id, { requireAccepted: true, requerido: ORIGEN_REQUERIDO });
   // El folio de la etapa anterior sale del registro vinculado, no de lo que mande el cliente.

@@ -364,6 +364,8 @@ export async function updateExtractionSample({ request, s, params }: RouteContex
   if (!tipo) {
     return json({ message: "Tipo de extraccion no valido" }, 400);
   }
+  // El formato (E-A ASP o E-D DSP) y su serie de folios se fijan al registrar: cambiarlo dejaría el folio en la serie equivocada.
+  if (antes && normalizeExtractionType(antes.tipo_registro) && tipo !== normalizeExtractionType(antes.tipo_registro)) return json({ message: `La extracción es ${normalizeExtractionType(antes.tipo_registro)}; el formato no cambia (anúlala y registra otra)`, campo: "tipo_registro" }, 400);
   const data = normalizePayload(payload, tipo);
   // Fase 4: autorizacion FX-THF-AP: extraccion, metodo del tipo (E-A ASP, E-D DSP) y cada equipo del inventario usado.
   await exigirAutorizaciones(s, user, [...requisitosExtraccion(tipo), ...(await requisitosEquipos(s, (safeJsonLoad(data.equipos_json, []) as Array<{ equipo_id?: unknown }>).map((e) => e.equipo_id)))]);

@@ -551,7 +551,7 @@ export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord |
               }}
             >
               <option value="">Sin vincular</option>
-              {receptions.map((option) => (
+              {receptions.filter((option) => String(option.id) === form.receptionId || (["aceptada", "aceptada_con_desviacion"].includes(String(option.decision_aceptacion || "")) && String(option.estado) !== "anulada")).map((option) => (
                 <option key={option.id} value={option.id}>
                   {formatearFolio("R", option.folio_num)} · {option.solicitante || option.id_interno || "Sin solicitante"}
                 </option>

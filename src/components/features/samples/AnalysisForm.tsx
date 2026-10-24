@@ -592,7 +592,7 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
               Enmendar…
             </Button>
           ) : null}
-          {editing && (estado === "registrado" || estado === "en_revision") && canReview ? (
+          {editing && estado === "en_revision" && canReview ? (
             <BotonSegregado bloqueo={segregacion.revisar} onSolicitar={() => solicitarExcepcion("revisar")}>
               <Button variant="soft" icon={<CheckCircle size={16} />} onClick={() => setSign("revisar")} disabled={!!segregacion.revisar}>
                 Marcar revisado

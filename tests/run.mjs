@@ -157,7 +157,7 @@ try {
   }
 
   // api-roles corre despues de api-dsp y api-sgc: crea registros y personas de prueba que alterarian los folios que esas suites esperan.
-  for (const file of ["api-dsp.mjs", "api-sgc.mjs", "api-roles.mjs", "api-seguridad.mjs", "api-segregacion.mjs", "api-autorizaciones.mjs", "api-muestras.mjs", "api-informes.mjs", "api-documentos.mjs", "api-documentos-flujo.mjs", "api-documentos-fase3.mjs", "api-documentos-aceptacion.mjs", "api-cierre.mjs", "api-evidencias.mjs", "api-incidencias.mjs", "api-no-conformidades.mjs", "api-produccion.mjs", "api-mantenimiento-reportes.mjs", "api-correcciones-v1.mjs", "respaldos.mjs", "api-respaldos-portables.mjs", "api-restaurar.mjs"]) {
+  for (const file of ["api-dsp.mjs", "api-sgc.mjs", "api-roles.mjs", "api-seguridad.mjs", "api-segregacion.mjs", "api-autorizaciones.mjs", "api-muestras.mjs", "api-informes.mjs", "api-documentos.mjs", "api-documentos-flujo.mjs", "api-documentos-fase3.mjs", "api-documentos-aceptacion.mjs", "api-cierre.mjs", "api-evidencias.mjs", "api-incidencias.mjs", "api-no-conformidades.mjs", "api-produccion.mjs", "api-mantenimiento-reportes.mjs", "api-correcciones-v1.mjs", "api-integral-muestras.mjs", "respaldos.mjs", "api-respaldos-portables.mjs", "api-restaurar.mjs"]) {
     console.log(`\n=== ${file}`);
     failed += (await run(path.join(here, file), api)) ? 1 : 0;
   }
@@ -180,7 +180,7 @@ try {
     if (!existsSync(chrome)) {
       console.log(`\n(navegador omitido: no se encontro Chrome en ${chrome}; define CHROME_PATH)`);
     } else {
-      for (const file of ["roles.mjs", "dsp.mjs", "sgc.mjs", "seguridad.mjs", "fechas.mjs", "segregacion.mjs", "autorizaciones.mjs", "etiquetas.mjs", "auditoria.mjs", "evidencias.mjs", "no-conformidades.mjs", "validacion.mjs", "documentos.mjs", "documentos-flujo.mjs", "documentos-fase3.mjs", "documentos-ficha.mjs", "documentos-listas.mjs", "documentos-inicio.mjs", "visor.mjs", "animaciones.mjs", "estilos-atajos.mjs", "firmantes.mjs", "mantenimiento-reporte.mjs", "calidad-visor.mjs", "integral-recorrido.mjs", "respaldos-portables.mjs", "respaldos-restaurar.mjs"]) {
+      for (const file of ["roles.mjs", "dsp.mjs", "sgc.mjs", "seguridad.mjs", "fechas.mjs", "segregacion.mjs", "autorizaciones.mjs", "etiquetas.mjs", "auditoria.mjs", "evidencias.mjs", "no-conformidades.mjs", "validacion.mjs", "documentos.mjs", "documentos-flujo.mjs", "documentos-fase3.mjs", "documentos-ficha.mjs", "documentos-listas.mjs", "documentos-inicio.mjs", "visor.mjs", "animaciones.mjs", "estilos-atajos.mjs", "firmantes.mjs", "mantenimiento-reporte.mjs", "calidad-visor.mjs", "integral-recorrido.mjs", "integral-muestras.mjs", "respaldos-portables.mjs", "respaldos-restaurar.mjs"]) {
         console.log(`\n=== ui/${file}`);
         failed += (await run(path.join(here, "ui", file), entornoUi())) ? 1 : 0;
       }

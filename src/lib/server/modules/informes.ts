@@ -303,6 +303,7 @@ export async function createInforme({ request, s }: RouteContext): Promise<Respo
   const data = normalizePayload(await readJson(request));
   const recepcion = await loadRecepcion(s, data.recepcion_id);
   const analyses = await loadAnalyses(s, data.analisis_ids);
+  if (analyses.length !== new Set(data.analisis_ids).size) return json({ message: "Alguno de los análisis indicados no existe", campo: "analisis_ids" }, 400);
   if (analyses.some((a) => Number(a.recepcion_id) !== Number(recepcion.id))) return json({ message: "Todos los analisis deben pertenecer a la recepcion del informe" }, 400);
   // El cliente es dato obligatorio del informe (si no se manda, se toma el solicitante de la recepción).
   if (!normalizeCliente(data.cliente, recepcion).nombre) return json({ message: "Indica el nombre del cliente" }, 400);
@@ -361,8 +362,11 @@ export async function updateInforme({ request, s, params }: RouteContext): Promi
   const antes = assertDraft(await snapshotRow(s, TABLE, id));
   await exigirSinSolicitudPendiente(s, TABLE, id, `El informe ${informeFolio(antes)}`, "editar");
   const data = normalizePayload(await readJson(request));
-  const recepcion = await loadRecepcion(s, data.recepcion_id || Number(antes.recepcion_id));
+  // La recepción define al informe (folio, cliente, muestras): no cambia al editar el borrador (la pantalla tampoco lo permite).
+  if (data.recepcion_id && Number(data.recepcion_id) !== Number(antes.recepcion_id)) return json({ message: "La recepción de un informe no cambia; crea un informe nuevo para otra recepción", campo: "recepcion_id" }, 400);
+  const recepcion = await loadRecepcion(s, Number(antes.recepcion_id));
   const analyses = await loadAnalyses(s, data.analisis_ids);
+  if (analyses.length !== new Set(data.analisis_ids).size) return json({ message: "Alguno de los análisis indicados no existe", campo: "analisis_ids" }, 400);
   if (analyses.some((a) => Number(a.recepcion_id) !== Number(recepcion.id))) return json({ message: "Todos los analisis deben pertenecer a la recepcion del informe" }, 400);
   // El cliente es dato obligatorio del informe (si no se manda, se toma el solicitante de la recepción).
   if (!normalizeCliente(data.cliente, recepcion).nombre) return json({ message: "Indica el nombre del cliente" }, 400);
@@ -494,6 +498,7 @@ export async function authorizeInforme({ request, s, params }: RouteContext): Pr
   await exigirReauth(s, request, user, "informes:A");
   const analyses = await loadAnalyses(s, ids);
   if (!analyses.length) return json({ message: "El informe no incluye analisis" }, 400);
+  if (analyses.length !== new Set(ids).size) return json({ message: "El informe incluye análisis que ya no existen; corrígelo en borrador" }, 409);
   await exigirAnalisisSinSolicitud(s, ids, "autorizar en un informe");
   const noAprobados = analyses.filter((a) => String(a.estado) !== "aprobado");
   if (noAprobados.length) return json({ message: `Hay analisis sin aprobar: ${noAprobados.map((a) => formatearFolio("A", a.folio_num)).join(", ")}` }, 409);

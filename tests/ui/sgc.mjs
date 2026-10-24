@@ -170,7 +170,7 @@ try {
   await row.getByRole("button", { name: "Acciones" }).click();
   await page.getByRole("menuitem", { name: /Anular recepción/ }).click();
   await fillPrompt("Prueba UI: registro duplicado", "Anular");
-  await page.locator("[data-solicitud-pendiente]").first().waitFor();
+  await row.locator("[data-solicitud-pendiente]").first().waitFor();
   check("anular una recepción aceptada queda pendiente de autorización", true);
   check("la Responsable General aprueba la anulación", (await aprobarComoRG(`R ${String(folio).padStart(7, "0")}`)) === 200);
   await page.reload();
@@ -182,7 +182,8 @@ try {
   await anulada.getByRole("button", { name: "Acciones" }).click();
   await page.getByRole("menuitem", { name: /Restaurar recepción/ }).click();
   await fillPrompt("Prueba UI: se anuló por error", "Restaurar");
-  await page.locator("[data-solicitud-pendiente]").first().waitFor();
+  // La marca de la solicitud en el renglón de esta recepción (otras recepciones pueden tener solicitudes pendientes).
+  await page.locator("tbody tr").filter({ hasText: `UI-${stamp}` }).locator("[data-solicitud-pendiente]").first().waitFor();
   check("la Responsable General aprueba la restauración", (await aprobarComoRG(`R ${String(folio).padStart(7, "0")}`)) === 200);
   await page.reload();
   await setFilterToggle("Mostrar anuladas", false);
@@ -243,9 +244,7 @@ try {
   await rowA.waitFor();
   check("análisis en la lista con estado Registrado", (await rowA.textContent()).includes("Registrado"), `folio A ${folioA}`);
   await rowA.click();
-  // Fase 3 (segregación): quien lo elaboró ve el botón deshabilitado con la explicación.
-  await page.getByText("Separación de funciones").first().waitFor();
-  check("QA no puede revisar su propio análisis (botón deshabilitado con explicación)", await page.getByRole("button", { name: "Marcar revisado" }).isDisabled());
+  await page.getByRole("navigation", { name: "Secciones del formato" }).waitFor();
   const analisisUrl = page.url();
   // Fase 10: evidencia instrumental obligatoria; se adjunta desde la sección del formato.
   await showAll();
@@ -259,6 +258,10 @@ try {
   await page.getByRole("dialog").getByRole("button", { name: /Enviar a revisión/ }).click();
   await page.locator("[data-sonner-toast]").filter({ hasText: /revisi/i }).last().waitFor({ timeout: 20_000 });
   check("el analista envía el análisis a revisión", true);
+  // Fase 3 (segregación): ya en revisión, quien lo elaboró ve «Marcar revisado» deshabilitado con la explicación.
+  await page.reload();
+  await page.getByText("Separación de funciones").first().waitFor();
+  check("QA no puede revisar su propio análisis (botón deshabilitado con explicación)", await page.getByRole("button", { name: "Marcar revisado" }).isDisabled());
   // La revisa y aprueba otra persona.
   await page2.goto(`${BASE}/login`);
   await page2.fill("#login-email", RICARDO);

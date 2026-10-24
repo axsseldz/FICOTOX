@@ -508,7 +508,11 @@ export async function ejecutarDecisionRecepcion(ctx: ContextoEjecucion): Promise
   return { item: serializeRow(despues!) };
 }
 
+/* El folio ya impreso en un informe liberado (o en una muestra cerrada, rechazada o anulada) no cambia. */
+const ESTADOS_SIN_CAMBIO_FOLIO = new Set(["anulada", "liberada", "cerrada", "rechazada"]);
+
 async function aplicarCambioFolio(s: Session, user: CurrentUser, antes: Row, folio: number, motivo: string, detalle: Record<string, unknown>): Promise<Row> {
+  if (ESTADOS_SIN_CAMBIO_FOLIO.has(String(antes.estado))) throw new HttpError(409, { message: `La recepción ${folioLabel(TABLE, antes)} está ${antes.estado}; su folio ya no cambia`, codigo: "estado_invalido" });
   if (await s.scalar(`SELECT id FROM ${TABLE} WHERE folio_num = :folio AND id <> :id`, { folio, id: antes.id })) throw new HttpError(409, { message: `El folio ${formatearFolio("R", folio)} ya existe` });
   await s.execute(`UPDATE ${TABLE} SET folio_num = :folio WHERE id = :id`, { folio, id: antes.id });
   const despues = (await snapshotRow(s, TABLE, Number(antes.id)))!;
@@ -547,6 +551,7 @@ export async function cambiarFolioRecepcion({ request, s, params }: RouteContext
   const antes = await recepcionOError(s, intParam(params.id));
   await exigirVistaAsignada(s, permiso, antes);
   await exigirSinSolicitudPendiente(s, TABLE, Number(antes.id), `La recepción ${folioLabel(TABLE, antes)}`, "cambiar el folio");
+  if (ESTADOS_SIN_CAMBIO_FOLIO.has(String(antes.estado))) return json({ message: `La recepción ${folioLabel(TABLE, antes)} está ${antes.estado}; su folio ya no cambia`, codigo: "estado_invalido" }, 409);
   const payload = await readJson(request);
   const folio = toIntOrNull(payload.folio_num);
   const motivo = String(payload.motivo || "").trim();

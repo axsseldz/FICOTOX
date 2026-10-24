@@ -17,6 +17,8 @@
  *   el correo aparece parcialmente oculto.
  */
 import { exigirSinRetencion } from "./modules/calidad/bloqueos";
+import { incidenciaPorAlertaIntegridad } from "./modules/calidad/automaticas";
+import { integridadArchivo } from "./adjuntos";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -119,6 +121,7 @@ async function registrar(s: Session, user: CurrentUser, cargo: string, informe: 
 export async function listarEnvios({ request, s, params }: RouteContext): Promise<Response> {
   const user = await requireUser(request);
   await requirePermission(s, user, "informes", "V");
+  if (!(await s.scalar("SELECT id FROM informes WHERE id = :id", { id: intParam(params.id) }))) throw new HttpError(404, { message: "Informe no encontrado" });
   return json({ items: await listar(s, intParam(params.id)), smtp_disponible: !!smtpConfig() });
 }
 
@@ -212,9 +215,22 @@ export async function descargarEvidencia({ request, s, params }: RouteContext): 
   const envio = await s.queryOne<Row>(`SELECT * FROM ${TABLE} WHERE id = :id AND informe_id = :informe`, { id: intParam(params.envio), informe: intParam(params.id) });
   if (!envio?.evidencia_archivo) throw new HttpError(404, { message: "Evidencia no encontrada" });
   const ruta = path.join(enviosDir(), String(envio.evidencia_archivo));
-  if (!fs.existsSync(ruta)) throw new HttpError(404, { message: "El archivo de evidencia no está en el servidor" });
-  const bytes = await fs.promises.readFile(ruta);
+  // Como los adjuntos: se verifica el SHA-256 guardado al registrar el envío; si falta o no coincide, alerta e incidencia automática.
+  const informe = await snapshotRow(s, "informes", Number(envio.informe_id));
+  const referencia = `${informeFolio(informe)} v${envio.version}`;
+  const integridad = await integridadArchivo(ruta, envio.evidencia_sha256);
+  if (integridad.estado !== "ok") {
+    await registrarAuditoria(s, user, { accion: "alerta_integridad", entidad: "informes", entidadId: Number(envio.informe_id), referencia, motivo: integridad.estado === "faltante" ? "La evidencia del envío no está en el servidor" : "El SHA-256 de la evidencia del envío no coincide con el registrado", detalle: { envio_id: envio.id, archivo: envio.evidencia_archivo, esperado: envio.evidencia_sha256, obtenido: integridad.sha256 } });
+    await incidenciaPorAlertaIntegridad(s, { clave: `envio:${envio.id}:${integridad.estado}`, descripcion: `La evidencia del envío del informe ${referencia} ${integridad.estado === "faltante" ? "no está en el servidor" : "no coincide con su huella SHA-256"} (alerta de integridad).`, registros: [{ entidad: "informes", entidad_id: Number(envio.informe_id), referencia }] });
+  }
+  if (!integridad.bytes) {
+    await s.commit();
+    return json({ message: "El archivo de evidencia no está en el servidor; se registró una alerta de integridad", codigo: "archivo_faltante" }, 404);
+  }
+  const bytes = integridad.bytes;
+  await registrarAuditoria(s, user, { accion: "descargar", entidad: "informes", entidadId: Number(envio.informe_id), referencia, detalle: { envio_id: envio.id, evidencia: true } });
+  await s.commit();
   const ext = path.extname(ruta).toLowerCase();
   const tipo = ext === ".pdf" ? "application/pdf" : ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : [".jpg", ".jpeg"].includes(ext) ? "image/jpeg" : ext === ".json" ? "application/json" : "message/rfc822";
-  return new Response(new Uint8Array(bytes), { status: 200, headers: { "Content-Type": tipo, "Content-Disposition": `attachment; filename="${envio.evidencia_archivo}"`, "X-Evidencia-Sha256": String(envio.evidencia_sha256 || "") } });
+  return new Response(new Uint8Array(bytes), { status: 200, headers: { "Content-Type": tipo, "Content-Disposition": `attachment; filename="${envio.evidencia_archivo}"`, "X-Evidencia-Sha256": String(envio.evidencia_sha256 || ""), "X-Integridad-Evidencia": integridad.estado } });
 }

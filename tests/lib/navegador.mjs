@@ -101,3 +101,47 @@ export const entendido = async (page) => {
   await page.getByRole("button", { name: "Entendido" }).last().click();
   await page.getByRole("button", { name: "Entendido" }).waitFor({ state: "detached" });
 };
+/* «Todo» en las fichas (todas las secciones abiertas). */
+export const mostrarTodo = async (page) => {
+  const todo = page.getByRole("radio", { name: "Todo" }).first();
+  await page.getByRole("navigation", { name: "Secciones del formato" }).waitFor();
+  if (!(await todo.count())) return;
+  for (let i = 0; i < 5 && (await todo.getAttribute("aria-checked")) !== "true"; i += 1) {
+    await todo.click();
+    await page.waitForFunction(() => document.querySelector('[role="radio"][aria-checked="true"]')?.textContent?.includes("Todo"), null, { timeout: 3000 }).catch(() => {});
+  }
+};
+/* Un trazo en un lienzo de firma (por su aria-label). */
+export const firmar = async (page, etiqueta) => {
+  const canvas = page.locator(`canvas[aria-label="${etiqueta}"]`);
+  await canvas.scrollIntoViewIfNeeded();
+  const box = await canvas.boundingBox();
+  await page.mouse.move(box.x + 30, box.y + 50);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 120, box.y + 80, { steps: 6 });
+  await page.mouse.move(box.x + 200, box.y + 40, { steps: 6 });
+  await page.mouse.up();
+};
+/* Aprueba en «Por autorizar» la solicitud `solicitudId` (la persona ya tiene sesión en `page`). */
+export const aprobarEnPorAutorizar = async (page, solicitudId, motivo, password) => {
+  await page.goto(`${BASE_WEB}/solicitudes`);
+  await page.getByRole("heading", { name: "Pendientes de tu autorización" }).waitFor();
+  const renglon = page.locator(`[data-solicitud="${solicitudId}"]`).first();
+  await renglon.waitFor();
+  await renglon.locator("button[aria-haspopup=dialog]").click();
+  await page.locator(`[data-solicitud-ventana="${solicitudId}"]`).getByRole("button", { name: "Aprobar", exact: true }).click();
+  await page.locator("#ap-motivo").fill(motivo);
+  await page.locator("#ap-password").fill(password);
+  await page.getByRole("dialog").getByRole("button", { name: "Aprobar y ejecutar" }).click();
+  await page.getByText(/aprobada y ejecutada/i).first().waitFor();
+};
+/* Espera (sondeando) a que se cumpla una condición; devuelve el último valor. */
+export const esperar = async (fn, ms = 20_000) => {
+  const inicio = Date.now();
+  let v = await fn();
+  while (!v && Date.now() - inicio < ms) {
+    await new Promise((r) => setTimeout(r, 300));
+    v = await fn();
+  }
+  return v;
+};

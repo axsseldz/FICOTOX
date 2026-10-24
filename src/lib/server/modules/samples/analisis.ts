@@ -542,6 +542,9 @@ export async function devolverAnalysis({ request, s, params }: RouteContext): Pr
   const antes = await snapshotRow(s, TABLE, id);
   await assertEditableAsync(s, antes, TABLE, "devolver");
   if (String(antes?.estado) !== "en_revision") return json({ message: "Solo se devuelven analisis enviados a revision" }, 409);
+  // Devolver es un resultado de la revisión: exige lo mismo que revisar (visto bueno del supervisor y autorización FX-THF-AP).
+  exigirSinSupervisionPendiente(antes, `El analisis ${folioLabel(TABLE, antes)}`, "devolver");
+  await exigirAutorizaciones(s, user, requisitosRevisionResultados(antes?.tipo_analisis, "revisar"));
   const payload = await readJson(request);
   const motivo = String(payload.motivo || payload.observaciones || "").trim();
   if (motivo.length < 5) return json({ message: "Escribe las observaciones para el analista (al menos 5 caracteres)" }, 400);
