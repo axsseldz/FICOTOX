@@ -259,7 +259,9 @@ try {
   await page.locator("[data-sonner-toast]").filter({ hasText: /revisi/i }).last().waitFor({ timeout: 20_000 });
   check("el analista envía el análisis a revisión", true);
   // Fase 3 (segregación): ya en revisión, quien lo elaboró ve «Marcar revisado» deshabilitado con la explicación.
-  await page.reload();
+  // Al enviarlo la pantalla regresa a la lista: se espera esa navegación y se vuelve a abrir (recargar antes de que termine era una carrera).
+  await page.waitForURL((url) => url.pathname === "/muestras/analisis");
+  await page.goto(analisisUrl);
   await page.getByText("Separación de funciones").first().waitFor();
   check("QA no puede revisar su propio análisis (botón deshabilitado con explicación)", await page.getByRole("button", { name: "Marcar revisado" }).isDisabled());
   // La revisa y aprueba otra persona.
