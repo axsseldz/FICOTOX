@@ -11,6 +11,7 @@ import { createRequire } from "node:module";
 process.env.BASE = `${(process.env.BASE || "http://localhost:3100").replace(/\/api$/, "")}/api`;
 const { abrirNavegador, BASE_WEB, contrasena, entendido, esperar, toast } = await import("../lib/navegador.mjs");
 const { api, crearCheck, credenciales, Database, EMAIL, enDias, fila, filas, hoy, sesiones } = await import("../lib/calidad.mjs");
+const { pdfConTexto } = await import("../lib/archivos.mjs");
 
 const require = createRequire(import.meta.url);
 const sharp = require("sharp");
@@ -1166,12 +1167,14 @@ await paso({ email: UP.email, password: TEMP_UP }, "cambio de contraseña obliga
   const menu = await page.locator('aside[aria-label="Navegación principal"]').count();
   check("[cob:A:A-010] con la contraseña restablecida se ve «Cambia tu contraseña» (sin menú) y la API responde 403 cambiar_password", otraApi.status === 403 && otraApi.data?.codigo === "cambiar_password" && menu === 0, `${otraApi.status} ${otraApi.data?.codigo} menú=${menu}`);
   const hash0 = usuario(UP.id)?.password_hash;
-  const salida = page.waitForRequest((r) => r.url().endsWith("/api/auth/logout") && r.method() === "POST");
+  // Se espera la respuesta del cierre (no solo la petición): la pantalla no la espera para ir al acceso y, con el
+  // servidor ocupado, la consulta de abajo podía llegar antes que la revocación.
+  const salida = page.waitForResponse((r) => r.url().endsWith("/api/auth/logout") && r.request().method() === "POST");
   await page.getByRole("button", { name: "Salir", exact: true }).click();
-  await salida;
+  const cierre = await salida;
   await page.waitForURL((u) => u.pathname === "/login");
   const tras = await api("GET", "/auth/me", undefined, token1);
-  check("[cob:A:A-015] «Salir» revoca la sesión y vuelve al acceso sin cambiar la contraseña", tras.status === 401 && revocada(UP.id) === "salir" && usuario(UP.id)?.password_hash === hash0 && Number(usuario(UP.id)?.debe_cambiar_password) === 1, `${tras.status} ${revocada(UP.id)}`);
+  check("[cob:A:A-015] «Salir» revoca la sesión y vuelve al acceso sin cambiar la contraseña", cierre.status() === 200 && tras.status === 401 && revocada(UP.id) === "salir" && usuario(UP.id)?.password_hash === hash0 && Number(usuario(UP.id)?.debe_cambiar_password) === 1, `${tras.status} ${revocada(UP.id)}`);
 
   await entrarConFormulario(page, UP.email, TEMP_UP);
   await page.getByRole("heading", { name: "Cambia tu contraseña" }).waitFor();
@@ -2114,6 +2117,21 @@ await paso(UC, "buscador: botón, comandos, recientes e Inicio", async (page) =>
 });
 
 /* ---------- Contadores del menú, Reportar incidencia y Ayuda con informes:C (Ricardo solo consulta) ---------- */
+// Pendientes propios para que los contadores no dependan de otras suites: lo que capturó un estudiante supervisado por
+// Ricardo (Por supervisar) y un documento vigente distribuido a Ricardo con lectura obligatoria (Bandeja).
+{
+  const est = await cuenta("Supervisado Ricardo", { rolClave: "estudiante", extra: { tipo_cuenta: "temporal", vigente_hasta: enDias(90), supervisor_id: id.ricardo, motivo_cuenta: "Estancia supervisada de la prueba de cobertura" } });
+  const tEst = (await api("POST", "/auth/login", { email: est.email, password: est.password })).data?.token;
+  const capt = await api("POST", "/inventory/reactivos", { tipo_reactivo: "alcoholes_solventes", producto: `Metanol supervisado ${s5}`, capacidad: 1, unidad_capacidad: "L", piezas: 1 }, tEst);
+  const fd = new FormData();
+  const campos = { clave: `FX-TCI-M${s5.toUpperCase()}`, titulo: `Instrucción para el menú ${s5}`, area_codigo: "TC", tipo_codigo: "I", elaborador_id: id.luis, revisor_id: id.gabriela, autorizador_id: id.patricia };
+  for (const [k, v] of Object.entries(campos)) fd.append(k, String(v));
+  fd.append("archivo_pdf", new Blob([await pdfConTexto(1, campos.titulo)]), "inicial.pdf");
+  const doc = await api("POST", "/sgc/documentos", fd, t.ana);
+  const vig = await api("POST", `/sgc/revisiones/${doc.data?.revision_id}/registrar-vigente`, { fecha_emision: "2025-01-10", fecha_proxima_revision: "2028-01-10" }, t.ana);
+  const dist = await api("POST", `/sgc/revisiones/${doc.data?.revision_id}/distribucion`, { usuarios: [id.ricardo], punto_uso: "Oficina de coordinación", requiere_lectura: true, motivo: "Distribución de la prueba de cobertura" }, t.ana);
+  check("(preparación) un registro por supervisar y una lectura pendiente para Ricardo", capt.status === 201 && doc.status === 201 && vig.status === 200 && dist.status < 300, `${capt.status} ${doc.status} ${vig.status} ${dist.status} ${dist.data?.message || ""}`);
+}
 await paso("ricardo", "contadores del menú y enlaces de la Ayuda", async (page) => {
   const token = await tokenDe(page);
   const p = (await permisosDe(token)).permissions || {};

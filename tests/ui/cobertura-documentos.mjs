@@ -1110,7 +1110,9 @@ await paso("ana", "carpeta: migas, filtros, orden y tarjetas", async (page) => {
   check("[cob:D:D-046] [cob:D:D-047] la cuadrícula tiene una tarjeta por documento y cada una muestra clave, título y estado", (await page.getByTestId("sgc-tarjetas").getByTestId("sgc-tarjeta").count()) === datos.items.length && texto.includes(V.clave) && texto.includes(V.titulo) && /Vigente/.test(texto), texto.slice(0, 160));
   const curso = (await page.locator(`[data-testid="sgc-tarjeta"][data-clave="${RA.clave}"]`).getByTestId("sgc-tarjeta-en-curso").innerText()).trim();
   check("[cob:D:D-048] «En curso»: la tarjeta con revisión de trabajo dice «Rev. 2 en elaboración»; la vigente sin trabajo no lo dice", /Rev\. 2/.test(curso) && (await tV.getByTestId("sgc-tarjeta-en-curso").count()) === 0, curso);
-  const mini = async (d) => esperar(async () => (await page.locator(`[data-testid="sgc-tarjeta"][data-clave="${d.clave}"]`).getByTestId("sgc-miniatura").getAttribute("data-con-imagen")) === "1", 25_000).then(Boolean);
+  // Las miniaturas se generan de dos en dos y en cola: en la corrida completa hay decenas de documentos de otras suites
+  // delante de esta tarjeta, y con el servidor cargado tardan más de 25 s.
+  const mini = async (d) => esperar(async () => (await page.locator(`[data-testid="sgc-tarjeta"][data-clave="${d.clave}"]`).getByTestId("sgc-miniatura").getAttribute("data-con-imagen")) === "1", 90_000).then(Boolean);
   await tV.scrollIntoViewIfNeeded();
   const conImagen = await mini(V);
   await page.locator(`[data-testid="sgc-tarjeta"][data-clave="${RS.clave}"]`).scrollIntoViewIfNeeded();
