@@ -12,6 +12,7 @@
  * - la carga inicial sin próxima revisión toma emisión + 3 años (antes nunca quedaba pendiente de revisión);
  * - el archivo de apoyo de una solicitud se verifica por SHA-256 (alterado → alerta e incidencia; faltante → 404);
  * - el historial heredado (/api/documentos-sgc) solo se lee: las escrituras responden 410.
+ * - fechas de la ficha y de los externos: fechas reales del calendario (antes solo el patrón AAAA-MM-DD).
  */
 import "./lib/reauth-auto.mjs";
 import fs from "node:fs";
@@ -197,6 +198,20 @@ const db = () => new Database(process.env.TEST_DB_PATH);
   const escribir = await api("PUT", "/documentos-sgc/1", { titulo: "x" }, t.ana);
   const crear = await api("POST", "/documentos-sgc", { titulo: "x" }, t.ana);
   check("el flujo anterior no se escribe: 410 retirado", escribir.status === 410 && crear.status === 410, `${escribir.status} ${crear.status}`);
+}
+
+/* ---------- Fechas reales (2025-02-30 no existe) ---------- */
+{
+  const d = await ficha({ clave: `FX-TCP-F${s5}`, titulo: `Procedimiento fechas ${s5}`, area_codigo: "TC", tipo_codigo: "P" });
+  const imposible = await api("POST", `/sgc/revisiones/${d.revision_id}/registrar-vigente`, { fecha_emision: "2025-02-30", fecha_proxima_revision: "2027-02-31" }, t.ana);
+  check("carga inicial con fecha de emisión imposible (2025-02-30) → 400 campo fecha_emision", imposible.status === 400 && imposible.data?.campo === "fecha_emision", `${imposible.status} ${imposible.data?.message}`);
+  const proximaMala = await api("POST", `/sgc/revisiones/${d.revision_id}/registrar-vigente`, { fecha_emision: "2025-02-28", fecha_proxima_revision: "2027-02-31" }, t.ana);
+  check("…y con próxima revisión imposible (2027-02-31) → 400 campo fecha_proxima_revision", proximaMala.status === 400 && proximaMala.data?.campo === "fecha_proxima_revision", `${proximaMala.status} ${proximaMala.data?.message}`);
+  check("…la revisión no quedó vigente", fila("SELECT estado FROM sgc_revisiones WHERE id = ?", d.revision_id)?.estado !== "vigente");
+  const valida = await api("POST", `/sgc/revisiones/${d.revision_id}/registrar-vigente`, { fecha_emision: "2024-02-29", fecha_proxima_revision: "2027-02-28" }, t.ana);
+  check("…el 29 de febrero de un año bisiesto sí se acepta", valida.status === 200 && fila("SELECT estado FROM sgc_revisiones WHERE id = ?", d.revision_id)?.estado === "vigente", `${valida.status} ${valida.data?.message}`);
+  const ext = await externo({ identificador: `NMX-EF-${s5}-2018`, titulo: `Norma fechas ${s5}`, area_codigo: "GC", tipo_codigo: "R", fuente: "IMNC", version_fecha: "2018", responsable_id: id.ricardo, ultima_verificacion: enDias(0), proxima_revision: "2027-04-31" });
+  check("externo con próxima revisión imposible (2027-04-31) → 400", ext.status === 400 && ext.data?.campo === "proxima_revision" && !fila("SELECT id FROM sgc_documentos WHERE clave = ?", `NMX-EF-${s5}-2018`), `${ext.status} ${ext.data?.message}`);
 }
 
 terminar();

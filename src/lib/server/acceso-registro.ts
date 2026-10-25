@@ -1,5 +1,5 @@
 import type { CurrentUser } from "./auth";
-import { estaAsignado, soloAsignado } from "./asignaciones";
+import { ensayoVisible, estaAsignado, soloAsignado } from "./asignaciones";
 import { type Row, type Session } from "./db";
 import { HttpError } from "./http";
 import { documentosDistribuidosA, soloAutorizados } from "./modules/documentos-flujo";
@@ -13,7 +13,7 @@ import type { Modulo } from "../shared/permisos";
  * ve quien ve la ficha de ese registro, con los mismos alcances:
  * - V del modulo del registro (sin el, 403 como antes);
  * - el registro debe existir (404);
- * - "asignado" (muestras): solo recepciones asignadas o registradas por la persona;
+ * - "asignado" (muestras y ensayos): solo lo de recepciones asignadas o lo registrado por la persona;
  * - "autorizados" (documentos): solo documentos vigentes distribuidos a la persona;
  * - Documentos SGC: el historial lo ve quien ve el historial de la ficha
  *   (documento_consultar_historico, crear fichas o diagnostico tecnico), con
@@ -66,6 +66,7 @@ export async function exigirVerRegistro(s: Session, user: CurrentUser, auth: Aut
   if (!fila) throw noEncontrado;
   const yo = auth.userId;
   if (entidad === "muestras_recepcion" && soloAsignado(permiso) && Number(fila.creado_por) !== yo && !(await estaAsignado(s, yo, id))) throw noEncontrado;
+  if ((entidad === "muestras_procesamiento" || entidad === "muestras_extraccion" || entidad === "muestras_analisis") && !(await ensayoVisible(s, permiso, entidad, fila))) throw noEncontrado;
   // Biblioteca: con "autorizados", solo documentos para todos o para alguno de sus roles.
   if (entidad === "biblioteca_documentos" && soloAutorizados(auth) && String(fila.visibilidad) !== "todos") {
     const roles = auth.roles.map((r) => Number(r.id));

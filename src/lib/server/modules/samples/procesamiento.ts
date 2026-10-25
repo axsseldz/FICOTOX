@@ -14,7 +14,7 @@ import { jsonText, safeJsonLoad, searchParam, strippedOrNull, toIntOrNull } from
 
 import { exigirAutorizaciones } from "../../autorizaciones";
 import { requisitosProcesamiento } from "../../../shared/autorizaciones";
-import { exigirAsignacion, filtroAsignadas } from "../../asignaciones";
+import { exigirAsignacion, exigirEnsayoVisible, filtroAsignadas, soloAsignado } from "../../asignaciones";
 import { guardarFirmantes, resolverFirmantes, verificarFirmasConPassword, type RolFirma } from "../../firmas";
 
 /*
@@ -107,8 +107,9 @@ export async function listProcessingSamples({ request, s }: RouteContext): Promi
   const user = await requireUser(request);
   const permiso = await requirePermission(s, user, "ensayos", "V");
   const supFiltro = filtroSupervision(request, "p", permiso.auth.userId);
-  // Fase 5: filtro "Mis muestras".
-  const asignadas = await filtroAsignadas(s, permiso.auth.userId, "p.recepcion_id", searchParam(request, "mias") === "1");
+  // Fase 5: filtro "Mis muestras"; con alcance "asignado", solo lo asignado o registrado por la persona.
+  const restringida = soloAsignado(permiso);
+  const asignadas = await filtroAsignadas(s, permiso.auth.userId, "p.recepcion_id", restringida || searchParam(request, "mias") === "1", restringida ? "p.creado_por" : undefined);
 
   const search = searchParam(request, "search");
   const includeAnuladas = searchParam(request, "anuladas") === "1";
@@ -129,7 +130,7 @@ export async function listProcessingSamples({ request, s }: RouteContext): Promi
     ORDER BY p.folio_num DESC
     LIMIT 400
     `,
-    { search, search_like: `%${search}%`, incluir_anuladas: includeAnuladas ? 1 : 0, ...supFiltro.params },
+    { search, search_like: `%${search}%`, incluir_anuladas: includeAnuladas ? 1 : 0, ...supFiltro.params, ...asignadas.params },
   );
   return json({
     items: (await conSolicitudesYPuede(s, user, TABLE, rows)).map((row) => {
@@ -144,7 +145,7 @@ export async function listProcessingSamples({ request, s }: RouteContext): Promi
 export async function getProcessingSample({ request, s, params }: RouteContext): Promise<Response> {
   const processingId = intParam(params.id);
   const user = await requireUser(request);
-  await requirePermission(s, user, "ensayos", "V");
+  const permiso = await requirePermission(s, user, "ensayos", "V");
 
   const row = await s.queryOne(
     `
@@ -159,7 +160,7 @@ export async function getProcessingSample({ request, s, params }: RouteContext):
            nombre_quien_superviso, firma_quien_proceso,
            firma_quien_superviso, uso_inventario_json,
            proceso_usuario_id, proceso_cargo, superviso_usuario_id, superviso_cargo,
-           estado, creado_en, actualizado_en,
+           estado, creado_por, creado_en, actualizado_en,
            requiere_supervision, supervision_estado, supervisor_id, supervision_observaciones
     FROM muestras_procesamiento
     WHERE id = :id
@@ -169,6 +170,7 @@ export async function getProcessingSample({ request, s, params }: RouteContext):
   if (!row) {
     return json({ message: "Registro no encontrado" }, 404);
   }
+  await exigirEnsayoVisible(s, permiso, TABLE, row);
   return json({ item: (await conSolicitudesYPuede(s, user, TABLE, [serializeRow(row)]))[0] });
 }
 

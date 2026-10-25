@@ -134,7 +134,8 @@ function expandir(filas) {
     // Fase 3.1: en usuarios, G no implica A.
     for (const a of accion === "G" ? ACCIONES.filter((x) => !(modulo === "usuarios" && x === "A")) : [accion]) {
       add(modulo, a, alcance);
-      if (a !== "V") add(modulo, "V", ["propio", "estado", "bitacora", "incidencias"].includes(alcance) || DIFERIDOS.has(alcance) ? alcance : "total");
+      // En ensayos, «borrador» y «preparación» (estudiante, técnico auxiliar) ven solo lo asignado (B-02 de la prueba integral).
+      if (a !== "V") add(modulo, "V", modulo === "ensayos" && ["borrador", "preparacion"].includes(alcance) ? "asignado" : ["propio", "estado", "bitacora", "incidencias"].includes(alcance) || DIFERIDOS.has(alcance) ? alcance : "total");
     }
   }
   return out;

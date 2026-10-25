@@ -15,7 +15,7 @@ import { firstTruthy, searchParam, toFloatOrNull, toIntOrNull, toStrOrNull, utcT
 
 import { fechaValida, finDiaLocal, hoyLocal, inicioDiaLocal, sumarDias } from "../../shared/fechas";
 import { autorizarEquipoA } from "../autorizaciones";
-import { REACTIVO_TYPES } from "../../client/constants";
+import { esTipoReactivo } from "../../shared/reactivos";
 
 /* Portado de modules/inventory/endpoints.py del backend Flask original. */
 
@@ -119,7 +119,7 @@ function normalizeReactivoPayload(raw: Record<string, unknown> | null | undefine
   const tipo = strip(payload.tipo_reactivo).slice(0, 80) || null;
   // Tipo del catalogo y fechas AAAA-MM-DD; un valor heredado de la carga del Excel que no cambia se conserva.
   const igualAntes = (campo: string, valor: string) => !!antes && String(antes[campo] ?? "") === valor;
-  if (tipo && !igualAntes("tipo_reactivo", tipo) && !REACTIVO_TYPES.some((t) => t.value === tipo)) throw new ReactivoInvalido("Elige un tipo de reactivo del catálogo");
+  if (tipo && !igualAntes("tipo_reactivo", tipo) && !esTipoReactivo(tipo)) throw new ReactivoInvalido("Elige un tipo de reactivo del catálogo");
   const fecha = (campo: string, etiqueta: string, valor: string | null): string | null => {
     if (valor === null || igualAntes(campo, valor)) return valor;
     const f = fechaValida(valor);
@@ -415,7 +415,7 @@ export async function refillReactivo({ request, s, params }: RouteContext): Prom
   // `cantidad_actual` es la existencia canónica; las columnas heredadas solo se acompañan
   // cuando ya la reflejaban (mismo valor), para no inventar existencias en piezas o volumen.
   const current = toFloatOrNull(row.cantidad_actual) || 0;
-  const mov = await interpretarMovimiento(s, await cargarAutorizacion(s, user), payload, current);
+  const mov = await interpretarMovimiento(s, await cargarAutorizacion(s, user), payload, current, { tabla: "reactivos", id: reactivoId, creadoEn: row.creado_en });
   const updates = ["cantidad_actual = COALESCE(cantidad_actual, 0) + :delta"];
   for (const legacy of ["restante_190126", "amount_in_stock"]) {
     const value = toFloatOrNull(row[legacy]);

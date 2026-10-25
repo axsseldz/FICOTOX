@@ -11,7 +11,7 @@
  */
 import "./lib/reauth-auto.mjs";
 import { createRequire } from "node:module";
-import { api, crearCheck, Database, enDias, fila, sesiones } from "./lib/calidad.mjs";
+import { api, crearCheck, Database, enDias, fila, filas, sesiones } from "./lib/calidad.mjs";
 
 const require = createRequire(import.meta.url);
 const sharp = require("sharp");
@@ -37,9 +37,12 @@ const datos = (c, extra) => ({ nombre: c.nombre, email: c.email, departamento: "
   const C = await cuenta("Baja Edicion");
   const sinMotivo = await api("PUT", `/admin/usuarios/${C.id}`, datos(C, { activo: false }), t.jorge);
   check("dar de baja por la edición sin motivo → 400 (como «Dar de baja…»)", C.status === 201 && sinMotivo.status === 400 && sinMotivo.data?.campo === "motivo_estado" && Number(fila("SELECT activo FROM usuarios WHERE id = ?", C.id)?.activo) === 1, `${C.status} ${sinMotivo.status} ${sinMotivo.data?.message}`);
+  const ultimaAntes = Number(fila("SELECT MAX(id) AS m FROM auditoria")?.m || 0);
   const conMotivo = await api("PUT", `/admin/usuarios/${C.id}`, datos(C, { activo: false, motivo_estado: "Terminó su estancia en el laboratorio" }), t.jorge);
   const bit = fila("SELECT motivo FROM auditoria WHERE accion = 'baja' AND entidad = 'usuarios' AND entidad_id = ? ORDER BY id DESC LIMIT 1", String(C.id));
   check("…con motivo se da de baja y la bitácora dice «baja» con el motivo", conMotivo.status === 200 && Number(fila("SELECT activo FROM usuarios WHERE id = ?", C.id)?.activo) === 0 && bit?.motivo === "Terminó su estancia en el laboratorio", `${conMotivo.status} ${conMotivo.data?.message} ${bit?.motivo}`);
+  const entradas = filas("SELECT accion FROM auditoria WHERE entidad = 'usuarios' AND entidad_id = ? AND id > ? ORDER BY id", String(C.id), ultimaAntes).map((r) => r.accion);
+  check("…y queda una sola entrada («baja»), sin un «editar» sin motivo", entradas.join(",") === "baja", entradas.join(","));
   const yo = (await api("GET", `/admin/usuarios/${id.jorge}`, undefined, t.jorge)).data?.item;
   const propia = await api("PUT", `/admin/usuarios/${id.jorge}`, { ...datos({ nombre: yo?.nombre, email: yo?.email }, { activo: false, motivo_estado: "Me doy de baja yo mismo" }), departamento: yo?.departamento ?? null }, t.jorge);
   check("darse de baja a uno mismo por la edición → 403", propia.status === 403 && Number(fila("SELECT activo FROM usuarios WHERE id = ?", id.jorge)?.activo) === 1, `${propia.status} ${propia.data?.message}`);

@@ -1,8 +1,9 @@
 
 /* Catalogos y metadatos de la interfaz; los de recepcion salen del formato oficial (src/lib/shared/sgc.ts). */
+import type { TipoReactivo } from "../shared/reactivos";
 
 export interface ReactivoTypeConfig {
-  value: string;
+  value: TipoReactivo;
   label: string;
   hint: string;
   fields: string[];

@@ -767,7 +767,9 @@ export async function updateUsuario({ request, s, params }: RouteContext): Promi
   }
   await assertAdministratorRemains(s, adminsAntes);
   const despues = await snapshotRow(s, "usuarios", userId);
-  await registrarAuditoria(s, user, { accion: "editar", entidad: "usuarios", entidadId: userId, referencia: String(data.email), antes: antesUsuario, despues, detalle: validated.passwordHash ? { contrasena: "cambiada" } : null });
+  // Una baja por el interruptor queda solo como «baja» (con su motivo); «editar» solo si cambió algo más.
+  const otrosCambios = Object.keys({ ...antesUsuario, ...despues }).some((k) => !CAMPOS_DE_LA_BAJA.has(k) && String(antesUsuario?.[k] ?? "") !== String(despues?.[k] ?? ""));
+  if (!seDaDeBaja || otrosCambios || validated.passwordHash) await registrarAuditoria(s, user, { accion: "editar", entidad: "usuarios", entidadId: userId, referencia: String(data.email), antes: antesUsuario, despues, detalle: validated.passwordHash ? { contrasena: "cambiada" } : null });
   if (seDaDeBaja) await registrarAuditoria(s, user, { accion: "baja", entidad: "usuarios", entidadId: userId, referencia: String(data.email), motivo: motivoEstado, antes: antesUsuario, despues });
   let solicitud: Solicitud | null = null;
   if (seReactiva) {
@@ -785,6 +787,9 @@ export async function updateUsuario({ request, s, params }: RouteContext): Promi
   }
   return json({ message: rolesAjustados.length ? `Usuario actualizado; ${rolesAjustados.length} rol(es) se ajustaron a la vigencia de la cuenta` : "Usuario actualizado", roles_acotados: rolesAjustados.length, roles_ajustados: rolesAjustados });
 }
+
+/* Lo que cambia al dar de baja una cuenta (la baja cierra sus sesiones). */
+const CAMPOS_DE_LA_BAJA = new Set(["activo", "token_version", "actualizado_en"]);
 
 export async function deleteUsuario({ request, s, params }: RouteContext): Promise<Response> {
   const userId = intParam(params.id);

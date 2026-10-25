@@ -12,7 +12,7 @@
  */
 import { documentosDistribuidosA, soloAutorizados } from "../documentos-flujo";
 import { accesoSgc, documentoVisible } from "../sgc/acceso";
-import { estaAsignado, soloAsignado } from "../../asignaciones";
+import { ensayoVisible, estaAsignado, soloAsignado } from "../../asignaciones";
 import { requireUser, userIdFromClaims } from "../../auth";
 import { registrarAuditoria, snapshotRow } from "../../audit";
 import { type Row, type Session } from "../../db";
@@ -149,6 +149,11 @@ export async function crearIncidencia({ request, s }: RouteContext): Promise<Res
     if (entidad === "muestras_recepcion" && soloAsignado(vista)) {
       const recepcion = await s.queryOne<Row>("SELECT id, creado_por FROM muestras_recepcion WHERE id = :id", { id: eid });
       if (!recepcion || (Number(recepcion.creado_por) !== permiso.auth.userId && !(await estaAsignado(s, permiso.auth.userId, eid)))) throw noExiste;
+    }
+    // Ensayos con alcance "asignado": solo los de sus muestras o registrados por la persona.
+    if ((entidad === "muestras_procesamiento" || entidad === "muestras_extraccion" || entidad === "muestras_analisis") && vista && soloAsignado(vista)) {
+      const ensayo = await s.queryOne<Row>(`SELECT * FROM ${entidad} WHERE id = :id`, { id: eid });
+      if (!ensayo || !(await ensayoVisible(s, vista, entidad, ensayo))) throw noExiste;
     }
     registros.push({ entidad, entidad_id: eid, referencia: await referenciaDe(s, entidad, eid) });
   }

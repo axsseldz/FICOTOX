@@ -60,6 +60,22 @@ export async function exigirVistaAsignada(s: Session, permiso: Permiso, recepcio
   throw new HttpError(403, { message: "Esta muestra no está asignada a ti", codigo: "no_asignado" });
 }
 
+/*
+ * Alcance "asignado" en ensayos (lo dan "borrador" y "preparacion"): un procesamiento, extraccion o analisis
+ * se ve si la persona lo registro o esta asignada a su recepcion.
+ */
+export async function ensayoVisible(s: Session, permiso: Permiso, tabla: "muestras_procesamiento" | "muestras_extraccion" | "muestras_analisis", row: Row): Promise<boolean> {
+  if (!soloAsignado(permiso)) return true;
+  const yo = permiso.auth.userId;
+  if (Number(row.creado_por) === yo) return true;
+  const recepcion = tabla === "muestras_extraccion" ? await s.scalar("SELECT recepcion_id FROM muestras_procesamiento WHERE id = :id", { id: row.procesamiento_id ?? 0 }) : row.recepcion_id;
+  return !!recepcion && (await estaAsignado(s, yo, Number(recepcion)));
+}
+
+export async function exigirEnsayoVisible(s: Session, permiso: Permiso, tabla: Parameters<typeof ensayoVisible>[2], row: Row): Promise<void> {
+  if (!(await ensayoVisible(s, permiso, tabla, row))) throw new HttpError(403, { message: "Esta muestra no está asignada a ti", codigo: "no_asignado" });
+}
+
 /* Regla operativa: crear o editar procesamiento, extraccion o analisis exige asignacion (salvo coordinacion). */
 export async function exigirAsignacion(s: Session, user: CurrentUser, recepcionId: number | null | undefined, auth?: Autorizacion): Promise<void> {
   if (!recepcionId) return;

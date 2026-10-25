@@ -79,6 +79,8 @@ export interface Validacion {
   /* Opcion bloqueada por una regla (o accion no permitida): pop-up con la explicacion y los campos que la causan. `titulo` reemplaza al del formulario. */
   avisar: (aviso: { titulo?: string; que: string; hacer?: string; problemas?: Problema[] }) => void;
   irA: (p: Problema) => void;
+  /* Tras guardar con éxito en un formulario que sigue abierto y se vacía: quita las marcas (no es un error). */
+  reiniciar: () => void;
   /* Para ValidacionAmbito: errores para los campos y el pop-up. */
   ctx: CtxValor;
   dialogo: ReactNode;
@@ -177,6 +179,10 @@ export function useValidacion({ titulo, reglas, dato = "dato" }: { titulo: strin
     errorServidor,
     avisar,
     irA: (p) => irAlCampo(p),
+    reiniciar: () => {
+      setIntentado(false);
+      setExtras({});
+    },
     ctx,
     dialogo: <DialogoValidacion titulo={titulo} dato={dato} modo={modo} onCerrar={cerrar} />,
   };

@@ -35,6 +35,7 @@ import { ANIOS_PROXIMA_REVISION, pendienteDeRevision, sumarAnios } from "../../.
 import { validarIdentificadorExterno } from "../../../shared/documentos";
 import { estadoDistribucion, lecturasPendientesDe, lecturasPendientesGlobales } from "./lecturas";
 import { CONFIDENCIALIDADES, ESTADOS_TRABAJO, MIME_SGC, MOTIVO_MIN_SGC, esConfidencialidad, esTipoArchivo, etiquetaConfidencialidad, extensionesDe, normalizarPalabras, validarClave, type TipoArchivoSgc } from "../../../shared/documentos";
+import { fechaValida } from "../../../shared/fechas";
 import { ACCION_DOCUMENTAL_KEYS, type AccionDocumental } from "../../../shared/permisos";
 import { evaluarTresPersonas } from "../../../shared/segregacion";
 import { exigirSinOtroPapel, registrarSolicitudDeFicha, solicitudPropiaAceptada } from "./flujo";
@@ -754,6 +755,8 @@ export const fechaONull = (v: unknown, campo: string): string | null => {
   const t = String(v ?? "").trim();
   if (!t) return null;
   if (!FECHA.test(t)) throw new HttpError(400, { message: "Escribe la fecha como AAAA-MM-DD", campo });
+  // Una fecha real (2025-02-30 no existe), como en el resto de la plataforma.
+  if (!fechaValida(t)) throw new HttpError(400, { message: "La fecha no existe en el calendario", campo });
   return t;
 };
 

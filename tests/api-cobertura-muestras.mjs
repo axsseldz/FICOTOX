@@ -480,8 +480,8 @@ check("(preparación) rol y cuentas propias", rolEnsayos.status === 201 && rolSu
   const sinEv = await envio(ok, null);
   const exe = await envio(ok, { bytes: "MZ", nombre: "virus.exe" });
   const vacia = await envio(ok, { bytes: "", nombre: "vacia.pdf" });
-  const enorme = await envio(ok, { bytes: Buffer.alloc(16 * 1024 * 1024, 0x20), nombre: "enorme.pdf" });
-  check("[cob:M:V-96] evidencia ausente, con extensión no permitida, vacía o de más de 15 MB → 400 (sin envío)", [sinEv, exe, vacia, enorme].every((r) => r.status === 400) && !filas("SELECT id FROM envios_informe WHERE informe_id = ?", inf).length, [sinEv, exe, vacia, enorme].map(sinFila).join(" · "));
+  const enorme = await envio(ok, { bytes: Buffer.alloc(26 * 1024 * 1024, 0x20), nombre: "enorme.pdf" });
+  check("[cob:M:V-96] evidencia ausente, con extensión no permitida, vacía o de más de EVIDENCIA_MAX_MB (25 MB) → 400 (sin envío)", [sinEv, exe, vacia, enorme].every((r) => r.status === 400) && !filas("SELECT id FROM envios_informe WHERE informe_id = ?", inf).length, [sinEv, exe, vacia, enorme].map(sinFila).join(" · "));
   // Con una solicitud pendiente (anulación) no se envía.
   const pidoAnular = await api("POST", `/informes/${inf}/anular`, { motivo: "Prueba: anulación pendiente" }, t.patricia, SIN_APROBAR);
   const conSol = await envio(ok);

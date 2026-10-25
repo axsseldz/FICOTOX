@@ -19,7 +19,7 @@ import { exigirAutorizaciones, requisitosEquipos } from "../../autorizaciones";
 import { metodoDeTipoAnalisis, requisitosAnalisis, requisitosRevisionResultados } from "../../../shared/autorizaciones";
 import { exigirSinSuspension, idsDeEquipos } from "../calidad/bloqueos";
 import { incidenciasPorEquiposNoAptos } from "../calidad/automaticas";
-import { exigirAsignacion, filtroAsignadas } from "../../asignaciones";
+import { exigirAsignacion, exigirEnsayoVisible, filtroAsignadas, soloAsignado } from "../../asignaciones";
 import { firmanteElegido, guardarFirmantes, resolverFirmantes, verificarFirmasConPassword, type RolFirma } from "../../firmas";
 import { marcarRequiereEnmienda } from "../informes";
 import { contarVigentes, heredarAdjuntos, resumenAdjuntos } from "../../adjuntos";
@@ -207,8 +207,9 @@ export async function listAnalyses({ request, s }: RouteContext): Promise<Respon
   const user = await requireUser(request);
   const permiso = await requirePermission(s, user, "ensayos", "V");
   const supFiltro = filtroSupervision(request, "a", permiso.auth.userId);
-  // Fase 5: filtro "Mis muestras".
-  const asignadas = await filtroAsignadas(s, permiso.auth.userId, "a.recepcion_id", searchParam(request, "mias") === "1");
+  // Fase 5: filtro "Mis muestras"; con alcance "asignado", solo lo asignado o registrado por la persona.
+  const restringida = soloAsignado(permiso);
+  const asignadas = await filtroAsignadas(s, permiso.auth.userId, "a.recepcion_id", restringida || searchParam(request, "mias") === "1", restringida ? "a.creado_por" : undefined);
   const search = searchParam(request, "search");
   const estado = searchParam(request, "estado");
   const recepcionId = toIntOrNull(searchParam(request, "recepcion_id")) || 0;
@@ -240,7 +241,7 @@ export async function listAnalyses({ request, s }: RouteContext): Promise<Respon
     ORDER BY a.folio_num DESC
     LIMIT 400
     `,
-    { search, search_like: `%${search}%`, estado, recepcion_id: recepcionId, extraccion_id: extraccionId, incluir_anulados: includeAnulados ? 1 : 0, ...supFiltro.params },
+    { search, search_like: `%${search}%`, estado, recepcion_id: recepcionId, extraccion_id: extraccionId, incluir_anulados: includeAnulados ? 1 : 0, ...supFiltro.params, ...asignadas.params },
   );
   return json({
     items: (await conSolicitudesYPuede(s, user, TABLE, rows)).map((row) => {
@@ -256,9 +257,10 @@ export async function listAnalyses({ request, s }: RouteContext): Promise<Respon
 export async function getAnalysis({ request, s, params }: RouteContext): Promise<Response> {
   const id = intParam(params.id);
   const user = await requireUser(request);
-  await requirePermission(s, user, "ensayos", "V");
+  const permiso = await requirePermission(s, user, "ensayos", "V");
   const row = await s.queryOne(`SELECT * FROM ${TABLE} WHERE id = :id`, { id });
   if (!row) return json({ message: "Registro no encontrado" }, 404);
+  await exigirEnsayoVisible(s, permiso, TABLE, row);
   // Folio de la recepcion para la cadena de la ficha (la lista lo trae con el mismo JOIN).
   const folioRecepcion = row.recepcion_id ? await s.scalar("SELECT folio_num FROM muestras_recepcion WHERE id = :id", { id: row.recepcion_id }) : null;
   // Informes que reportan este analisis (el LIKE acota; la lista JSON decide).

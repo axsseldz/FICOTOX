@@ -315,6 +315,9 @@ await paso("ricardo", "recepción: seguimiento, asignar con aviso y etiquetas", 
   const asig = fila("SELECT motivo FROM asignaciones_muestra WHERE recepcion_id = ? AND usuario_id = ? AND revocado_en IS NULL", R_A, sinAut.id);
   check("[cob:M:M-104] asignar a quien no tiene las autorizaciones muestra el aviso (role=alert)", (await aviso.getAttribute("role")) === "alert" && /autoriza|FX-THF-AP/i.test(textoAviso), textoAviso.slice(0, 200));
   check("[cob:M:M-102] el motivo de la asignación se guarda", asig?.motivo === "Apoyo en la recepción de cobertura", JSON.stringify(asig));
+  // Tras asignar, el selector vuelve a vacío: no es un error (antes quedaba en rojo con «Elige a la persona…»).
+  const textoDialogo = (await page.getByRole("dialog").innerText()).replace(/\s+/g, " ");
+  check("tras asignar con éxito el selector vacío no queda marcado en rojo", (await page.locator("#asignar-usuario").getAttribute("aria-invalid")) !== "true" && !/Elige a la persona/i.test(textoDialogo), textoDialogo.slice(0, 200));
   await page.keyboard.press("Escape");
 
   await page.goto(`${BASE_WEB}/muestras/recepcion/${R_A}/etiquetas`);

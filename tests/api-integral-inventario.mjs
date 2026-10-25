@@ -11,7 +11,9 @@
  * - el reporte PDF de mantenimiento se verifica al abrirlo (SHA-256, bitácora «descargar»; alterado →
  *   alerta_integridad + incidencia automática) y no se adjunta a un mantenimiento cancelado;
  * - la lista de movimientos filtra en el servidor (insumo, tipo, búsqueda) y marca las reversiones;
- * - reactivos y consumibles: tipo del catálogo y fechas AAAA-MM-DD (400); un valor heredado que no cambia se conserva.
+ * - reactivos y consumibles: tipo del catálogo y fechas AAAA-MM-DD (400); un valor heredado que no cambia se conserva;
+ * - ajuste por conteo con fecha anterior: lo contado es la existencia de ese día y se conserva lo que salió o entró
+ *   después (antes se igualaba a la existencia de hoy y borraba esas salidas); antes del alta del insumo → 400.
  */
 import "./lib/reauth-auto.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -176,6 +178,30 @@ const estadoMant = (id) => fila("SELECT estado FROM mantenimientos WHERE id = ?"
   check("consumible con fecha de ingreso «ayer» → 400", consMala.status === 400 && /Fecha de ingreso/.test(consMala.data?.message || ""), `${consMala.status} ${consMala.data?.message}`);
   const consSf = await api("POST", "/consumables", { producto: `Consumible s/f ${unico()}`, piezas: 1, cantidad_por_pieza: 5, fecha_ingreso: "s/f" }, t.qa);
   check("…«s/f» sigue aceptándose (sin fecha)", consSf.status === 201, `${consSf.status} ${consSf.data?.message}`);
+}
+
+/* ---------- Ajuste por conteo con fecha anterior ---------- */
+{
+  const R = (await api("POST", "/inventory/reactivos", { tipo_reactivo: "alcoholes_solventes", producto: `Reactivo conteo ${unico()}`, capacidad: 4, unidad_capacidad: "L", piezas: 2 }, t.qa)).data?.id;
+  const existencia = () => Number(fila("SELECT cantidad_actual FROM reactivos WHERE id = ?", R)?.cantidad_actual);
+  const antesDelAlta = await api("POST", `/inventory/reactivos/${R}/refill`, { tipo: "ajuste", cantidad: 8, fecha_movimiento: enDias(-3), motivo: "Conteo antes de que existiera" }, t.ricardo);
+  check("conteo con fecha anterior al alta del insumo → 400 (no hay qué contar)", antesDelAlta.status === 400 && antesDelAlta.data?.campo === "fecha_movimiento" && existencia() === 8, `${antesDelAlta.status} ${antesDelAlta.data?.message} ${existencia()}`);
+  // Alta de hace 10 días (con su existencia inicial), como un reactivo que ya estaba en el laboratorio.
+  const b = new Database(process.env.TEST_DB_PATH);
+  b.prepare("UPDATE reactivos SET creado_en = datetime('now', '-10 days') WHERE id = ?").run(R);
+  b.prepare("UPDATE movimientos SET fecha_movimiento = ? WHERE tabla_origen = 'reactivos' AND id_item = ? AND motivo = 'Existencia inicial'").run(enDias(-10), R);
+  b.close();
+  await api("POST", `/inventory/reactivos/${R}/refill`, { tipo: "salida", cantidad: 1, motivo: "Salida de hoy" }, t.ricardo);
+  check("(preparación) 8 L y una salida de 1 L hoy → 7 L", existencia() === 7, String(existencia()));
+  const conteo = await api("POST", `/inventory/reactivos/${R}/refill`, { tipo: "ajuste", cantidad: 8, fecha_movimiento: enDias(-3), motivo: "Conteo físico de hace tres días" }, t.ricardo);
+  const mov = fila("SELECT cantidad, fecha_movimiento FROM movimientos WHERE tabla_origen = 'reactivos' AND id_item = ? AND tipo = 'ajuste' ORDER BY id DESC", R);
+  check("conteo de 8 L hace 3 días: la salida de hoy se conserva (7 L, ajuste 0 con la fecha del conteo)", conteo.status === 200 && existencia() === 7 && Number(mov?.cantidad) === 0 && mov?.fecha_movimiento === enDias(-3), `${conteo.status} ${conteo.data?.message} ${existencia()} ${JSON.stringify(mov)}`);
+  const menos = await api("POST", `/inventory/reactivos/${R}/refill`, { tipo: "ajuste", cantidad: 6, fecha_movimiento: enDias(-3), motivo: "Recuento de hace tres días" }, t.ricardo);
+  check("conteo de 6 L hace 3 días: existencia 6 − 1 = 5 L (diferencia −2)", menos.status === 200 && existencia() === 5, `${menos.status} ${menos.data?.message} ${existencia()}`);
+  const imposible = await api("POST", `/inventory/reactivos/${R}/refill`, { tipo: "ajuste", cantidad: 0.5, fecha_movimiento: enDias(-3), motivo: "Conteo menor a lo que salió después" }, t.ricardo);
+  check("conteo menor a lo que salió después → 409 existencia_insuficiente (sin cambios)", imposible.status === 409 && imposible.data?.codigo === "existencia_insuficiente" && existencia() === 5, `${imposible.status} ${imposible.data?.message} ${existencia()}`);
+  const hoyMismo = await api("POST", `/inventory/reactivos/${R}/refill`, { tipo: "ajuste", cantidad: 4, motivo: "Conteo de hoy" }, t.ricardo);
+  check("conteo de hoy: fija la existencia (4 L)", hoyMismo.status === 200 && existencia() === 4, `${hoyMismo.status} ${existencia()}`);
 }
 
 terminar();

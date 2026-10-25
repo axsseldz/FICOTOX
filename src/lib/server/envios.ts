@@ -34,7 +34,8 @@ import { exigirSinRequiereEnmienda, informeFolio } from "./modules/informes";
 
 const TABLE = "envios_informe";
 const EXTENSIONES = new Set([".pdf", ".png", ".jpg", ".jpeg", ".webp", ".eml", ".msg"]);
-const MAX_BYTES = 15 * 1024 * 1024;
+/* La evidencia del envío pesa lo mismo que cualquier evidencia (EVIDENCIA_MAX_MB). */
+const maxBytes = () => getConfig().EVIDENCIA_MAX_MB * 1024 * 1024;
 
 /* ---------- Utilidades ---------- */
 
@@ -122,7 +123,7 @@ export async function listarEnvios({ request, s, params }: RouteContext): Promis
   const user = await requireUser(request);
   await requirePermission(s, user, "informes", "V");
   if (!(await s.scalar("SELECT id FROM informes WHERE id = :id", { id: intParam(params.id) }))) throw new HttpError(404, { message: "Informe no encontrado" });
-  return json({ items: await listar(s, intParam(params.id)), smtp_disponible: !!smtpConfig() });
+  return json({ items: await listar(s, intParam(params.id)), smtp_disponible: !!smtpConfig(), max_mb: getConfig().EVIDENCIA_MAX_MB });
 }
 
 /* POST /api/informes/:id/envios (multipart): envio manual con evidencia. */
@@ -144,7 +145,7 @@ export async function registrarEnvioManual({ request, s, params }: RouteContext)
   const ext = path.extname(archivo.name).toLowerCase();
   if (!EXTENSIONES.has(ext)) throw new HttpError(400, { message: "La evidencia debe ser PDF, imagen (PNG/JPG/WebP) o correo (.eml/.msg)" });
   const bytes = Buffer.from(await archivo.arrayBuffer());
-  if (!bytes.length || bytes.length > MAX_BYTES) throw new HttpError(400, { message: "La evidencia está vacía o pesa más de 15 MB" });
+  if (!bytes.length || bytes.length > maxBytes()) throw new HttpError(400, { message: `La evidencia está vacía o pesa más de ${getConfig().EVIDENCIA_MAX_MB} MB` });
   const sha = createHash("sha256").update(bytes).digest("hex");
   const nombreArchivo = `${informeFolio(informe).replace(/\s+/g, "-")}-v${informe.version}-envio-${Date.now()}${ext}`;
   await fs.promises.writeFile(path.join(enviosDir(), nombreArchivo), bytes);
@@ -197,6 +198,9 @@ export async function confirmarEnvio({ request, s, params }: RouteContext): Prom
   const envio = await s.queryOne<Row>(`SELECT * FROM ${TABLE} WHERE id = :id AND informe_id = :informe`, { id: intParam(params.envio), informe: informeId });
   if (!envio) throw new HttpError(404, { message: "Envío no encontrado" });
   if (envio.confirmacion_en) throw new HttpError(409, { message: "La confirmación de recepción ya está registrada" });
+  // Un informe anulado ya no cambia (tampoco su historial de envíos).
+  const anulado = await s.queryOne<Row>("SELECT estado, folio_num, version FROM informes WHERE id = :id", { id: informeId });
+  if (String(anulado?.estado) === "anulado") throw new HttpError(409, { message: `El informe ${informeFolio(anulado!)} está anulado: no se registran confirmaciones`, codigo: "anulado" });
   const payload = await readJson(request);
   const en = String(payload.confirmacion_en || "").trim();
   const nota = String(payload.confirmacion_nota || "").trim() || null;

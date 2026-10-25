@@ -6,12 +6,17 @@
  * - editar una extracción cambiando E-D ↔ E-A (400) o la recepción de un procesamiento con extracciones (409);
  * - devolver un análisis exige la autorización FX-THF-AP de revisión, como revisar (403);
  * - la evidencia de un envío se descarga verificando su SHA-256 (bitácora «descargar»;
- *   alterada → alerta_integridad + incidencia automática) y la lista de envíos de un informe que no existe da 404.
+ *   alterada → alerta_integridad + incidencia automática) y la lista de envíos de un informe que no existe da 404;
+ * - la evidencia del envío sigue a EVIDENCIA_MAX_MB (antes un tope fijo de 15 MB) y un informe anulado no
+ *   registra confirmaciones de recepción (409);
+ * - el estudiante y el técnico auxiliar (ensayos con alcance «borrador»/«preparación») solo ven los ensayos de
+ *   sus muestras asignadas o registrados por ellos (antes veían resultados de cualquier muestra): 403 no_asignado.
  */
 import "./lib/reauth-auto.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { analisisDe, api, cadena, crearCheck, fila, filas, informeLiberado, sesiones } from "./lib/calidad.mjs";
+import { analisisDe, api, BASE, cadena, crearCheck, fila, filas, informeLiberado, sesiones } from "./lib/calidad.mjs";
+import { registrarEnvio } from "./lib/envio.mjs";
 
 const { check, terminar } = crearCheck();
 const { t, id } = await sesiones();
@@ -95,6 +100,43 @@ const { t, id } = await sesiones();
   writeFileSync(ruta, original);
   const nada = await api("GET", "/informes/99999999/envios", undefined, t.patricia);
   check("lista de envíos de un informe que no existe → 404", nada.status === 404, String(nada.status));
+}
+
+/* ---------- Envío: límite de la evidencia y confirmación de un informe anulado ---------- */
+{
+  const lib = await informeLiberado(t, "ENV", { enviar: true });
+  const grande = await registrarEnvio(BASE, t.patricia, lib.informe, { evidencia: Buffer.alloc(16 * 1024 * 1024, 0x20) });
+  check("evidencia de 16 MB (bajo EVIDENCIA_MAX_MB, 25) se acepta: el tope ya no es un 15 MB fijo", grande.status === 200, `${grande.status} ${grande.data?.message}`);
+  const lista = await api("GET", `/informes/${lib.informe}/envios`, undefined, t.patricia);
+  check("…y la lista de envíos dice el límite a la pantalla (max_mb)", Number(lista.data?.max_mb) === 25, String(lista.data?.max_mb));
+  const envio = fila("SELECT id FROM envios_informe WHERE informe_id = ? AND confirmacion_en IS NULL ORDER BY id DESC", lib.informe);
+  await api("POST", `/informes/${lib.informe}/anular`, { motivo: "Informe de la prueba integral de envíos" }, t.ricardo);
+  check("(preparación) informe anulado", fila("SELECT estado FROM informes WHERE id = ?", lib.informe)?.estado === "anulado", fila("SELECT estado FROM informes WHERE id = ?", lib.informe)?.estado);
+  const conf = await api("POST", `/informes/${lib.informe}/envios/${envio.id}/confirmar`, { confirmacion_en: new Date().toISOString(), confirmacion_nota: "El cliente lo recibió" }, t.patricia);
+  check("confirmar la recepción de un envío de un informe anulado → 409 (sin cambios)", conf.status === 409 && conf.data?.codigo === "anulado" && !fila("SELECT confirmacion_en FROM envios_informe WHERE id = ?", envio.id)?.confirmacion_en, `${conf.status} ${conf.data?.message}`);
+}
+
+/* ---------- Ensayos de muestras no asignadas (estudiante y técnico auxiliar) ---------- */
+{
+  const ajena = await cadena(t, "AJE");
+  const A = (await api("POST", "/samples/analysis", analisisDe(ajena), t.qa)).data?.id;
+  const propia = await cadena(t, "PRO", { asignar: [id.diego, id.mariana] });
+  const AP = (await api("POST", "/samples/analysis", analisisDe(propia), t.qa)).data?.id;
+  check("(preparación) dos cadenas: una ajena y otra asignada a Diego y Mariana", !!A && !!AP && !!ajena.E && !!propia.E, `${A} ${AP}`);
+  for (const [quien, rol] of [["diego", "estudiante"], ["mariana", "técnico auxiliar"]]) {
+    const det = await Promise.all([api("GET", `/samples/processing/${ajena.P}`, undefined, t[quien]), api("GET", `/samples/extraction/${ajena.E}`, undefined, t[quien]), api("GET", `/samples/analysis/${A}`, undefined, t[quien])]);
+    check(`${rol}: procesamiento, extracción y análisis de una muestra no asignada → 403 no_asignado`, det.every((r) => r.status === 403 && r.data?.codigo === "no_asignado"), det.map((r) => `${r.status} ${r.data?.codigo}`).join(" · "));
+    const listas = await Promise.all(["processing", "extraction", "analysis"].map((l) => api("GET", `/samples/${l}?anuladas=1`, undefined, t[quien])));
+    const ids = listas.map((r) => (r.data?.items || []).map((x) => Number(x.id)));
+    check(`${rol}: las listas no traen los ensayos ajenos y sí los de su muestra`, !ids[0].includes(ajena.P) && !ids[1].includes(ajena.E) && !ids[2].includes(A) && ids[0].includes(propia.P) && ids[1].includes(propia.E) && ids[2].includes(AP), `${ids.map((l) => l.length).join("/")}`);
+    const suyo = await api("GET", `/samples/analysis/${AP}`, undefined, t[quien]);
+    check(`${rol}: el análisis de su muestra asignada sí se abre`, suyo.status === 200, String(suyo.status));
+    const historial = await api("GET", `/audit?entidad=muestras_analisis&entidad_id=${A}`, undefined, t[quien]);
+    const historialSuyo = await api("GET", `/audit?entidad=muestras_analisis&entidad_id=${AP}`, undefined, t[quien]);
+    check(`${rol}: el historial del análisis ajeno tampoco (404, como si no existiera); el de su muestra sí`, historial.status === 404 && historialSuyo.status === 200, `${historial.status} ${historialSuyo.status}`);
+  }
+  const analista = await api("GET", `/samples/analysis/${A}`, undefined, t.luis);
+  check("el técnico analista (ensayos total, del catálogo) sigue viendo los ensayos de cualquier muestra", analista.status === 200, String(analista.status));
 }
 
 terminar();

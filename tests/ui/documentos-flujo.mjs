@@ -25,7 +25,11 @@ const executablePath = process.env.CHROME_PATH || path.join(os.homedir(), "Libra
 const { check, terminar } = crearCheck();
 const stamp = Date.now().toString(36).slice(-4).toUpperCase();
 const { t, id } = await sesiones();
-const enDias = (n) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Tijuana" }).format(new Date(Date.now() + n * 86_400_000));
+// Hoy (en Tijuana) más n días de calendario (sumar n × 24 h fallaba el día del cambio de horario).
+const enDias = (n) => {
+  const [anio, mes, dia] = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Tijuana" }).format(new Date()).split("-").map(Number);
+  return new Date(Date.UTC(anio, mes - 1, dia + n)).toISOString().slice(0, 10);
+};
 
 /* ---------- Datos de apoyo ---------- */
 async function ficha(campos) {
