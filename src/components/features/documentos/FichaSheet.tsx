@@ -251,7 +251,8 @@ export function FichaSheet({ open, onClose, catalogos, editar, areaInicial, tipo
               </Field>
               <Field label="Propietario del documento" htmlFor="ficha-propietario">
                 <Select id="ficha-propietario" value={datos.propietario_id} onChange={(e) => cambiar({ propietario_id: e.target.value })}>
-                  <option value="">Sin asignar</option>
+                  {/* Un externo siempre tiene responsable de seguimiento (su propietario). */}
+                  {datos.origen === "externo" ? null : <option value="">Sin asignar</option>}
                   {personas.map((p) => (
                     <option key={p.id} value={String(p.id)}>
                       {p.nombre}

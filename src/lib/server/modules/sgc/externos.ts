@@ -24,6 +24,7 @@ import { exigirReauth } from "../../seguridad";
 import { documentoVisible, tiene, type AccesoSgc } from "./acceso";
 import { acceso, ahora, datosFicha, documentosVisibles, ENTIDAD, exigir, fechaONull, fichaVisible, idONull, palabrasDe, referenciaDe, sgcDir, texto, textoLargo, validarFicha } from "./documentos";
 import { registrarFlujo } from "./flujo";
+import { copiarDistribucion } from "./lecturas";
 import { enlaceValido, MIME_SGC, MOTIVO_MIN_SGC, pendienteDeRevision } from "../../../shared/documentos";
 
 interface Pdf {
@@ -179,6 +180,8 @@ export async function nuevaVersionExterno({ request, s, params }: RouteContext):
     }
     const numero = Math.max(0, ...revisiones.map((r) => Number(r.numero))) + 1;
     const revId = await insertarVersion(s, Number(doc.id), numero, { version: seg.version, ultima, proxima, comentario: textoLargo(campos.comentario, 2000), por: a.yo, pdf }, guardados);
+    // Como al publicar una revisión interna: la nueva versión conserva los destinatarios (y pide de nuevo el acuse).
+    const distribuidos = vigente ? await copiarDistribucion(s, Number(vigente.id), revId, a.yo) : 0;
     if (vigente) {
       await s.execute("UPDATE sgc_revisiones SET sustituida_por_id = :nueva WHERE id = :id", { nueva: revId, id: vigente.id });
       await registrarFlujo(s, { revision_id: Number(vigente.id), accion: "obsoleta", comentario: `Sustituida por la versión ${seg.version}`, usuario_id: a.yo, papel: "publicador" });
@@ -186,7 +189,7 @@ export async function nuevaVersionExterno({ request, s, params }: RouteContext):
     await s.execute("UPDATE sgc_documentos SET estado = 'vigente', revision_vigente_id = :rev, actualizado_por = :por, actualizado_en = :en WHERE id = :id", { rev: revId, por: a.yo, en, id: doc.id });
     await s.execute("UPDATE sgc_externos SET version_fecha = :v, fuente = :f, enlace = :e, ultima_revision = :ult, proxima_revision = :prox, actualizado_en = :en WHERE id = :id", { v: seg.version, f: seg.fuente || ext.fuente, e: seg.enlace ?? ext.enlace ?? null, ult: ultima, prox: proxima, en, id: ext.id });
     await registrarFlujo(s, { revision_id: revId, accion: "externo_version", comentario: textoLargo(campos.comentario, 2000), usuario_id: a.yo, papel: "publicador" });
-    await registrarAuditoria(s, user, { accion: "publicar", entidad: ENTIDAD, entidadId: Number(doc.id), referencia: `${referenciaDe(doc)} rev. ${numero}`, antes: { version: ext.version_fecha ?? null }, despues: { version: seg.version, proxima_revision: proxima }, detalle: { externo: true, revision: numero, revision_id: revId, sustituye: vigente ? { revision: Number(vigente.numero), revision_id: Number(vigente.id) } : null } });
+    await registrarAuditoria(s, user, { accion: "publicar", entidad: ENTIDAD, entidadId: Number(doc.id), referencia: `${referenciaDe(doc)} rev. ${numero}`, antes: { version: ext.version_fecha ?? null }, despues: { version: seg.version, proxima_revision: proxima }, detalle: { externo: true, revision: numero, revision_id: revId, sustituye: vigente ? { revision: Number(vigente.numero), revision_id: Number(vigente.id) } : null, ...(distribuidos ? { distribucion: { origen: "revision_anterior", filas: distribuidos } } : {}) } });
     await s.commit();
     return json({ message: `Versión ${seg.version} registrada como vigente; la anterior queda obsoleta`, revision_id: revId }, 201);
   } catch (error) {
@@ -201,6 +204,7 @@ export async function editarExterno({ request, s, params }: RouteContext): Promi
   const a = await acceso(s, user);
   exigir(a, "documento_externo_gestionar", "Solo quien gestiona externos edita sus datos de seguimiento (documento_externo_gestionar)");
   const { doc, ext } = await externoDe(s, a, intParam(params.id));
+  if (doc.estado === "obsoleto") throw new HttpError(409, { message: "El documento externo está obsoleto: sus datos de seguimiento ya no se modifican" });
   const raw = await readJson(request);
   const motivo = String(raw.motivo || "").trim();
   if (motivo.length < MOTIVO_MIN_SGC) throw new HttpError(400, { message: `Indica el motivo (al menos ${MOTIVO_MIN_SGC} caracteres)`, campo: "motivo" });

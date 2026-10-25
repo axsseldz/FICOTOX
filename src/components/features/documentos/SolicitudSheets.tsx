@@ -41,6 +41,7 @@ export interface SolicitudSgc {
   clave_asignada: string | null;
   creado_en: string;
   con_apoyo: boolean;
+  apoyo_nombre_original?: string | null;
   puede: { atender: boolean };
 }
 
@@ -118,8 +119,8 @@ export function SolicitudSheet({ catalogos, documento, onClose }: { catalogos: C
         <div className="flex flex-col gap-5">
           {!documento ? (
             <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Tipo de solicitud">
-              <ChoiceCard type="radio" name="sol-tipo" checked={tipo === "nuevo"} onChange={() => setTipo("nuevo")} label="Documento nuevo" description="Proponer un documento que no existe" />
-              <ChoiceCard type="radio" name="sol-tipo" checked={tipo === "cambio"} onChange={() => setTipo("cambio")} label="Cambio a un documento" description="Una nueva revisión de uno existente" />
+              <ChoiceCard type="radio" name="sol-clase" checked={tipo === "nuevo"} onChange={() => setTipo("nuevo")} label="Documento nuevo" description="Proponer un documento que no existe" />
+              <ChoiceCard type="radio" name="sol-clase" checked={tipo === "cambio"} onChange={() => setTipo("cambio")} label="Cambio a un documento" description="Una nueva revisión de uno existente" />
             </div>
           ) : null}
           {tipo === "nuevo" ? (

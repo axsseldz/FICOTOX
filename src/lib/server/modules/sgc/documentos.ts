@@ -31,7 +31,7 @@ import { cargarAutorizacion, cargoActuante, hoy, permisoDe } from "../../rbac";
 import { exigirReauth } from "../../seguridad";
 import { incidenciaPorAlertaIntegridad } from "../calidad/automaticas";
 import { accesoSgc, documentoVisible, tiene, vistaDocumento, type AccesoSgc } from "./acceso";
-import { pendienteDeRevision } from "../../../shared/documentos";
+import { ANIOS_PROXIMA_REVISION, pendienteDeRevision, sumarAnios } from "../../../shared/documentos";
 import { validarIdentificadorExterno } from "../../../shared/documentos";
 import { estadoDistribucion, lecturasPendientesDe, lecturasPendientesGlobales } from "./lecturas";
 import { CONFIDENCIALIDADES, ESTADOS_TRABAJO, MIME_SGC, MOTIVO_MIN_SGC, esConfidencialidad, esTipoArchivo, etiquetaConfidencialidad, extensionesDe, normalizarPalabras, validarClave, type TipoArchivoSgc } from "../../../shared/documentos";
@@ -261,7 +261,8 @@ export async function listarDocumentos({ request, s }: RouteContext): Promise<Re
   const desde = FECHA.test(p("desde")) ? p("desde") : "";
   const hasta = FECHA.test(p("hasta")) ? p("hasta") : "";
   const orden = p("orden") || "clave";
-  let lista = await documentosVisibles(s, a);
+  const todos = await documentosVisibles(s, a);
+  let lista = todos;
   // Obsoletos: fuera de los puntos de uso; solo con "Mostrar obsoletos" (y solo los ve quien consulta el historico).
   if (p("obsoletos") !== "1" && estado !== "obsoleto") lista = lista.filter((x) => x.doc.estado !== "obsoleto");
   if (area) lista = lista.filter((x) => x.doc.area_codigo === area);
@@ -287,7 +288,7 @@ export async function listarDocumentos({ request, s }: RouteContext): Promise<Re
     proxima: (x, y) => String(x.vigente?.fecha_proxima_revision || "9999").localeCompare(String(y.vigente?.fecha_proxima_revision || "9999")),
   };
   lista.sort(cmp[orden] || cmp.clave);
-  const propietarios = [...new Map((await documentosVisibles(s, a)).filter((x) => x.doc.propietario_id).map((x) => [Number(x.doc.propietario_id), { id: Number(x.doc.propietario_id), nombre: String(x.doc.propietario_nombre || "") }])).values()].sort((x, y) => x.nombre.localeCompare(y.nombre, "es"));
+  const propietarios = [...new Map(todos.filter((x) => x.doc.propietario_id).map((x) => [Number(x.doc.propietario_id), { id: Number(x.doc.propietario_id), nombre: String(x.doc.propietario_nombre || "") }])).values()].sort((x, y) => x.nombre.localeCompare(y.nombre, "es"));
   return json({ items: lista.map(serializarLista), propietarios, puede: { crear_ficha: tiene(a, "documento_crear_ficha"), proponer: tiene(a, "documento_proponer"), ver_obsoletos: tiene(a, "documento_consultar_historico") || tiene(a, "documento_crear_ficha") }, diagnostico: a.diagnostico });
 }
 
@@ -352,7 +353,8 @@ export async function obtenerDocumento({ request, s, params }: RouteContext): Pr
   let nuevaRevision: Puede = no();
   if (crear) {
     if (doc.estado === "obsoleto") nuevaRevision = no("El documento está obsoleto");
-    else if (!vigente) nuevaRevision = no("El documento todavía no tiene revisión vigente: completa la revisión en curso");
+    // Sin vigente: si la primera revisión se rechazó (cancelada) se abre otra; si sigue en curso, se completa esa.
+    else if (!vigente && trabajo) nuevaRevision = no("El documento todavía no tiene revisión vigente: completa la revisión en curso");
     else if (trabajo) nuevaRevision = no(`Ya hay una revisión en curso (revisión ${trabajo.numero}, ${String(trabajo.estado).replace("_", " ")})`);
     else if (renovaciones.some((n) => ["en_revision", "en_autorizacion"].includes(String(n.estado)))) nuevaRevision = no("Hay una renovación de vigencia en curso");
     else if (pendienteObs) nuevaRevision = no("Hay una solicitud de obsolescencia pendiente");
@@ -705,6 +707,8 @@ export async function editarDocumento({ request, s, params }: RouteContext): Pro
   if (motivo.length < MOTIVO_MIN_SGC) throw new HttpError(400, { message: `Indica el motivo del cambio (al menos ${MOTIVO_MIN_SGC} caracteres)`, campo: "motivo" });
   // El origen no cambia al editar: un externo sigue siendo externo (y uno interno, interno).
   const d = await validarFicha(s, { ...datosFicha(raw), origen: doc.origen === "externo" ? "externo" : "interno" }, Number(doc.id), a);
+  // Un externo siempre tiene responsable de seguimiento (su propietario): no se deja vacío.
+  if (doc.origen === "externo" && !d.propietario_id) throw new HttpError(400, { message: "Un documento externo necesita responsable de seguimiento", campo: "propietario_id" });
   // Con revision vigente, el area y el tipo ya forman parte de la clave publicada: siguen la regla de la clave.
   const antes = fichaVisible(doc);
   await s.execute(
@@ -732,7 +736,7 @@ export async function nuevaRevision({ request, s, params }: RouteContext): Promi
   const raw = await readJson(request);
   const r = await solicitudPropiaAceptada(s, user, a, request, intParam(params.id), raw);
   await s.commit();
-  return json({ message: `Revisión ${r.numero} abierta en borrador; la vigente sigue en uso`, revision_id: r.revision_id, numero: r.numero }, 201);
+  return json({ message: r.message.replace(/^Solicitud aceptada: r/, "R"), revision_id: r.revision_id, numero: r.numero }, 201);
 }
 
 /* Revision con su documento, visible para la persona (404 si no). */
@@ -791,7 +795,9 @@ export async function editarRevision({ request, s, params }: RouteContext): Prom
        fecha_vigencia = :fecha_vigencia, fecha_proxima_revision = :fecha_proxima_revision, ubicacion_historica = :ubicacion_historica, regla_conservacion = :regla_conservacion,
        elaborador_id = :elaborador_id, revisor_id = :revisor_id, autorizador_id = :autorizador_id, actualizado_por = :por, actualizado_en = :en WHERE id = :id AND estado = 'borrador'`,
     { ...datosRevisionVisibles(nuevo), por: a.yo, en: ahora(), id: rev.id },
-  );
+  ).then((r) => {
+    if (!r.rowcount) throw new HttpError(409, { message: "La revisión ya no está en borrador: sus datos no se modifican", codigo: "no_borrador" });
+  });
   await registrarAuditoria(s, user, { accion: "editar", entidad: ENTIDAD, entidadId: Number(doc.id), referencia: `${referenciaDe(doc)} rev. ${rev.numero}`, motivo, antes, despues: datosRevisionVisibles(nuevo), detalle: { revision: Number(rev.numero), revision_id: Number(rev.id) } });
   await s.commit();
   return json({ message: `Revisión ${rev.numero} actualizada` });
@@ -860,8 +866,9 @@ export async function registrarVigente({ request, s, params }: RouteContext): Pr
   const fechaEmision = fechaONull(raw.fecha_emision, "fecha_emision");
   if (!fechaEmision) throw new HttpError(400, { message: "Indica la fecha de emisión autorizada", campo: "fecha_emision" });
   const fechaVigencia = fechaONull(raw.fecha_vigencia, "fecha_vigencia") || fechaEmision;
-  const proxima = fechaONull(raw.fecha_proxima_revision, "fecha_proxima_revision");
-  if (proxima && proxima <= fechaVigencia) throw new HttpError(400, { message: "La próxima revisión debe ser posterior a la fecha de vigencia", campo: "fecha_proxima_revision" });
+  // Como al publicar: sin fecha, emisión + 3 años (sin ella el documento nunca quedaría pendiente de revisión).
+  const proxima = fechaONull(raw.fecha_proxima_revision, "fecha_proxima_revision") || sumarAnios(fechaEmision, ANIOS_PROXIMA_REVISION);
+  if (proxima <= fechaVigencia) throw new HttpError(400, { message: "La próxima revisión debe ser posterior a la fecha de vigencia", campo: "fecha_proxima_revision" });
   await validarResponsables(s, { elaborador_id: rev.elaborador_id ?? null, revisor_id: rev.revisor_id ?? null, autorizador_id: rev.autorizador_id ?? null });
   await exigirReauth(s, request, user, "documentos:publicar");
   const permiso = permisoDe(a.auth, "documentos", "documento_publicar");

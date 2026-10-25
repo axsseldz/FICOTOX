@@ -195,6 +195,9 @@ export const ACCION_FLUJO: Record<string, string> = {
   renovacion_rechazar: "Rechazó la renovación",
   renovacion_autorizar: "Autorizó la renovación",
   obsoletar: "Declaró el documento obsoleto",
+  externo_registrar: "Registró el documento externo",
+  externo_verificar: "Verificó que sigue vigente",
+  externo_version: "Registró una nueva versión",
 };
 
 /* ---------- Externos (Fase 3) ---------- */

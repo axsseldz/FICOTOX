@@ -148,10 +148,11 @@ try {
     check("bandeja: «Revisar» abre la ficha con la ventana de revisión", (await ventanaCentrada(page)) && !new URL(page.url()).searchParams.has("accion"));
   });
 
-  await paso("jorge", "Bandeja vacía", async (page) => {
+  // La administración técnica solo diagnostica metadatos en carpetas y fichas: la Bandeja no es para ese papel.
+  await paso("jorge", "Bandeja sin acciones documentales", async (page) => {
     await page.goto(`${BASE}/documentos/bandeja`);
-    await page.getByTestId("bandeja-vacia").waitFor();
-    check("bandeja: estado vacío «No tienes pendientes»", /No tienes pendientes/.test(await page.getByTestId("bandeja-vacia").innerText()));
+    await page.getByText("Sin acceso a Documentos SGC").waitFor();
+    check("bandeja: el administrador técnico ve «Sin acceso» (no tiene tareas documentales)", (await page.getByTestId("bandeja-vacia").count()) === 0);
   });
 
   /* ---------- Solicitudes ---------- */

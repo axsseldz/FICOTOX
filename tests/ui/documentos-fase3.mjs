@@ -200,7 +200,7 @@ try {
 
   await paso("jorge", "Jorge: sin Lista Maestra", async (page) => {
     await page.goto(`${BASE}/documentos/lista-maestra`);
-    await page.getByText(/Lista Maestra requiere|No tienes permiso/).first().waitFor();
+    await page.getByText(/Sin acceso a Documentos SGC|Lista Maestra requiere|No tienes permiso/).first().waitFor();
     check("admin técnico por URL directa: la Lista Maestra se niega", (await page.getByTestId("lm-tabla").count()) === 0);
   });
 

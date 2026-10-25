@@ -278,11 +278,18 @@ async function cargarPendiente(s: Session, params: Record<string, string | strin
   return fila;
 }
 
+/* Un documento SGC confidencial que la persona no ve: su solicitud responde 404, como en la bandeja (no se resuelve a ciegas). */
+async function exigirSolicitudVisible(s: Session, user: CurrentUser, solicitud: Solicitud): Promise<void> {
+  if (solicitud.entidad !== "sgc_documentos") return;
+  if ((await documentosOcultos(s, await cargarAutorizacion(s, user))).includes(String(solicitud.entidad_id))) throw new HttpError(404, { message: "Solicitud no encontrada" });
+}
+
 /* Aprobar: segundo usuario con el permiso de la accion; ejecuta en la misma transaccion. */
 export function aprobarSolicitudCon(ejecutores: Ejecutores) {
   return async ({ request, s, params }: RouteContext): Promise<Response> => {
     const user = await requireUser(request);
     const solicitud = await cargarPendiente(s, params);
+    await exigirSolicitudVisible(s, user, solicitud);
     const yo = userIdFromClaims(user) as number;
     const violacion = evaluarSegundoUsuario(yo, solicitud.solicitado_por);
     if (violacion) throw new HttpError(409, { message: violacion.mensaje, codigo: "segregacion", regla: violacion.regla, clave: violacion.clave });
@@ -318,6 +325,7 @@ export function aprobarSolicitudCon(ejecutores: Ejecutores) {
 export async function rechazarSolicitud({ request, s, params }: RouteContext): Promise<Response> {
   const user = await requireUser(request);
   const solicitud = await cargarPendiente(s, params);
+  await exigirSolicitudVisible(s, user, solicitud);
   const yo = userIdFromClaims(user) as number;
   const violacion = evaluarSegundoUsuario(yo, solicitud.solicitado_por);
   if (violacion) throw new HttpError(409, { message: "Solicitaste esta acción; para desistir cancélala", codigo: "segregacion", regla: violacion.regla, clave: violacion.clave });
