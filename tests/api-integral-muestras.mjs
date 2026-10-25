@@ -85,11 +85,14 @@ const { t, id } = await sesiones();
   check("descargar la evidencia del envío verifica su SHA-256", ok.status === 200 && ok.headers.get("x-integridad-evidencia") === "ok", `${ok.status} ${ok.headers.get("x-integridad-evidencia")}`);
   check("…y queda «descargar» en la bitácora", !!fila("SELECT id FROM auditoria WHERE accion = 'descargar' AND entidad = 'informes' AND entidad_id = ? AND cambios_json LIKE ?", String(lib.informe), `%"envio_id":${envio.id}%`));
   const ruta = path.join(path.dirname(process.env.TEST_DB_PATH), "informes", "envios", envio.evidencia_archivo);
-  writeFileSync(ruta, Buffer.concat([readFileSync(ruta), Buffer.from("alterado")]));
+  // El original vuelve a su lugar al terminar: la prueba de restauración de respaldos (más adelante) verifica cada archivo.
+  const original = readFileSync(ruta);
+  writeFileSync(ruta, Buffer.concat([original, Buffer.from("alterado")]));
   const alterada = await api("GET", url, undefined, t.patricia);
   check("evidencia alterada → X-Integridad-Evidencia alterado", alterada.headers.get("x-integridad-evidencia") === "alterado", `${alterada.status} ${alterada.headers.get("x-integridad-evidencia")}`);
   check("…con alerta_integridad en la bitácora", !!fila("SELECT id FROM auditoria WHERE accion = 'alerta_integridad' AND entidad = 'informes' AND entidad_id = ? AND cambios_json LIKE ?", String(lib.informe), `%"envio_id":${envio.id}%`));
   check("…y una incidencia automática", !!fila("SELECT id FROM incidencias WHERE clave_automatica = ?", `alerta_integridad:envio:${envio.id}:alterado`));
+  writeFileSync(ruta, original);
   const nada = await api("GET", "/informes/99999999/envios", undefined, t.patricia);
   check("lista de envíos de un informe que no existe → 404", nada.status === 404, String(nada.status));
 }

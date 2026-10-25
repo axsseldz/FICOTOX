@@ -171,6 +171,8 @@ const db = () => new Database(process.env.TEST_DB_PATH);
   check("el apoyo íntegro se descarga con su nombre y la marca de integridad", ok.status === 200 && ok.headers.get("x-integridad-archivo") === "ok" && /borrador-formato\.pdf/.test(ok.headers.get("content-disposition") || ""), `${ok.status} ${ok.headers.get("x-integridad-archivo")}`);
   const almacenado = fila("SELECT apoyo_nombre_almacenado AS a FROM sgc_solicitudes WHERE id = ?", sid)?.a;
   const ruta = path.join(path.dirname(process.env.TEST_DB_PATH), "sgc", ...String(almacenado).split("/"));
+  // El original vuelve a su lugar al terminar: la prueba de restauración de respaldos (más adelante) verifica cada archivo.
+  const original = fs.readFileSync(ruta);
   fs.appendFileSync(ruta, "alterado");
   const alt = await fetch(`${BASE}/sgc/solicitudes/${sid}/apoyo`, { headers: { Authorization: `Bearer ${t.ana}` } });
   const inc = fila("SELECT id FROM incidencias WHERE clave_automatica = ?", `alerta_integridad:sgc_apoyo:${sid}:alterado`);
@@ -178,6 +180,7 @@ const db = () => new Database(process.env.TEST_DB_PATH);
   fs.rmSync(ruta);
   const falta = await api("GET", `/sgc/solicitudes/${sid}/apoyo`, undefined, t.ana);
   check("faltante → 404 archivo_faltante", falta.status === 404 && falta.data?.codigo === "archivo_faltante", `${falta.status} ${falta.data?.codigo}`);
+  fs.writeFileSync(ruta, original);
 }
 
 /* ---------- Historial heredado ---------- */

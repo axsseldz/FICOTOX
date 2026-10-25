@@ -145,10 +145,13 @@ const estadoMant = (id) => fila("SELECT estado FROM mantenimientos WHERE id = ?"
   check("abrir el reporte verifica su SHA-256 y lo sirve con su nombre original", ok.status === 200 && ok.headers.get("x-integridad-archivo") === "ok" && /reporte%20integral\.pdf/.test(ok.headers.get("content-disposition") || ""), `${ok.status} ${ok.headers.get("x-integridad-archivo")} ${ok.headers.get("content-disposition")}`);
   check("…y la consulta queda en la bitácora («descargar»)", !!fila("SELECT id FROM auditoria WHERE accion = 'descargar' AND entidad = 'reportes_mantenimiento' AND entidad_id = ?", String(rep.id)));
   const ruta = path.join(path.dirname(process.env.TEST_DB_PATH), "maintenance_reports", ...String(rep.nombre_almacenado).split("/"));
-  writeFileSync(ruta, Buffer.concat([readFileSync(ruta), Buffer.from("alterado")]));
+  // El original vuelve a su lugar al terminar: la prueba de restauración de respaldos (más adelante) verifica cada archivo.
+  const original = readFileSync(ruta);
+  writeFileSync(ruta, Buffer.concat([original, Buffer.from("alterado")]));
   const alterado = await api("GET", url, undefined, t.hector);
   check("reporte alterado → X-Integridad-Archivo alterado", alterado.headers.get("x-integridad-archivo") === "alterado", `${alterado.status} ${alterado.headers.get("x-integridad-archivo")}`);
   check("…con alerta_integridad y una incidencia automática", !!fila("SELECT id FROM auditoria WHERE accion = 'alerta_integridad' AND entidad = 'reportes_mantenimiento' AND entidad_id = ?", String(rep.id)) && !!fila("SELECT id FROM incidencias WHERE clave_automatica = ?", `alerta_integridad:reporte_mantenimiento:${rep.id}:alterado`));
+  writeFileSync(ruta, original);
   check("(los reportes de la base siguen enlazados a su mantenimiento)", filas("SELECT id FROM reportes_mantenimiento WHERE id_mantenimiento = ?", M).length === 1);
 }
 
