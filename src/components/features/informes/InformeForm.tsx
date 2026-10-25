@@ -22,7 +22,7 @@ import { ActionMenu, usePrompt, type MenuItem } from "@/components/ui/Overlay";
 import { Badge, EmptyState } from "@/components/ui/Primitives";
 import { API_BASE_URL, getJsonAuth, sendJsonAuth } from "@/lib/client/api";
 import { descargarPdfInforme } from "@/lib/client/informes-pdf";
-import { fmtDate, isoDate, parseIntOrNull, todayIso } from "@/lib/client/format";
+import { fmtDate, isoDate, parseIntOrNull } from "@/lib/client/format";
 import { formatActiveUserSignature } from "@/lib/client/session";
 import { invalidate } from "@/lib/client/store";
 import { seOfrece } from "@/lib/client/puede";
@@ -72,7 +72,8 @@ const defaultForm = (): InformeState => ({
   desviaciones: "",
   descargo: "",
   opiniones: "",
-  fechaEmision: todayIso(),
+  // Vacía: la fecha de emisión se fija al autorizar (no la del día en que se empezó el borrador).
+  fechaEmision: "",
   elaboradoNombre: formatActiveUserSignature(),
   elaboradoFirma: "",
   observaciones: "",
@@ -93,7 +94,7 @@ const formFromItem = (item: ApiRecord): InformeState => {
     desviaciones: str(decl.desviaciones),
     descargo: str(decl.descargo),
     opiniones: str(decl.opiniones),
-    fechaEmision: isoDate(item.fecha_emision) || todayIso(),
+    fechaEmision: isoDate(item.fecha_emision) || "",
     elaboradoNombre: str(item.elaborado_nombre),
     elaboradoFirma: str(item.elaborado_firma),
     observaciones: str(item.observaciones),
@@ -447,7 +448,7 @@ export function InformeForm({ item, prefillRecepcionId }: { item: ApiRecord | nu
       {editing && estado === "borrador" && canReview ? <AvisoAutorizacion requisitos={requisitosInforme("revisar")} accion="revisar este informe" /> : null}
       {editing && estado === "en_revision" && canAuthorize ? <AvisoAutorizacion requisitos={requisitosInforme("autorizar")} accion="autorizar este informe" /> : null}
       {editing && estado === "autorizado" && canLiberar ? <AvisoAutorizacion requisitos={requisitosInforme("liberar")} accion="liberar este informe" /> : null}
-      <SegregacionCallout bloqueo={editing && estado === "borrador" && canReview ? segregacion.revisar : editing && estado === "en_revision" && canAuthorize ? segregacion.autorizar : null} accion={estado === "en_revision" ? "autorizar" : "revisar"} onSolicitar={() => solicitarExcepcion(estado === "en_revision" ? "autorizar" : "revisar")} />
+      <SegregacionCallout enFormato bloqueo={editing && estado === "borrador" && canReview ? segregacion.revisar : editing && estado === "en_revision" && canAuthorize ? segregacion.autorizar : null} accion={estado === "en_revision" ? "autorizar" : "revisar"} onSolicitar={() => solicitarExcepcion(estado === "en_revision" ? "autorizar" : "revisar")} />
       {item?.motivo_anulacion ? (
         <Callout tone="danger" title="Informe anulado">
           Motivo: {String(item.motivo_anulacion)}

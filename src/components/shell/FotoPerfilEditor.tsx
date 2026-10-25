@@ -145,7 +145,7 @@ export function PanelFoto({ onCambio }: { onCambio: () => Promise<void> }) {
 /* Ventana de recorte: circulo, zoom (deslizador, rueda o pellizco), arrastrar y vistas previas. */
 function Recortador({ archivo, onCerrar, onGuardado }: { archivo: File; onCerrar: () => void; onGuardado: () => Promise<void> }) {
   const { token } = useSession();
-  const [src] = useState(() => URL.createObjectURL(archivo));
+  const [src, setSrc] = useState<string | null>(null);
   const [nat, setNat] = useState<{ w: number; h: number } | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pos, setPos] = useState({ x: 0, y: 0 });
@@ -155,7 +155,14 @@ function Recortador({ archivo, onCerrar, onGuardado }: { archivo: File; onCerrar
   const pellizco = useRef<{ d: number; z: number } | null>(null);
   const v = useValidacion({ titulo: "No se pudo guardar la foto", reglas: () => [] });
 
-  useEffect(() => () => URL.revokeObjectURL(src), [src]);
+  // La URL se crea y se revoca en el mismo efecto: creada en useState, el montaje doble de StrictMode la
+  // revocaba antes de que cargara la imagen y «Guardar» no se habilitaba.
+  useEffect(() => {
+    const url = URL.createObjectURL(archivo);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- la URL vive lo que vive el efecto
+    setSrc(url);
+    return () => URL.revokeObjectURL(url);
+  }, [archivo]);
 
   const base = nat ? Math.max(VISTA / nat.w, VISTA / nat.h) : 1;
   const escala = base * zoom;
@@ -236,7 +243,7 @@ function Recortador({ archivo, onCerrar, onGuardado }: { archivo: File; onCerrar
     const f = tam / VISTA;
     return nat ? (
       // eslint-disable-next-line @next/next/no-img-element -- vista previa local (blob:)
-      <img src={src} alt="" draggable={false} className="pointer-events-none absolute top-1/2 left-1/2 max-w-none select-none" style={{ width: nat.w * escala * f, height: nat.h * escala * f, transform: `translate(calc(-50% + ${pos.x * f}px), calc(-50% + ${pos.y * f}px))` }} />
+      <img src={src ?? undefined} alt="" draggable={false} className="pointer-events-none absolute top-1/2 left-1/2 max-w-none select-none" style={{ width: nat.w * escala * f, height: nat.h * escala * f, transform: `translate(calc(-50% + ${pos.x * f}px), calc(-50% + ${pos.y * f}px))` }} />
     ) : null;
   };
 
@@ -283,7 +290,7 @@ function Recortador({ archivo, onCerrar, onGuardado }: { archivo: File; onCerrar
             >
               {/* Imagen oculta que sirve para medir y recortar. */}
               {/* eslint-disable-next-line @next/next/no-img-element -- vista previa local (blob:) */}
-              <img ref={imgRef} src={src} alt="" className="hidden" onLoad={(e) => setNat({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} />
+              {src ? <img ref={imgRef} src={src} alt="" className="hidden" onLoad={(e) => setNat({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} /> : null}
               {imagen(VISTA)}
               {/* Circulo: lo de fuera queda oscurecido. */}
               <span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-full shadow-recorte ring-2 ring-knob/80" />

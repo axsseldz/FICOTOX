@@ -100,7 +100,11 @@ export async function listarAutorizacionesUsuario({ request, s, params }: RouteC
   const usuarioId = intParam(params.id);
   const auth = await cargarAutorizacion(s, user);
   const puedeAdministrar = !!permisoAdministrar(auth);
-  if (auth.userId !== usuarioId && !puedeAdministrar) await requirePermission(s, user, "usuarios", "V", undefined, auth);
+  if (auth.userId !== usuarioId && !puedeAdministrar) {
+    const permiso = await requirePermission(s, user, "usuarios", "V", undefined, auth);
+    // Con alcance «propio» en usuarios solo se ve la cuenta propia (como en la ficha de usuario).
+    if (!permiso.total && permiso.alcances.every((a) => a === "propio")) throw new HttpError(403, { message: "Tu alcance en usuarios es solo tu propia cuenta" });
+  }
   await cuenta(s, usuarioId);
   return json({ items: await autorizacionesDe(s, usuarioId), puede_administrar: puedeAdministrar && auth.userId !== usuarioId });
 }

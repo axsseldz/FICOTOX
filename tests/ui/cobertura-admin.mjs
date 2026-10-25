@@ -92,6 +92,47 @@ check(
   `${prep.join(",")} aut=${aut} asig=${[aExtra, aFut, aRev, aTer].map((r) => r.status)} revoca=${revoca.status} foto=${foto.status} ${foto.data?.message || ""} inact=${inact.status}`,
 );
 
+/* ---------- Más cuentas y roles propios: acceso, sesión, Mi cuenta y acciones de Usuarios y Roles ---------- */
+// IP propia para los intentos fallidos (TRUST_PROXY): no bloquean la del navegador de otras suites.
+const ipBase = `10.${100 + Math.floor(Math.random() * 150)}.${Math.floor(Math.random() * 250)}`;
+let ipN = 0;
+const ipPropia = () => ({ "X-Forwarded-For": `${ipBase}.${(ipN += 1)}` });
+const conIp = () => ({ extraHTTPHeaders: ipPropia() });
+const UB = await cuenta("De Baja");
+const UL1 = await cuenta("Bloqueada Uno");
+const UL2 = await cuenta("Bloqueada Dos");
+const USP = await cuenta("Sin Permisos", { headers: SIN_APROBAR });
+const UP = await cuenta("Cambio Obligatorio");
+const UI = await cuenta("Inactividad");
+const UX = await cuenta("Sesiones");
+const UPW = await cuenta("Clave Propia");
+const UFo = await cuenta("Foto Propia");
+const UAC = await cuenta("Cargo");
+const UD1 = await cuenta("Baja Menu");
+const UD2 = await cuenta("Baja Hoja");
+const UA2 = await cuenta("Admin Dos", { rolClave: "admin_tecnico" });
+const [RA1, RA2, Rdes, Rquita, Rdatos] = [await rolPropio("Aprueba Uno"), await rolPropio("Aprueba Dos"), await rolPropio("Desactivar"), await rolPropio("Quitar"), await rolPropio("Datos")];
+const ponerPermisos = (r, permisos) => api("PUT", `/admin/roles/${r.id}`, { nombre: r.nombre, descripcion: "Rol de la prueba de cobertura", activo: true, permisos, motivo: "Permisos de la prueba de cobertura" }, t.jorge);
+// Dos roles que permiten otorgar autorizaciones (ensayos:A) y ver Usuarios: la cuenta «Cargo» debe elegir con cuál actúa.
+const APRUEBA = [{ modulo: "usuarios", accion: "V", alcance: "total" }, { modulo: "ensayos", accion: "V", alcance: "total" }, { modulo: "ensayos", accion: "A", alcance: "total" }];
+const permisosA = [await ponerPermisos(RA1, APRUEBA), await ponerPermisos(RA2, APRUEBA), await ponerPermisos(Rquita, [{ modulo: "muestras", accion: "V", alcance: "total" }])];
+const asigA = [await asignar(UAC.id, RA1.id), await asignar(UAC.id, RA2.id)];
+const bajaUB = await api("DELETE", `/admin/usuarios/${UB.id}`, { motivo: "Cuenta de baja de la prueba de cobertura" }, t.jorge);
+// Bloqueo por intentos fallidos (5), cada cuenta desde su IP.
+for (const c of [UL1, UL2]) {
+  const ip = ipPropia();
+  for (let i = 0; i < 5; i += 1) await api("POST", "/auth/login", { email: c.email, password: "incorrecta-000" }, undefined, ip);
+}
+// Contraseña restablecida por la administración: cambio obligatorio al entrar.
+const restUP = await api("POST", `/admin/usuarios/${UP.id}/password`, { motivo: "Contraseña olvidada de la prueba de cobertura" }, t.jorge);
+const TEMP_UP = String(restUP.data?.password_temporal || "");
+const prep2 = [UB, UL1, UL2, USP, UP, UI, UX, UPW, UFo, UAC, UD1, UD2, UA2].map((c) => c.status).concat([RA1, RA2, Rdes, Rquita, Rdatos].map((r) => r.status));
+check(
+  "(preparación) cuentas de baja, bloqueadas, sin roles, con cambio obligatorio y con dos cargos; roles con permisos",
+  prep2.every((st) => st === 201) && permisosA.every((r) => r.status < 300) && asigA.every((r) => r.status < 300) && bajaUB.status === 200 && Number(usuario(UB.id)?.activo) === 0 && [UL1, UL2].every((c) => !!usuario(c.id)?.bloqueado_hasta) && TEMP_UP.length >= 10 && Number(usuario(UP.id)?.debe_cambiar_password) === 1 && filas("SELECT id FROM rol_acciones WHERE id_rol = ?", RA2.id).length === 3 && filas("SELECT id FROM rol_acciones WHERE id_rol = ?", Rquita.id).length === 1 && !!asignacion(UAC.id, RA1.id) && !!asignacion(UAC.id, RA2.id),
+  `${prep2.join(",")} permisos=${permisosA.map((r) => r.status)} asig=${asigA.map((r) => r.status)} baja=${bajaUB.status} rest=${restUP.status}`,
+);
+
 /* ---------- Utilidades de pantalla ---------- */
 const marcado = (page, campo, ms = 4000) => esperar(async () => (await page.locator(`#${campo}`).first().getAttribute("aria-invalid").catch(() => null)) === "true", ms).then(Boolean);
 /* Pulsa `boton` y espera el resumen de validación; dice qué campos quedaron marcados y lo cierra. */
@@ -520,7 +561,8 @@ await paso(UA, "buscador: acciones, recientes, teclado", async (page) => {
 });
 
 /* ---------- Ayuda ---------- */
-const SECCIONES = { empezar: "Cómo usar la plataforma", buscar: "Buscar", muestras: "Flujo de una muestra", extraccion: "Extracciones ASP y DSP", analisis: "Análisis, revisión y aprobación", informes: "Informes de resultados", inventario: "Inventario y avisos", calidad: "Calidad y auditoría", documentos: "Documentos SGC", anular: "Corregir un registro", atajos: "Atajos de teclado" };
+/* Cada sección: [título del enlace en el índice (matriz 6.1), título de la sección]. */
+const SECCIONES = { empezar: ["Cómo usar la plataforma", "Cómo usar la plataforma"], buscar: ["Buscar", "Buscar"], muestras: ["Flujo de una muestra", "Flujo de una muestra"], extraccion: ["Extracciones ASP y DSP", "Extracciones ASP y DSP"], analisis: ["Análisis y firmas", "Análisis, revisión y aprobación"], informes: ["Informes", "Informes de resultados"], inventario: ["Inventario y avisos", "Inventario y avisos"], calidad: ["Calidad y auditoría", "Calidad y auditoría"], documentos: ["Documentos SGC", "Documentos SGC"], anular: ["Corregir un registro", "Corregir un registro"], atajos: ["Atajos", "Atajos de teclado"] };
 await paso(UA, "ayuda: índice y secciones", async (page) => {
   await page.goto(`${BASE_WEB}/ayuda#documentos`);
   const indice = page.getByRole("navigation", { name: "Índice" });
@@ -535,12 +577,23 @@ await paso(UA, "ayuda: índice y secciones", async (page) => {
   await indice.locator('a[href="#atajos"]').click();
   const atajos = await page.waitForFunction(() => document.querySelector('nav[aria-label="Índice"] a[href="#atajos"]')?.getAttribute("aria-current") === "location", null, { timeout: 15_000 }).then(() => true, () => false);
   check("[cob:A:A-180] pulsar «Atajos» (la última sección) la marca en el índice", atajos);
-  for (const [ancla, titulo] of Object.entries(SECCIONES)) {
-    const h2 = await page.locator(`section#${ancla} h2`).innerText().catch(() => "");
-    const texto = await page.locator(`section#${ancla}`).innerText().catch(() => "");
-    const enIndice = await indice.locator(`a[href="#${ancla}"]`).count();
-    check(`[cob:A:ayuda-${ancla}] Ayuda #${ancla}: sección «${titulo}» con contenido y entrada en el índice`, h2 === titulo && texto.length > 200 && enIndice === 1, `${h2} (${texto.length}) índice=${enIndice}`);
+  // Pulsar el enlace del índice cambia el hash, deja la sección a la vista y la marca (aria-current).
+  const seccion = async (ancla) => {
+    const enlace = indice.locator(`a[href="#${ancla}"]`);
+    const datos = { enIndice: await enlace.count(), enlace: (await enlace.innerText().catch(() => "")).trim(), h2: await page.locator(`section#${ancla} h2`).innerText().catch(() => ""), largo: (await page.locator(`section#${ancla}`).innerText().catch(() => "")).length };
+    await enlace.click();
+    datos.lleva = await page.waitForFunction((a) => {
+      const r = document.getElementById(a)?.getBoundingClientRect();
+      return location.hash === `#${a}` && !!r && r.top < window.innerHeight && r.bottom > 0 && document.querySelector(`nav[aria-label="Índice"] a[href="#${a}"]`)?.getAttribute("aria-current") === "location";
+    }, ancla, { timeout: 15_000 }).then(() => true, () => false);
+    return datos;
+  };
+  for (const [ancla, [enlace, titulo]] of Object.entries(SECCIONES)) {
+    const d = await seccion(ancla);
+    check(`[cob:A:ayuda-${ancla}] Ayuda #${ancla}: el índice dice «${enlace}» y lleva a la sección «${titulo}» (a la vista y marcada), con contenido`, d.enIndice === 1 && d.enlace === enlace && d.h2 === titulo && d.largo > 200 && d.lleva, JSON.stringify(d));
   }
+  const sc = await seccion("cuenta");
+  check("[cob:A:ayuda-cuenta] Ayuda #cuenta: el índice dice «Tu cuenta y la sesión» y lleva a la sección (a la vista y marcada), con contenido", sc.enIndice === 1 && sc.enlace === "Tu cuenta y la sesión" && sc.h2 === "Tu cuenta y la sesión" && sc.largo > 200 && sc.lleva, JSON.stringify(sc));
   await page.goto(`${BASE_WEB}/administracion/accesos`);
   await page.waitForURL((u) => u.pathname === "/administracion/usuarios");
   check("[cob:A:A-179] /administracion/accesos lleva a Administración › Usuarios", await page.getByRole("heading", { name: "Usuarios" }).first().isVisible());
@@ -602,7 +655,7 @@ await paso(UA, "usuarios: filtros y orden", async (page) => {
   await esperar(async () => (await filasUsuarios(page))[0] !== undefined && acceso((await filasUsuarios(page))[0]) !== "", 5000);
   const porAcceso = (await filasUsuarios(page)).map(acceso);
   const noCrece = (lista) => lista.every((v, k) => k === 0 || lista[k - 1] >= v);
-  check("[cob:A:A-109] Ordenar por: Nombre A–Z (por omisión), Fecha de alta (la más nueva primero) y Último acceso (quien entró, primero)", nombres.join("|") === ordenNombre.join("|") && noCrece(porAlta) && porAlta[0] === creado(UF.id) && noCrece(porAcceso) && porAcceso[0] !== "", `${nombres.join("|")} || alta ${porAlta.join(",")} || acceso ${porAcceso.join(",")}`);
+  check("[cob:A:A-109] Ordenar por: Nombre A–Z (por omisión), Fecha de alta (la más nueva primero) y Último acceso (quien entró, primero)", nombres.join("|") === ordenNombre.join("|") && noCrece(porAlta) && porAlta[0] === creadas.map(creado).sort().at(-1) && noCrece(porAcceso) && porAcceso[0] !== "", `${nombres.join("|")} || alta ${porAlta.join(",")} || acceso ${porAcceso.join(",")}`);
 
   // Desde el aviso «Accesos que vencen en 7 días» y «Con solicitudes pendientes».
   await page.goto(`${BASE_WEB}/administracion/usuarios?vigencia=vence7&buscar=${s5}`);
@@ -971,6 +1024,1125 @@ await paso(UA, "roles: rol que pasa a ser propio y alta de rol", async (page) =>
   const nuevo = fila("SELECT id, descripcion FROM roles WHERE nombre = ?", nombre);
   if (nuevo?.id) rolesPropios.push(Number(nuevo.id));
   check("[cob:A:A-177] con nombre y descripción: «Rol creado: ahora define sus permisos», sin permisos", nuevo?.descripcion === "Rol creado desde la pantalla de cobertura" && filas("SELECT id FROM rol_acciones WHERE id_rol = ?", nuevo?.id).length === 0, JSON.stringify(nuevo));
+});
+
+/* ---------- Utilidades de las pruebas de acceso, sesión y Mi cuenta ---------- */
+const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+const enTijuana = (iso, op) => new Intl.DateTimeFormat("en-GB", { timeZone: "America/Tijuana", hourCycle: "h23", ...op }).format(new Date(iso));
+const horaTijuana = (iso) => enTijuana(iso, { hour: "2-digit", minute: "2-digit" });
+const tokenDe = (page) => page.evaluate(() => localStorage.getItem("ficotox_access_token"));
+const permisosDe = async (token) => (await api("GET", "/auth/me", undefined, token)).data || {};
+const revocada = (idu) => fila("SELECT motivo FROM sesiones_revocadas WHERE usuario_id = ? ORDER BY revocada_en DESC LIMIT 1", idu)?.motivo;
+const limpio = (x) => String(x || "").replace(/\s+/g, " ").trim();
+/* Diálogo de motivo (con «Tu contraseña» si es crítico), aunque haya otra ventana abierta debajo. */
+async function conMotivo(page, motivo, confirmar, password) {
+  const dialogo = page.getByRole("dialog").filter({ has: page.locator("#prompt-motivo") });
+  await dialogo.waitFor();
+  await page.locator("#prompt-motivo").fill(motivo);
+  if (password && (await page.locator("#prompt-password").count())) await page.locator("#prompt-password").fill(password);
+  await dialogo.getByRole("button", { name: confirmar, exact: true }).click();
+  return dialogo;
+}
+const errorAcceso = (page) => page.locator('form [role="alert"]');
+async function entrarConFormulario(page, email, password) {
+  await page.goto(`${BASE_WEB}/login`);
+  await page.locator("#login-email").fill(email);
+  await page.locator("#login-password").fill(password);
+  await page.getByRole("button", { name: /^Entrar/ }).click();
+}
+const abrirMiCuenta = async (page) => {
+  await page.getByRole("button", { name: "Menú de usuario" }).click();
+  await page.getByRole("menuitem", { name: "Mi cuenta" }).click();
+  const hoja = page.getByRole("dialog", { name: "Mi cuenta" });
+  await hoja.waitFor();
+  return hoja;
+};
+
+/* ---------- Acceso: correo, errores del servidor, Entrar e Inicio ---------- */
+const ipBloqueada = ipPropia();
+const fallosIp = [];
+for (let i = 0; i < 20; i += 1) fallosIp.push((await api("POST", "/auth/login", { email: `cob.ui.noexiste.${s5}.${i}@ficotox.local`, password: "incorrecta-000" }, undefined, ipBloqueada)).status);
+await paso(null, "acceso: correo, errores del servidor y Entrar", async (page) => {
+  const envios = [];
+  page.on("request", (r) => r.url().endsWith("/api/auth/login") && r.method() === "POST" && envios.push(r.url()));
+  await page.goto(`${BASE_WEB}/login`);
+  const correo = page.locator("#login-email");
+  const placeholder = await correo.getAttribute("placeholder");
+  await correo.fill("persona.sin.arroba");
+  await page.locator("#login-password").fill("cualquier-cosa");
+  await page.getByRole("button", { name: /^Entrar/ }).click();
+  const avisoCorreo = page.locator("#login-email-error");
+  await avisoCorreo.waitFor();
+  const textoCorreo = await avisoCorreo.innerText();
+  const enfocado = await page.evaluate(() => document.activeElement?.id);
+  check("[cob:A:A-001] correo sin «@» (placeholder «nombre@cicese.mx»): «Escribe tu correo completo, por ejemplo nombre@cicese.mx», el campo en rojo con el foco y no se envía", /Escribe tu correo completo, por ejemplo nombre@cicese\.mx/.test(textoCorreo) && enfocado === "login-email" && (await correo.getAttribute("aria-invalid")) === "true" && envios.length === 0 && placeholder === "nombre@cicese.mx", `«${textoCorreo}» foco=${enfocado} envíos=${envios.length} «${placeholder}»`);
+
+  const fallo = async (email, password, re) => {
+    await correo.fill(email);
+    await page.locator("#login-password").fill(password);
+    const respuesta = page.waitForResponse((x) => x.url().endsWith("/api/auth/login") && x.request().method() === "POST");
+    await page.getByRole("button", { name: /^Entrar/ }).click();
+    const st = (await respuesta).status();
+    await esperar(async () => re.test(await errorAcceso(page).innerText().catch(() => "")), 10_000);
+    return { st, texto: limpio(await errorAcceso(page).innerText().catch(() => "")), url: new URL(page.url()).pathname };
+  };
+  const mala = await fallo(UR.email, "incorrecta-000", /Correo o contraseña incorrectos/);
+  const baja = await fallo(UB.email, PASS, /Usuario inactivo/);
+  const futura = await fallo(UFut.email, PASS, /no está vigente/);
+  check("[cob:A:A-005] el aviso del formulario dice lo que respondió el servidor: contraseña incorrecta (401), cuenta de baja «Usuario inactivo» (403) y fuera de vigencia (403); se queda en el acceso", mala.st === 401 && mala.texto === "Correo o contraseña incorrectos. Después de varios intentos fallidos el acceso se bloquea temporalmente." && baja.st === 403 && baja.texto === "Usuario inactivo" && futura.st === 403 && futura.texto === "Tu acceso no está vigente; contacta al administrador" && [mala, baja, futura].every((x) => x.url === "/login") && !(await tokenDe(page)), JSON.stringify([mala, baja, futura]));
+
+  await correo.fill(UH.email);
+  const clave = page.locator("#login-password");
+  const tipo = await clave.getAttribute("type");
+  await clave.fill(PASS);
+  const acceso0 = usuario(UH.id)?.ultimo_acceso;
+  await page.getByRole("button", { name: /^Entrar/ }).click();
+  await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 120_000 });
+  const me = await permisosDe(await tokenDe(page));
+  check("[cob:A:A-002] [cob:A:A-006] «Contraseña» (oculta) y «Entrar» con datos correctos: sale del acceso con la sesión de esa cuenta y registra el acceso", tipo === "password" && Number(me.user?.id) === UH.id && !!usuario(UH.id)?.ultimo_acceso && usuario(UH.id)?.ultimo_acceso !== acceso0, `tipo=${tipo} usuario=${me.user?.id} acceso ${acceso0} → ${usuario(UH.id)?.ultimo_acceso}`);
+
+  await page.goto(`${BASE_WEB}/`);
+  const h1 = page.locator("main h1").first();
+  await h1.waitFor();
+  const saludo = limpio(await h1.innerText());
+  const textoMain = limpio(await page.locator("main").innerText());
+  const [a, m, d] = hoy().split("-").map(Number);
+  const fecha = `${DIAS[new Date(Date.UTC(a, m - 1, d)).getUTCDay()]}, ${d} de ${MESES[m - 1]}`;
+  const hora = Number(enTijuana(new Date().toISOString(), { hour: "2-digit" }));
+  const esperado = `${hora < 12 ? "Buenos días" : hora < 19 ? "Buenas tardes" : "Buenas noches"}, Cob.`;
+  check("[cob:A:A-083] Inicio: saludo según la hora de Tijuana con el nombre («…, Cob.») y la fecha del laboratorio", saludo === esperado && textoMain.includes(fecha), `«${saludo}» (esperado «${esperado}») fecha «${fecha}» en «${textoMain.slice(0, 120)}»`);
+}, conIp());
+await paso(null, "acceso: equipo bloqueado por intentos", async (page) => {
+  await page.goto(`${BASE_WEB}/login`);
+  await page.locator("#login-email").fill(UH.email);
+  await page.locator("#login-password").fill(PASS);
+  const respuesta = page.waitForResponse((x) => x.url().endsWith("/api/auth/login") && x.request().method() === "POST");
+  await page.getByRole("button", { name: /^Entrar/ }).click();
+  const st = (await respuesta).status();
+  await errorAcceso(page).waitFor();
+  const texto = limpio(await errorAcceso(page).innerText());
+  check("[cob:A:A-005] tras 20 intentos fallidos desde el mismo equipo, aun con la contraseña correcta: 429 «Demasiados intentos fallidos desde este equipo; espera N minutos» y no entra", fallosIp.every((x) => x === 401) && st === 429 && /^Demasiados intentos fallidos desde este equipo; espera \d+ minutos$/.test(texto) && new URL(page.url()).pathname === "/login" && !(await tokenDe(page)), `${fallosIp.join(",")} → ${st} «${texto}»`);
+}, { extraHTTPHeaders: ipBloqueada });
+
+/* ---------- Sesión: cargando y cerrada desde otro dispositivo ---------- */
+await paso(UX, "sesión: cargando y cerrada desde otro dispositivo", async (page) => {
+  let soltar;
+  const retenida = new Promise((r) => (soltar = r));
+  await page.route("**/api/auth/me", async (route) => {
+    await retenida;
+    await route.continue();
+  });
+  const navegacion = page.goto(`${BASE_WEB}/ayuda`);
+  const cargando = page.locator('[aria-label="Cargando sesión"]');
+  await cargando.waitFor();
+  const mientras = { busy: await cargando.getAttribute("aria-busy"), menu: await page.locator('aside[aria-label="Navegación principal"]').count(), ayuda: await page.getByRole("heading", { name: "Cómo se usa FICOTOX" }).count() };
+  soltar();
+  await navegacion;
+  await page.getByRole("heading", { name: "Cómo se usa FICOTOX" }).waitFor();
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  check("[cob:A:A-009] mientras /auth/me no responde se ve «Cargando sesión» (aria-busy, sin menú ni contenido); al responder aparece la pantalla", mientras.busy === "true" && mientras.menu === 0 && mientras.ayuda === 0 && (await cargando.count()) === 0, JSON.stringify(mientras));
+
+  // Otro dispositivo cierra todas las sesiones: al refrescar, esta vuelve al acceso con el motivo.
+  const otra = await api("POST", "/auth/login", { email: UX.email, password: PASS });
+  const tv0 = Number(usuario(UX.id)?.token_version);
+  const todas = await api("POST", "/auth/logout-all", {}, otra.data?.token);
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.waitForURL((u) => u.pathname === "/login", { timeout: 20_000 });
+  const aviso = page.locator('p[role="status"]');
+  await aviso.waitFor();
+  const texto = limpio(await aviso.innerText());
+  await page.reload();
+  await page.locator("#login-email").waitFor();
+  const otraVez = await page.locator('p[role="status"]').count();
+  check("[cob:A:A-008] con las sesiones cerradas desde otro lado, al refrescar vuelve al acceso con «Tu sesión se cerró (cambio de contraseña, bloqueo o cierre en todos los dispositivos)…» (una sola vez)", todas.status === 200 && Number(usuario(UX.id)?.token_version) === tv0 + 1 && /^Tu sesión se cerró \(cambio de contraseña, bloqueo o cierre en todos los dispositivos\)/.test(texto) && otraVez === 0, `${todas.status} tv ${tv0}→${usuario(UX.id)?.token_version} «${texto}» al recargar=${otraVez}`);
+});
+
+/* ---------- Cambio de contraseña obligatorio ---------- */
+await paso({ email: UP.email, password: TEMP_UP }, "cambio de contraseña obligatorio", async (page) => {
+  await page.getByRole("heading", { name: "Cambia tu contraseña" }).waitFor();
+  const token1 = await tokenDe(page);
+  const otraApi = await api("GET", "/admin/usuarios", undefined, token1);
+  const menu = await page.locator('aside[aria-label="Navegación principal"]').count();
+  check("[cob:A:A-010] con la contraseña restablecida se ve «Cambia tu contraseña» (sin menú) y la API responde 403 cambiar_password", otraApi.status === 403 && otraApi.data?.codigo === "cambiar_password" && menu === 0, `${otraApi.status} ${otraApi.data?.codigo} menú=${menu}`);
+  const hash0 = usuario(UP.id)?.password_hash;
+  const salida = page.waitForRequest((r) => r.url().endsWith("/api/auth/logout") && r.method() === "POST");
+  await page.getByRole("button", { name: "Salir", exact: true }).click();
+  await salida;
+  await page.waitForURL((u) => u.pathname === "/login");
+  const tras = await api("GET", "/auth/me", undefined, token1);
+  check("[cob:A:A-015] «Salir» revoca la sesión y vuelve al acceso sin cambiar la contraseña", tras.status === 401 && revocada(UP.id) === "salir" && usuario(UP.id)?.password_hash === hash0 && Number(usuario(UP.id)?.debe_cambiar_password) === 1, `${tras.status} ${revocada(UP.id)}`);
+
+  await entrarConFormulario(page, UP.email, TEMP_UP);
+  await page.getByRole("heading", { name: "Cambia tu contraseña" }).waitFor();
+  const envios = [];
+  page.on("request", (r) => r.url().endsWith("/api/auth/password") && r.method() === "POST" && envios.push(r.url()));
+  const guardar = page.getByRole("button", { name: "Guardar y continuar" });
+  let r = await intentar(page, guardar, ["pwd-actual", "pwd-nueva"]);
+  check("[cob:A:A-011] [cob:A:A-012] vacío: «Contraseña actual» y «Contraseña nueva» se marcan y no se envía", r.tipo !== "servidor" && r.todos && envios.length === 0, `${r.texto} ${JSON.stringify(r.marcados)}`);
+  const NUEVA = `Obligada-${s5}-2026`;
+  await page.locator("#pwd-actual").fill(TEMP_UP);
+  await page.locator("#pwd-nueva").fill("corta");
+  await page.locator("#pwd-confirmar").fill("corta");
+  r = await intentar(page, guardar, ["pwd-nueva"]);
+  check("[cob:A:A-012] nueva < 10: «La contraseña nueva debe tener al menos 10 caracteres», marcada, sin enviar", /La contraseña nueva debe tener al menos 10 caracteres/.test(r.texto) && r.todos && envios.length === 0, r.texto);
+  await page.locator("#pwd-nueva").fill(NUEVA);
+  await page.locator("#pwd-confirmar").fill(`${NUEVA}x`);
+  r = await intentar(page, guardar, ["pwd-confirmar"]);
+  check("[cob:A:A-013] confirmación distinta: «La confirmación no coincide con la contraseña nueva», marcada, sin enviar", /La confirmación no coincide con la contraseña nueva/.test(r.texto) && r.todos && envios.length === 0, r.texto);
+  await page.locator("#pwd-actual").fill("incorrecta-000");
+  await page.locator("#pwd-confirmar").fill(NUEVA);
+  r = await intentar(page, guardar, ["pwd-actual"]);
+  check("[cob:A:A-011] actual incorrecta: el servidor la rechaza, «Vuelve a escribir tu contraseña actual.» con el campo marcado y la contraseña no cambia", r.tipo === "aviso" && /Vuelve a escribir tu contraseña actual/.test(r.texto) && r.todos && envios.length === 1 && usuario(UP.id)?.password_hash === hash0, `${r.tipo} ${r.texto} envíos=${envios.length}`);
+  // Al cerrar el aviso el foco queda en «Contraseña actual»: lo que se escribe ahí (sobre lo seleccionado) queda en el campo.
+  // (Cmd+A seguido de insertText no llega al campo en Chromium sin ventana en macOS; se selecciona desde la página.)
+  await page.waitForFunction(() => document.activeElement?.id === "pwd-actual");
+  await page.evaluate(() => document.getElementById("pwd-actual")?.select());
+  await page.keyboard.type(TEMP_UP);
+  const pegada = await page.locator("#pwd-actual").inputValue();
+  const foco = await page.evaluate(() => document.activeElement?.id);
+  check("[cob:A:A-011] tras el aviso, lo que se escribe en «Contraseña actual» (con el foco puesto por el aviso) queda en el campo", pegada === TEMP_UP && foco === "pwd-actual", `quedó ${pegada.length} caracteres («${pegada === "incorrecta-000" ? "la equivocada" : "otro"}»), se escribieron ${TEMP_UP.length}; foco=${foco}`);
+  // Al pulsar el campo se quita la marca del servidor y ya se puede reemplazar.
+  await page.locator("#pwd-actual").click();
+  await page.locator("#pwd-actual").fill(TEMP_UP);
+  const cambio = page.waitForResponse((x) => x.url().endsWith("/api/auth/password") && x.request().method() === "POST");
+  await guardar.click();
+  const rc = await cambio;
+  if (rc.status() !== 200) throw new Error(`cambio ${rc.status()} ${rc.request().postData()?.replace(/"(actual|nueva)":"[^"]*"/g, (m, k) => `"${k}":${m.length}`)} valor=${(await page.locator("#pwd-actual").inputValue()).length}/${TEMP_UP.length}`);
+  await toast(page, /Contraseña cambiada; tus otras sesiones se cerraron/);
+  await page.locator('aside[aria-label="Navegación principal"]').waitFor();
+  const entra = await api("POST", "/auth/login", { email: UP.email, password: NUEVA }, undefined, { "X-Sin-Cambio-Auto": "1", ...ipPropia() });
+  check("[cob:A:A-014] «Guardar y continuar» con la actual correcta: cambia la contraseña, quita el cambio obligatorio y entra a la plataforma", Number(usuario(UP.id)?.debe_cambiar_password) === 0 && usuario(UP.id)?.password_hash !== hash0 && entra.status === 200 && !entra.data?.user?.debe_cambiar_password, `debe=${usuario(UP.id)?.debe_cambiar_password} login=${entra.status}`);
+}, conIp());
+
+/* ---------- Sin roles vigentes ---------- */
+await paso(USP, "sin permisos asignados", async (page) => {
+  await page.getByText("Sin permisos asignados").first().waitFor();
+  const me = await permisosDe(await tokenDe(page));
+  check("[cob:A:A-016] sin roles vigentes (el rol inicial sigue por autorizar): «Sin permisos asignados», sin menú", (me.roles || []).length === 0 && (await page.locator('aside[aria-label="Navegación principal"]').count()) === 0, `roles=${(me.roles || []).length}`);
+  await page.getByRole("link", { name: "Ayuda" }).click();
+  await page.waitForURL((u) => u.pathname === "/ayuda");
+  await page.getByRole("heading", { name: "Cómo se usa FICOTOX" }).waitFor();
+  const enAyuda = { sinPermisos: await page.getByText("Sin permisos asignados").count(), menu: await page.locator('aside[aria-label="Navegación principal"]').count() };
+  await page.getByRole("link", { name: "Volver" }).click();
+  await page.waitForURL((u) => u.pathname === "/");
+  await page.getByText("Sin permisos asignados").first().waitFor();
+  check("[cob:A:A-017] «Ayuda» abre la guía sin el menú y con «Volver», que regresa al aviso", enAyuda.sinPermisos === 0 && enAyuda.menu === 0, JSON.stringify(enAyuda));
+  const token = await tokenDe(page);
+  const salida = page.waitForRequest((r) => r.url().endsWith("/api/auth/logout") && r.method() === "POST");
+  await page.getByRole("button", { name: "Cerrar sesión" }).click();
+  await salida;
+  await page.waitForURL((u) => u.pathname === "/login");
+  const tras = await api("GET", "/auth/me", undefined, token);
+  check("[cob:A:A-018] «Cerrar sesión» revoca la sesión («salir») y vuelve al acceso", tras.status === 401 && revocada(USP.id) === "salir", `${tras.status} ${revocada(USP.id)}`);
+});
+
+/* ---------- Técnico Auxiliar temporal: sin acceso, página inexistente, menú, Ayuda y Mi cuenta ---------- */
+await paso(UC, "sin acceso, página inexistente, menú y enlaces de la Ayuda", async (page) => {
+  const me = await permisosDe(await tokenDe(page));
+  const p = me.permissions || {};
+  const pedidas = [];
+  page.on("request", (r) => /\/api\/(informes|admin\/roles)(\?|$)/.test(new URL(r.url()).pathname + new URL(r.url()).search) && pedidas.push(new URL(r.url()).pathname));
+  await page.goto(`${BASE_WEB}/informes`);
+  await page.getByText("Sin acceso a esta sección").first().waitFor();
+  await page.goto(`${BASE_WEB}/administracion/roles`);
+  await page.getByText("Sin acceso a esta sección").first().waitFor();
+  const propio = await page.getByText("Solo puedes ver tu propia cuenta.").isVisible();
+  check("[cob:A:A-019] [cob:A:A-158] sin informes:V, /informes dice «Sin acceso a esta sección»; con usuarios:V «propio», Roles también («Solo puedes ver tu propia cuenta.»), sin pedir sus datos", !p.informes?.V && p.usuarios?.V === "propio" && propio && pedidas.length === 0 && (await page.locator('[aria-label="Roles"] li[data-rol]').count()) === 0, `informes=${p.informes?.V} usuarios=${p.usuarios?.V} pedidas=${pedidas}`);
+
+  await page.goto(`${BASE_WEB}/no-existe-cobertura-${s5}`);
+  await page.getByRole("heading", { name: "Esta página no existe" }).waitFor();
+  await page.getByRole("link", { name: "Ir al inicio" }).click();
+  await page.waitForURL((u) => u.pathname === "/");
+  await page.locator("main h1").first().waitFor();
+  check("[cob:A:A-020] [cob:A:A-021] una ruta inexistente muestra «Esta página no existe» e «Ir al inicio» lleva al Inicio", (await page.getByRole("heading", { name: "Esta página no existe" }).count()) === 0);
+
+  await page.goto(`${BASE_WEB}/administracion/usuarios?nuevo=1`);
+  await page.getByRole("heading", { name: "Usuarios" }).first().waitFor();
+  await esperar(async () => (await filasUsuarios(page)).length > 0, 15_000);
+  const lista = await filasUsuarios(page);
+  const deApi = (await api("GET", "/admin/usuarios", undefined, await tokenDe(page))).data?.items || [];
+  check("[cob:A:A-101] [cob:A:A-102] con usuarios:V «propio», Usuarios solo trae la cuenta propia, sin «Filtros» ni «Nuevo usuario» (?nuevo=1 no abre el alta)", lista.join() === String(UC.id) && deApi.length === 1 && Number(deApi[0]?.id) === UC.id && (await page.getByRole("button", { name: /^Filtros/ }).count()) === 0 && (await page.getByRole("button", { name: "Nuevo usuario" }).count()) === 0 && (await page.getByRole("dialog", { name: "Nuevo usuario" }).count()) === 0, `${lista} api=${deApi.length}`);
+  const v = await ventanaUsuario(page, UC.id);
+  await v.getByRole("tab", { name: "Autorizaciones" }).click();
+  const lista2 = page.locator('#autorizaciones-usuario [aria-label="Autorizaciones FX-THF-AP"]');
+  await lista2.waitFor();
+  const vigentes = filas("SELECT id FROM autorizaciones_personal WHERE usuario_id = ? AND revocada_en IS NULL AND (vigente_hasta IS NULL OR vigente_hasta >= ?)", UC.id, hoy()).map((x) => String(x.id));
+  const enPantalla = await lista2.locator("[data-autorizacion]").evaluateAll((els) => els.map((e) => e.getAttribute("data-autorizacion")));
+  check("[cob:A:A-153] la persona ve sus propias «Autorizaciones FX-THF-AP» (las mismas que tiene registradas), sin «Agregar» ni «Revocar»", vigentes.length === 2 && enPantalla.sort().join() === vigentes.sort().join() && (await page.locator("#autorizaciones-usuario").getByRole("button", { name: /Agregar|Revocar/ }).count()) === 0, `${enPantalla} vs ${vigentes}`);
+  await page.keyboard.press("Escape");
+
+  // Menú: Inicio, Documentos SGC y Reportar incidencia según los permisos.
+  await page.goto(`${BASE_WEB}/ayuda`);
+  const aside = page.locator('aside[aria-label="Navegación principal"]');
+  await aside.waitFor();
+  await aside.locator('a[href="/"]').first().click();
+  await page.waitForURL((u) => u.pathname === "/");
+  check("[cob:A:A-038] «Inicio» del menú lleva al Inicio (saludo)", /^(Buenos días|Buenas tardes|Buenas noches), Cob\.$/.test(limpio(await page.locator("main h1").first().innerText())));
+  const docs = {};
+  for (const href of ["/documentos", "/documentos/bandeja", "/documentos/solicitudes", "/documentos/externos", "/documentos/lista-maestra"]) docs[href] = (await aside.locator(`a[href="${href}"]`).count()) > 0;
+  const esperadoDocs = { "/documentos": !!(p.documentos?.V || p.usuarios?.G) };
+  for (const href of ["/documentos/bandeja", "/documentos/solicitudes", "/documentos/externos", "/documentos/lista-maestra"]) esperadoDocs[href] = !!p.documentos?.V;
+  check("[cob:A:A-039] Técnico Auxiliar: Documentos SGC muestra lo que permiten sus permisos (Documentos: documentos:V o usuarios:G; Bandeja, Solicitudes, Externos y Lista Maestra: documentos:V)", JSON.stringify(docs) === JSON.stringify(esperadoDocs), `${JSON.stringify(docs)} esperado ${JSON.stringify(esperadoDocs)} documentos.V=${p.documentos?.V}`);
+  const reportar = page.locator("[data-reportar-incidencia-boton]");
+  const hayReportar = await reportar.count();
+  await reportar.click();
+  const ventanaReporte = page.getByRole("dialog", { name: "Reportar incidencia" });
+  await ventanaReporte.waitFor();
+  await page.keyboard.press("Escape");
+  await ventanaReporte.waitFor({ state: "detached" });
+  check("[cob:A:A-052] con calidad:C (incidencias) aparece «Reportar incidencia» en el menú y abre su formulario", !!p.calidad?.C && hayReportar === 1);
+
+  // Enlaces de la Ayuda según los permisos.
+  await page.goto(`${BASE_WEB}/ayuda`);
+  await page.getByRole("heading", { name: "Cómo se usa FICOTOX" }).waitFor();
+  const recepcion = await page.getByRole("link", { name: "Nueva recepción" }).count();
+  const informe = await page.getByRole("link", { name: "Nuevo informe" }).count();
+  await page.getByRole("link", { name: "Nueva recepción" }).click();
+  await page.waitForURL((u) => u.pathname === "/muestras/recepcion/nueva");
+  check("[cob:A:A-181] Ayuda con muestras:C (recepción) y sin informes:C: «Nueva recepción» (lleva al alta) y no «Nuevo informe»", !!p.muestras?.C && !p.informes?.C && recepcion === 1 && informe === 0, `muestras.C=${p.muestras?.C} informes.C=${p.informes?.C} ${recepcion} ${informe}`);
+});
+
+await paso(UC, "mi cuenta: menú, roles, temporal, autorizaciones y seguridad", async (page) => {
+  const me = await permisosDe(await tokenDe(page));
+  const cfg = (await api("GET", "/auth/config")).data || {};
+  await page.goto(`${BASE_WEB}/ayuda`);
+  const boton = page.getByRole("button", { name: "Menú de usuario" });
+  const textoBoton = limpio(await boton.innerText());
+  const figura = await boton.locator("svg, img").count();
+  await boton.click();
+  const opciones = (await page.getByRole("menuitem").allInnerTexts()).map(limpio);
+  check("[cob:A:A-054] «Menú de usuario» muestra el nombre y la figura, y ofrece Mi cuenta, el tema y Cerrar sesión", textoBoton.includes(UC.nombre) && figura > 0 && opciones[0] === "Mi cuenta" && /^Tema (oscuro|claro)$/.test(opciones[1]) && opciones.at(-1) === "Cerrar sesión", `«${textoBoton}» figura=${figura} ${opciones.join(" | ")}`);
+  await page.getByRole("menuitem", { name: "Mi cuenta" }).click();
+  const hoja = page.getByRole("dialog", { name: "Mi cuenta" });
+  await hoja.waitFor();
+  const textoHoja = limpio(await hoja.innerText());
+  check("[cob:A:A-055] [cob:A:A-086] «Mi cuenta» abre su ventana con el nombre y el correo de la cuenta", textoHoja.includes(UC.nombre) && textoHoja.includes(UC.email));
+  const roles = (await hoja.locator('ul[aria-label="Roles vigentes"] li').allInnerTexts()).map(limpio);
+  const esperados = (me.roles || []).map((r) => `${r.nombre}${r.vigente_hasta ? ` · hasta ${fmt(r.vigente_hasta)}` : ""}`);
+  check("[cob:A:A-087] «Roles vigentes» lista los roles de la cuenta con «· hasta <fecha>» cuando tienen fin", esperados.length > 0 && roles.join("|") === esperados.join("|"), `${roles.join("|")} vs ${esperados.join("|")}`);
+  const supervisado = (me.roles || []).some((r) => Object.values(r.permisos || {}).some((acciones) => Object.values(acciones || {}).includes("supervisado")));
+  const temporal = limpio(await hoja.getByText(/^Cuenta temporal/).innerText());
+  const base = `Cuenta temporal vigente hasta el ${fmt(usuario(UC.id).vigente_hasta)}.`;
+  check("[cob:A:A-089] cuenta temporal: «Cuenta temporal vigente hasta el <fecha>.»; lo del visto bueno del supervisor solo si algún rol tiene alcance «supervisado»", temporal === (supervisado ? `${base} Lo que capturas en equipos e inventario queda pendiente del visto bueno de tu supervisor.` : base), `«${temporal}» supervisado=${supervisado}`);
+  const vigentes = filas("SELECT id FROM autorizaciones_personal WHERE usuario_id = ? AND revocada_en IS NULL AND (vigente_hasta IS NULL OR vigente_hasta >= ?)", UC.id, hoy()).map((x) => String(x.id));
+  await esperar(async () => (await hoja.locator("#mis-autorizaciones [data-autorizacion]").count()) > 0, 10_000);
+  const mias = await hoja.locator("#mis-autorizaciones [data-autorizacion]").evaluateAll((els) => els.map((e) => e.getAttribute("data-autorizacion")));
+  check("[cob:A:A-091] «Mis autorizaciones» lista las FX-THF-AP vigentes de la cuenta", vigentes.length === 2 && mias.sort().join() === vigentes.sort().join(), `${mias} vs ${vigentes}`);
+  const seguridad = `Tu sesión se cierra tras ${cfg.sesion?.inactividad_min} minutos sin actividad y, en todo caso, a las ${cfg.sesion?.expira_horas} horas.`;
+  check("[cob:A:A-092] «Seguridad» dice los minutos de inactividad y las horas de la sesión que da /auth/config", !!cfg.sesion?.inactividad_min && textoHoja.includes(seguridad), seguridad);
+  await page.keyboard.press("Escape");
+  await hoja.waitFor({ state: "detached" });
+  // Al cargar con #mis-autorizaciones: Mi cuenta abierta en esa sección y el hash se quita.
+  await page.goto(`${BASE_WEB}/#mis-autorizaciones`);
+  await hoja.waitFor();
+  const llego = await page.waitForFunction(() => {
+    const r = document.getElementById("mis-autorizaciones")?.getBoundingClientRect();
+    return location.hash === "" && !!r && r.top >= 0 && r.top < window.innerHeight;
+  }, null, { timeout: 10_000 }).then(() => true, () => false);
+  check("[cob:A:A-059] /#mis-autorizaciones abre Mi cuenta en «Mis autorizaciones» (a la vista) y quita el hash", llego);
+});
+
+/* ---------- Inactividad: aviso, seguir, bloqueo y volver a entrar (S-25) ---------- */
+await paso(UI, "inactividad: aviso, bloqueo y volver a entrar", async (page) => {
+  await page.goto(`${BASE_WEB}/`);
+  const campo = page.locator('main input[aria-label="Buscar en FICOTOX"]');
+  await campo.waitFor();
+  // Plazo de prueba (solo en desarrollo): 8 s sin actividad, aviso 4 s antes.
+  await page.evaluate(() => localStorage.setItem("ficotox.prueba.inactividad-seg", "8"));
+  await page.reload();
+  await campo.waitFor();
+  const aviso = page.getByRole("dialog", { name: "Tu sesión está por cerrarse" });
+  await aviso.waitFor({ timeout: 20_000 });
+  const textoAviso = limpio(await aviso.innerText());
+  await aviso.getByRole("button", { name: "Seguir trabajando" }).click();
+  await aviso.waitFor({ state: "detached" });
+  const bloqueo = page.getByText("Sesión cerrada por inactividad");
+  const sigue = (await bloqueo.count()) === 0 && !!(await tokenDe(page));
+  check("[cob:A:A-030] [cob:A:A-031] sin actividad avisa «Tu sesión está por cerrarse» («se cerrará en N segundos»); «Seguir trabajando» la mantiene abierta", /se cerrará en \d+ segundos/.test(textoAviso) && sigue, textoAviso);
+
+  await campo.fill(`capturado ${s5}`);
+  const token1 = await tokenDe(page);
+  const salida = page.waitForRequest((r) => r.url().endsWith("/api/auth/logout") && r.method() === "POST", { timeout: 30_000 });
+  await bloqueo.waitFor({ timeout: 30_000 });
+  const cuerpo = (await salida).postData() || "";
+  await esperar(async () => revocada(UI.id) === "inactividad", 10_000);
+  const tras = await api("GET", "/auth/me", undefined, token1);
+  check("[cob:A:A-032] al vencer el plazo: «Sesión cerrada por inactividad», la sesión se revoca («inactividad») y lo capturado sigue debajo", /inactividad/.test(cuerpo) && revocada(UI.id) === "inactividad" && tras.status === 401 && (await campo.inputValue()) === `capturado ${s5}`, `${cuerpo} ${revocada(UI.id)} ${tras.status}`);
+  const volver = page.getByRole("button", { name: "Volver a entrar" });
+  const sinClave = await volver.isDisabled();
+  await page.locator("#bloqueo-password").fill("incorrecta-000");
+  await volver.click();
+  const rechazo = await esperar(async () => /Correo o contraseña incorrectos/.test(await page.locator("#bloqueo-password").locator("xpath=ancestor::div[1]/..").innerText().catch(() => "")) || (await page.locator("#bloqueo-password").getAttribute("aria-invalid")) === "true", 10_000);
+  const sigueBloqueada = (await bloqueo.count()) === 1;
+  // Sin el plazo de prueba, al volver a entrar no se vuelve a cerrar en segundos.
+  await page.evaluate(() => localStorage.removeItem("ficotox.prueba.inactividad-seg"));
+  await page.locator("#bloqueo-password").fill(PASS);
+  await volver.click();
+  await bloqueo.waitFor({ state: "detached" });
+  const token2 = await tokenDe(page);
+  const vale = await api("GET", "/auth/me", undefined, token2);
+  check("[cob:A:A-033] [cob:A:A-034] [cob:A:S-25] «Volver a entrar» está deshabilitado sin contraseña; con una equivocada sigue bloqueada; con la correcta se reabre sin desmontar la página (lo capturado sigue)", sinClave && !!rechazo && sigueBloqueada && token2 && token2 !== token1 && vale.status === 200 && (await campo.inputValue()) === `capturado ${s5}`, `deshabilitado=${sinClave} rechazo=${!!rechazo} bloqueada=${sigueBloqueada} me=${vale.status} valor=${await campo.inputValue()}`);
+
+  await page.evaluate(() => localStorage.setItem("ficotox.prueba.inactividad-seg", "8"));
+  await page.reload();
+  await bloqueo.waitFor({ timeout: 30_000 });
+  await page.getByRole("button", { name: /^Salir \(se descarta lo capturado\)$/ }).click();
+  await page.waitForURL((u) => u.pathname === "/login");
+  check("[cob:A:A-035] «Salir (se descarta lo capturado)» deja el bloqueo y vuelve al acceso sin sesión", !(await tokenDe(page)) && (await page.locator("#login-email").isVisible()));
+}, conIp());
+
+/* ---------- Restablecer contraseña: motivo, «Tu contraseña» y «Confirma tu identidad» ---------- */
+await paso(UA2, "restablecer: motivo, contraseña y Confirma tu identidad", async (page) => {
+  let menu = await acciones(page, UA2);
+  const propio = await menu.getByRole("menuitem", { name: "Restablecer contraseña…" }).count();
+  await page.keyboard.press("Escape");
+  menu = await acciones(page, UB);
+  const deBaja = await menu.getByRole("menuitem", { name: "Restablecer contraseña…" }).count();
+  await page.keyboard.press("Escape");
+  const hash0 = usuario(UR.id)?.password_hash;
+  menu = await acciones(page, UR);
+  const enActiva = await menu.getByRole("menuitem", { name: "Restablecer contraseña…" }).count();
+  await menu.getByRole("menuitem", { name: "Restablecer contraseña…" }).click();
+  const dialogo = page.getByRole("dialog").filter({ has: page.locator("#prompt-motivo") });
+  await dialogo.waitFor();
+  const conClave = await dialogo.getByLabel("Tu contraseña").count();
+  const restablecer = dialogo.getByRole("button", { name: "Restablecer contraseña", exact: true });
+  await page.locator("#prompt-motivo").fill("abc");
+  const r = await intentar(page, restablecer, ["prompt-motivo", "prompt-password"]);
+  check("[cob:A:A-112] «Restablecer contraseña…» solo para otra persona activa (no en la propia ni en una de baja)", propio === 0 && deBaja === 0 && enActiva === 1, `propia=${propio} baja=${deBaja} activa=${enActiva}`);
+  check("[cob:A:A-118] [cob:A:A-027] motivo < 5 y «Tu contraseña» vacía: los dos se marcan («Escribe tu contraseña para confirmar») y no se restablece", r.tipo !== "servidor" && r.todos && /al menos 5 caracteres/.test(r.texto) && /Escribe tu contraseña para confirmar/.test(r.texto) && conClave === 1 && usuario(UR.id)?.password_hash === hash0, `${r.texto} ${JSON.stringify(r.marcados)}`);
+
+  // Contraseña equivocada en el diálogo: el servidor la rechaza y «Confirma tu identidad» la vuelve a pedir.
+  await page.locator("#prompt-motivo").fill("La persona olvidó su contraseña");
+  await page.locator("#prompt-password").fill("incorrecta-000");
+  await restablecer.click();
+  const confirma = page.getByRole("dialog", { name: "Confirma tu identidad" });
+  await confirma.waitFor();
+  const roja = await page.locator("#reauth-password").getAttribute("aria-invalid");
+  const textoConfirma = limpio(await confirma.innerText());
+  await confirma.getByRole("button", { name: "Cancelar" }).click();
+  await confirma.waitFor({ state: "detached" });
+  check("[cob:A:A-024] [cob:A:A-026] con la contraseña equivocada aparece «Confirma tu identidad» con el campo en rojo; «Cancelar» no restablece", roja === "true" && /Tu contraseña/.test(textoConfirma) && usuario(UR.id)?.password_hash === hash0 && (await page.getByTestId("password-temporal").count()) === 0, `${roja} «${textoConfirma}»`);
+
+  menu = await acciones(page, UR);
+  await menu.getByRole("menuitem", { name: "Restablecer contraseña…" }).click();
+  await conMotivo(page, "La persona olvidó su contraseña", "Restablecer contraseña", "incorrecta-001");
+  await confirma.waitFor();
+  await page.locator("#reauth-password").fill("incorrecta-002");
+  await confirma.getByRole("button", { name: "Confirmar", exact: true }).click();
+  const otraVez = await esperar(async () => (await page.locator("#reauth-password").inputValue().catch(() => "x")) === "" && (await page.locator("#reauth-password").getAttribute("aria-invalid").catch(() => null)) === "true", 10_000);
+  const sinCambio = usuario(UR.id)?.password_hash === hash0;
+  await page.locator("#reauth-password").fill(UA2.password);
+  await confirma.getByRole("button", { name: "Confirmar", exact: true }).click();
+  const temporal = page.getByTestId("password-temporal");
+  await temporal.waitFor();
+  check("[cob:A:A-025] [cob:A:A-026] en «Confirma tu identidad» una equivocada lo deja vacío y en rojo (sin restablecer); con la correcta «Confirmar» completa la acción", !!otraVez && sinCambio && usuario(UR.id)?.password_hash !== hash0 && Number(usuario(UR.id)?.debe_cambiar_password) === 1 && (await temporal.innerText()).trim().length >= 10, `otra vez=${!!otraVez} sin cambio=${sinCambio}`);
+  await page.getByRole("dialog", { name: "Contraseña temporal" }).getByRole("button", { name: "Entendido" }).click();
+}, conIp());
+
+/* ---------- Dos cargos: «¿Con qué cargo actúas?», autorizaciones y cargo predeterminado ---------- */
+await paso(UAC, "autorizaciones: validación, Actuar como, cargo predeterminado y revocar", async (page) => {
+  const v = await ventanaUsuario(page, UH.id);
+  await v.getByRole("tab", { name: "Autorizaciones" }).click();
+  const panel = page.locator("#autorizaciones-usuario");
+  await panel.waitFor();
+  await panel.getByRole("button", { name: "Agregar" }).click();
+  await page.locator("#aut-tipo").waitFor();
+  const envios = [];
+  page.on("request", (r) => r.method() === "POST" && /\/autorizaciones$/.test(new URL(r.url()).pathname) && envios.push(r.url()));
+  const tipos = await page.locator("#aut-tipo option").allInnerTexts();
+  await page.locator("#aut-desde").fill(enDias(5));
+  await page.locator("#aut-hasta").fill(enDias(2));
+  await page.locator("#aut-motivo").fill("abc");
+  const r = await intentar(page, page.locator("#aut-agregar"), ["aut-clave", "aut-hasta", "aut-motivo"]);
+  check("[cob:A:A-155] Tipo (Actividad, Método, Equipo); sin actividad, fin antes del inicio y motivo < 5: los tres se marcan y no se envía nada", tipos.join() === "Actividad,Método,Equipo" && r.tipo !== "servidor" && r.todos && envios.length === 0, `${tipos} ${r.texto} ${JSON.stringify(r.marcados)}`);
+
+  const clave = await page.locator("#aut-clave option").nth(1).getAttribute("value");
+  await page.locator("#aut-clave").selectOption(clave);
+  await page.locator("#aut-desde").fill(hoy());
+  await page.locator("#aut-hasta").fill(enDias(30));
+  await page.locator("#aut-folio").fill(`FX-THF-AP-${s5}`);
+  await page.locator("#aut-motivo").fill("Evaluación de competencia de cobertura");
+  await page.locator("#aut-clave-admin").fill(PASS);
+  const n0 = filas("SELECT id FROM autorizaciones_personal WHERE usuario_id = ?", UH.id).length;
+  await page.locator("#aut-agregar").click();
+  const actuar = page.getByRole("dialog", { name: "¿Con qué cargo actúas?" });
+  await actuar.waitFor();
+  const cargos = (await actuar.getByRole("radio").allInnerTexts()).map(limpio);
+  const continuar = actuar.getByRole("button", { name: "Actuar con este cargo" });
+  const primera = await actuar.getByRole("radio").first().getAttribute("aria-checked");
+  const sinElegir = (await continuar.isEnabled()) && primera === "true";
+  await actuar.getByRole("button", { name: "Cancelar" }).click();
+  await actuar.waitFor({ state: "detached" });
+  await esperar(async () => page.locator("#aut-agregar").isEnabled(), 10_000);
+  const n1 = filas("SELECT id FROM autorizaciones_personal WHERE usuario_id = ?", UH.id).length;
+  check("[cob:A:A-028] [cob:A:A-029] con dos roles que permiten otorgar y sin cargo predeterminado: «¿Con qué cargo actúas?» ofrece «Actuar como: …» de cada uno (la primera ya elegida y «Actuar con este cargo» habilitado); «Cancelar» no registra nada", cargos.sort().join("|") === [`Actuar como: ${RA1.nombre}`, `Actuar como: ${RA2.nombre}`].sort().join("|") && sinElegir && n1 === n0, `${cargos.join(" | ")} primera=${primera} habilitado=${sinElegir} ${n0}→${n1}`);
+  await page.locator("#aut-agregar").click();
+  await actuar.waitFor();
+  await actuar.getByRole("radio", { name: `Actuar como: ${RA2.nombre}` }).click();
+  await continuar.click();
+  await toast(page, /Autorización registrada/);
+  const nueva = fila("SELECT * FROM autorizaciones_personal WHERE usuario_id = ? ORDER BY id DESC LIMIT 1", UH.id);
+  await esperar(async () => (await panel.locator(`[data-autorizacion="${nueva?.id}"]`).count()) === 1, 10_000);
+  check("[cob:A:A-156] [cob:A:A-028] «Agregar» con actividad, fechas, folio, motivo y contraseña la registra con el cargo elegido («Actuar como»)", nueva && nueva.clave === clave && nueva.vigente_desde === hoy() && nueva.vigente_hasta === enDias(30) && nueva.folio_fx_thf_ap === `FX-THF-AP-${s5}` && nueva.otorgada_rol === RA2.nombre && Number(nueva.otorgada_por) === UAC.id && (await panel.locator(`[data-autorizacion="${nueva.id}"]`).count()) === 1, JSON.stringify(nueva));
+  await page.keyboard.press("Escape");
+  await v.waitFor({ state: "detached" });
+
+  // Cargo predeterminado: ya no se pregunta.
+  const hoja = await abrirMiCuenta(page);
+  const opcionesCargo = await page.locator("#cuenta-cargo option").allInnerTexts();
+  await page.locator("#cuenta-cargo").selectOption(String(RA1.id));
+  await toast(page, /Cargo predeterminado guardado/);
+  await esperar(async () => Number(usuario(UAC.id)?.cargo_predeterminado) === RA1.id, 10_000);
+  check("[cob:A:A-090] «Actuar como» (con más de un rol) ofrece «Preguntar cada vez» y los roles vigentes; elegir uno lo guarda en la cuenta", opcionesCargo[0] === "Preguntar cada vez" && opcionesCargo.includes(RA1.nombre) && opcionesCargo.includes(RA2.nombre) && Number(usuario(UAC.id)?.cargo_predeterminado) === RA1.id, opcionesCargo.join(" | "));
+  await page.keyboard.press("Escape");
+  await hoja.waitFor({ state: "detached" });
+  const v2 = await ventanaUsuario(page, UH.id);
+  await v2.getByRole("tab", { name: "Autorizaciones" }).click();
+  await panel.locator(`[data-autorizacion="${nueva.id}"]`).getByRole("button", { name: "Revocar" }).click();
+  await conMotivo(page, "Termina la autorización de cobertura", "Revocar", PASS);
+  await toast(page, /Autorización revocada/);
+  const rev = fila("SELECT revocada_en, revocada_por, motivo_revocacion FROM autorizaciones_personal WHERE id = ?", nueva.id);
+  check("[cob:A:A-157] [cob:A:A-090] «Revocar» con motivo y contraseña la revoca, sin preguntar el cargo (usa el predeterminado)", !!rev?.revocada_en && Number(rev.revocada_por) === UAC.id && rev.motivo_revocacion === "Termina la autorización de cobertura" && (await actuar.count()) === 0, JSON.stringify(rev));
+
+  // Sin usuarios:G: Roles en solo lectura, sin «Nuevo rol» ni acciones.
+  const enNavegador = [];
+  page.on("response", async (x) => {
+    if (new URL(x.url()).pathname === "/api/notificaciones") enNavegador.push(`${x.status()}:${(await x.json().catch(() => ({}))).items?.length}:${x.request().headers()["x-actuar-como"] || ""}`);
+  });
+  await page.goto(`${BASE_WEB}/administracion/roles`);
+  await page.getByRole("heading", { name: "Roles" }).first().waitFor();
+  await esperar(async () => (await filasRoles(page)).length > 0, 15_000);
+  check("[cob:A:A-158] [cob:A:A-159] con usuarios:V total y sin usuarios:G: Roles se ve, sin «Nuevo rol» ni menú de acciones", (await page.getByRole("button", { name: "Nuevo rol" }).count()) === 0 && (await page.locator('[aria-label="Roles"]').getByRole("button", { name: "Acciones" }).count()) === 0);
+  // Campana: «Notificaciones» o «Notificaciones: N sin leer», también en la barra contraída.
+  const n = ((await api("GET", "/notificaciones", undefined, await tokenDe(page))).data?.items || []).length;
+  const etiqueta = n ? `Notificaciones: ${n} sin leer` : "Notificaciones";
+  const aside = page.locator('aside[aria-label="Navegación principal"]');
+  const campana = aside.locator('button[aria-label^="Notificaciones"]');
+  const enCabecera = await esperar(async () => (await campana.getAttribute("aria-label")) === etiqueta, 10_000);
+  const cabecera = await campana.getAttribute("aria-label");
+  await aside.getByRole("button", { name: "Contraer barra lateral" }).click();
+  await aside.getByRole("button", { name: "Expandir barra lateral" }).waitFor();
+  // La de la barra contraída se monta al contraer y carga su lista.
+  await esperar(async () => (await campana.getAttribute("aria-label")) === etiqueta, 10_000);
+  const enBarra = await campana.getAttribute("aria-label");
+  await aside.getByRole("button", { name: "Expandir barra lateral" }).click();
+  check("[cob:A:A-060] la campana se nombra «Notificaciones» (o «…: N sin leer», N de /notificaciones) en la cabecera y en la barra contraída", !!enCabecera && enBarra === etiqueta, `n=${n} navegador=${enNavegador} cabecera=${cabecera} barra=${enBarra}`);
+});
+
+/* ---------- Usuarios (Administrador técnico): búsqueda, filtros de estado y tipo, filas y ventana ---------- */
+await paso(UA, "usuarios: búsqueda, estado, tipo, filas y ventana", async (page) => {
+  const p = (await permisosDe(await tokenDe(page))).permissions || {};
+  await page.goto(`${BASE_WEB}/administracion/usuarios?buscar=${s5}`);
+  await page.getByRole("heading", { name: "Usuarios" }).first().waitFor();
+  const buscador = page.getByPlaceholder("Buscar por nombre o correo");
+  const propias = [...mias(), UB.id, UL1.id, UL2.id, USP.id, UP.id, UAC.id];
+  await esperar(async () => { const f = await filasUsuarios(page); return propias.every((x) => f.includes(x)); }, 15_000);
+  const conS5 = await filasUsuarios(page);
+  const todasS5 = conS5.every((x) => `${usuario(x)?.nombre} ${usuario(x)?.email}`.includes(s5));
+  await buscador.fill(UH.email);
+  await esperar(async () => (await filasUsuarios(page)).join() === String(UH.id), 10_000);
+  check("[cob:A:A-103] ?buscar= llena el buscador y filtra por nombre o correo; escribir el correo deja solo a esa persona", (await filasUsuarios(page)).join() === String(UH.id) && todasS5 && propias.every((x) => conS5.includes(x)), `${conS5.length} filas, todas con s5=${todasS5}`);
+
+  const deEstado = async (q) => {
+    await page.goto(`${BASE_WEB}/administracion/usuarios?buscar=${s5}${q}`);
+    await esperar(async () => (await filasUsuarios(page)).length > 0, 15_000);
+    return { filas: await filasUsuarios(page), etiqueta: await page.getByRole("button", { name: /^Filtros/ }).getAttribute("aria-label") };
+  };
+  const baja = await deEstado("&estado=baja");
+  const bloqueados = await deEstado("&estado=bloqueados");
+  await page.goto(`${BASE_WEB}/administracion/usuarios?buscar=${s5}`);
+  await esperar(async () => (await filasUsuarios(page)).includes(UB.id), 15_000);
+  await filtros(page, (pop) => interruptor(pop, "Estado", "Activos").click());
+  await esperar(async () => !(await filasUsuarios(page)).includes(UB.id), 10_000);
+  const activos = await filasUsuarios(page);
+  check("[cob:A:A-104] Estado: ?estado=baja deja solo cuentas de baja, «Bloqueados» las bloqueadas por intentos y «Activos» quita las de baja", baja.filas.includes(UB.id) && baja.filas.every((x) => Number(usuario(x)?.activo) === 0) && bloqueados.filas.includes(UL1.id) && bloqueados.filas.includes(UL2.id) && bloqueados.filas.every((x) => !!usuario(x)?.bloqueado_hasta) && activos.length > 0 && activos.every((x) => Number(usuario(x)?.activo) === 1) && baja.etiqueta === "Filtros (1 activos)", `baja=${baja.filas} bloq=${bloqueados.filas} activos=${activos.length} «${baja.etiqueta}»`);
+  const temporales = await deEstado("&tipo=temporal");
+  await page.goto(`${BASE_WEB}/administracion/usuarios?buscar=${s5}`);
+  await esperar(async () => (await filasUsuarios(page)).includes(UC.id), 15_000);
+  await filtros(page, (pop) => interruptor(pop, "Tipo de cuenta", "Permanente").click());
+  await esperar(async () => !(await filasUsuarios(page)).includes(UC.id), 10_000);
+  const permanentes = await filasUsuarios(page);
+  check("[cob:A:A-105] Tipo de cuenta: ?tipo=temporal deja las temporales y «Permanente» las quita", temporales.filas.includes(UC.id) && temporales.filas.every((x) => usuario(x)?.tipo_cuenta === "temporal") && permanentes.length > 0 && permanentes.every((x) => (usuario(x)?.tipo_cuenta || "permanente") !== "temporal"), `temp=${temporales.filas} perm=${permanentes.length}`);
+
+  await page.goto(`${BASE_WEB}/administracion/usuarios?buscar=${s5}`);
+  await esperar(async () => { const f = await filasUsuarios(page); return propias.every((x) => f.includes(x)); }, 15_000);
+  const renglon = async (x) => limpio(await page.locator(`[aria-label="Usuarios"] li[data-usuario="${x}"]`).innerText());
+  const r = { baja: await renglon(UB.id), bloqueada: await renglon(UL1.id), futura: await renglon(UFut.id), temporal: await renglon(UC.id), activa: await renglon(UH.id) };
+  check("[cob:A:A-110] filas: persona (nombre y correo), roles y estado «De baja», «Bloqueado», «Acceso vencido», «Temporal» (hasta y quién supervisa) y «Activo»", r.baja.includes("De baja") && r.bloqueada.includes("Bloqueado") && r.futura.includes("Acceso vencido") && r.temporal.includes("Temporal") && r.temporal.includes(`Hasta ${fmt(usuario(UC.id).vigente_hasta)}`) && /supervisa Ricardo/.test(r.temporal) && r.activa.includes("Activo") && r.activa.includes(UH.email) && r.activa.includes(UH.nombre), JSON.stringify(r));
+
+  // Ventana: persona anterior y siguiente (botones y flechas).
+  const orden = await filasUsuarios(page);
+  await page.locator(`[aria-label="Usuarios"] li[data-usuario="${orden[0]}"]`).click();
+  const ventana = page.locator("[data-usuario-ventana]");
+  await page.locator(`[data-usuario-ventana="${orden[0]}"]`).waitFor();
+  const anterior = page.getByRole("button", { name: "Persona anterior" });
+  const sinAnterior = await anterior.isDisabled();
+  await page.getByRole("button", { name: "Persona siguiente" }).click();
+  await page.locator(`[data-usuario-ventana="${orden[1]}"]`).waitFor();
+  await page.keyboard.press("ArrowDown");
+  const conFlecha = await page.locator(`[data-usuario-ventana="${orden[2]}"]`).waitFor({ timeout: 10_000 }).then(() => true, () => false);
+  await anterior.click();
+  await page.locator(`[data-usuario-ventana="${orden[1]}"]`).waitFor();
+  check("[cob:A:A-136] la ventana de la persona: «Persona anterior» deshabilitado en la primera; «Persona siguiente», ↓ y «Persona anterior» recorren la lista en orden", sinAnterior && conFlecha && (await ventana.getAttribute("data-usuario-ventana")) === String(orden[1]), `${orden.slice(0, 3)} anterior deshabilitado=${sinAnterior} flecha=${conFlecha}`);
+  await page.keyboard.press("Escape");
+
+  // Pestañas Roles y Autorizaciones.
+  let v = await ventanaUsuario(page, UC.id);
+  const pestRoles = v.getByRole("tab", { name: "Roles" });
+  const pestAut = v.getByRole("tab", { name: "Autorizaciones" });
+  await esperar(async () => (await v.locator("[data-asignacion]").count()) > 0, 10_000);
+  const antes = [await pestRoles.getAttribute("aria-selected"), await v.locator("[data-asignacion]").count()];
+  await pestAut.click();
+  await page.locator("#autorizaciones-usuario").waitFor();
+  const despues = [await pestAut.getAttribute("aria-selected"), await pestRoles.getAttribute("aria-selected"), await v.locator("[data-asignacion]").count()];
+  check("[cob:A:A-139] pestañas «Roles» (por omisión, con sus tarjetas) y «Autorizaciones» (aria-selected, muestra sus autorizaciones)", antes[0] === "true" && antes[1] > 0 && despues.join() === "true,false,0", `${antes} → ${despues}`);
+
+  // Solicitud pendiente sobre la cuenta.
+  v = await ventanaUsuario(page, UN.id);
+  const banner = v.locator("[data-banner-solicitud]");
+  await banner.waitFor();
+  const textoBanner = limpio(await banner.innerText());
+  const respuestaUR = page.waitForResponse((x) => x.url().includes("/api/solicitudes?") && x.url().includes(`entidad_id=${UR.id}`));
+  v = await ventanaUsuario(page, UR.id);
+  await respuestaUR;
+  check("[cob:A:A-135] con una solicitud pendiente sobre la cuenta, su ventana la muestra («… · pendiente de autorización»); sin solicitud, no", /pendiente de autorización/.test(textoBanner) && (await v.locator("[data-banner-solicitud]").count()) === 0, textoBanner.slice(0, 200));
+  await page.keyboard.press("Escape");
+
+  // Menú del Administrador técnico: Documentos (usuarios:G) y sin Reportar incidencia (sin calidad:C).
+  await page.goto(`${BASE_WEB}/administracion/usuarios?nuevo=1`);
+  const alta = page.getByRole("dialog", { name: "Nuevo usuario" });
+  const abre = await alta.waitFor({ timeout: 15_000 }).then(() => true, () => false);
+  await page.keyboard.press("Escape");
+  await alta.waitFor({ state: "detached" });
+  check("[cob:A:A-101] [cob:A:A-102] con usuarios:G: Usuarios con «Nuevo usuario»; ?nuevo=1 abre el alta", abre && (await page.getByRole("button", { name: "Nuevo usuario" }).count()) === 1);
+  const aside = page.locator('aside[aria-label="Navegación principal"]');
+  const docs = {};
+  for (const href of ["/documentos", "/documentos/bandeja", "/documentos/solicitudes", "/documentos/externos", "/documentos/lista-maestra"]) docs[href] = (await aside.locator(`a[href="${href}"]`).count()) > 0;
+  const esperadoDocs = { "/documentos": !!(p.documentos?.V || p.usuarios?.G) };
+  for (const href of ["/documentos/bandeja", "/documentos/solicitudes", "/documentos/externos", "/documentos/lista-maestra"]) esperadoDocs[href] = !!p.documentos?.V;
+  check("[cob:A:A-039] Administrador técnico (usuarios:G, sin documentos:V): en Documentos SGC solo «Documentos»", JSON.stringify(docs) === JSON.stringify(esperadoDocs) && docs["/documentos"] && !docs["/documentos/bandeja"], JSON.stringify(docs));
+  check("[cob:A:A-052] sin calidad:C no aparece «Reportar incidencia»", !p.calidad?.C && (await page.locator("[data-reportar-incidencia-boton]").count()) === 0, `calidad=${JSON.stringify(p.calidad)}`);
+});
+
+/* ---------- Cuentas bloqueadas: aviso en la ventana y «Desbloquear…» ---------- */
+await paso(UA, "usuarios: cuentas bloqueadas", async (page) => {
+  const hasta = usuario(UL2.id)?.bloqueado_hasta;
+  const v = await ventanaUsuario(page, UL2.id);
+  const aviso = v.getByText(/^Cuenta bloqueada hasta las \d{2}:\d{2}$/);
+  await aviso.waitFor();
+  const titulo = limpio(await aviso.innerText());
+  await v.getByRole("button", { name: "Desbloquear" }).click();
+  await conMotivo(page, "Identidad verificada en persona", "Desbloquear", PASS);
+  await toast(page, /Cuenta desbloqueada/);
+  await esperar(async () => !usuario(UL2.id)?.bloqueado_hasta, 10_000);
+  await aviso.waitFor({ state: "detached" });
+  const entra = await api("POST", "/auth/login", { email: UL2.email, password: PASS }, undefined, ipPropia());
+  check("[cob:A:A-138] cuenta bloqueada: «Cuenta bloqueada hasta las HH:MM» (hora de Tijuana) con «Desbloquear»; al desbloquear con motivo el aviso se va y puede entrar", titulo === `Cuenta bloqueada hasta las ${horaTijuana(hasta)}` && !usuario(UL2.id)?.bloqueado_hasta && entra.status === 200, `«${titulo}» (${hasta}) login=${entra.status} ${entra.data?.message || ""}`);
+  await page.keyboard.press("Escape");
+
+  let menu = await acciones(page, UH);
+  const enActiva = await menu.getByRole("menuitem", { name: "Desbloquear…" }).count();
+  await page.keyboard.press("Escape");
+  menu = await acciones(page, UL1);
+  await menu.getByRole("menuitem", { name: "Desbloquear…" }).click();
+  await conMotivo(page, "Identidad verificada por teléfono", "Desbloquear", PASS);
+  await toast(page, /Cuenta desbloqueada/);
+  await esperar(async () => !usuario(UL1.id)?.bloqueado_hasta, 10_000);
+  menu = await acciones(page, UL1);
+  const despues = await menu.getByRole("menuitem", { name: "Desbloquear…" }).count();
+  await page.keyboard.press("Escape");
+  check("[cob:A:A-114] «Desbloquear…» solo en cuentas bloqueadas; con motivo y contraseña quita el bloqueo", enActiva === 0 && despues === 0 && !usuario(UL1.id)?.bloqueado_hasta, `activa=${enActiva} después=${despues}`);
+});
+
+/* ---------- Hoja de usuario y acciones: editar, cancelar, baja, reactivar e interruptor ---------- */
+const ultimaBitacora = (idu) => fila("SELECT accion, motivo FROM auditoria WHERE entidad LIKE 'usuario%' AND CAST(entidad_id AS TEXT) = ? ORDER BY id DESC LIMIT 1", String(idu));
+await paso(UA, "usuarios: editar, baja, reactivar e interruptor", async (page) => {
+  const depto0 = usuario(UH.id)?.departamento;
+  let menu = await acciones(page, UH);
+  await menu.getByRole("menuitem", { name: "Editar datos" }).click();
+  let hoja = page.getByRole("dialog", { name: "Editar usuario" });
+  await hoja.waitFor();
+  const datos = { correo: await page.locator("#u-email").inputValue(), rol: await page.locator("#u-rol").count(), clave: await page.locator("#u-clave-admin").count() };
+  await page.locator("#u-depto").fill(`Sin guardar ${s5}`);
+  await hoja.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await hoja.waitFor({ state: "detached" });
+  const cancelado = usuario(UH.id)?.departamento === depto0;
+  menu = await acciones(page, UH);
+  await menu.getByRole("menuitem", { name: "Editar datos" }).click();
+  await hoja.waitFor();
+  await page.locator("#u-depto").fill(`Depto ${s5}`);
+  const clave2 = await page.locator("#u-clave-admin").count();
+  await hoja.getByRole("button", { name: "Guardar cambios" }).click();
+  await toast(page, /Usuario actualizado/);
+  await esperar(async () => usuario(UH.id)?.departamento === `Depto ${s5}`, 10_000);
+  await hoja.waitFor({ state: "detached" });
+  check("[cob:A:A-111] [cob:A:A-134] [cob:A:A-119] «Editar datos» abre «Editar usuario» con sus datos (sin «Rol inicial»); «Cancelar» no guarda; «Guardar cambios» guarda", datos.correo === UH.email && datos.rol === 0 && cancelado && usuario(UH.id)?.departamento === `Depto ${s5}`, `${JSON.stringify(datos)} cancelado=${cancelado} → ${usuario(UH.id)?.departamento}`);
+  menu = await acciones(page, UH);
+  await menu.getByRole("menuitem", { name: "Editar datos" }).click();
+  await hoja.waitFor();
+  await page.locator("#u-cuenta-hasta").fill(enDias(60));
+  const pide = await page.locator("#u-clave-admin").waitFor({ timeout: 10_000 }).then(() => true, () => false);
+  await hoja.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await hoja.waitFor({ state: "detached" });
+  check("[cob:A:A-133] «Tu contraseña» en la hoja solo cuando el guardado es crítico: no al cambiar el departamento, sí al cambiar la vigencia", datos.clave === 0 && clave2 === 0 && pide && !usuario(UH.id)?.vigente_hasta, `depto=${datos.clave}/${clave2} vigencia=${pide}`);
+
+  // Alta: rol inicial solo con roles activos, supervisores posibles y contraseña de quien da de alta.
+  await page.goto(`${BASE_WEB}/administracion/usuarios`);
+  await page.getByRole("button", { name: "Nuevo usuario" }).click();
+  hoja = page.getByRole("dialog", { name: "Nuevo usuario" });
+  await hoja.waitFor();
+  await esperar(async () => (await page.locator("#u-rol option").count()) > 2, 10_000);
+  const rolesAlta = await page.locator("#u-rol option").allInnerTexts();
+  await page.locator("#u-tipo-cuenta").selectOption("temporal");
+  await esperar(async () => (await page.locator("#u-supervisor option").count()) > 1, 10_000);
+  const supervisores = (await page.locator("#u-supervisor option").evaluateAll((els) => els.map((e) => e.value))).filter(Boolean).map(Number);
+  const claveAlta = await page.locator("#u-clave-admin").count();
+  const n0 = Number(fila("SELECT COUNT(*) AS n FROM usuarios")?.n);
+  await hoja.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await hoja.waitFor({ state: "detached" });
+  check("[cob:A:A-122] «Rol inicial» solo en el alta y solo con roles activos", rolesAlta.includes(Rextra.nombre) && !rolesAlta.includes(Rinact.nombre) && datos.rol === 0, `${rolesAlta.length} roles; inactivo=${rolesAlta.includes(Rinact.nombre)}`);
+  check("[cob:A:A-129] «Supervisor»: cuentas activas y permanentes sin fecha de fin (no temporales, de baja ni con fin)", supervisores.includes(UH.id) && !supervisores.includes(UC.id) && !supervisores.includes(UB.id) && !supervisores.includes(UR.id) && supervisores.every((x) => Number(usuario(x)?.activo) === 1 && (usuario(x)?.tipo_cuenta || "permanente") !== "temporal" && !usuario(x)?.vigente_hasta), `${supervisores.length} supervisores`);
+  check("[cob:A:A-134] [cob:A:A-133] [cob:A:A-119] el alta («Nuevo usuario») pide «Tu contraseña»; «Cancelar» no crea nada", claveAlta === 1 && Number(fila("SELECT COUNT(*) AS n FROM usuarios")?.n) === n0);
+
+  // Dar de baja desde el menú (no en la propia).
+  menu = await acciones(page, UA);
+  const bajaPropia = await menu.getByRole("menuitem", { name: "Dar de baja…" }).count();
+  await page.keyboard.press("Escape");
+  menu = await acciones(page, UD1);
+  await menu.getByRole("menuitem", { name: "Dar de baja…" }).click();
+  await conMotivo(page, "Termina su colaboración de cobertura", "Dar de baja", PASS);
+  await toast(page, /Cuenta dada de baja/);
+  await esperar(async () => Number(usuario(UD1.id)?.activo) === 0, 10_000);
+  const bit = ultimaBitacora(UD1.id);
+  check("[cob:A:A-116] «Dar de baja…» (no en la propia) con motivo y contraseña deja la cuenta de baja y la bitácora dice «baja»", bajaPropia === 0 && Number(usuario(UD1.id)?.activo) === 0 && bit?.accion === "baja", `propia=${bajaPropia} ${JSON.stringify(bit)}`);
+  // Reactivar: queda por autorizar (segundo usuario).
+  menu = await acciones(page, UD1);
+  const opcionesBaja = (await menu.getByRole("menuitem").allInnerTexts()).map(limpio);
+  await menu.getByRole("menuitem", { name: "Reactivar…" }).click();
+  await conMotivo(page, "Vuelve a colaborar en cobertura", "Pedir reactivación", PASS);
+  await toast(page, /pendiente de que otra persona autorizada la apruebe/);
+  const sol = fila("SELECT tipo FROM solicitudes_autorizacion WHERE entidad = 'usuarios' AND entidad_id = ? AND estado = 'pendiente' ORDER BY id DESC LIMIT 1", String(UD1.id));
+  check("[cob:A:A-117] en una cuenta de baja el menú ofrece «Reactivar…» (no «Dar de baja…»); «Pedir reactivación» deja la solicitud pendiente y la cuenta sigue de baja", opcionesBaja.includes("Reactivar…") && !opcionesBaja.includes("Dar de baja…") && !!sol && Number(usuario(UD1.id)?.activo) === 0, `${opcionesBaja.join(" | ")} ${JSON.stringify(sol)}`);
+
+  // Interruptor «Usuario activo»: baja con motivo desde la hoja; no aparece en la propia.
+  menu = await acciones(page, UD2);
+  await menu.getByRole("menuitem", { name: "Editar datos" }).click();
+  hoja = page.getByRole("dialog", { name: "Editar usuario" });
+  await hoja.waitFor();
+  await hoja.getByRole("switch", { name: "Usuario activo" }).click();
+  await page.locator("#u-motivo-estado").waitFor();
+  const etiquetaMotivo = limpio(await page.locator('label[for="u-motivo-estado"]').innerText());
+  await page.locator("#u-motivo-estado").fill("abc");
+  await page.locator("#u-clave-admin").fill(PASS);
+  const r = await intentar(page, hoja.getByRole("button", { name: "Guardar cambios" }), ["u-motivo-estado"]);
+  const sigue = Number(usuario(UD2.id)?.activo) === 1;
+  await page.locator("#u-motivo-estado").fill("Termina su estancia de cobertura");
+  await hoja.getByRole("button", { name: "Guardar cambios" }).click();
+  await toast(page, /Usuario actualizado/);
+  await esperar(async () => Number(usuario(UD2.id)?.activo) === 0, 10_000);
+  const bit2 = ultimaBitacora(UD2.id);
+  menu = await acciones(page, UA);
+  await menu.getByRole("menuitem", { name: "Editar datos" }).click();
+  hoja = page.getByRole("dialog", { name: "Editar usuario" });
+  await hoja.waitFor();
+  const enPropia = await hoja.getByRole("switch", { name: "Usuario activo" }).count();
+  await hoja.getByRole("button", { name: "Cancelar", exact: true }).click();
+  check("[cob:A:A-127] apagar «Usuario activo» pide «Motivo de la baja» (< 5 se marca y no guarda); con motivo la da de baja («baja» en la bitácora); en la propia cuenta no hay interruptor", /^Motivo de la baja/.test(etiquetaMotivo) && r.todos && sigue && Number(usuario(UD2.id)?.activo) === 0 && bit2?.accion === "baja" && bit2?.motivo === "Termina su estancia de cobertura" && enPropia === 0, `«${etiquetaMotivo}» ${r.texto} sigue=${sigue} ${JSON.stringify(bit2)} propia=${enPropia}`);
+});
+
+/* ---------- Asignar rol (cancelar) y revocar un rol ---------- */
+await paso(UA, "asignar rol: cancelar; revocar un rol", async (page) => {
+  let v = await ventanaUsuario(page, UR.id);
+  await v.getByRole("button", { name: "Asignar rol" }).click();
+  const dialogo = page.getByRole("dialog", { name: `Asignar rol a ${UR.nombre}` });
+  await dialogo.waitFor();
+  await esperar(async () => (await page.locator("#u-asignar-rol option").count()) > 2, 10_000);
+  const ops = await page.locator("#u-asignar-rol option").allInnerTexts();
+  await page.locator("#u-asignar-rol").selectOption({ label: Rextra.nombre });
+  await page.locator("#u-asignar-motivo").fill("Cambio de funciones que no se hará");
+  await dialogo.getByRole("button", { name: "Cancelar" }).click();
+  await dialogo.waitFor({ state: "detached" });
+  const sol = fila("SELECT id FROM solicitudes_autorizacion WHERE entidad = 'usuarios' AND entidad_id = ? AND tipo = 'asignar_rol' AND estado = 'pendiente'", String(UR.id));
+  check("[cob:A:A-146] [cob:A:A-147] [cob:A:A-151] «Asignar rol a <nombre>»: el selector solo trae roles activos; «Cancelar» cierra sin pedir nada", ops.includes(Rextra.nombre) && !ops.includes(Rinact.nombre) && !sol && !asignacion(UR.id, Rextra.id), `${ops.length} opciones; inactivo=${ops.includes(Rinact.nombre)} sol=${JSON.stringify(sol)}`);
+  await page.keyboard.press("Escape");
+
+  v = await ventanaUsuario(page, UH.id);
+  const tarjeta = v.locator("[data-asignacion]").filter({ hasText: Rextra.nombre }).first();
+  await tarjeta.getByRole("button", { name: "Revocar" }).click();
+  await conMotivo(page, "Cambio de funciones de cobertura", "Revocar", PASS);
+  await toast(page, /Rol revocado/);
+  await esperar(async () => !!asignacion(UH.id, Rextra.id)?.revocado_en, 10_000);
+  const a = asignacion(UH.id, Rextra.id);
+  const resumen = v.locator("summary").filter({ hasText: /Historial de roles/ });
+  await resumen.click();
+  const enHistorial = limpio(await v.locator("[data-asignacion]").filter({ hasText: Rextra.nombre }).first().innerText());
+  check("[cob:A:A-143] «Revocar» (con motivo y contraseña) revoca el rol al instante y pasa al historial como «Revocado»", !!a?.revocado_en && Number(a.revocado_por) === UA.id && a.motivo_revocacion === "Cambio de funciones de cobertura" && /Revocado/.test(enHistorial), `${JSON.stringify(a)} | ${enHistorial}`);
+});
+
+/* ---------- Roles: búsqueda, filas, menús, ventana y editor ---------- */
+const menuRol = async (page, r) => {
+  await page.goto(`${BASE_WEB}/administracion/roles?buscar=${encodeURIComponent(r.nombre)}`);
+  const renglon = page.locator(`[aria-label="Roles"] li[data-rol="${r.id}"]`);
+  await renglon.waitFor();
+  await renglon.getByRole("button", { name: "Acciones" }).click();
+  return page.getByRole("menu");
+};
+await paso(UA, "roles: búsqueda, filas, menús y ventana", async (page) => {
+  await page.goto(`${BASE_WEB}/administracion/roles?buscar=${encodeURIComponent(Rdes.nombre)}`);
+  await page.getByRole("heading", { name: "Roles" }).first().waitFor();
+  await esperar(async () => (await filasRoles(page)).join() === String(Rdes.id), 15_000);
+  const buscador = page.getByPlaceholder("Buscar por nombre");
+  const valor = await buscador.inputValue();
+  check("[cob:A:A-158] [cob:A:A-159] [cob:A:A-160] Roles con «Nuevo rol» (usuarios:G); ?buscar= llena el buscador y deja solo ese rol", valor === Rdes.nombre && (await filasRoles(page)).join() === String(Rdes.id) && (await page.getByRole("button", { name: "Nuevo rol" }).count()) === 1, valor);
+
+  await buscador.fill(`Cob UI`);
+  await esperar(async () => { const f = await filasRoles(page); return [Rdes.id, Rinact.id, Rasig.id].every((x) => f.includes(x)); }, 10_000);
+  const filaDe = async (x) => limpio(await page.locator(`[aria-label="Roles"] li[data-rol="${x}"]`).innerText());
+  const sinPersonas = await filaDe(Rdes.id);
+  const inactivo = await filaDe(Rinact.id);
+  await buscador.fill("");
+  const tecnico = rol("tecnico_auxiliar");
+  await esperar(async () => (await filasRoles(page)).includes(tecnico.id), 10_000);
+  const delCatalogo = await filaDe(tecnico.id);
+  const total = Number((await api("GET", "/admin/roles", undefined, t.qa)).data?.items?.find((x) => x.id === tecnico.id)?.total_usuarios || 0);
+  const sinMenuPropio = await page.locator(`[aria-label="Roles"] li[data-rol="${rol("admin_tecnico").id}"]`).getByRole("button", { name: "Acciones" }).count();
+  check("[cob:A:A-162] [cob:A:A-163] filas: rol con su propósito, personas («Sin personas» / «N personas») y tipo («Personalizado», «Del catálogo», «Inactivo»); el rol propio no tiene menú", sinPersonas.includes(Rdes.nombre) && sinPersonas.includes("Sin personas") && sinPersonas.includes("Personalizado") && inactivo.includes("Inactivo") && delCatalogo.includes("Del catálogo") && delCatalogo.includes(total === 1 ? "1 persona" : `${total.toLocaleString("es-MX")} personas`) && sinMenuPropio === 0, `${sinPersonas} | ${inactivo} | ${delCatalogo} (total ${total})`);
+
+  // Ventana: rol anterior y siguiente.
+  await buscador.fill("Cob UI");
+  await esperar(async () => (await filasRoles(page)).length >= 3, 10_000);
+  const orden = await filasRoles(page);
+  await page.locator(`[aria-label="Roles"] li[data-rol="${orden[0]}"]`).click();
+  await page.locator(`[data-rol-ventana="${orden[0]}"]`).waitFor();
+  const sinAnterior = await page.getByRole("button", { name: "Rol anterior" }).isDisabled();
+  await page.getByRole("button", { name: "Rol siguiente" }).click();
+  await page.locator(`[data-rol-ventana="${orden[1]}"]`).waitFor();
+  await page.getByRole("button", { name: "Rol anterior" }).click();
+  await page.locator(`[data-rol-ventana="${orden[0]}"]`).waitFor();
+  check("[cob:A:A-166] ventana del rol: «Rol anterior» deshabilitado en el primero; «Rol siguiente» y «Rol anterior» recorren la lista", sinAnterior);
+  await page.keyboard.press("Escape");
+
+  // Editar nombre y descripción.
+  let menu = await menuRol(page, Rdatos);
+  const opciones = (await menu.getByRole("menuitem").allInnerTexts()).map(limpio);
+  await menu.getByRole("menuitem", { name: "Editar nombre y descripción" }).click();
+  const datos = page.getByRole("dialog", { name: "Editar nombre y descripción" });
+  await datos.waitFor();
+  const nombre0 = await page.locator("#role-nombre").inputValue();
+  await page.locator("#role-descripcion").fill(`Descripción nueva ${s5}`);
+  await datos.getByRole("button", { name: "Guardar", exact: true }).click();
+  await toast(page, /Rol actualizado/);
+  await esperar(async () => fila("SELECT descripcion FROM roles WHERE id = ?", Rdatos.id)?.descripcion === `Descripción nueva ${s5}`, 10_000);
+  check("[cob:A:A-164] [cob:A:A-176] [cob:A:A-178] «Editar nombre y descripción» abre su ventana con el nombre; «Guardar» cambia la descripción sin tocar los permisos", opciones.join("|") === "Editar permisos|Editar nombre y descripción|Desactivar…" && nombre0 === Rdatos.nombre && fila("SELECT nombre FROM roles WHERE id = ?", Rdatos.id)?.nombre === Rdatos.nombre && filas("SELECT id FROM rol_acciones WHERE id_rol = ?", Rdatos.id).length === 0, `${opciones.join("|")} «${nombre0}»`);
+
+  // Editar permisos desde el menú; guardar sin cambios cierra sin pedir nada.
+  menu = await menuRol(page, Rdatos);
+  await menu.getByRole("menuitem", { name: "Editar permisos" }).click();
+  const v = page.locator(`[data-rol-ventana="${Rdatos.id}"]`);
+  await v.waitFor();
+  await page.getByLabel("Ver en Muestras", { exact: true }).waitFor();
+  const puts = [];
+  page.on("request", (x) => x.method() === "PUT" && new URL(x.url()).pathname === `/api/admin/roles/${Rdatos.id}` && puts.push(1));
+  await v.getByRole("button", { name: "Guardar permisos" }).click();
+  await page.getByLabel("Ver en Muestras", { exact: true }).waitFor({ state: "detached" });
+  check("[cob:A:A-163] [cob:A:A-175] «Editar permisos» del menú abre el editor; «Guardar permisos» sin cambios lo cierra sin motivo ni guardar", puts.length === 0 && (await page.locator("#prompt-motivo").count()) === 0 && !fila("SELECT id FROM solicitudes_autorizacion WHERE entidad = 'roles' AND entidad_id = ? AND estado = 'pendiente'", String(Rdatos.id)), `puts=${puts.length}`);
+  await page.keyboard.press("Escape");
+
+  // Quitar un permiso se aplica de inmediato (sin segundo usuario).
+  const vq = await ventanaRol(page, Rquita.id);
+  await vq.getByRole("button", { name: "Editar permisos" }).click();
+  const verMuestras = page.getByLabel("Ver en Muestras", { exact: true });
+  await verMuestras.waitFor();
+  const marcadaAntes = await verMuestras.isChecked();
+  await verMuestras.uncheck();
+  await vq.getByRole("button", { name: "Guardar permisos" }).click();
+  await conMotivo(page, "Ya no consulta muestras", "Guardar permisos", PASS);
+  await toast(page, /Permisos actualizados/);
+  await esperar(async () => filas("SELECT id FROM rol_acciones WHERE id_rol = ?", Rquita.id).length === 0, 10_000);
+  check("[cob:A:A-175] quitar un permiso y «Guardar permisos» (motivo y contraseña) lo aplica al instante, sin solicitud", marcadaAntes && filas("SELECT id FROM rol_acciones WHERE id_rol = ?", Rquita.id).length === 0 && !fila("SELECT id FROM solicitudes_autorizacion WHERE entidad = 'roles' AND entidad_id = ? AND estado = 'pendiente'", String(Rquita.id)));
+  await page.keyboard.press("Escape");
+
+  // Desactivar y activar.
+  menu = await menuRol(page, Rdes);
+  await menu.getByRole("menuitem", { name: "Desactivar…" }).click();
+  await conMotivo(page, "Rol que ya no se usa", "Desactivar", PASS);
+  await toast(page, /Rol desactivado/);
+  await esperar(async () => Number(fila("SELECT activo FROM roles WHERE id = ?", Rdes.id)?.activo) === 0, 10_000);
+  menu = await menuRol(page, Rdes);
+  await menu.getByRole("menuitem", { name: "Activar…" }).click();
+  await conMotivo(page, "Se vuelve a usar el rol", "Activar", PASS);
+  await toast(page, /pendiente/i);
+  const sol = fila("SELECT tipo FROM solicitudes_autorizacion WHERE entidad = 'roles' AND entidad_id = ? AND estado = 'pendiente' ORDER BY id DESC LIMIT 1", String(Rdes.id));
+  check("[cob:A:A-165] «Desactivar…» (motivo y contraseña) lo desactiva al instante; «Activar…» queda por autorizar (ampliar_permisos_rol) y sigue inactivo", sol?.tipo === "ampliar_permisos_rol" && Number(fila("SELECT activo FROM roles WHERE id = ?", Rdes.id)?.activo) === 0, JSON.stringify(sol));
+});
+
+/* ---------- Mi cuenta: apariencia y cerrar todas las sesiones ---------- */
+await paso(UX, "mi cuenta: apariencia y cerrar sesión en todos los dispositivos", async (page) => {
+  await page.goto(`${BASE_WEB}/ayuda`);
+  const hoja = await abrirMiCuenta(page);
+  const grupo = hoja.getByRole("radiogroup", { name: "Apariencia" });
+  const pasos = [];
+  for (const [nombre, valor] of [["Oscuro", "oscuro"], ["Claro", "claro"], ["Automático", "auto"]]) {
+    const radio = grupo.getByRole("radio", { name: new RegExp(nombre) });
+    await radio.click();
+    await esperar(async () => usuario(UX.id)?.tema === valor, 10_000);
+    pasos.push([valor, usuario(UX.id)?.tema, await radio.getAttribute("aria-checked"), await page.evaluate(() => document.documentElement.dataset.theme || "")]);
+  }
+  check("[cob:A:A-095] «Apariencia» (Claro, Oscuro, Automático) cambia el tema al momento y lo guarda en la cuenta", pasos.every(([v, g, c]) => v === g && c === "true") && pasos[0][3] === "dark" && pasos[1][3] === "light", JSON.stringify(pasos));
+
+  const otra = await api("POST", "/auth/login", { email: UX.email, password: PASS });
+  const tv0 = Number(usuario(UX.id)?.token_version);
+  await hoja.getByRole("button", { name: "Cerrar sesión en todos los dispositivos" }).click();
+  const confirma = page.getByRole("dialog", { name: "Cerrar sesión en todos los dispositivos" });
+  await confirma.waitFor();
+  const descripcion = limpio(await confirma.innerText());
+  await confirma.getByRole("button", { name: "Cancelar" }).click();
+  await confirma.waitFor({ state: "detached" });
+  const sigue = Number(usuario(UX.id)?.token_version) === tv0 && (await api("GET", "/auth/me", undefined, otra.data?.token)).status === 200;
+  await hoja.getByRole("button", { name: "Cerrar sesión en todos los dispositivos" }).click();
+  await confirma.getByRole("button", { name: "Cerrar todas" }).click();
+  await page.waitForURL((u) => u.pathname === "/login");
+  const tras = await api("GET", "/auth/me", undefined, otra.data?.token);
+  check("[cob:A:A-094] «Cerrar sesión en todos los dispositivos» pide confirmación («Cancelar» no cierra nada); «Cerrar todas» cierra esta y las demás sesiones", /Se cerrarán todas tus sesiones abiertas, incluida esta/.test(descripcion) && sigue && Number(usuario(UX.id)?.token_version) === tv0 + 1 && tras.status === 401, `cancelar=${sigue} tv ${tv0}→${usuario(UX.id)?.token_version} otra=${tras.status}`);
+});
+
+/* ---------- Mi cuenta: cambiar la contraseña propia y cerrar sesión ---------- */
+await paso(UPW, "mi cuenta: cambiar contraseña y cerrar sesión", async (page) => {
+  const otra = await api("POST", "/auth/login", { email: UPW.email, password: PASS });
+  await page.goto(`${BASE_WEB}/ayuda`);
+  const hoja = await abrirMiCuenta(page);
+  const hash0 = usuario(UPW.id)?.password_hash;
+  await hoja.getByRole("button", { name: "Cambiar contraseña" }).click();
+  const NUEVA = `Propia-${s5}-Nueva`;
+  await page.locator("#pwd-actual").fill(PASS);
+  await page.locator("#pwd-nueva").fill(NUEVA);
+  await page.locator("#pwd-confirmar").fill(NUEVA);
+  await page.locator("form:has(#pwd-confirmar) button[type=submit]").click();
+  await toast(page, /Contraseña cambiada; tus otras sesiones se cerraron/);
+  await hoja.getByRole("button", { name: "Cambiar contraseña" }).waitFor();
+  const nueva = await api("POST", "/auth/login", { email: UPW.email, password: NUEVA }, undefined, ipPropia());
+  const vieja = await api("POST", "/auth/login", { email: UPW.email, password: PASS }, undefined, ipPropia());
+  const otraTras = await api("GET", "/auth/me", undefined, otra.data?.token);
+  const esta = await api("GET", "/auth/me", undefined, await tokenDe(page));
+  check("[cob:A:A-093] «Cambiar contraseña» en Mi cuenta: con la actual y la nueva confirmada la cambia, cierra las otras sesiones y conserva esta", usuario(UPW.id)?.password_hash !== hash0 && nueva.status === 200 && vieja.status === 401 && otraTras.status === 401 && esta.status === 200, `nueva=${nueva.status} vieja=${vieja.status} otra=${otraTras.status} esta=${esta.status}`);
+  await page.keyboard.press("Escape");
+  await hoja.waitFor({ state: "detached" });
+  const token = await tokenDe(page);
+  await page.getByRole("button", { name: "Menú de usuario" }).click();
+  await page.getByRole("menuitem", { name: "Cerrar sesión" }).click();
+  await page.waitForURL((u) => u.pathname === "/login");
+  const tras = await api("GET", "/auth/me", undefined, token);
+  check("[cob:A:A-057] «Cerrar sesión» del menú de usuario sale sin confirmación y revoca la sesión («salir»)", tras.status === 401 && revocada(UPW.id) === "salir" && !(await tokenDe(page)), `${tras.status} ${revocada(UPW.id)}`);
+});
+
+/* ---------- Mi cuenta: foto de perfil propia ---------- */
+await paso(UFo, "mi cuenta: foto de perfil", async (page) => {
+  await page.goto(`${BASE_WEB}/ayuda`);
+  const hoja = await abrirMiCuenta(page);
+  const modo = hoja.getByRole("radiogroup", { name: "Foto de perfil" });
+  const puts = [];
+  page.on("request", (x) => x.method() === "PUT" && x.url().endsWith("/api/auth/me/foto") && puts.push(x.postData()));
+  const subidas = [];
+  page.on("request", (x) => x.method() === "POST" && x.url().endsWith("/api/auth/me/foto") && subidas.push(1));
+  const inicial = await modo.getByRole("radio", { name: "Figura" }).getAttribute("aria-checked");
+  await modo.getByRole("radio", { name: "Foto" }).click();
+  await hoja.getByRole("button", { name: "Subir foto", exact: true }).waitFor();
+  check("[cob:A:A-096] «Foto de perfil»: Figura por omisión; «Foto» sin foto subida solo muestra «Subir foto» (no cambia nada)", inicial === "true" && (await modo.getByRole("radio", { name: "Foto" }).getAttribute("aria-checked")) === "true" && puts.length === 0 && !usuario(UFo.id)?.foto, `${inicial} puts=${puts.length}`);
+
+  const entrada = hoja.getByLabel("Subir foto de perfil");
+  const aviso = page.locator('[role="alertdialog"][data-validacion]');
+  await entrada.setInputFiles({ name: "foto.gif", mimeType: "image/gif", buffer: Buffer.from("GIF89a") });
+  await aviso.waitFor();
+  const tipo = limpio(await aviso.innerText());
+  await entendido(page);
+  await entrada.setInputFiles({ name: "grande.jpg", mimeType: "image/jpeg", buffer: Buffer.alloc(5 * 1024 * 1024 + 10, 1) });
+  await aviso.waitFor();
+  const peso = limpio(await aviso.innerText());
+  await entendido(page);
+  check("[cob:A:A-098] «Subir foto de perfil»: un GIF avisa «Usa una foto JPG, PNG o WEBP» y una de más de 5 MB «La foto pesa más de 5 MB»; ninguna se sube", /Usa una foto JPG, PNG o WEBP/.test(tipo) && /La foto pesa más de 5 MB/.test(peso) && subidas.length === 0 && !usuario(UFo.id)?.foto, `${tipo} | ${peso}`);
+
+  const png = await sharp({ create: { width: 400, height: 300, channels: 3, background: { r: 200, g: 90, b: 40 } } }).png().toBuffer();
+  await entrada.setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: png });
+  const recorte = page.getByRole("dialog", { name: "Recorta tu foto" });
+  await recorte.waitFor();
+  const zoom = recorte.getByRole("slider", { name: "Zoom" });
+  const rango = [await zoom.getAttribute("min"), await zoom.getAttribute("max"), await zoom.inputValue()];
+  await recorte.getByRole("application").focus();
+  await page.keyboard.press("=");
+  await page.keyboard.press("=");
+  const acercado = Number(await zoom.inputValue());
+  // «Guardar» se habilita cuando la imagen elegida termina de cargar en el encuadre.
+  const guardar = recorte.getByRole("button", { name: "Guardar", exact: true });
+  const cargaPrimera = !!(await esperar(() => guardar.isEnabled(), 10_000));
+  await recorte.getByRole("button", { name: "Cancelar" }).click();
+  await recorte.waitFor({ state: "detached" });
+  const cancelada = subidas.length === 0 && !usuario(UFo.id)?.foto;
+  await entrada.setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: png });
+  await recorte.waitFor();
+  const cargaSegunda = !!(await esperar(() => guardar.isEnabled(), 10_000));
+  check("[cob:A:A-100] «Recorta tu foto»: Zoom de 1 a 4 (las teclas lo acercan) y «Cancelar» no sube nada", rango.join() === "1,4,1" && acercado > 1 && cancelada, `${rango} → ${acercado} cancelada=${cancelada}`);
+  if (cargaSegunda) {
+    await guardar.click();
+    await toast(page, /Foto de perfil actualizada/);
+    await esperar(async () => !!usuario(UFo.id)?.foto, 10_000);
+  } else {
+    // La imagen no cargó en el encuadre: se cierra y la foto se sube por la API para seguir con lo demás.
+    await recorte.getByRole("button", { name: "Cancelar" }).click();
+    await recorte.waitFor({ state: "detached" });
+    const fd2 = new FormData();
+    fd2.append("archivo", new Blob([png], { type: "image/png" }), "foto.png");
+    await api("POST", "/auth/me/foto", fd2, await tokenDe(page));
+    await page.reload();
+    await abrirMiCuenta(page);
+  }
+  check("[cob:A:A-100] «Recorta tu foto»: la foto elegida se ve en el encuadre y «Guardar» (habilitado al cargarla) la sube y la usa", cargaPrimera && cargaSegunda && subidas.length === 1 && !!usuario(UFo.id)?.foto && Number(usuario(UFo.id)?.usa_foto) === 1, `carga 1.ª=${cargaPrimera} 2.ª=${cargaSegunda} subidas=${subidas.length} usa=${usuario(UFo.id)?.usa_foto}`);
+
+  await modo.getByRole("radio", { name: "Figura" }).click();
+  await toast(page, /Se muestra tu figura/);
+  await esperar(async () => Number(usuario(UFo.id)?.usa_foto) === 0, 10_000);
+  const conFigura = Number(usuario(UFo.id)?.usa_foto) === 0 && !!usuario(UFo.id)?.foto;
+  await modo.getByRole("radio", { name: "Foto" }).click();
+  await toast(page, /Se muestra tu foto/);
+  await esperar(async () => Number(usuario(UFo.id)?.usa_foto) === 1, 10_000);
+  check("[cob:A:A-096] con foto subida, «Figura» y «Foto» cambian lo que se muestra (usa_foto) sin perder la foto", conFigura && Number(usuario(UFo.id)?.usa_foto) === 1 && puts.length === 2, `puts=${puts.join(" ")}`);
+
+  await hoja.getByRole("button", { name: "Quitar foto" }).click();
+  await toast(page, /Foto de perfil quitada/);
+  await esperar(async () => !usuario(UFo.id)?.foto, 10_000);
+  await hoja.getByRole("button", { name: "Subir foto", exact: true }).waitFor();
+  check("[cob:A:A-099] «Quitar foto» (sin confirmación) borra la foto y vuelve a ofrecer «Subir foto»", !usuario(UFo.id)?.foto && (await hoja.getByRole("button", { name: "Quitar foto" }).count()) === 0);
+});
+
+/* ---------- Buscador: botón, comandos, recientes e Inicio (cuenta temporal) ---------- */
+await paso(UC, "buscador: botón, comandos, recientes e Inicio", async (page) => {
+  const token = await tokenDe(page);
+  const p = (await permisosDe(token)).permissions || {};
+  await page.goto(`${BASE_WEB}/ayuda`);
+  await page.getByRole("heading", { name: "Cómo se usa FICOTOX" }).waitFor();
+  await page.locator('aside[aria-label="Navegación principal"]').getByRole("button", { name: "Buscar", exact: true }).click();
+  const dialogo = paletaDe(page);
+  await dialogo.waitFor();
+  const campo = dialogo.locator('input[aria-label="Buscar en FICOTOX"]');
+  const enfocado = await campo.evaluate((e) => e === document.activeElement);
+  const placeholder = await campo.getAttribute("placeholder");
+  await page.keyboard.press("Escape");
+  await dialogo.waitFor({ state: "detached" });
+  const largo = "cobertura".repeat(15);
+  const [r130, r120] = [await api("GET", `/busqueda?q=${largo.slice(0, 130)}`, undefined, token), await api("GET", `/busqueda?q=${largo.slice(0, 120)}`, undefined, token)];
+  check("[cob:A:A-049] [cob:A:A-070] [cob:A:A-069] «Buscar» abre la ventana «Buscar» con el campo «Buscar en FICOTOX» enfocado («Busca un folio, un reactivo, un equipo, o escribe lo que quieres hacer»); el servidor usa hasta 120 caracteres", enfocado && placeholder === "Busca un folio, un reactivo, un equipo, o escribe lo que quieres hacer" && r130.status === 200 && JSON.stringify(r130.data) === JSON.stringify(r120.data), `foco=${enfocado} «${placeholder}» ${r130.status}`);
+
+  // Recientes: se guardan 30 y se ven 8.
+  for (let i = 0; i < 35; i += 1) await api("POST", "/busqueda/recientes", { tipo: "consulta", texto: `consulta ${i} ${s5}` }, token);
+  const guardados = Number(fila("SELECT COUNT(*) AS n FROM busqueda_recientes WHERE usuario_id = ?", UC.id)?.n);
+  let b = await buscar(page, "");
+  const grupo = b.dialogo.locator("[cmdk-group]").filter({ hasText: "Recientes" });
+  await grupo.waitFor();
+  const visibles = (await grupo.getByRole("option").allInnerTexts()).map(limpio);
+  check("[cob:A:A-071] «Recientes» sin escribir: de 30 guardados (los más nuevos) se ven 8", guardados === 30 && visibles.length === 8 && visibles[0].includes(`consulta 34 ${s5}`), `${guardados} guardados; ${visibles.join(" / ")}`);
+  await page.keyboard.press("Escape");
+
+  // Comandos.
+  const comando = async (q, titulo) => {
+    b = await buscar(page, q);
+    const opcion = b.dialogo.getByRole("option").filter({ hasText: titulo }).first();
+    const hay = await opcion.count();
+    if (hay) await opcion.click();
+    return hay;
+  };
+  const tema = async (valor, dataset) => esperar(async () => usuario(UC.id)?.tema === valor && (dataset === null || (await page.evaluate(() => document.documentElement.dataset.theme)) === dataset), 10_000);
+  const viejo = (await buscar(page, "tema oscuro").then((x) => x.opciones())).some((x) => /^Tema oscuro/.test(x));
+  await page.keyboard.press("Escape");
+  const temas = [await comando("modo oscuro", "Modo oscuro"), await tema("oscuro", "dark"), await comando("modo claro", "Modo claro"), await tema("claro", "light"), await comando("tema automático", "Tema automático"), await tema("auto", null)];
+  check("[cob:A:A-077] comandos «Modo oscuro», «Modo claro» y «Tema automático» cambian y guardan el tema (no hay «Tema oscuro»)", temas.every(Boolean) && !viejo, `${temas} viejo=${viejo}`);
+  await comando("mi cuenta", "Mi cuenta");
+  const hoja = page.getByRole("dialog", { name: "Mi cuenta" });
+  await hoja.waitFor();
+  const sinFormulario = (await page.locator("#pwd-actual").count()) === 0;
+  await page.keyboard.press("Escape");
+  await hoja.waitFor({ state: "detached" });
+  await comando("cambiar contraseña", "Cambiar contraseña");
+  await hoja.waitFor();
+  const conFormulario = await page.locator("#pwd-actual").isVisible();
+  await page.keyboard.press("Escape");
+  await hoja.waitFor({ state: "detached" });
+  // Solo las de esta cuenta: otras suites registran incidencias al mismo tiempo.
+  const incidenciasDe = () => Number(fila("SELECT COUNT(*) AS n FROM incidencias WHERE reportada_por = ?", UC.id)?.n);
+  const incidencias0 = incidenciasDe();
+  const hayReportar = await comando("reportar incidencia", "Reportar incidencia");
+  const reporte = page.getByRole("dialog", { name: "Reportar incidencia" });
+  await reporte.waitFor();
+  await page.keyboard.press("Escape");
+  await reporte.waitFor({ state: "detached" });
+  check("[cob:A:A-077] comandos «Mi cuenta» (abre la ventana), «Cambiar contraseña» (con el formulario abierto) y «Reportar incidencia» (con calidad:C; abre el formulario sin registrar nada)", sinFormulario && conFormulario && hayReportar === 1 && !!p.calidad?.C && incidenciasDe() === incidencias0, `${sinFormulario} ${conFormulario} ${hayReportar} calidad=${JSON.stringify(p.calidad)} incidencias ${incidencias0}→${incidenciasDe()}`);
+
+  // Inicio: píldoras de pendientes y buscador en la página.
+  // Se compara con la respuesta que pintó la página (otras suites cambian los conteos mientras tanto).
+  const respuestaAvisos = page.waitForResponse((r) => r.url().includes("/api/inicio/avisos") && r.request().method() === "GET");
+  await page.goto(`${BASE_WEB}/`);
+  await page.locator("main h1").first().waitFor();
+  const pintados = ((await (await respuestaAvisos).json().catch(() => null))?.items || []).map((x) => `${x.href}#${x.count}`);
+  const pildoras = await esperar(async () => {
+    const avisos = pintados;
+    const enPantalla = await page.getByRole("list", { name: "Pendientes" }).getByRole("link").evaluateAll((els) => els.map((e) => `${e.getAttribute("href")}#${e.querySelector(".tnum")?.textContent?.trim()}`)).catch(() => []);
+    return enPantalla.length === Math.min(4, avisos.length) && enPantalla.every((x) => avisos.includes(x)) ? { avisos, enPantalla } : null;
+  }, 15_000);
+  check("[cob:A:A-084] Inicio: hasta 4 píldoras de pendientes, cada una con el destino y el número que da /inicio/avisos", !!pildoras && pildoras.enPantalla.length > 0, JSON.stringify(pildoras));
+  const enPagina = page.locator('main input[aria-label="Buscar en FICOTOX"]');
+  await enPagina.fill("cómo anular");
+  const opcion = page.locator("main").getByRole("option").filter({ hasText: "Corregir un registro" }).first();
+  await opcion.waitFor();
+  await opcion.click();
+  await page.waitForURL((u) => u.pathname === "/ayuda" && u.hash === "#anular");
+  check("[cob:A:A-085] el buscador del Inicio (en la página) encuentra «Corregir un registro» y lleva a /ayuda#anular", true);
+
+  // Cerrar sesión desde el buscador: con confirmación.
+  await comando("cerrar sesión", "Cerrar sesión");
+  const confirma = page.getByRole("dialog", { name: "Cerrar sesión" });
+  await confirma.waitFor();
+  const descripcion = limpio(await confirma.innerText());
+  await confirma.getByRole("button", { name: "Cancelar" }).click();
+  await confirma.waitFor({ state: "detached" });
+  const sigue = (await api("GET", "/auth/me", undefined, token)).status === 200;
+  await comando("cerrar sesión", "Cerrar sesión");
+  await confirma.waitFor();
+  await confirma.getByRole("button", { name: "Cerrar sesión" }).click();
+  await page.waitForURL((u) => u.pathname === "/login");
+  const tras = await api("GET", "/auth/me", undefined, token);
+  check("[cob:A:A-078] el comando «Cerrar sesión» pide confirmación («Saldrás de FICOTOX en este dispositivo.»): «Cancelar» la conserva; confirmar la revoca y vuelve al acceso", /Saldrás de FICOTOX en este dispositivo\./.test(descripcion) && sigue && tras.status === 401 && revocada(UC.id) === "salir", `${descripcion} cancelar=${sigue} tras=${tras.status}`);
+});
+
+/* ---------- Contadores del menú, Reportar incidencia y Ayuda con informes:C (Ricardo solo consulta) ---------- */
+await paso("ricardo", "contadores del menú y enlaces de la Ayuda", async (page) => {
+  const token = await tokenDe(page);
+  const p = (await permisosDe(token)).permissions || {};
+  const aside = page.locator('aside[aria-label="Navegación principal"]');
+  const leer = async (href) => {
+    const c = aside.locator(`[data-contador="${href}"]`);
+    return (await c.count()) ? { n: Number(await c.innerText()), etiqueta: await c.getAttribute("aria-label") } : { n: 0, etiqueta: null };
+  };
+  // Otras suites pueden crear pendientes a la vez: se compara la pantalla con la API hasta que coinciden.
+  const conteos = await esperar(async () => {
+    await page.goto(`${BASE_WEB}/ayuda`);
+    await aside.waitFor();
+    await esperar(async () => (await aside.locator("[data-contador]").count()) === 3, 10_000);
+    const api3 = { sol: ((await api("GET", "/solicitudes", undefined, token)).data?.items || []).filter((x) => x.puedo_aprobar).length, sup: ((await api("GET", "/supervision", undefined, token)).data?.por_supervisar || []).length, sgc: Number((await api("GET", "/sgc/bandeja", undefined, token)).data?.total || 0) };
+    // El de la Bandeja sube con animación.
+    await esperar(async () => (await leer("/documentos/bandeja")).n === api3.sgc, 5000);
+    const ui = { sol: await leer("/solicitudes"), sup: await leer("/supervision"), sgc: await leer("/documentos/bandeja") };
+    return ui.sol.n === api3.sol && ui.sup.n === api3.sup && ui.sgc.n === api3.sgc ? { api3, ui } : null;
+  }, 60_000);
+  check("[cob:A:A-041] «Por autorizar» muestra el número de solicitudes que puede aprobar (aria-label «N pendientes»)", !!conteos && conteos.api3.sol > 0 && conteos.ui.sol.etiqueta === `${conteos.api3.sol} pendientes`, JSON.stringify(conteos));
+  check("[cob:A:A-042] «Por supervisar» muestra el número por supervisar", !!conteos && conteos.api3.sup > 0 && conteos.ui.sup.etiqueta === `${conteos.api3.sup} pendientes`, JSON.stringify(conteos?.ui?.sup));
+  check("[cob:A:A-043] «Bandeja» de Documentos SGC muestra (con animación) sus tareas", !!conteos && conteos.api3.sgc > 0 && conteos.ui.sgc.etiqueta === `${conteos.api3.sgc} pendientes`, JSON.stringify(conteos?.ui?.sgc));
+
+  await page.goto(`${BASE_WEB}/ayuda`);
+  await page.getByRole("heading", { name: "Cómo se usa FICOTOX" }).waitFor();
+  const recepcion = await page.getByRole("link", { name: "Nueva recepción" }).getAttribute("href");
+  await page.getByRole("link", { name: "Nuevo informe" }).click();
+  await page.waitForURL((u) => u.pathname === "/informes/nuevo");
+  check("[cob:A:A-181] con muestras:C e informes:C la Ayuda ofrece «Nueva recepción» (/muestras/recepcion/nueva) y «Nuevo informe» (lleva a /informes/nuevo)", !!p.muestras?.C && !!p.informes?.C && recepcion === "/muestras/recepcion/nueva", `${p.muestras?.C} ${p.informes?.C} ${recepcion}`);
 });
 
 await nav.cerrar();

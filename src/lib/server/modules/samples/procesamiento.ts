@@ -109,7 +109,7 @@ export async function listProcessingSamples({ request, s }: RouteContext): Promi
   const supFiltro = filtroSupervision(request, "p", permiso.auth.userId);
   // Fase 5: filtro "Mis muestras"; con alcance "asignado", solo lo asignado o registrado por la persona.
   const restringida = soloAsignado(permiso);
-  const asignadas = await filtroAsignadas(s, permiso.auth.userId, "p.recepcion_id", restringida || searchParam(request, "mias") === "1", restringida ? "p.creado_por" : undefined);
+  const asignadas = await filtroAsignadas(s, permiso.auth.userId, "p.recepcion_id", restringida || searchParam(request, "mias") === "1", "p.creado_por");
 
   const search = searchParam(request, "search");
   const includeAnuladas = searchParam(request, "anuladas") === "1";

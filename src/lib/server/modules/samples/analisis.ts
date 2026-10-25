@@ -209,7 +209,7 @@ export async function listAnalyses({ request, s }: RouteContext): Promise<Respon
   const supFiltro = filtroSupervision(request, "a", permiso.auth.userId);
   // Fase 5: filtro "Mis muestras"; con alcance "asignado", solo lo asignado o registrado por la persona.
   const restringida = soloAsignado(permiso);
-  const asignadas = await filtroAsignadas(s, permiso.auth.userId, "a.recepcion_id", restringida || searchParam(request, "mias") === "1", restringida ? "a.creado_por" : undefined);
+  const asignadas = await filtroAsignadas(s, permiso.auth.userId, "a.recepcion_id", restringida || searchParam(request, "mias") === "1", "a.creado_por");
   const search = searchParam(request, "search");
   const estado = searchParam(request, "estado");
   const recepcionId = toIntOrNull(searchParam(request, "recepcion_id")) || 0;

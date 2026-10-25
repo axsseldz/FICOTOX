@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Camera, LinkSimple, WarningDiamond, X } from "@phosphor-icons/react";
 import { Callout, ChoiceCard, ChoiceGrid } from "@/components/features/samples/FormLayout";
@@ -62,30 +62,33 @@ export function ReportarIncidenciaHost() {
   const [registros, setRegistros] = useState<RegistroLigado[]>([]);
   const [vez, setVez] = useState(0);
 
+  const abrirCon = useCallback((lista: RegistroLigado[]) => {
+    setRegistros(lista.filter((r) => r && r.entidad && r.entidad_id));
+    setVez((n) => n + 1);
+    setAbierto(true);
+  }, []);
+
   useEffect(() => {
-    const abrir = (event: Event) => {
-      setRegistros(((event as CustomEvent<RegistroLigado[]>).detail || []).filter((r) => r && r.entidad && r.entidad_id));
-      setVez((n) => n + 1);
-      setAbierto(true);
-    };
+    const abrir = (event: Event) => abrirCon((event as CustomEvent<RegistroLigado[]>).detail || []);
     window.addEventListener(EVENTO, abrir);
     return () => window.removeEventListener(EVENTO, abrir);
-  }, []);
+  }, [abrirCon]);
 
   if (!puede) return null;
   return (
     <>
       <Suspense fallback={null}>
-        <DisparadorUrl />
+        <DisparadorUrl onAbrir={abrirCon} />
       </Suspense>
       {abierto ? <ReportarSheet key={vez} registrosIniciales={registros} onClose={() => setAbierto(false)} /> : null}
     </>
   );
 }
 
-/* ?reportar=1 (lo usa la paleta de comandos) abre el formulario en la pantalla actual. */
-function DisparadorUrl() {
-  useUrlTrigger("reportar", () => reportarIncidencia());
+/* ?reportar=1 abre el formulario en la pantalla actual. Abre directo (no por el evento): al cargar la
+   página con esa dirección, el efecto del hijo corre antes de que el host escuche el evento. */
+function DisparadorUrl({ onAbrir }: { onAbrir: (lista: RegistroLigado[]) => void }) {
+  useUrlTrigger("reportar", () => onAbrir([]));
   return null;
 }
 

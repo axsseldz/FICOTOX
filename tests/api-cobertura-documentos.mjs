@@ -9,7 +9,7 @@ import "./lib/reauth-auto.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { api, crearCheck, Database, enDias, fila, hoy, sesiones } from "./lib/calidad.mjs";
+import { api, crearCheck, Database, enDias, fila, filas, hoy, sesiones } from "./lib/calidad.mjs";
 import { docxSimple, pdfConTexto } from "./lib/archivos.mjs";
 
 const { check, terminar } = crearCheck();
@@ -151,7 +151,7 @@ const R2 = globalThis.R2;
     ["V-012", "elaborador sin documento_elaborar (estudiante) → 400 campo elaborador", { elaborador_id: id.diego }, 400, { campo: "elaborador" }],
     ["V-012", "revisor sin documento_revisar (técnico) → 400 campo revisor", { revisor_id: id.mariana }, 400, { campo: "revisor" }],
     ["V-012", "autorizador sin documento_autorizar → 400 campo autorizador", { autorizador_id: id.gabriela, revisor_id: id.ricardo }, 400, { campo: "autorizador" }],
-    ["V-013][cob:D:V-023", "elaborador y revisor la misma persona (ambos papeles permitidos) → 400 segregación regla 11", { elaborador_id: id.gabriela }, 400, { codigo: "segregacion", regla: 11 }],
+    [["V-013", "V-023"], "elaborador y revisor la misma persona (ambos papeles permitidos) → 400 segregación regla 11", { elaborador_id: id.gabriela }, 400, { codigo: "segregacion", regla: 11 }],
     ["V-021", "origen externo por la ficha interna → 400 campo origen", { origen: "externo" }, 400, { campo: "origen" }],
     ["V-022", "revisión inicial 1000 → 400 campo numero", { numero: "1000" }, 400, { campo: "numero" }],
     ["V-022", "revisión inicial negativa → 400 campo numero", { numero: "-1" }, 400, { campo: "numero" }],
@@ -160,7 +160,7 @@ const R2 = globalThis.R2;
   for (const [vid, nombre, cambio, status, extra] of casos) {
     const k = cambio.clave ?? clave(cambio.area_codigo && cambio.area_codigo !== "ZZ" ? cambio.area_codigo : "TC", cambio.tipo_codigo && cambio.tipo_codigo !== "Z" ? cambio.tipo_codigo : "P");
     const r = await api("POST", "/sgc/documentos", fichaForm({ clave: k, titulo: `Ficha inválida ${s5}`, area_codigo: "TC", tipo_codigo: "P", ...cambio }), t.ana);
-    check(`[cob:D:${vid}] ficha: ${nombre} (y no se crea)`, es(r, status, extra) && !fila("SELECT id FROM sgc_documentos WHERE clave = ?", String(k).toUpperCase()), txt(r));
+    check(`${[].concat(vid).map((v) => `[cob:D:${v}]`).join("")} ficha: ${nombre} (y no se crea)`, es(r, status, extra) && !fila("SELECT id FROM sgc_documentos WHERE clave = ?", String(k).toUpperCase()), txt(r));
   }
   const rector = await api("POST", "/sgc/documentos", fichaForm({ clave: `FX-MC-K${s5}`, titulo: `Manual rector ${s5}`, area_codigo: "DI", tipo_codigo: "M" }), t.ana);
   check("[cob:D:V-008] …la clave rectora FX-MC sí se acepta en DI/M", rector.status === 201, txt(rector));
@@ -308,14 +308,14 @@ const R2 = globalThis.R2;
     ["V-053", "cambio sin documento → 400 campo documento", { tipo: "cambio", justificacion: "Cambio sin decir a qué documento" }, t.luis, 400, { campo: "documento" }],
     ["V-054", "cambio a un confidencial que no ve → 400 campo documento", { tipo: "cambio", documento_id: C.id, justificacion: "Cambio a la lista confidencial" }, t.mariana, 400, { campo: "documento" }],
     ["V-055", "cambio a un documento obsoleto → 409 campo documento", { tipo: "cambio", documento_id: O.id, justificacion: "Cambio al procedimiento retirado" }, t.ricardo, 409, { campo: "documento" }],
-    ["V-056][cob:D:T-039", "cambio a un documento externo → 409 externo", { tipo: "cambio", documento_id: Ext.id, justificacion: "Cambio a la norma externa" }, t.luis, 409, { codigo: "externo" }],
+    [["V-056", "T-039"], "cambio a un documento externo → 409 externo", { tipo: "cambio", documento_id: Ext.id, justificacion: "Cambio a la norma externa" }, t.luis, 409, { codigo: "externo" }],
     ["V-057", "nuevo con área inexistente → 400 campo area", nuevo({ area_codigo: "ZZ" }), t.luis, 400, { campo: "area" }],
     ["V-058", "nuevo con tipo documental inexistente → 400 campo tipo_documental", nuevo({ tipo_codigo: "Z" }), t.luis, 400, { campo: "tipo_documental" }],
     ["V-059", "nuevo sin título → 400 campo titulo", nuevo({ titulo_propuesto: "" }), t.luis, 400, { campo: "titulo" }],
   ];
   for (const [vid, nombre, body, token, status, extra] of casos) {
     const r = await api("POST", "/sgc/solicitudes", body, token);
-    check(`[cob:D:${vid}] solicitud: ${nombre}`, es(r, status, extra), txt(r));
+    check(`${[].concat(vid).map((v) => `[cob:D:${v}]`).join("")} solicitud: ${nombre}`, es(r, status, extra), txt(r));
   }
   const exe = await api("POST", "/sgc/solicitudes", form(nuevo(), { archivo: [PDF, "macro.exe"] }), t.luis);
   const txtA = await api("POST", "/sgc/solicitudes", form(nuevo(), { archivo: [Buffer.from("notas sueltas"), "notas.txt"] }), t.luis);
@@ -669,10 +669,252 @@ const R4 = globalThis.R4;
   check("[cob:D:V-157] obsoletos en la Lista Maestra solo con consultar_historico y «obsoletos=1»", tiene(hecObs) && !tiene(hecSin) && luisObs.status === 200 && !tiene(luisObs), `${tiene(hecObs)} ${tiene(hecSin)} ${luisObs.status} ${tiene(luisObs)}`);
 }
 
+/* ---------- Validaciones restantes (§2) ---------- */
+{
+  const kU = claveDe(U.id);
+  const rep = await api("POST", "/sgc/documentos", fichaForm({ clave: kU, titulo: `Ficha repetida ${s5}`, area_codigo: "TC", tipo_codigo: "P" }), t.ana);
+  check("[cob:D:V-009] clave ya usada por otro documento → 409 clave_repetida campo clave (sigue habiendo uno)", es(rep, 409, { codigo: "clave_repetida", campo: "clave" }) && Number(fila("SELECT COUNT(*) AS n FROM sgc_documentos WHERE clave = ?", kU)?.n) === 1, txt(rep));
+  const nArch = (rid) => Number(fila("SELECT COUNT(*) AS n FROM sgc_archivos WHERE revision_id = ?", rid)?.n);
+  const antes = nArch(U.revision_id);
+  const bloq = await subirPdf(U.revision_id, t.luis);
+  check("[cob:D:V-032] cargar un archivo a una revisión vigente (fuera de borrador) → 409 archivo_bloqueado (sin archivo nuevo)", es(bloq, 409, { codigo: "archivo_bloqueado" }) && nArch(U.revision_id) === antes, txt(bloq));
+  const CV = await ficha({ titulo: `Carga inicial sin contraseña ${s5}` });
+  const sinReauth = await api("POST", `/sgc/revisiones/${CV.revision_id}/registrar-vigente`, { fecha_emision: "2025-01-10" }, t.ana, SIN_REAUTH);
+  check("[cob:D:V-044] carga inicial sin contraseña → 401 reauth_required documentos:publicar (sigue en borrador)", es(sinReauth, 401, { codigo: "reauth_required", accion: "documentos:publicar" }) && estadoRev(CV.revision_id) === "borrador", txt(sinReauth));
+  const aidU = fila("SELECT id FROM sgc_archivos WHERE revision_id = ? AND tipo = 'pdf' AND reemplazado_en IS NULL", U.revision_id)?.id;
+  const diag = await api("GET", `/sgc/archivos/${aidU}`, undefined, t.jorge);
+  check("[cob:D:V-046] la administración técnica (diagnóstico) abre un archivo → 403 solo_metadatos", es(diag, 403, { codigo: "solo_metadatos" }), txt(diag));
+  // Archivo faltante: se aparta el archivo del disco y se devuelve al terminar.
+  const F = await vigente({ titulo: `Procedimiento con archivo faltante ${s5}` });
+  const arch = fila("SELECT id, nombre_almacenado FROM sgc_archivos WHERE revision_id = ? AND tipo = 'pdf'", F.revision_id);
+  const ruta = path.join(sgcDir, ...String(arch.nombre_almacenado).split("/"));
+  fs.renameSync(ruta, `${ruta}.apartado`);
+  let falta;
+  try {
+    falta = await api("GET", `/sgc/archivos/${arch.id}`, undefined, t.ana);
+  } finally {
+    fs.renameSync(`${ruta}.apartado`, ruta);
+  }
+  const alerta = fila("SELECT id FROM auditoria WHERE accion = 'alerta_integridad' AND entidad = 'sgc_documentos' AND entidad_id = ?", String(F.id));
+  const inc = fila("SELECT id FROM incidencias WHERE clave_automatica = ?", `alerta_integridad:sgc:${arch.id}:faltante`);
+  check("[cob:D:V-048] archivo que ya no está en el disco → 404 archivo_faltante (X-Integridad-Archivo: faltante) con alerta en la bitácora e incidencia automática", es(falta, 404, { codigo: "archivo_faltante" }) && falta.headers.get("x-integridad-archivo") === "faltante" && !!alerta && !!inc, `${txt(falta)} ${!!alerta} ${!!inc}`);
+  const vuelve = await api("GET", `/sgc/archivos/${arch.id}`, undefined, t.ana);
+  check("[cob:D:V-048] …devuelto el archivo, se abre íntegro", vuelve.status === 200 && vuelve.headers.get("x-integridad-archivo") === "ok", txt(vuelve));
+  const respJorge = await api("POST", "/sgc/externos", { ...baseExterno(), responsable_id: id.jorge }, t.ana);
+  check("[cob:D:V-141] responsable de seguimiento que no puede consultar vigentes (Administrador técnico) → 400 campo responsable (no se registra)", es(respJorge, 400, { campo: "responsable" }) && /no puede consultar documentos vigentes/.test(respJorge.data?.message || ""), txt(respJorge));
+}
+
+/* ---------- Transiciones (§3) ---------- */
+const flujoDe = (rid, accion) => fila("SELECT decision, comentario, usuario_id, papel FROM sgc_flujo_acciones WHERE revision_id = ? AND accion = ? ORDER BY id DESC", rid, accion);
+const docEstado = (docId) => fila("SELECT estado FROM sgc_documentos WHERE id = ?", docId)?.estado;
+const revDe = (rid) => fila("SELECT * FROM sgc_revisiones WHERE id = ?", rid);
+{
+  // Solicitudes
+  const sn = await api("POST", "/sgc/solicitudes", { tipo: "nuevo", area_codigo: "TC", tipo_codigo: "F", titulo_propuesto: `Formato de transiciones ${s5}`, justificacion: "Se necesita un formato para la bitácora de equipos" }, t.luis);
+  const solN = fila("SELECT tipo, estado, area_codigo, tipo_codigo, titulo_propuesto, solicitante_id FROM sgc_solicitudes WHERE id = ?", sn.data?.id);
+  const Dc = await vigente({ titulo: `Procedimiento por cambiar ${s5}` });
+  const sc = await api("POST", "/sgc/solicitudes", { tipo: "cambio", documento_id: Dc.id, justificacion: "Cambiar el método por el equipo nuevo" }, t.luis);
+  const solC = fila("SELECT tipo, estado, documento_id FROM sgc_solicitudes WHERE id = ?", sc.data?.id);
+  check("[cob:D:T-001] proponer: la solicitud nueva (área, tipo y título) y la de cambio (con su documento) quedan pendientes", sn.status === 201 && solN?.estado === "pendiente" && solN.tipo === "nuevo" && solN.area_codigo === "TC" && solN.tipo_codigo === "F" && Number(solN.solicitante_id) === id.luis && sc.status === 201 && solC?.estado === "pendiente" && Number(solC.documento_id) === Dc.id, `${txt(sn)} ${JSON.stringify(solN)} ${txt(sc)} ${JSON.stringify(solC)}`);
+  const kN = clave("TC", "F");
+  const acN = await api("POST", `/sgc/solicitudes/${sn.data?.id}/aceptar`, { clave: kN, ...RESP }, t.ana);
+  const docN = fila("SELECT id, estado, origen FROM sgc_documentos WHERE clave = ?", kN);
+  const revN = docN ? fila("SELECT id, numero, estado, elaborador_id, revisor_id, autorizador_id FROM sgc_revisiones WHERE documento_id = ?", docN.id) : null;
+  const solN2 = fila("SELECT estado, clave_asignada, revision_id FROM sgc_solicitudes WHERE id = ?", sn.data?.id);
+  check("[cob:D:T-002] aceptar una solicitud nueva: crea el documento en_elaboracion y su revisión inicial en borrador con los tres responsables", acN.status === 200 && docN?.estado === "en_elaboracion" && docN.origen === "interno" && revN?.estado === "borrador" && Number(revN.numero) === 1 && Number(revN.elaborador_id) === id.luis && Number(revN.revisor_id) === id.gabriela && Number(revN.autorizador_id) === id.patricia && solN2?.estado === "aceptada" && solN2.clave_asignada === kN && Number(solN2.revision_id) === Number(revN.id), `${txt(acN)} ${JSON.stringify({ docN, revN, solN2 })}`);
+  const acC = await api("POST", `/sgc/solicitudes/${sc.data?.id}/aceptar`, { ...RESP }, t.ana);
+  const revC = fila("SELECT id, numero, estado FROM sgc_revisiones WHERE documento_id = ? AND estado = 'borrador'", Dc.id);
+  check("[cob:D:T-003] aceptar un cambio: abre la revisión n+1 en borrador (la vigente sigue)", acC.status === 200 && Number(revC?.numero) === 2 && estadoRev(Dc.revision_id) === "vigente" && fila("SELECT estado FROM sgc_solicitudes WHERE id = ?", sc.data?.id)?.estado === "aceptada", `${txt(acC)} ${JSON.stringify(revC)}`);
+  const sr = await api("POST", "/sgc/solicitudes", { tipo: "nuevo", area_codigo: "TC", tipo_codigo: "R", titulo_propuesto: `Registro por rechazar ${s5}`, justificacion: "Registro que ya existe con otro nombre" }, t.luis);
+  const rech = await api("POST", `/sgc/solicitudes/${sr.data?.id}/rechazar`, { motivo: "Ya existe un registro equivalente" }, t.ana);
+  const solR = fila("SELECT estado, comentario_resolucion, resuelta_por FROM sgc_solicitudes WHERE id = ?", sr.data?.id);
+  check("[cob:D:T-004] rechazar: la solicitud queda rechazada con el motivo y quién la resolvió", rech.status === 200 && solR?.estado === "rechazada" && /registro equivalente/.test(solR.comentario_resolucion || "") && Number(solR.resuelta_por) === id.ana, `${txt(rech)} ${JSON.stringify(solR)}`);
+  const Dp = await vigente({ titulo: `Procedimiento con revisión directa ${s5}` });
+  const rp = await api("POST", `/sgc/documentos/${Dp.id}/revisiones`, { motivo_cambio: "Actualización pedida por Mejora Continua", ...RESP }, t.ana);
+  const solP = fila("SELECT tipo, estado, solicitante_id, documento_id FROM sgc_solicitudes WHERE revision_id = ?", rp.data?.revision_id);
+  check("[cob:D:T-005] «Nueva revisión» desde la ficha registra su solicitud de cambio ya aceptada y abre la revisión en borrador", rp.status === 201 && estadoRev(rp.data?.revision_id) === "borrador" && solP?.tipo === "cambio" && solP.estado === "aceptada" && Number(solP.solicitante_id) === id.ana && Number(solP.documento_id) === Dp.id, `${txt(rp)} ${JSON.stringify(solP)}`);
+  // Ficha creada directamente
+  const Fx = await ficha({ titulo: `Ficha directa ${s5}` });
+  const revFx = revDe(Fx.revision_id);
+  const solFx = revFx ? fila("SELECT tipo, estado, documento_id, clave_asignada FROM sgc_solicitudes WHERE id = ?", revFx.solicitud_id) : null;
+  check("[cob:D:T-006] crear la ficha: documento en_elaboracion, revisión inicial en borrador y su solicitud registrada como aceptada", Fx.r.status === 201 && docEstado(Fx.id) === "en_elaboracion" && revFx?.estado === "borrador" && solFx?.tipo === "nuevo" && solFx.estado === "aceptada" && Number(solFx.documento_id) === Fx.id, `${txt(Fx.r)} ${JSON.stringify(solFx)}`);
+  // Edición del borrador
+  const ed = await api("PUT", `/sgc/revisiones/${Fx.revision_id}`, { apartados_afectados: "Secciones 2 y 3", descripcion_cambio: "Se reescribe el alcance" }, t.luis);
+  const r1 = revDe(Fx.revision_id);
+  const misma = await api("PUT", `/sgc/revisiones/${Fx.revision_id}`, { elaborador_id: id.gabriela }, t.ana);
+  const r2 = revDe(Fx.revision_id);
+  const reasig = await api("PUT", `/sgc/revisiones/${Fx.revision_id}`, { revisor_id: id.ricardo }, t.ana);
+  const r3 = revDe(Fx.revision_id);
+  check("[cob:D:T-007] borrador → borrador: el elaborador edita los datos del cambio; Mejora Continua cambia responsables (con la regla 11: misma persona → 400 y nada cambia)", ed.status === 200 && r1.apartados_afectados === "Secciones 2 y 3" && r1.estado === "borrador" && es(misma, 400, { codigo: "segregacion", regla: 11 }) && Number(r2.elaborador_id) === id.luis && Number(r2.revisor_id) === id.gabriela && reasig.status === 200 && Number(r3.revisor_id) === id.ricardo && r3.estado === "borrador", `${txt(ed)} | ${txt(misma)} | ${txt(reasig)}`);
+  await api("PUT", `/sgc/revisiones/${Fx.revision_id}`, { revisor_id: id.gabriela }, t.ana);
+  const pdfs = () => filas("SELECT id, reemplazado_en FROM sgc_archivos WHERE revision_id = ? AND tipo = 'pdf' ORDER BY id", Fx.revision_id);
+  const p0 = pdfs();
+  const sust = await subirPdf(Fx.revision_id);
+  const p1 = pdfs();
+  check("[cob:D:T-008] en borrador el elaborador sustituye el PDF: el anterior queda reemplazado (se conserva) y el nuevo es el activo", sust.status === 201 && p1.length === p0.length + 1 && !!p1[p1.length - 2].reemplazado_en && !p1[p1.length - 1].reemplazado_en, `${txt(sust)} ${JSON.stringify(p1)}`);
+  const env = await api("POST", `/sgc/revisiones/${Fx.revision_id}/enviar-revision`, {}, t.luis);
+  const r4 = revDe(Fx.revision_id);
+  check("[cob:D:T-009] borrador → en_revision: el elaborador la envía (queda quién y cuándo)", env.status === 200 && r4.estado === "en_revision" && Number(r4.enviada_revision_por) === id.luis && !!r4.enviada_revision_en && !!flujoDe(Fx.revision_id, "enviar_revision"), `${txt(env)} ${r4.estado}`);
+  const bloq2 = await subirPdf(Fx.revision_id);
+  check("[cob:D:T-008] …fuera de borrador el archivo queda bloqueado → 409 archivo_bloqueado", es(bloq2, 409, { codigo: "archivo_bloqueado" }) && pdfs().length === p1.length, txt(bloq2));
+  const acep = await api("POST", `/sgc/revisiones/${Fx.revision_id}/revisar`, { decision: "aceptar" }, t.gabriela);
+  const r5 = revDe(Fx.revision_id);
+  check("[cob:D:T-010] en_revision → en_autorizacion: el revisor asignado acepta", acep.status === 200 && r5.estado === "en_autorizacion" && Number(r5.revisada_por) === id.gabriela && flujoDe(Fx.revision_id, "revisar_aceptar")?.papel === "revisor", `${txt(acep)} ${r5.estado}`);
+  const sinClave = await api("POST", `/sgc/revisiones/${Fx.revision_id}/autorizar`, { decision: "autorizar" }, t.patricia, SIN_REAUTH);
+  const sigue = estadoRev(Fx.revision_id);
+  const devA = await api("POST", `/sgc/revisiones/${Fx.revision_id}/autorizar`, { decision: "devolver", comentario: "Falta la referencia a la norma" }, t.patricia, SIN_REAUTH);
+  check("[cob:D:V-080] autorizar sin contraseña → 401 reauth_required documentos:autorizar (sigue en autorización); devolver no la pide", es(sinClave, 401, { codigo: "reauth_required", accion: "documentos:autorizar" }) && sigue === "en_autorizacion" && devA.status === 200, `${txt(sinClave)} ${sigue} | ${txt(devA)}`);
+  check("[cob:D:T-014] en_autorizacion → borrador: la autorizadora devuelve con su comentario", estadoRev(Fx.revision_id) === "borrador" && flujoDe(Fx.revision_id, "autorizar_devolver")?.comentario === "Falta la referencia a la norma", estadoRev(Fx.revision_id));
+  await api("POST", `/sgc/revisiones/${Fx.revision_id}/enviar-revision`, {}, t.luis);
+  const devR = await api("POST", `/sgc/revisiones/${Fx.revision_id}/revisar`, { decision: "devolver", comentario: "Corregir la sección 2" }, t.gabriela);
+  check("[cob:D:T-011] en_revision → borrador: el revisor devuelve con su comentario", devR.status === 200 && estadoRev(Fx.revision_id) === "borrador" && flujoDe(Fx.revision_id, "revisar_devolver")?.comentario === "Corregir la sección 2", txt(devR));
+  await api("POST", `/sgc/revisiones/${Fx.revision_id}/enviar-revision`, {}, t.luis);
+  await api("POST", `/sgc/revisiones/${Fx.revision_id}/revisar`, { decision: "aceptar" }, t.gabriela);
+  const aut = await api("POST", `/sgc/revisiones/${Fx.revision_id}/autorizar`, { decision: "autorizar" }, t.patricia);
+  const r6 = revDe(Fx.revision_id);
+  check("[cob:D:T-013] en_autorizacion → autorizada: la autorizadora autoriza (con contraseña)", aut.status === 200 && r6.estado === "autorizada" && Number(r6.autorizada_por) === id.patricia && !!r6.autorizada_en, `${txt(aut)} ${r6.estado}`);
+  const pub = await api("POST", `/sgc/revisiones/${Fx.revision_id}/publicar`, { fecha_emision: hoy(), distribucion: { usuarios: [id.luis], requiere_lectura: true, motivo: "Distribución al publicar" } }, t.ana);
+  const r7 = revDe(Fx.revision_id);
+  check("[cob:D:T-016] autorizada → vigente: publicar con fechas y distribución (el documento queda vigente)", pub.status === 200 && r7.estado === "vigente" && r7.fecha_emision === hoy() && Number(r7.publicada_por) === id.ana && docEstado(Fx.id) === "vigente" && !!fila("SELECT id FROM sgc_distribucion WHERE revision_id = ? AND usuario_id = ? AND retirado_en IS NULL", Fx.revision_id, id.luis), `${txt(pub)} ${r7.estado}`);
+  // Rechazos del revisor y de la autorizadora
+  const G1 = await ficha({ titulo: `Procedimiento que rechaza el revisor ${s5}` });
+  await aEnRevision(G1.revision_id, false);
+  const rr = await api("POST", `/sgc/revisiones/${G1.revision_id}/revisar`, { decision: "rechazar", comentario: "El documento no procede" }, t.gabriela);
+  const g1 = revDe(G1.revision_id);
+  check("[cob:D:T-012] en_revision → cancelada: el revisor rechaza con comentario", rr.status === 200 && g1.estado === "cancelada" && !!g1.cancelada_en && flujoDe(G1.revision_id, "revisar_rechazar")?.comentario === "El documento no procede", `${txt(rr)} ${g1.estado}`);
+  const G2 = await ficha({ titulo: `Procedimiento que rechaza la autorizadora ${s5}` });
+  await aEnRevision(G2.revision_id, false);
+  await api("POST", `/sgc/revisiones/${G2.revision_id}/revisar`, { decision: "aceptar" }, t.gabriela);
+  const ra = await api("POST", `/sgc/revisiones/${G2.revision_id}/autorizar`, { decision: "rechazar", comentario: "No se autoriza este método" }, t.patricia, SIN_REAUTH);
+  check("[cob:D:T-015] en_autorizacion → cancelada: la autorizadora rechaza con comentario (sin pedir contraseña)", ra.status === 200 && estadoRev(G2.revision_id) === "cancelada" && flujoDe(G2.revision_id, "autorizar_rechazar")?.comentario === "No se autoriza este método", txt(ra));
+  // Carga inicial
+  const Ci = await ficha({ titulo: `Procedimiento de carga inicial ${s5}` });
+  const ci = await api("POST", `/sgc/revisiones/${Ci.revision_id}/registrar-vigente`, { fecha_emision: "2024-05-02" }, t.ana);
+  const rci = revDe(Ci.revision_id);
+  check("[cob:D:T-019] borrador → vigente sin flujo (carga inicial): origen_registro carga_inicial y fecha de emisión", ci.status === 200 && rci.estado === "vigente" && rci.origen_registro === "carga_inicial" && rci.fecha_emision === "2024-05-02" && docEstado(Ci.id) === "vigente", `${txt(ci)} ${rci.estado} ${rci.origen_registro}`);
+  // Reasignar en revisión
+  const H = await ficha({ titulo: `Procedimiento por reasignar en revisión ${s5}` });
+  await aEnRevision(H.revision_id, false);
+  const rea = await api("POST", `/sgc/revisiones/${H.revision_id}/reasignar`, { motivo: "La revisora está de vacaciones", ...RESP, revisor_id: id.ricardo }, t.ana);
+  const h = revDe(H.revision_id);
+  check("[cob:D:T-020] reasignar en revisión: el estado no cambia y queda el revisor nuevo", rea.status === 200 && h.estado === "en_revision" && Number(h.revisor_id) === id.ricardo && Number(h.elaborador_id) === id.luis, `${txt(rea)} ${h.estado} ${h.revisor_id}`);
+}
+
+/* ---------- Renovaciones (§3) ---------- */
+{
+  const pendiente = (titulo) => vigente({ titulo }, { fecha_emision: "2025-01-10", fecha_proxima_revision: enDias(10) });
+  const ren = (nid) => fila("SELECT * FROM sgc_renovaciones WHERE id = ?", nid);
+  const R = await pendiente(`Procedimiento por renovar ${s5}`);
+  const ini = await api("POST", `/sgc/documentos/${R.id}/renovar`, { revisor_id: id.gabriela, autorizador_id: id.patricia, fecha_proxima_revision: enDias(900) }, t.ana);
+  const nid = ini.data?.id;
+  check("[cob:D:T-021] renovar sin cambios: la renovación nace en_revision sobre la misma revisión vigente", ini.status === 201 && ren(nid)?.estado === "en_revision" && Number(ren(nid)?.revision_id) === R.revision_id && estadoRev(R.revision_id) === "vigente", txt(ini));
+  const conf = await api("POST", `/sgc/renovaciones/${nid}/revisar`, { decision: "confirmar", comentario: "Sigue vigente sin cambios" }, t.gabriela);
+  check("[cob:D:T-022] en_revision → en_autorizacion: el revisor confirma la vigencia con comentario", conf.status === 200 && ren(nid)?.estado === "en_autorizacion", txt(conf));
+  const fin = await api("POST", `/sgc/renovaciones/${nid}/autorizar`, { decision: "autorizar" }, t.patricia);
+  const rv = revDe(R.revision_id);
+  check("[cob:D:T-024] en_autorizacion → completada: se actualiza la próxima revisión de la misma revisión (sin revisión nueva)", fin.status === 200 && ren(nid)?.estado === "completada" && rv.fecha_proxima_revision === enDias(900) && rv.estado === "vigente" && Number(fila("SELECT COUNT(*) AS n FROM sgc_revisiones WHERE documento_id = ?", R.id)?.n) === 1, `${txt(fin)} ${rv.fecha_proxima_revision}`);
+  const R2r = await pendiente(`Procedimiento cuya renovación rechaza el revisor ${s5}`);
+  const n2 = (await api("POST", `/sgc/documentos/${R2r.id}/renovar`, { revisor_id: id.gabriela, autorizador_id: id.patricia }, t.ana)).data?.id;
+  const rec = await api("POST", `/sgc/renovaciones/${n2}/revisar`, { decision: "rechazar", comentario: "Requiere cambios: abrir revisión" }, t.gabriela);
+  check("[cob:D:T-023] en_revision → rechazada: el revisor rechaza la renovación (queda «cancelada» con quién; la próxima revisión no cambia)", rec.status === 200 && ren(n2)?.estado === "cancelada" && Number(ren(n2)?.cancelada_por) === id.gabriela && revDe(R2r.revision_id).fecha_proxima_revision === enDias(10), txt(rec));
+  const R3r = await pendiente(`Procedimiento cuya renovación rechaza la autorizadora ${s5}`);
+  const n3 = (await api("POST", `/sgc/documentos/${R3r.id}/renovar`, { revisor_id: id.gabriela, autorizador_id: id.patricia }, t.ana)).data?.id;
+  await api("POST", `/sgc/renovaciones/${n3}/revisar`, { decision: "confirmar", comentario: "Sigue vigente sin cambios" }, t.gabriela);
+  const recA = await api("POST", `/sgc/renovaciones/${n3}/autorizar`, { decision: "rechazar", comentario: "Se prefiere actualizarlo" }, t.patricia, SIN_REAUTH);
+  check("[cob:D:T-025] en_autorizacion → rechazada: la autorizadora rechaza la renovación sin contraseña (queda «cancelada» con quién; la próxima revisión no cambia)", recA.status === 200 && ren(n3)?.estado === "cancelada" && Number(ren(n3)?.cancelada_por) === id.patricia && revDe(R3r.revision_id).fecha_proxima_revision === enDias(10), txt(recA));
+}
+
+/* ---------- Obsolescencia con segundo usuario (§3) ---------- */
+{
+  const X1 = await vigente({ titulo: `Procedimiento con obsolescencia pendiente ${s5}` });
+  const sc = await api("POST", "/sgc/solicitudes", { tipo: "cambio", documento_id: X1.id, justificacion: "Cambio pedido antes de retirarlo" }, t.luis);
+  const obs = await obsoletarDoc(X1.id, SIN_APROBAR);
+  const sol = solicitudObs(X1.id);
+  check("[cob:D:T-026] obsoletar: queda la solicitud de segundo usuario pendiente y el documento sigue vigente", obs.status === 202 && sol?.estado === "pendiente" && docEstado(X1.id) === "vigente" && estadoRev(X1.revision_id) === "vigente", `${txt(obs)} ${JSON.stringify(sol)}`);
+  const otra = await obsoletarDoc(X1.id, SIN_APROBAR);
+  check("[cob:D:V-119] pedir otra obsolescencia con una pendiente → 409 solicitud_pendiente (sigue habiendo una)", es(otra, 409, { codigo: "solicitud_pendiente" }) && Number(fila("SELECT COUNT(*) AS n FROM solicitudes_autorizacion WHERE tipo = 'obsoletar_documento_sgc' AND entidad_id = ? AND estado = 'pendiente'", String(X1.id))?.n) === 1, txt(otra));
+  const acepta = await api("POST", `/sgc/solicitudes/${sc.data?.id}/aceptar`, { ...RESP }, t.ana);
+  check("[cob:D:V-068] aceptar un cambio con la obsolescencia pendiente → 409 solicitud_pendiente (sin revisión nueva; la solicitud sigue pendiente)", es(acepta, 409, { codigo: "solicitud_pendiente" }) && Number(fila("SELECT COUNT(*) AS n FROM sgc_revisiones WHERE documento_id = ?", X1.id)?.n) === 1 && fila("SELECT estado FROM sgc_solicitudes WHERE id = ?", sc.data?.id)?.estado === "pendiente", txt(acepta));
+  await api("POST", `/sgc/solicitudes/${sc.data?.id}/rechazar`, { motivo: "El documento se retira" }, t.ana);
+  const propia = await api("POST", `/solicitudes/${sol?.id}/aprobar`, { motivo: "Apruebo mi propia solicitud" }, t.ana);
+  const ok = await api("POST", `/solicitudes/${sol?.id}/aprobar`, { motivo: "Procede retirarlo" }, t.patricia);
+  check("[cob:D:T-027] vigente → obsoleto: quien pidió no aprueba (409); la Responsable General aprueba y la vigente pasa a obsoleta", propia.status === 409 && ok.status === 200 && docEstado(X1.id) === "obsoleto" && estadoRev(X1.revision_id) === "obsoleta" && !!revDe(X1.revision_id).fecha_obsolescencia, `${txt(propia)} | ${txt(ok)} ${docEstado(X1.id)}`);
+  // Con una revisión en curso y otro con una renovación en curso: ambas se cancelan.
+  const X2 = await vigente({ titulo: `Procedimiento obsoleto con revisión en curso ${s5}` });
+  const w = await nuevaRev(X2.id);
+  const X3 = await vigente({ titulo: `Procedimiento obsoleto con renovación ${s5}` }, { fecha_emision: "2025-01-10", fecha_proxima_revision: enDias(10) });
+  const n3 = (await api("POST", `/sgc/documentos/${X3.id}/renovar`, { revisor_id: id.gabriela, autorizador_id: id.patricia }, t.ana)).data?.id;
+  await obsoletarDoc(X2.id, SIN_APROBAR);
+  await obsoletarDoc(X3.id, SIN_APROBAR);
+  const a2 = await api("POST", `/solicitudes/${solicitudObs(X2.id)?.id}/aprobar`, { motivo: "Procede retirarlo" }, t.patricia);
+  const a3 = await api("POST", `/solicitudes/${solicitudObs(X3.id)?.id}/aprobar`, { motivo: "Procede retirarlo" }, t.patricia);
+  check("[cob:D:T-027] …la revisión de trabajo queda cancelada y la renovación en curso cancelada", a2.status === 200 && a3.status === 200 && docEstado(X2.id) === "obsoleto" && estadoRev(w) === "cancelada" && docEstado(X3.id) === "obsoleto" && fila("SELECT estado FROM sgc_renovaciones WHERE id = ?", n3)?.estado === "cancelada", `${txt(a2)} ${txt(a3)} ${estadoRev(w)}`);
+}
+
+/* ---------- Distribución y lecturas (§3) ---------- */
+{
+  const L = await vigente({ titulo: `Instructivo de lecturas ${s5}`, tipo_codigo: "I" });
+  const rid = L.revision_id;
+  const nueva = await api("POST", `/sgc/revisiones/${rid}/distribucion`, { usuarios: [id.luis, id.mariana], punto_uso: "Laboratorio de toxinas", requiere_lectura: true, motivo: "Distribución de las transiciones" }, t.ana);
+  const dLuis = fila("SELECT id, punto_uso, requiere_lectura, retirado_en, motivo FROM sgc_distribucion WHERE revision_id = ? AND usuario_id = ?", rid, id.luis);
+  check("[cob:D:T-029] distribuir: los destinatarios quedan activos con punto de uso, lectura requerida y motivo", nueva.status === 201 && dLuis?.punto_uso === "Laboratorio de toxinas" && Number(dLuis.requiere_lectura) === 1 && !dLuis.retirado_en && dLuis.motivo === "Distribución de las transiciones", `${txt(nueva)} ${JSON.stringify(dLuis)}`);
+  const ajena = await api("POST", `/sgc/revisiones/${rid}/acusar`, {}, t.ricardo);
+  check("[cob:D:V-130] confirmar la lectura sin ser destinatario → 409 no_destinatario (sin lectura registrada)", es(ajena, 409, { codigo: "no_destinatario" }) && !fila("SELECT id FROM sgc_lecturas WHERE revision_id = ? AND usuario_id = ?", rid, id.ricardo), txt(ajena));
+  const sinAbrir = await api("POST", `/sgc/revisiones/${rid}/acusar`, {}, t.luis);
+  check("[cob:D:V-132] confirmar la lectura sin haber abierto el PDF vigente → 409 sin_abrir (sin leido_en)", es(sinAbrir, 409, { codigo: "sin_abrir" }) && !fila("SELECT leido_en FROM sgc_lecturas WHERE revision_id = ? AND usuario_id = ?", rid, id.luis)?.leido_en, txt(sinAbrir));
+  const aid = fila("SELECT id FROM sgc_archivos WHERE revision_id = ? AND tipo = 'pdf'", rid)?.id;
+  const abierto = () => fila("SELECT abierto_en FROM sgc_lecturas WHERE revision_id = ? AND usuario_id = ?", rid, id.luis)?.abierto_en || null;
+  const desc = await api("GET", `/sgc/archivos/${aid}?modo=descargar`, undefined, t.luis);
+  const trasDescargar = abierto();
+  const ver = await api("GET", `/sgc/archivos/${aid}`, undefined, t.luis);
+  check("[cob:D:T-032] pendiente → abierta: la primera vista del PDF vigente marca abierto_en (descargarlo no cuenta)", desc.status === 200 && !trasDescargar && ver.status === 200 && !!abierto(), `${desc.status} ${trasDescargar} ${ver.status} ${abierto()}`);
+  const rec = await api("POST", `/sgc/revisiones/${rid}/recordatorio`, {}, t.ana);
+  const notif = (u) => fila("SELECT notificado_en FROM sgc_lecturas WHERE revision_id = ? AND usuario_id = ?", rid, u)?.notificado_en;
+  check("[cob:D:T-034] recordatorio: se marca a las dos personas pendientes", rec.status === 200 && /2 personas/.test(rec.data?.message || "") && !!notif(id.luis) && !!notif(id.mariana), `${txt(rec)}`);
+  const acusa = await api("POST", `/sgc/revisiones/${rid}/acusar`, {}, t.luis);
+  const lec = fila("SELECT estado, leido_en FROM sgc_lecturas WHERE revision_id = ? AND usuario_id = ?", rid, id.luis);
+  check("[cob:D:T-033] abierta → confirmada: el destinatario confirma (estado leido con fecha)", acusa.status === 200 && lec?.estado === "leido" && !!lec.leido_en, `${txt(acusa)} ${JSON.stringify(lec)}`);
+  const dMar = fila("SELECT id FROM sgc_distribucion WHERE revision_id = ? AND usuario_id = ?", rid, id.mariana)?.id;
+  const ret = await api("POST", `/sgc/distribucion/${dMar}/retirar`, { motivo: "Cambió de área de trabajo" }, t.ana);
+  const dm = fila("SELECT retirado_en, retirado_por, motivo_retiro FROM sgc_distribucion WHERE id = ?", dMar);
+  check("[cob:D:T-030] activa → retirada: queda la fecha, quién y el motivo del retiro", ret.status === 200 && !!dm?.retirado_en && Number(dm.retirado_por) === id.ana && dm.motivo_retiro === "Cambió de área de trabajo", `${txt(ret)} ${JSON.stringify(dm)}`);
+}
+
+/* ---------- Externos (§3) ---------- */
+{
+  const doc = fila("SELECT estado, origen FROM sgc_documentos WHERE id = ?", Ext.id);
+  const rev = revDe(Ext.revision_id);
+  check("[cob:D:T-035] registrar un externo: queda vigente desde su registro (revisión 1, sin flujo)", doc?.estado === "vigente" && doc.origen === "externo" && rev?.estado === "vigente" && Number(rev.numero) === 1, JSON.stringify({ doc, rev: rev && { estado: rev.estado, numero: rev.numero } }));
+  const ver = await api("POST", `/sgc/externos/${Ext.id}/verificar`, { comentario: "Consultado el catálogo del IMNC", proxima_revision: enDias(500) }, t.ricardo);
+  const ex = fila("SELECT ultima_revision, proxima_revision FROM sgc_externos WHERE documento_id = ?", Ext.id);
+  check("[cob:D:T-036] verificar la vigencia (responsable): sigue vigente con la última verificación de hoy y la próxima nueva", ver.status === 200 && ex?.ultima_revision === hoy() && ex.proxima_revision === enDias(500) && estadoRev(Ext.revision_id) === "vigente" && revDe(Ext.revision_id).fecha_proxima_revision === enDias(500), `${txt(ver)} ${JSON.stringify(ex)}`);
+  const v = await api("POST", `/sgc/externos/${Ext.id}/version`, form({ version_fecha: "2024", ultima_verificacion: hoy(), proxima_revision: enDias(365) }, { archivo_pdf: [PDF, "norma-2024.pdf"] }), t.ana);
+  const nuevaV = fila("SELECT id, numero, estado, version_externa FROM sgc_revisiones WHERE documento_id = ? AND estado = 'vigente'", Ext.id);
+  check("[cob:D:T-037] nueva versión: la anterior pasa a obsoleta y la nueva (n+1) queda vigente", v.status === 201 && estadoRev(Ext.revision_id) === "obsoleta" && Number(nuevaV?.numero) === 2 && nuevaV?.version_externa === "2024" && fila("SELECT version_fecha FROM sgc_externos WHERE documento_id = ?", Ext.id)?.version_fecha === "2024", `${txt(v)} ${JSON.stringify(nuevaV)}`);
+  const ed = await api("PUT", `/sgc/externos/${Ext.id}`, { fuente: "IMNC (Instituto Mexicano de Normalización)", enlace: "https://www.imnc.org.mx", responsable_id: id.ricardo, motivo: "Nombre completo del emisor" }, t.ana);
+  const audit = fila("SELECT motivo FROM auditoria WHERE entidad = 'sgc_documentos' AND entidad_id = ? ORDER BY id DESC", String(Ext.id));
+  check("[cob:D:T-038] editar el seguimiento: se guarda la fuente y el motivo queda en la bitácora", ed.status === 200 && fila("SELECT fuente FROM sgc_externos WHERE documento_id = ?", Ext.id)?.fuente === "IMNC (Instituto Mexicano de Normalización)" && audit?.motivo === "Nombre completo del emisor", `${txt(ed)} ${JSON.stringify(audit)}`);
+}
+
+/* ---------- Metadatos (§3) ---------- */
+{
+  const M = await vigente({ titulo: `Procedimiento por renombrar ${s5}` });
+  const datos = { clave: claveDe(M.id), area_codigo: "TC", tipo_codigo: "P", confidencialidad: "uso_interno" };
+  const ed = await api("PUT", `/sgc/documentos/${M.id}`, { ...datos, titulo: `Procedimiento renombrado ${s5}`, motivo: "Título acorde al alcance" }, t.ana);
+  const audit = fila("SELECT motivo FROM auditoria WHERE entidad = 'sgc_documentos' AND entidad_id = ? AND accion = 'editar' ORDER BY id DESC", String(M.id));
+  const obs = await api("PUT", `/sgc/documentos/${O.id}`, { ...datos, clave: claveDe(O.id), titulo: `Intento sobre el obsoleto ${s5}`, motivo: "Corregir el título del retirado" }, t.ana);
+  check("[cob:D:T-040] editar metadatos con motivo: cambia el título y el motivo queda en la bitácora; un obsoleto → 409 sin cambios", ed.status === 200 && fila("SELECT titulo FROM sgc_documentos WHERE id = ?", M.id)?.titulo === `Procedimiento renombrado ${s5}` && audit?.motivo === "Título acorde al alcance" && obs.status === 409 && fila("SELECT titulo FROM sgc_documentos WHERE id = ?", O.id)?.titulo === `Procedimiento a retirar ${s5}`, `${txt(ed)} ${JSON.stringify(audit)} | ${txt(obs)}`);
+}
+
 /* ---------- Rutas heredadas /api/documentos-sgc ---------- */
 {
   const retiradas = [
+    ["E-038", "GET", "/documentos-sgc"],
+    ["E-039", "POST", "/documentos-sgc"],
     ["E-040", "GET", "/documentos-sgc/summary"],
+    ["E-041", "GET", "/documentos-sgc/lista-maestra"],
+    ["E-043", "GET", "/documentos-sgc/propuestas"],
+    ["E-048", "PUT", "/documentos-sgc/1"],
     ["E-042", "GET", "/documentos-sgc/por-leer"],
     ["E-044", "POST", "/documentos-sgc/propuestas"],
     ["E-045", "POST", "/documentos-sgc/propuestas/1/aceptar"],
@@ -710,6 +952,10 @@ const R4 = globalThis.R4;
   const inex = await api("GET", "/documentos-sgc/99999999/archivo", undefined, t.ana);
   check("[cob:D:E-050] archivo del flujo anterior: se descarga con documentos:V y queda «descargar» en la bitácora", ana.status === 200 && Buffer.isBuffer(ana.data) && ana.data.equals(PDF) && !!bit, `${ana.status} ${!!bit}`);
   check("[cob:D:E-050] …sin documentos:V → 403; no distribuido a quien solo consulta vigentes → 403; inexistente → 404", jorge.status === 403 && diego.status === 403 && inex.status === 404, `${jorge.status} ${diego.status} ${inex.status}`);
+  const fAna = await api("GET", `/documentos-sgc/${lid}`, undefined, t.ana);
+  const fDiego = await api("GET", `/documentos-sgc/${lid}`, undefined, t.diego);
+  const fJorge = await api("GET", `/documentos-sgc/${lid}`, undefined, t.jorge);
+  check("[cob:D:E-047] GET /documentos-sgc/:id sigue activo (no 410): con historial lo ve con sus revisiones; quien solo consulta vigentes sin distribución → 404; sin documentos:V → 403", fAna.status === 200 && fAna.data?.item?.clave === `FX-TCP-LEG${s5}` && Array.isArray(fAna.data?.item?.revisiones) && fAna.data.item.revisiones.length === 1 && es(fDiego, 404, { message: "Documento no encontrado" }) && fJorge.status === 403, `${txt(fAna)} | ${txt(fDiego)} | ${txt(fJorge)}`);
 }
 
 terminar();

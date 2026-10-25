@@ -322,7 +322,7 @@ export function SolicitudDetalle({ sol, entidad, onCambio, compacto = false }: {
  * Dentro de un formato en solo lectura todo queda en un <fieldset disabled>:
  * los avisos con botones se montan en #form-avisos (fuera del fieldset), si existe.
  */
-function EnAvisos({ children }: { children: ReactNode }) {
+export function EnAvisos({ children }: { children: ReactNode }) {
   const [destino, setDestino] = useState<HTMLElement | null>(null);
   useEffect(() => {
     // El lugar se monta en el mismo commit que el aviso: se busca justo después.

@@ -151,7 +151,9 @@ export function useValidacion({ titulo, reglas, dato = "dato" }: { titulo: strin
         if (nodo.id && extras[nodo.id]) quitar.push(nodo.id);
         nodo = nodo.parentElement;
       }
-      if (quitar.length) setExtras((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !quitar.includes(k))));
+      // Después de que React procese el evento: en captura, el nuevo render (en una microtarea) llegaría antes que
+      // el onChange del campo controlado, que restauraría el valor anterior y perdería lo escrito o pegado.
+      if (quitar.length) window.setTimeout(() => setExtras((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !quitar.includes(k)))), 0);
     };
     document.addEventListener("input", limpiar, true);
     document.addEventListener("change", limpiar, true);
