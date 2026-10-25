@@ -167,11 +167,14 @@ export async function quitarFotoDe({ request, s, params }: RouteContext): Promis
 
 /* GET /api/cuentas/:id/foto?tam=128|512&v=<version>: la foto con sesion iniciada. */
 export async function servirFoto({ request, s, params }: RouteContext): Promise<Response> {
-  await exigirSesionVigente(s, await requireUser(request));
+  const user = await requireUser(request);
+  await exigirSesionVigente(s, user);
   const id = intParam(params.id);
   const tam = searchParam(request, "tam") === "512" ? 512 : 128;
-  const fila = await s.queryOne<Row>("SELECT foto FROM usuarios WHERE id = :id", { id });
-  if (!fila?.foto) throw new HttpError(404, { message: "Sin foto de perfil" });
+  const fila = await s.queryOne<Row>("SELECT foto, usa_foto FROM usuarios WHERE id = :id", { id });
+  // Quien eligio mostrar su figura conserva la foto para volver a ella, pero solo la ve esa persona.
+  const propia = String(user.sub) === String(id);
+  if (!fila?.foto || (!Number(fila.usa_foto) && !propia)) throw new HttpError(404, { message: "Sin foto de perfil" });
   let bytes: Buffer;
   try {
     bytes = await fs.promises.readFile(rutaFoto(String(fila.foto), tam));

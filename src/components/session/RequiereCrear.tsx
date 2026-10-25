@@ -18,12 +18,15 @@ export function RequiereCrear({ tipo, children }: { tipo: TipoRegistro; children
   if (!recurso.data && !recurso.error) return <Skeleton className="h-64 w-full" />;
   const flag = recurso.data?.[tipo];
   if (!flag?.ok) {
+    // Con el rol pero sin la autorizacion FX-THF-AP, el motivo del servidor dice cual falta y donde se registra.
     return (
-      <EmptyState
-        icon={<LockKey size={20} />}
-        title="Sin permiso para registrar"
-        description={flag?.motivo || "Tus roles pueden consultar esta sección, pero no registrar formatos nuevos (o te falta la autorización FX-THF-AP de la actividad). Pide a la administración que lo revise."}
-      />
+      <div data-sin-permiso-registrar>
+        <EmptyState
+          icon={<LockKey size={20} />}
+          title="Sin permiso para registrar"
+          description={flag?.motivo ? `${flag.motivo}. La coordinación la registra en tu ficha (Administración › Usuarios › Autorizaciones).` : "Tus roles pueden consultar esta sección, pero no registrar formatos nuevos. Pide a la administración que lo revise."}
+        />
+      </div>
     );
   }
   return <>{children}</>;

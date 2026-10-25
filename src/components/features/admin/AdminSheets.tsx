@@ -43,6 +43,7 @@ export function UserSheet({ open, item, onClose }: { open: boolean; item: ApiRec
   const [cuentaHasta, setCuentaHasta] = useState(String(item?.vigente_hasta || ""));
   const [supervisorId, setSupervisorId] = useState(item?.supervisor_id ? String(item.supervisor_id) : "");
   const [motivoCuenta, setMotivoCuenta] = useState("");
+  const [motivoEstado, setMotivoEstado] = useState("");
   const [personas, setPersonas] = useState<ApiRecord[]>([]);
   // Contrasena de quien administra: confirma la identidad en la misma hoja (reautenticacion).
   const [clave, setClave] = useState("");
@@ -68,8 +69,10 @@ export function UserSheet({ open, item, onClose }: { open: boolean; item: ApiRec
       String(item?.vigente_desde || "") !== cuentaDesde ||
       String(item?.vigente_hasta || "") !== cuentaHasta ||
       String(item?.supervisor_id || "") !== supervisorId);
-  // Pide la contrasena en la hoja cuando el guardado es critico: alta (asigna rol), cambio de vigencia o supervisor, baja o fijar la contrasena de otra persona.
-  const guardadoCritico = !editing || cambiaCuenta || (editing && !!item?.activo && !activo) || (editing && !!password && !esPropia);
+  // Dar de baja o reactivar desde aqui: con motivo, como en «Dar de baja…» (la reactivacion la aprueba un segundo usuario).
+  const cambiaEstado = editing && !!item?.activo !== activo;
+  // Pide la contrasena en la hoja cuando el guardado es critico: alta (asigna rol), cambio de vigencia o supervisor, baja, reactivacion o fijar la contrasena de otra persona.
+  const guardadoCritico = !editing || cambiaCuenta || cambiaEstado || (editing && !!password && !esPropia);
 
   const dominios = authConfig.dominios_permitidos || [];
   /* Reglas de la cuenta, en el orden de la hoja. */
@@ -90,10 +93,11 @@ export function UserSheet({ open, item, onClose }: { open: boolean; item: ApiRec
       if (tipoCuenta === "temporal" && !supervisorId) out.push({ campo: "u-supervisor", mensaje: "Una cuenta temporal necesita supervisor" });
       if (tipoCuenta === "temporal" && !cuentaHasta) out.push({ campo: "u-cuenta-hasta", mensaje: "Una cuenta temporal necesita fecha de fin" });
       if (cambiaCuenta && motivoCuenta.trim().length < 5) out.push({ campo: "u-motivo-cuenta", mensaje: msg.minimo("El motivo del cambio", 5) });
+      if (cambiaEstado && motivoEstado.trim().length < 5) out.push({ campo: "u-motivo-estado", mensaje: msg.minimo(activo ? "El motivo de la reactivación" : "El motivo de la baja", 5) });
       return out;
     },
   });
-  const camposUsuario = { correo: "u-email", motivo: editing ? "u-motivo-cuenta" : "u-motivo-rol", password: guardadoCritico ? "u-clave-admin" : "u-password" };
+  const camposUsuario = { correo: "u-email", email: "u-email", motivo: editing ? "u-motivo-cuenta" : "u-motivo-rol", motivo_estado: "u-motivo-estado", password: guardadoCritico ? "u-clave-admin" : "u-password" };
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -116,6 +120,7 @@ export function UserSheet({ open, item, onClose }: { open: boolean; item: ApiRec
     payload.vigente_hasta = cuentaHasta || null;
     payload.supervisor_id = supervisorId ? Number(supervisorId) : null;
     if (cambiaCuenta) payload.motivo_cuenta = motivoCuenta.trim();
+    if (cambiaEstado) payload.motivo_estado = motivoEstado.trim();
     if (guardadoCritico) armarReauth(clave ? { password: clave } : null);
     setSubmitting(true);
     try {
@@ -209,7 +214,12 @@ export function UserSheet({ open, item, onClose }: { open: boolean; item: ApiRec
               </>
             ) : null}
           </FormGrid>
-          {puedeAdministrar ? <Switch checked={activo} onCheckedChange={setActivo} label="Usuario activo" description="Un usuario inactivo conserva su historial pero no puede entrar." /> : null}
+          {puedeAdministrar && !esPropia ? <Switch checked={activo} onCheckedChange={setActivo} label="Usuario activo" description="Un usuario inactivo conserva su historial pero no puede entrar." /> : null}
+          {cambiaEstado ? (
+            <Field label={activo ? "Motivo de la reactivación" : "Motivo de la baja"} htmlFor="u-motivo-estado" required hint={activo ? "La reactivación la aprueba un segundo usuario; queda en la bitácora." : "Cierra sus sesiones abiertas; queda en la bitácora."}>
+              <Textarea id="u-motivo-estado" rows={2} maxLength={300} value={motivoEstado} onChange={(event) => setMotivoEstado(event.target.value)} />
+            </Field>
+          ) : null}
 
           <Panel title="Vigencia de la cuenta" description="Una cuenta temporal (estudiantes, estancias) necesita fecha de fin y un supervisor; fuera de su vigencia no puede entrar y sus roles no pueden durar más que la cuenta.">
             <FormGrid>

@@ -57,9 +57,10 @@ try {
     const { context, page } = await entrar(LUIS, credenciales[LUIS]);
     try {
       await page.goto(`${BASE}/muestras/procesamiento/nuevo`);
-      const aviso = page.locator("[data-aviso-autorizacion]").first();
+      // Desde la prueba integral (T-01) el formato no se abre sin la autorizacion: se dice cual falta en lugar del formulario.
+      const aviso = page.locator("[data-sin-permiso-registrar]").first();
       await aviso.waitFor();
-      check("al abrir el formato sin la autorizacion aparece el aviso", /procesamiento/i.test((await aviso.textContent()) || ""), (await aviso.textContent())?.slice(0, 160));
+      check("al abrir el formato sin la autorizacion se dice cual falta (sin formulario)", /procesamiento/i.test((await aviso.textContent()) || "") && /FX-THF-AP/.test((await aviso.textContent()) || "") && (await page.getByText("FX-TCF-GMP").count()) === 0, (await aviso.textContent())?.slice(0, 160));
     } catch (error) {
       check("aviso al abrir el formato", false, error.message);
       await captura(page);
@@ -73,7 +74,7 @@ try {
       await page.goto(`${BASE}/muestras/procesamiento/nuevo`);
       await page.getByRole("heading").first().waitFor();
       await page.waitForTimeout(1500);
-      check("con la autorizacion vigente no aparece el aviso", (await page.locator("[data-aviso-autorizacion]").count()) === 0);
+      check("con la autorizacion vigente se abre el formato, sin aviso", (await page.locator("[data-aviso-autorizacion], [data-sin-permiso-registrar]").count()) === 0 && (await page.getByText("FX-TCF-GMP").count()) > 0);
     } catch (error) {
       check("sin aviso con autorizacion", false, error.message);
       await captura(page);

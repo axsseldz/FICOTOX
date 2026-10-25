@@ -107,7 +107,7 @@ export async function getRoleDetail({ request, s, params }: RouteContext): Promi
     `
     SELECT u.id, u.nombre, u.email, u.avatar, ur.vigente_desde, ur.vigente_hasta
     FROM usuario_roles ur INNER JOIN usuarios u ON u.id = ur.usuario_id
-    WHERE ur.rol_id = :id AND ur.revocado_en IS NULL AND (ur.vigente_hasta IS NULL OR ur.vigente_hasta >= :hoy)
+    WHERE ur.rol_id = :id AND ur.revocado_en IS NULL AND ur.vigente_desde <= :hoy AND (ur.vigente_hasta IS NULL OR ur.vigente_hasta >= :hoy)
     ORDER BY u.nombre
     `,
     { id: roleId, hoy: hoy() },
@@ -134,16 +134,32 @@ export async function createRole({ request, s }: RouteContext): Promise<Response
   if (await s.scalar("SELECT id FROM roles WHERE LOWER(nombre) = LOWER(:nombre) LIMIT 1", { nombre: data.nombre })) {
     return json({ message: "Ya existe un rol con ese nombre" }, 409);
   }
+  /*
+   * R8: lo que concede un rol se amplia con segundo usuario. Un rol nuevo nace sin
+   * permisos; los que se piden al crearlo quedan en solicitud (ampliar_permisos_rol),
+   * igual que al editarlo.
+   */
+  const conPermisos = data.permisos.length > 0;
+  if (conPermisos) {
+    exigirMotivo(motivoDe(payload), "de los permisos del rol");
+    await exigirReauth(s, request, user, "usuarios:permisos");
+  }
   const result = await s.execute("INSERT INTO roles (nombre, descripcion, es_sistemico, activo) VALUES (:nombre, :descripcion, 0, :activo)", {
     nombre: data.nombre,
     descripcion: data.descripcion,
     activo: data.activo,
   });
   const roleId = result.lastrowid as number;
-  await guardarFilasRol(s, roleId, data.permisos);
-  await registrarAuditoria(s, user, { accion: "crear", entidad: "roles", entidadId: roleId, referencia: data.nombre, motivo, despues: await snapshotRow(s, "roles", roleId), detalle: { permisos: data.permisos } });
+  await guardarFilasRol(s, roleId, []);
+  await registrarAuditoria(s, user, { accion: "crear", entidad: "roles", entidadId: roleId, referencia: data.nombre, motivo, despues: await snapshotRow(s, "roles", roleId), detalle: conPermisos ? { permisos_solicitados: data.permisos } : { permisos: [] } });
+  if (!conPermisos) {
+    await s.commit();
+    return json({ message: "Rol creado", id: roleId }, 201);
+  }
+  const solicitud = await crearSolicitud(s, user, { tipo: "ampliar_permisos_rol", entidad: "roles", entidadId: roleId, referencia: data.nombre, accion: "ampliar_permisos", datos: { rol: data.nombre, agregar: data.permisos, reemplazar: [], activar: false }, motivo });
   await s.commit();
-  return json({ message: "Rol creado", id: roleId }, 201);
+  const def = ACCIONES_CRITICAS[solicitud.tipo];
+  return json({ message: `Rol creado sin permisos. ${def.pendiente}: sus permisos quedan pendientes de la autorización de un segundo usuario (solicitud #${solicitud.id})`, id: roleId, solicitud: serializarSolicitud(solicitud), codigo: "solicitud_creada" }, 201);
 }
 
 export async function updateRole({ request, s, params }: RouteContext): Promise<Response> {
@@ -393,6 +409,9 @@ function validateUsuarioPayload(payload: Record<string, unknown>, options: { pas
   const password = String(payload.password || "");
   if (!data.nombre) return { error: json({ message: "El nombre es obligatorio" }, 400) };
   if (!data.email) return { error: json({ message: "El email es obligatorio" }, 400) };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(data.email)) && String(options.currentEmail || "").toLowerCase() !== String(data.email).toLowerCase()) {
+    return { error: json({ message: "Escribe un correo válido, por ejemplo nombre@cicese.mx", campo: "email" }, 400) };
+  }
   // El dominio se exige al dar de alta o cambiar el correo; una cuenta existente que
   // conserva su correo se puede editar aunque el dominio ya no este en la lista.
   const emailSinCambio = !!options.currentEmail && String(options.currentEmail).toLowerCase() === String(data.email).toLowerCase();
@@ -643,19 +662,24 @@ export async function updateUsuario({ request, s, params }: RouteContext): Promi
     if (cuenta.tipo_cuenta !== "temporal" && (await tieneRolEstudiante(s, userId))) throw new HttpError(400, { message: "Una cuenta con el rol de estudiante / personal en formación debe ser temporal" });
   }
   const seDaDeBaja = Number(antesUsuario.activo ?? 1) === 1 && !data.activo;
+  // Dar de baja desde la edicion sigue las reglas de DELETE: no a uno mismo y con motivo.
+  const motivoEstado = motivoDe(payload, "motivo_estado") || motivoDe(payload);
+  if (seDaDeBaja && String(user.sub) === String(userId)) throw new HttpError(403, { message: "No puedes dar de baja tu propio usuario activo" });
+  if (seDaDeBaja && motivoEstado.length < MOTIVO_MIN) throw new HttpError(400, { message: "Indica el motivo de la baja del usuario (al menos 5 caracteres)", campo: "motivo_estado" });
   // Reactivar una cuenta dada de baja tambien es critico (le devuelve el acceso): segundo usuario (Fase 3).
   const seReactiva = Number(antesUsuario.activo ?? 1) === 0 && !!data.activo;
   /*
-   * Ampliar la vigencia de una cuenta temporal (fecha de fin posterior, sin fin,
-   * o pasarla a permanente) tambien requiere segundo usuario: se guarda todo lo
-   * demas y la ampliacion queda en solicitud.
+   * Ampliar la vigencia de una cuenta (fecha de fin posterior o sin fin, o pasar
+   * una temporal a permanente) tambien requiere segundo usuario, sea temporal o
+   * permanente con fecha de fin (incluso ya vencida): se guarda todo lo demas y
+   * la ampliacion queda en solicitud.
    */
   const hastaAntes = (antesUsuario.vigente_hasta as string | null) || null;
-  const eraTemporal = String(antesUsuario.tipo_cuenta || "permanente") === "temporal";
-  const amplia = eraTemporal && (cuenta.tipo_cuenta === "permanente" || (hastaAntes && (!cuenta.vigente_hasta || cuenta.vigente_hasta > hastaAntes)));
+  const tipoAntes = String(antesUsuario.tipo_cuenta || "permanente") === "temporal" ? "temporal" : "permanente";
+  const amplia = (tipoAntes === "temporal" && cuenta.tipo_cuenta === "permanente") || (!!hastaAntes && (!cuenta.vigente_hasta || cuenta.vigente_hasta > hastaAntes));
   const ampliacion = amplia ? { tipo_cuenta: cuenta.tipo_cuenta, vigente_hasta: cuenta.vigente_hasta } : null;
   if (amplia) {
-    cuenta.tipo_cuenta = "temporal";
+    cuenta.tipo_cuenta = tipoAntes;
     cuenta.vigente_hasta = hastaAntes;
     // Lo que se guarda ahora es solo lo que no es ampliacion (p. ej. el supervisor).
     cambiosCuenta = cambioDeCuenta(antesUsuario, cuenta);
@@ -747,9 +771,10 @@ export async function updateUsuario({ request, s, params }: RouteContext): Promi
   await assertAdministratorRemains(s, adminsAntes);
   const despues = await snapshotRow(s, "usuarios", userId);
   await registrarAuditoria(s, user, { accion: "editar", entidad: "usuarios", entidadId: userId, referencia: String(data.email), antes: antesUsuario, despues, detalle: validated.passwordHash ? { contrasena: "cambiada" } : null });
+  if (seDaDeBaja) await registrarAuditoria(s, user, { accion: "baja", entidad: "usuarios", entidadId: userId, referencia: String(data.email), motivo: motivoEstado, antes: antesUsuario, despues });
   let solicitud: Solicitud | null = null;
   if (seReactiva) {
-    solicitud = await crearSolicitud(s, user, { tipo: "reactivar_cuenta", entidad: "usuarios", entidadId: userId, referencia: String(data.email), accion: "reactivar", motivo: motivoDe(payload) || motivoCuenta || "Reactivación de la cuenta" });
+    solicitud = await crearSolicitud(s, user, { tipo: "reactivar_cuenta", entidad: "usuarios", entidadId: userId, referencia: String(data.email), accion: "reactivar", motivo: motivoEstado || motivoCuenta || "Reactivación de la cuenta" });
   } else if (ampliacion) {
     solicitud = await crearSolicitud(s, user, { tipo: "ampliar_vigencia", entidad: "usuarios", entidadId: userId, referencia: String(data.email), accion: "ampliar_vigencia", datos: ampliacion, motivo: motivoCuenta });
   }

@@ -455,7 +455,7 @@ if (!TRAS_REINICIO) {
     const qa = usuarios.find((u) => u.email === "qa@ficotox.local");
     const payload = (u, cambios) => ({ nombre: u.nombre, email: u.email, departamento: u.departamento, activo: !!Number(u.activo), ...cambios });
     const admin2 = await persona("admin2.roles@cicese.mx", "Administrador técnico del sistema");
-    const qaOff = await api("PUT", `/admin/usuarios/${qa.id}`, payload(qa, { activo: false }), J);
+    const qaOff = await api("PUT", `/admin/usuarios/${qa.id}`, payload(qa, { activo: false, motivo_estado: "Prueba de la guarda de administrador" }), J);
     // Con dos administradores (Jorge y admin2), revocar el de Jorge se permite y surte efecto de inmediato.
     const asigJorge = await asignacionDe(jorgeId, "Administrador técnico del sistema", admin2.token);
     const rev = await api("POST", `/admin/usuarios/${jorgeId}/roles/${asigJorge?.id}/revocar`, { motivo: "Prueba de la guarda de administrador" }, admin2.token);
@@ -464,12 +464,13 @@ if (!TRAS_REINICIO) {
     check("revocar el rol de administrador a Jorge (queda admin2): 200 y Jorge pierde el acceso sin re-login", qaOff.status === 200 && admin2.status === 201 && rev.status === 200 && jorgeSin.status === 403 && (jorgeMe?.roles || []).length === 0, `qaOff ${qaOff.status} admin2 ${admin2.status} revocar ${rev.status} jorge roles ${jorgeSin.status}`);
     // admin2 es ahora el unico: no puede desactivarse ni quitarle usuarios:G a su rol.
     const yo = (await api("GET", `/admin/usuarios/${admin2.id}`, undefined, admin2.token)).data?.item;
-    const selfOff = await api("PUT", `/admin/usuarios/${admin2.id}`, payload(yo, { activo: false }), admin2.token);
+    const selfOff = await api("PUT", `/admin/usuarios/${admin2.id}`, payload(yo, { activo: false, motivo_estado: "Intento de desactivarse" }), admin2.token);
     const adminRol = roles.find((r) => r.nombre === "Administrador técnico del sistema");
     const detalle = (await api("GET", `/admin/roles/${adminRol.id}`, undefined, admin2.token)).data;
     const recorte = await api("PUT", `/admin/roles/${adminRol.id}`, { nombre: adminRol.nombre, descripcion: adminRol.descripcion, activo: true, motivo: "Intento de dejar sin administrador", permisos: detalle.permisos.filter((p) => p.modulo !== "usuarios").concat([{ modulo: "usuarios", accion: "V", alcance: "total" }]) }, admin2.token);
     const despues = (await api("GET", `/admin/roles/${adminRol.id}`, undefined, admin2.token)).data;
-    check("unico administrador: desactivarse -> 409; quitar usuarios:G a su rol -> 409 (sin cambios)", selfOff.status === 409 && recorte.status === 409 && despues.permisos.some((p) => p.modulo === "usuarios" && p.accion === "G"), `desactivarse ${selfOff.status} recorte ${recorte.status}`);
+    // Darse de baja a uno mismo se rechaza antes (403, prueba integral A-04); la guarda del ultimo administrador sigue en DELETE y al quitar permisos.
+    check("unico administrador: desactivarse -> 403; quitar usuarios:G a su rol -> 409 (sin cambios)", selfOff.status === 403 && recorte.status === 409 && despues.permisos.some((p) => p.modulo === "usuarios" && p.accion === "G"), `desactivarse ${selfOff.status} recorte ${recorte.status}`);
     const borrarSistemico = await api("DELETE", `/admin/roles/${adminRol.id}`, undefined, admin2.token);
     check("el rol de administrador (sistemico) no se elimina", borrarSistemico.status === 403, `status ${borrarSistemico.status}`);
     // Restaurar: admin2 devuelve el rol a Jorge, Jorge reactiva a QA y da de baja a admin2.
@@ -484,7 +485,7 @@ if (!TRAS_REINICIO) {
     const tempEmail = "admin.temporal@cicese.mx";
     const alta = await api("POST", "/admin/usuarios", { nombre: "admin.temporal", email: tempEmail, activo: true, rol_id: rolId("Administrador técnico del sistema"), vigente_hasta: "2099-12-31", password: "PruebaRoles2026!", motivo: "Administrador temporal de prueba" }, QA);
     const temporal = (await api("POST", "/auth/login", { email: tempEmail, password: "PruebaRoles2026!" })).data?.token;
-    const qaOff2 = await api("PUT", `/admin/usuarios/${qa.id}`, payload(qa, { activo: false }), J);
+    const qaOff2 = await api("PUT", `/admin/usuarios/${qa.id}`, payload(qa, { activo: false, motivo_estado: "Prueba de la guarda temporal" }), J);
     const asigJorge2 = await asignacionDe(jorgeId, "Administrador técnico del sistema", temporal);
     const revTemporal = await api("POST", `/admin/usuarios/${jorgeId}/roles/${asigJorge2?.id}/revocar`, { motivo: "Dejaria solo un administrador temporal" }, temporal);
     const jorgeSigue = await api("GET", "/admin/roles", undefined, J);

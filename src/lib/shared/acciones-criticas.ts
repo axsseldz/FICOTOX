@@ -48,7 +48,7 @@ export const ACCIONES_CRITICAS: Record<TipoSolicitud, AccionCritica> = {
   ampliar_permisos_rol: { tipo: "ampliar_permisos_rol", etiqueta: "Ampliar permisos de un rol", pendiente: "Ampliación de permisos solicitada", aprueba: { modulo: "usuarios", accion: "A" }, descripcion: "Agregar permisos a un rol o reactivarlo. La aprueba quien tiene A en usuarios y no tiene ese rol. Quitar permisos se aplica directo." },
   // Restaurar la plataforma desde un respaldo: lo pide quien tiene respaldos:G (Administrador técnico); lo aprueba otra persona con calidad:A (Responsable General).
   restaurar_respaldo: { tipo: "restaurar_respaldo", etiqueta: "Restaurar un respaldo", pendiente: "Restauración solicitada", aprueba: { modulo: "calidad", accion: "A" }, descripcion: "Recuperar toda la plataforma desde un respaldo: se pierde lo registrado después de su fecha. Antes se guarda un respaldo «Previo a restauración» y al terminar todos vuelven a iniciar sesión." },
-  ampliar_vigencia: { tipo: "ampliar_vigencia", etiqueta: "Ampliar vigencia", pendiente: "Ampliación de vigencia solicitada", aprueba: { modulo: "usuarios", accion: "A" }, descripcion: "Ampliar la vigencia de una cuenta temporal (o convertirla en permanente)." },
+  ampliar_vigencia: { tipo: "ampliar_vigencia", etiqueta: "Ampliar vigencia", pendiente: "Ampliación de vigencia solicitada", aprueba: { modulo: "usuarios", accion: "A" }, descripcion: "Ampliar la vigencia de una cuenta con fecha de fin (o convertir una temporal en permanente)." },
 };
 
 export const TIPOS_SOLICITUD = Object.keys(ACCIONES_CRITICAS) as TipoSolicitud[];

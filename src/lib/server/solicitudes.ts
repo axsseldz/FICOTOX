@@ -329,6 +329,8 @@ export async function rechazarSolicitud({ request, s, params }: RouteContext): P
   const yo = userIdFromClaims(user) as number;
   const violacion = evaluarSegundoUsuario(yo, solicitud.solicitado_por);
   if (violacion) throw new HttpError(409, { message: "Solicitaste esta acción; para desistir cancélala", codigo: "segregacion", regla: violacion.regla, clave: violacion.clave });
+  // Regla 6 tambien al rechazar: la persona afectada no resuelve un cambio de acceso sobre su propia cuenta.
+  if (solicitud.entidad === "usuarios" && String(solicitud.entidad_id) === String(yo)) throw new HttpError(409, { message: "La solicitud es sobre tu propia cuenta; la debe resolver otra persona", codigo: "segregacion", regla: 6, clave: "segundo_usuario" });
   const permiso = permisoParaAprobar(solicitud.tipo, solicitud.entidad);
   const actuo = cargoActuante(request, await requirePermission(s, user, permiso.modulo, permiso.accion));
   const payload = await readJson(request);

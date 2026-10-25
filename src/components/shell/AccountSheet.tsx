@@ -162,7 +162,8 @@ export function AccountSheet({ open, onClose, abrirClave = false }: { open: bool
         </div>
         {user?.tipo_cuenta === "temporal" ? (
           <p className="rounded-field bg-surface-2 px-3 py-2 text-xs text-ink-2 ring-1 ring-line">
-            Cuenta temporal{user.vigente_hasta ? ` vigente hasta el ${fmtDate(user.vigente_hasta)}` : ""}. Lo que capturas queda pendiente del visto bueno de tu supervisor.
+            Cuenta temporal{user.vigente_hasta ? ` vigente hasta el ${fmtDate(user.vigente_hasta)}` : ""}.
+            {roles.some((rol) => Object.values(rol.permisos || {}).some((acciones) => Object.values(acciones || {}).includes("supervisado"))) ? " Lo que capturas en equipos e inventario queda pendiente del visto bueno de tu supervisor." : ""}
           </p>
         ) : null}
         {roles.length > 1 ? (
