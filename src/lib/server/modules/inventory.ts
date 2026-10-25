@@ -15,6 +15,7 @@ import { firstTruthy, searchParam, toFloatOrNull, toIntOrNull, toStrOrNull, utcT
 
 import { fechaValida, finDiaLocal, hoyLocal, inicioDiaLocal, sumarDias } from "../../shared/fechas";
 import { autorizarEquipoA } from "../autorizaciones";
+import { REACTIVO_TYPES } from "../../client/constants";
 
 /* Portado de modules/inventory/endpoints.py del backend Flask original. */
 
@@ -116,6 +117,15 @@ function numeroNoNegativo(valor: unknown, etiqueta: string): number | null {
 function normalizeReactivoPayload(raw: Record<string, unknown> | null | undefined, antes?: Record<string, unknown> | null): Record<string, unknown> {
   const payload = raw || {};
   const tipo = strip(payload.tipo_reactivo).slice(0, 80) || null;
+  // Tipo del catalogo y fechas AAAA-MM-DD; un valor heredado de la carga del Excel que no cambia se conserva.
+  const igualAntes = (campo: string, valor: string) => !!antes && String(antes[campo] ?? "") === valor;
+  if (tipo && !igualAntes("tipo_reactivo", tipo) && !REACTIVO_TYPES.some((t) => t.value === tipo)) throw new ReactivoInvalido("Elige un tipo de reactivo del catálogo");
+  const fecha = (campo: string, etiqueta: string, valor: string | null): string | null => {
+    if (valor === null || igualAntes(campo, valor)) return valor;
+    const f = fechaValida(valor);
+    if (!f) throw new ReactivoInvalido(`«${etiqueta}» debe ser una fecha válida (AAAA-MM-DD)`);
+    return f;
+  };
   const producto = strip(firstTruthy(payload.producto, payload.item_name, payload.nombre_crm, payload.nombre, "")).slice(0, 180) || null;
   const esColumna = tipo === "columnas_cromatograficas";
   const idInterno = toStrOrNull(firstTruthy(payload.id_interno, payload.codigo_interno, payload.id_reactivo), 120);
@@ -124,7 +134,7 @@ function normalizeReactivoPayload(raw: Record<string, unknown> | null | undefine
   for (const column of REACTIVO_COLUMNS) data[column] = payload[column] === undefined ? null : payload[column];
 
   const indefinida = [1, true, "1", "true", "on"].includes(payload.caducidad_indefinida as never);
-  const caducidad = indefinida ? null : toStrOrNull(firstTruthy(payload.caducidad, payload.expiration_date, payload.fecha_vencimiento), 20);
+  const caducidad = indefinida ? null : fecha("caducidad", "Caducidad", toStrOrNull(firstTruthy(payload.caducidad, payload.expiration_date, payload.fecha_vencimiento), 20));
   Object.assign(data, {
     tipo_reactivo: tipo,
     categoria: tipo,
@@ -140,8 +150,8 @@ function normalizeReactivoPayload(raw: Record<string, unknown> | null | undefine
     localizacion,
     ubicacion: localizacion,
     lote: toStrOrNull(firstTruthy(payload.lote, payload.lot_number), 120),
-    fecha_ingreso: toStrOrNull(payload.fecha_ingreso, 20),
-    fecha_apertura: toStrOrNull(payload.fecha_apertura, 20),
+    fecha_ingreso: fecha("fecha_ingreso", "Fecha de ingreso", toStrOrNull(payload.fecha_ingreso, 20)),
+    fecha_apertura: fecha("fecha_apertura", "Fecha de apertura", toStrOrNull(payload.fecha_apertura, 20)),
     observaciones: toStrOrNull(payload.observaciones, 4000),
     caducidad_indefinida: !esColumna && indefinida ? 1 : 0,
     caducidad: esColumna ? null : caducidad,

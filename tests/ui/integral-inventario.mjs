@@ -6,7 +6,8 @@
  * - un ajuste sin diferencia se pintaba «−0»;
  * - «Stock bajo» en la lista contaba reactivos sin existencia canónica (columnas heredadas) que el Inicio no cuenta;
  * - ?abrir= de un registro que no está en la lista no avisaba nada;
- * - la pista del stock mínimo de consumibles decía «Opcional. Opcional, …».
+ * - la pista del stock mínimo de consumibles decía «Opcional. Opcional, …»;
+ * - el selector «Responsable» del equipo salía vacío a quien edita equipos sin usuarios:V.
  * Sin errores de consola ni respuestas 5xx.
  */
 import "../lib/reauth-auto.mjs";
@@ -17,7 +18,7 @@ const { api, crearCheck, credenciales, Database, EMAIL, enDias, sesiones } = awa
 
 const { check, terminar } = crearCheck();
 const { t } = await sesiones();
-const nav = await abrirNavegador({ suite: "integral-inventario", check, credencial: (quien) => ({ email: quien === "qa" ? "qa@ficotox.local" : EMAIL[quien], password: quien === "qa" ? "QaFicotox2026!" : credenciales[EMAIL[quien]] }) });
+const nav = await abrirNavegador({ suite: "integral-inventario", check, credencial: (quien) => (typeof quien === "object" ? quien : { email: quien === "qa" ? "qa@ficotox.local" : EMAIL[quien], password: quien === "qa" ? "QaFicotox2026!" : credenciales[EMAIL[quien]] }) });
 const { paso } = nav;
 const sello = Date.now().toString(36).slice(-5).toUpperCase();
 
@@ -126,6 +127,28 @@ await paso("qa", "reactivos: stock bajo como el Inicio y ?abrir= que avisa", asy
   await toast(page, /no aparece en la lista/);
   check("?abrir= de un reactivo dado de baja avisa que no está en la lista", true);
 });
+
+/* ---------- Equipo: responsable sin usuarios:V ---------- */
+{
+  const rol = await api("POST", "/admin/roles", { nombre: `Equipos sin usuarios ${sello}`, motivo: "Rol de la prueba integral", permisos: ["V", "C", "E"].map((accion) => ({ modulo: "equipos", accion, alcance: "total" })) }, t.jorge);
+  const email = `equipos.${sello.toLowerCase()}@ficotox.local`;
+  const password = `Temporal-${sello}-2026`;
+  const alta = await api("POST", "/admin/usuarios", { nombre: `Equipos ${sello}`, email, activo: true, rol_id: rol.data?.id, departamento: "Laboratorio", password, motivo: "Alta de la prueba integral" }, t.jorge);
+  const b = new Database(process.env.TEST_DB_PATH);
+  b.prepare("UPDATE usuarios SET debe_cambiar_password = 0 WHERE email = ?").run(email);
+  b.close();
+  check("(preparación) cuenta con equipos C/E y sin usuarios", rol.status === 201 && alta.status === 201, `${rol.status} ${alta.status} ${alta.data?.message}`);
+  await paso({ email, password }, "equipo: responsable sin usuarios:V", async (page) => {
+    await page.goto(`${BASE_WEB}/inventario/equipos`);
+    await page.getByRole("button", { name: "Nuevo equipo" }).first().click();
+    const select = page.locator("#e-responsable");
+    await select.waitFor();
+    await page.waitForFunction(() => document.querySelectorAll("#e-responsable option").length > 1, null, { timeout: 15_000 }).catch(() => {});
+    const opciones = await select.locator("option").count();
+    check("el selector «Responsable» lista las cuentas activas aunque no se vea Administración", opciones > 2, `${opciones} opciones`);
+    await page.keyboard.press("Escape");
+  });
+}
 
 await nav.cerrar();
 terminar();

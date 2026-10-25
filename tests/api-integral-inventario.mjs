@@ -10,12 +10,13 @@
  *   un ajuste igual a la existencia guarda 0;
  * - el reporte PDF de mantenimiento se verifica al abrirlo (SHA-256, bitácora «descargar»; alterado →
  *   alerta_integridad + incidencia automática) y no se adjunta a un mantenimiento cancelado;
- * - la lista de movimientos filtra en el servidor (insumo, tipo, búsqueda) y marca las reversiones.
+ * - la lista de movimientos filtra en el servidor (insumo, tipo, búsqueda) y marca las reversiones;
+ * - reactivos y consumibles: tipo del catálogo y fechas AAAA-MM-DD (400); un valor heredado que no cambia se conserva.
  */
 import "./lib/reauth-auto.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { api, crearCheck, enDias, fila, filas, sesiones } from "./lib/calidad.mjs";
+import { api, crearCheck, Database, enDias, fila, filas, sesiones } from "./lib/calidad.mjs";
 import { pdfConTexto } from "./lib/archivos.mjs";
 
 const { check, terminar } = crearCheck();
@@ -149,6 +150,29 @@ const estadoMant = (id) => fila("SELECT estado FROM mantenimientos WHERE id = ?"
   check("reporte alterado → X-Integridad-Archivo alterado", alterado.headers.get("x-integridad-archivo") === "alterado", `${alterado.status} ${alterado.headers.get("x-integridad-archivo")}`);
   check("…con alerta_integridad y una incidencia automática", !!fila("SELECT id FROM auditoria WHERE accion = 'alerta_integridad' AND entidad = 'reportes_mantenimiento' AND entidad_id = ?", String(rep.id)) && !!fila("SELECT id FROM incidencias WHERE clave_automatica = ?", `alerta_integridad:reporte_mantenimiento:${rep.id}:alterado`));
   check("(los reportes de la base siguen enlazados a su mantenimiento)", filas("SELECT id FROM reportes_mantenimiento WHERE id_mantenimiento = ?", M).length === 1);
+}
+
+/* ---------- Reactivos y consumibles: tipo y fechas ---------- */
+{
+  const reactivo = (extra) => ({ tipo_reactivo: "acidos", producto: `Ácido integral ${unico()}`, capacidad: 1, unidad_capacidad: "L", piezas: 1, ...extra });
+  const tipoRaro = await api("POST", "/inventory/reactivos", reactivo({ tipo_reactivo: "inventado" }), t.qa);
+  check("reactivo con tipo fuera del catálogo → 400", tipoRaro.status === 400, `${tipoRaro.status} ${tipoRaro.data?.message}`);
+  const cadMala = await api("POST", "/inventory/reactivos", reactivo({ caducidad: "31/12/2027" }), t.qa);
+  check("reactivo con caducidad «31/12/2027» → 400 (no se guarda un texto que salta los avisos)", cadMala.status === 400 && /Caducidad/.test(cadMala.data?.message || ""), `${cadMala.status} ${cadMala.data?.message}`);
+  const aperturaMala = await api("POST", "/inventory/reactivos", reactivo({ fecha_apertura: "2027-02-30" }), t.qa);
+  check("reactivo con fecha de apertura imposible (2027-02-30) → 400", aperturaMala.status === 400, `${aperturaMala.status} ${aperturaMala.data?.message}`);
+  const bueno = await api("POST", "/inventory/reactivos", reactivo({ caducidad: "2027-12-31", fecha_ingreso: "2026-01-15" }), t.qa);
+  check("…con fechas AAAA-MM-DD se da de alta", bueno.status === 201 && fila("SELECT caducidad FROM reactivos WHERE id = ?", bueno.data?.id)?.caducidad === "2027-12-31", `${bueno.status} ${bueno.data?.message}`);
+  // Un valor heredado del Excel («dic-2026») se conserva mientras no se cambie.
+  const b = new Database(process.env.TEST_DB_PATH);
+  b.prepare("UPDATE reactivos SET caducidad = 'dic-2026', expiration_date = 'dic-2026', fecha_vencimiento = 'dic-2026' WHERE id = ?").run(bueno.data?.id);
+  b.close();
+  const conserva = await api("PUT", `/inventory/reactivos/${bueno.data?.id}`, { ...reactivo({ producto: "Ácido integral editado" }), caducidad: "dic-2026" }, t.qa);
+  check("…editar otro dato conserva la caducidad heredada sin cambiar", conserva.status === 200 && fila("SELECT caducidad FROM reactivos WHERE id = ?", bueno.data?.id)?.caducidad === "dic-2026", `${conserva.status} ${conserva.data?.message}`);
+  const consMala = await api("POST", "/consumables", { producto: `Consumible fecha ${unico()}`, piezas: 1, cantidad_por_pieza: 5, fecha_ingreso: "ayer" }, t.qa);
+  check("consumible con fecha de ingreso «ayer» → 400", consMala.status === 400 && /Fecha de ingreso/.test(consMala.data?.message || ""), `${consMala.status} ${consMala.data?.message}`);
+  const consSf = await api("POST", "/consumables", { producto: `Consumible s/f ${unico()}`, piezas: 1, cantidad_por_pieza: 5, fecha_ingreso: "s/f" }, t.qa);
+  check("…«s/f» sigue aceptándose (sin fecha)", consSf.status === 201, `${consSf.status} ${consSf.data?.message}`);
 }
 
 terminar();

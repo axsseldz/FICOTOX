@@ -7,7 +7,7 @@ import { darDeBaja, reactivarItem } from "../inventory-baja";
 import { cargarAutorizacion, requirePermission } from "../rbac";
 import { aplicarSupervision, marcaSupervision } from "../supervision";
 
-import { hoyLocal } from "../../shared/fechas";
+import { fechaValida, hoyLocal } from "../../shared/fechas";
 import { interpretarMovimiento, tipoDeMovimiento } from "../inventory-movimientos";
 import { searchParam, toFloatOrNull, toStrOrNull, utcTimestampReference } from "./helpers";
 
@@ -38,13 +38,17 @@ function numeroNoNegativo(value: unknown, etiqueta: string): number | null {
   return n;
 }
 
-/* Fecha de ingreso opcional: vacío o "s/f" (sin fecha) se guarda vacío. */
-function fechaOpcional(value: unknown): string | null {
+/* Fecha de ingreso opcional: vacío o "s/f" (sin fecha) se guarda vacío; si no, AAAA-MM-DD (un valor heredado que no cambia se conserva). */
+function fechaOpcional(value: unknown, anterior?: unknown): string | null {
   const text = String(value ?? "").trim();
-  return !text || /^s\/?f$/i.test(text) ? null : text.slice(0, 20);
+  if (!text || /^s\/?f$/i.test(text)) return null;
+  if (anterior !== undefined && String(anterior ?? "") === text) return text;
+  const f = fechaValida(text);
+  if (!f) throw new ConsumibleInvalido("«Fecha de ingreso» debe ser una fecha válida (AAAA-MM-DD) o «s/f»");
+  return f;
 }
 
-function normalizePayload(raw: Record<string, unknown> | null | undefined): ConsumablePayload {
+function normalizePayload(raw: Record<string, unknown> | null | undefined, antes?: Record<string, unknown> | null): ConsumablePayload {
   const data = raw || {};
   const contenedor = toStrOrNull(data.contenedor, 120);
   return {
@@ -54,7 +58,7 @@ function normalizePayload(raw: Record<string, unknown> | null | undefined): Cons
     proveedor: toStrOrNull(data.proveedor, 180),
     catalogo_parte_cas: toStrOrNull(data.catalogo_parte_cas, 180),
     lote: toStrOrNull(data.lote, 120),
-    fecha_ingreso: fechaOpcional(data.fecha_ingreso),
+    fecha_ingreso: fechaOpcional(data.fecha_ingreso, antes ? antes.fecha_ingreso : undefined),
     tamano_capacidad: toStrOrNull(data.tamano_capacidad, 120),
     contenedor,
     piezas: numeroNoNegativo(data.piezas, "Piezas"),
@@ -143,9 +147,10 @@ export async function updateConsumable({ request, s, params }: RouteContext): Pr
   const user = await requireUser(request);
   const supervision = marcaSupervision(await requirePermission(s, user, "inventario", "E", { objeto: "catalogo_inventario" }));
 
+  const antes = await snapshotRow(s, "consumibles", consumableId);
   let data: ConsumablePayload;
   try {
-    data = normalizePayload(await readJson(request));
+    data = normalizePayload(await readJson(request), antes);
   } catch (err) {
     if (err instanceof ConsumibleInvalido) return json({ message: err.message }, 400);
     throw err;
@@ -155,7 +160,6 @@ export async function updateConsumable({ request, s, params }: RouteContext): Pr
   }
 
   // La existencia (en unidades) solo cambia con movimientos; piezas y cantidad por pieza son datos del empaque.
-  const antes = await snapshotRow(s, "consumibles", consumableId);
   const result = await s.execute(
     `
     UPDATE consumibles
