@@ -1258,6 +1258,13 @@ await paso("luis", "bandeja: abrir borrador, corregir y leer", async (page) => {
 });
 
 await paso(nueva, "bandeja vacía", async (page) => {
+  // En la corrida completa otras suites distribuyen documentos a su rol (lecturas pendientes): se toma la respuesta
+  // real del servidor y se vacían sus listas, para ver solo cómo pinta la pantalla una bandeja sin nada.
+  await page.route("**/api/sgc/bandeja*", async (route) => {
+    const real = await route.fetch();
+    const cuerpo = await real.json();
+    await route.fulfill({ response: real, json: { ...cuerpo, items: [], lecturas_pendientes: [] } });
+  });
   const resp = respuesta(page, /\/api\/sgc\/bandeja/);
   await page.goto(`${BASE_WEB}/documentos/bandeja`);
   const datos = await (await resp).json();

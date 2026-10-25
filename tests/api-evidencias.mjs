@@ -83,7 +83,9 @@ async function cadena(etiqueta, asignar = []) {
 const nuevoAnalisis = async (token, c, tipo = "toxinas_lipofilicas") => (await api("POST", "/samples/analysis", { tipo_analisis: tipo, metodo: tipo === "toxinas_paralizantes" ? "hplc_fld" : "hplc_ms_ms", extraccion_id: c.E, fecha_analisis: "2026-09-20", analista_nombre: "Analista", resultados: [{ id_muestra: c.id, resultado: 50, unidad: "µg/kg", limite_regulatorio: 160, cumple: "cumple" }] }, token)).data?.id;
 
 const LUIS = idDe("luis.castro@ficotox.local");
-const c1 = await cadena("1", [LUIS]);
+// Mariana (técnico auxiliar) ve los ensayos de las muestras que tiene asignadas (B-02 de la prueba integral).
+const MARIANA = idDe("mariana.delgado@ficotox.local");
+const c1 = await cadena("1", [LUIS, MARIANA]);
 const A1 = await nuevoAnalisis(tL, c1);
 check("datos: Luis (asignado) registra el analisis A1", !!A1, `${A1}`);
 
@@ -192,7 +194,10 @@ check("datos: Luis (asignado) registra el analisis A1", !!A1, `${A1}`);
 /* ---------- Permisos de lectura ---------- */
 {
   const [m, p, h, j] = await Promise.all([tM, tP, tH, tJ].map((t) => api("GET", `/samples/analysis/${A1}/adjuntos`, undefined, t)));
-  check("ven la evidencia: Mariana (T. Auxiliar), Patricia (Resp. General) y el Auditor; Jorge (Adm. técnico) no", m.status === 200 && p.status === 200 && h.status === 200 && j.status === 403, `${m.status} ${p.status} ${h.status} ${j.status}`);
+  check("ven la evidencia: Mariana (T. Auxiliar, muestra asignada), Patricia (Resp. General) y el Auditor; Jorge (Adm. técnico) no", m.status === 200 && p.status === 200 && h.status === 200 && j.status === 403, `${m.status} ${p.status} ${h.status} ${j.status}`);
+  const A6 = await nuevoAnalisis(tL, await cadena("6", [LUIS]));
+  const ajena = await api("GET", `/samples/analysis/${A6}/adjuntos`, undefined, tM);
+  check("…de una muestra que no tiene asignada, Mariana no ve la evidencia (403)", ajena.status === 403, `${ajena.status} ${ajena.data?.codigo || ""}`);
   check("quien solo ve no puede adjuntar (edicion.permitido = false con el motivo)", p.data?.edicion?.permitido === false && !!p.data?.edicion?.motivo, JSON.stringify(p.data?.edicion));
   const intento = await subir(tP, A1, { descripcion: "Patricia intenta adjuntar" });
   const intentoM = await subir(tM, A1, { descripcion: "Mariana intenta adjuntar" });
