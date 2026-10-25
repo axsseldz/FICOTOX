@@ -7,6 +7,7 @@
  * - «Stock bajo» en la lista contaba reactivos sin existencia canónica (columnas heredadas) que el Inicio no cuenta;
  * - ?abrir= de un registro que no está en la lista no avisaba nada; y una lista nueva antes de que se quitara de la
  *   dirección volvía a abrir la ventana ya cerrada;
+ * - tras el aviso de faltantes, el foco tardío al campo marcado le quitaba el foco a quien ya escribía en otro;
  * - la pista del stock mínimo de consumibles decía «Opcional. Opcional, …»;
  * - el selector «Responsable» del equipo salía vacío a quien edita equipos sin usuarios:V.
  * Sin errores de consola ni respuestas 5xx.
@@ -173,6 +174,26 @@ await paso("qa", "?abrir= no reabre la ventana cerrada mientras la dirección se
   const reabierta = await ventana.waitFor({ timeout: 3_000 }).then(() => true).catch(() => false);
   check("cerrada la ventana de ?abrir=, una lista nueva no la vuelve a abrir (aunque el parámetro siga en la dirección)", !reabierta && sigue, `reabierta=${reabierta} parámetro aún en la dirección=${sigue}`);
   await page.unrouteAll({ behavior: "ignoreErrors" });
+});
+
+/* ---------- Tras el aviso de faltantes, el foco tardío no se impone ---------- */
+// Al cerrar el aviso, la pantalla lleva el foco al primer campo marcado tras una espera (hasta 380 ms): antes, si la
+// persona ya había entrado a otro campo, se lo quitaba y lo que escribía iba a dar al campo marcado.
+await paso("qa", "tras el aviso de faltantes, lo escrito en otro campo no va a dar al marcado", async (page) => {
+  await page.goto(`${BASE_WEB}/inventario/equipos?nuevo=1`);
+  await page.getByRole("dialog", { name: "Nuevo equipo" }).waitFor();
+  await page.locator('button[form="equipo-form"][type="submit"]').click();
+  await page.locator('[data-validacion="faltan"]').waitFor();
+  await page.getByRole("button", { name: "Entendido" }).last().click();
+  // Entra a «Marca» y empieza a escribir de inmediato; sigue escribiendo cuando ya pasó la espera del foco.
+  await page.locator("#e-marca").focus();
+  await page.keyboard.insertText("Agilent");
+  await page.waitForTimeout(800);
+  await page.keyboard.type(" 1290");
+  const nombre = await page.locator("#e-nombre").inputValue();
+  const marca = await page.locator("#e-marca").inputValue();
+  check("lo escrito en «Marca» justo después de cerrar el aviso se queda en «Marca» (el nombre marcado sigue vacío)", marca === "Agilent 1290" && nombre === "", `nombre=${JSON.stringify(nombre)} marca=${JSON.stringify(marca)}`);
+  await page.keyboard.press("Escape");
 });
 
 await nav.cerrar();

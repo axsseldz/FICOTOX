@@ -44,21 +44,32 @@ const reduceMotion = () => typeof window !== "undefined" && window.matchMedia?.(
 const FOCUSABLE = "input:not([type=hidden]):not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled), [tabindex]:not([tabindex='-1'])";
 
 /* Abre la seccion (evento de FormPage), desplaza al campo y le pone el foco. */
-function irAlCampo(p: Pick<Problema, "campo" | "seccion">, opciones: { enfocar?: boolean } = {}): void {
+function irAlCampo(p: Pick<Problema, "campo" | "seccion">, opciones: { enfocar?: boolean; espera?: number } = {}): void {
   if (typeof window === "undefined") return;
-  if (p.seccion) window.dispatchEvent(new CustomEvent("ficotox:form-open", { detail: p.seccion }));
-  window.setTimeout(
-    () => {
-      const el = document.getElementById(p.campo);
-      if (!el) return;
-      el.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "center" });
-      if (opciones.enfocar === false) return;
-      const destino = el.matches(FOCUSABLE) ? el : el.querySelector<HTMLElement>(FOCUSABLE) || el;
-      if (destino === el && !el.matches(FOCUSABLE) && !el.hasAttribute("tabindex")) el.setAttribute("tabindex", "-1");
-      destino.focus({ preventScroll: true });
-    },
-    p.seccion ? 380 : 30,
-  );
+  // Si en la espera la persona ya escribe o entra a otro campo (clic, tecla), no se le quita el foco: lo que escribiera
+  // iría a dar al campo marcado.
+  let actuo = false;
+  const marcar = () => {
+    actuo = true;
+  };
+  const eventos = ["pointerdown", "keydown", "input"] as const;
+  for (const evento of eventos) document.addEventListener(evento, marcar, true);
+  window.setTimeout(() => {
+    if (p.seccion) window.dispatchEvent(new CustomEvent("ficotox:form-open", { detail: p.seccion }));
+    window.setTimeout(
+      () => {
+        for (const evento of eventos) document.removeEventListener(evento, marcar, true);
+        const el = document.getElementById(p.campo);
+        if (!el || actuo) return;
+        el.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "center" });
+        if (opciones.enfocar === false) return;
+        const destino = el.matches(FOCUSABLE) ? el : el.querySelector<HTMLElement>(FOCUSABLE) || el;
+        if (destino === el && !el.matches(FOCUSABLE) && !el.hasAttribute("tabindex")) el.setAttribute("tabindex", "-1");
+        destino.focus({ preventScroll: true });
+      },
+      p.seccion ? 380 : 30,
+    );
+  }, opciones.espera ?? 0);
 }
 
 type Modo = { tipo: "faltan"; items: Problema[] } | { tipo: "servidor"; que: string; hacer?: string; items?: Problema[] } | { tipo: "aviso"; titulo?: string; que: string; hacer?: string; items: Problema[] };
@@ -168,7 +179,7 @@ export function useValidacion({ titulo, reglas, dato = "dato" }: { titulo: strin
   const cerrar = (destino?: Problema | null) => {
     const ir = destino === undefined ? enfocarAlCerrar : destino;
     setModo(null);
-    if (ir) window.setTimeout(() => irAlCampo(ir), 40);
+    if (ir) irAlCampo(ir, { espera: 40 });
   };
 
   return {

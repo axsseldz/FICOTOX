@@ -2125,7 +2125,9 @@ await paso("qa", "búsqueda global: accesos y resultados de inventario", async (
   await titulosBusqueda(page, "Nuevo equipo");
   await elegirResultado(page, "Nuevo equipo");
   destinos.accion = await page.getByRole("dialog", { name: "Nuevo equipo" }).waitFor().then(() => true);
+  await page.getByRole("dialog", { name: "Buscar", exact: true }).waitFor({ state: "detached" });
   await page.keyboard.press("Escape");
+  await page.getByRole("dialog", { name: "Nuevo equipo" }).waitFor({ state: "detached" });
   check("[cob:I:I-206] un acceso lleva a su vista filtrada (?filtro=bajo) y una acción abre su alta (?nuevo=1)", destinos.vista && destinos.accion, JSON.stringify(destinos));
 
   const resultados = {};
@@ -2142,9 +2144,13 @@ await paso("qa", "búsqueda global: accesos y resultados de inventario", async (
     }
     await elegirResultado(page, titulo);
     await page.waitForURL((u) => u.pathname === ruta && u.searchParams.get("abrir") === String(idEsperado));
-    await page.locator(`[${attr}="${idEsperado}"]`).waitFor();
+    const ventana = page.locator(`[${attr}="${idEsperado}"]`);
+    await ventana.waitFor();
     resultados[titulo] = true;
+    // Escape solo cuando el buscador ya se fue: mientras se cierra sigue siendo la capa de arriba y se lo queda.
+    await page.getByRole("dialog", { name: "Buscar", exact: true }).waitFor({ state: "detached" });
     await page.keyboard.press("Escape");
+    await ventana.waitFor({ state: "detached" });
   }
   check("[cob:I:I-207] resultados de reactivo, consumible, equipo y mantenimiento abren su ficha (?abrir=<id>)", Object.values(resultados).every((x) => x === true), JSON.stringify(resultados));
   const vistos = await titulosBusqueda(page, `BuscaX${S}`);
