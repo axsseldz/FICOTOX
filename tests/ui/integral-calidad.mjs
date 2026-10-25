@@ -140,4 +140,10 @@ if (distribucion) {
 } else check("(sin distribuciones en la base: corre después de api-documentos-fase3)", true);
 
 await nav.cerrar();
+
+// Limpieza: el método ASP y el equipo no pueden quedar suspendidos para las suites siguientes (el E2E extrae con ASP).
+// Reanuda Mejora Continua (no quien suspendió); antes se rechaza la excepción pendiente.
+if (SOL) await api("POST", `/solicitudes/${SOL}/rechazar`, { motivo: "Limpieza de la prueba de pantalla" }, t.ana);
+for (const su of [SU, SP]) if (su) await api("POST", `/calidad/suspensiones/${su}/reanudar`, { motivo: "Fin de la prueba de pantalla" }, t.ana);
+check("(limpieza) sin suspensiones activas de esta suite", !fila("SELECT id FROM suspensiones WHERE id IN (?, ?) AND reanudada_en IS NULL", SU || 0, SP || 0));
 terminar();

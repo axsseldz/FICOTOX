@@ -168,7 +168,7 @@ Cuentas de la base de prueba: `jorge.ramirez` (Administrador técnico), `patrici
 - Con poco disco o memoria `next dev` se cae sin mensaje a media suite: repetir antes de buscar un error en el código.
 - Las pruebas que dan de alta reactivos usan capacidad × piezas; la disposición necesita un informe liberado; en suites de navegador `lib/calidad.mjs` no sirve como cliente web (`BASE` apunta a la web).
 - Pruebas que programan mantenimientos deben usar un equipo propio (rompen `ui/dsp`).
-- Una prueba que altera o borra un archivo en disco para probar la integridad debe devolver el original: la prueba de restauración (más adelante en `run.mjs`) verifica cada archivo por SHA-256.
+- Una prueba que altera o borra un archivo en disco para probar la integridad debe devolver el original: la prueba de restauración (más adelante en `run.mjs`) verifica cada archivo por SHA-256. Igual con las suspensiones de calidad: una suite que suspende un método o un equipo que no creó lo reanuda al final (el E2E extrae con ASP).
 - Suites de la prueba integral: `api-integral-*.mjs` y `ui/integral-*.mjs` (un bug corregido por bloque; `ui/integral-recorrido.mjs` abre cada pantalla con cada rol), `api-cobertura-*.mjs` y `ui/cobertura-*.mjs` (cada check lleva `[cob:<módulo>:<id>]` de la matriz; en `run.mjs` van después de las integrales y antes de respaldos/restaurar). Las que alteran archivos para probar integridad devuelven el original. Las de navegador usan `tests/lib/navegador.mjs` (sin errores de consola ni 5xx; para simular fallas `route.abort`, nunca un 500).
 - Retener la capa de las ventanas al cerrar rompe el menú ⋯.
 - Chrome de Playwright desde la caché o `CHROME_PATH`.
