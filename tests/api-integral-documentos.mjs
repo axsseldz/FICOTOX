@@ -1,5 +1,6 @@
 /*
  * Prueba integral · Documentos SGC (API). Cada bloque es un bug corregido en la prueba integral y falla sin su corrección:
+ * - el responsable de seguimiento de un externo debe poder consultar documentos vigentes (como ofrece la pantalla);
  * - aceptar una solicitud «nuevo» no crea un externo por el flujo interno (400 campo origen);
  * - reasignar una revisión atrasada conserva su fecha límite vencida (antes 400 y había que inventar otra);
  * - con la obsolescencia pendiente no se publica una revisión (409 solicitud_pendiente);
@@ -7,7 +8,7 @@
  * - la nueva versión de un externo conserva la distribución, como una revisión interna;
  * - quien no ve un documento confidencial no resuelve su solicitud (404), ni aprobar ni rechazar;
  * - rechazar la primera revisión no deja el documento sin salida: se abre otra y el mensaje no habla de «la vigente»;
- * - las solicitudes propias se ven aunque haya más de 500 en total;
+ * - las solicitudes propias se ven aunque haya más de 500 en total, y las pendientes llegan primero (pestaña «Pendientes»);
  * - la carga inicial sin próxima revisión toma emisión + 3 años (antes nunca quedaba pendiente de revisión);
  * - el archivo de apoyo de una solicitud se verifica por SHA-256 (alterado → alerta e incidencia; faltante → 404);
  * - el historial heredado (/api/documentos-sgc) solo se lee: las escrituras responden 410.
@@ -107,6 +108,11 @@ const db = () => new Database(process.env.TEST_DB_PATH);
   const d = await doc(E_ID);
   const sinResp = await api("PUT", `/sgc/documentos/${E_ID}`, { clave: d.item?.clave ?? d.clave, titulo: base.titulo, area_codigo: "GC", tipo_codigo: "R", confidencialidad: "uso_interno", propietario_id: "", motivo: "Quitar el responsable" }, t.ana);
   check("un externo no queda sin responsable de seguimiento → 400", sinResp.status === 400 && sinResp.data?.campo === "propietario_id", `${sinResp.status} ${sinResp.data?.message}`);
+  // El responsable de seguimiento verifica la vigencia: debe poder consultar documentos vigentes (Jorge solo ve metadatos).
+  const conJorge = await externo({ ...base, identificador: `NMX-EJ-${s5}-2018`, titulo: `Norma sin seguimiento ${s5}`, responsable_id: id.jorge });
+  const aJorge = await api("PUT", `/sgc/externos/${E_ID}`, { responsable_id: id.jorge, motivo: "Cambiar el responsable" }, t.ana);
+  const igual = await api("PUT", `/sgc/externos/${E_ID}`, { responsable_id: id.ricardo, fuente: "IMNC", motivo: "Mismo responsable" }, t.ana);
+  check("responsable de seguimiento sin consultar vigentes (registrar o cambiar) → 400 campo responsable; el mismo se conserva", conJorge.status === 400 && conJorge.data?.campo === "responsable" && aJorge.status === 400 && aJorge.data?.campo === "responsable" && igual.status === 200 && Number(fila("SELECT responsable_id AS r FROM sgc_externos WHERE documento_id = ?", E_ID)?.r) === id.ricardo, `${conJorge.status} ${conJorge.data?.message} ${aJorge.status} ${igual.status} ${igual.data?.message}`);
   const obs = await api("POST", `/sgc/documentos/${E_ID}/obsoletar`, { motivo: "La norma se retiró" }, t.ana);
   const edita = await api("PUT", `/sgc/externos/${E_ID}`, { fuente: "Otra fuente", motivo: "Corregir la fuente" }, t.ana);
   check("un externo obsoleto no cambia sus datos de seguimiento → 409", fila("SELECT estado FROM sgc_documentos WHERE id = ?", E_ID)?.estado === "obsoleto" && edita.status === 409, `${obs.status} ${obs.data?.message} ${edita.status} ${edita.data?.message}`);
@@ -149,6 +155,9 @@ const db = () => new Database(process.env.TEST_DB_PATH);
   }
   const suyas = (await api("GET", "/sgc/solicitudes", undefined, t.mariana)).data?.items || [];
   check("con más de 500 solicitudes, quien solo propone sigue viendo la suya", propia.status === 201 && suyas.some((x) => Number(x.id) === Number(propia.data?.id)), `${propia.status} ${suyas.length}`);
+  // La pestaña «Pendientes» filtra en la pantalla lo que manda el servidor: una pendiente vieja no debe quedar fuera de las 500.
+  const todas = (await api("GET", "/sgc/solicitudes", undefined, t.ana)).data?.items || [];
+  check("con más de 500 solicitudes más nuevas, quien atiende sigue recibiendo la pendiente (pendientes primero)", todas.some((x) => Number(x.id) === Number(propia.data?.id)) && todas[0]?.estado === "pendiente", `${todas.length} ${todas[0]?.estado}`);
 }
 
 /* ---------- Carga inicial sin próxima revisión ---------- */

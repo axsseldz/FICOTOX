@@ -63,7 +63,15 @@ function useActiveSection(): string {
       { rootMargin: "-20% 0px -65% 0px", threshold: 0 },
     );
     targets.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
+    // Las últimas secciones son cortas y al final de la página nunca llegan a la franja del observador: al tocar fondo se marca la última.
+    const alFondo = () => {
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) setActive(SECTIONS[SECTIONS.length - 1].anchor);
+    };
+    window.addEventListener("scroll", alFondo, { passive: true });
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", alFondo);
+    };
   }, []);
   return active;
 }

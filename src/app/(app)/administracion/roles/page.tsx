@@ -52,7 +52,9 @@ function RolesGuard() {
 }
 
 type EstadoFiltro = "" | "activos" | "inactivos";
-type TipoFiltro = "" | "sistema" | "personalizados";
+type TipoFiltro = "" | "sistema" | "catalogo" | "personalizados";
+/* Del sistema: no se borra; del catálogo: viene de roles-catalogo.json (tiene clave); personalizado: lo creó el laboratorio. */
+const tipoDeRol = (role: ApiRecord): Exclude<TipoFiltro, ""> => (role.es_sistemico ? "sistema" : role.clave ? "catalogo" : "personalizados");
 type UsoFiltro = "" | "con" | "sin";
 
 function RolesContent() {
@@ -82,8 +84,7 @@ function RolesContent() {
       if (term && !normalizeText(String(role.nombre || "")).includes(term)) return false;
       if (estado === "activos" && !role.activo) return false;
       if (estado === "inactivos" && role.activo) return false;
-      if (tipo === "sistema" && !role.es_sistemico) return false;
-      if (tipo === "personalizados" && role.es_sistemico) return false;
+      if (tipo && tipoDeRol(role) !== tipo) return false;
       if (uso === "con" && !Number(role.total_usuarios || 0)) return false;
       if (uso === "sin" && Number(role.total_usuarios || 0)) return false;
       return true;
@@ -132,7 +133,7 @@ function RolesContent() {
 
   const groups: FilterGroup[] = [
     { key: "estado", label: "Estado", value: estado, defaultValue: "", onChange: (v) => setEstado(v as EstadoFiltro), options: [{ value: "", label: "Todos" }, { value: "activos", label: "Activos" }, { value: "inactivos", label: "Inactivos" }] },
-    { key: "tipo", label: "Tipo", value: tipo, defaultValue: "", onChange: (v) => setTipo(v as TipoFiltro), options: [{ value: "", label: "Todos" }, { value: "sistema", label: "Del sistema" }, { value: "personalizados", label: "Personalizados" }] },
+    { key: "tipo", label: "Tipo", value: tipo, defaultValue: "", onChange: (v) => setTipo(v as TipoFiltro), options: [{ value: "", label: "Todos" }, { value: "sistema", label: "Del sistema" }, { value: "catalogo", label: "Del catálogo" }, { value: "personalizados", label: "Personalizados" }] },
     { key: "uso", label: "Uso", value: uso, defaultValue: "", onChange: (v) => setUso(v as UsoFiltro), options: [{ value: "", label: "Todos" }, { value: "con", label: "Con personas asignadas" }, { value: "sin", label: "Sin personas" }] },
   ];
   const filtrando = !!search.trim() || !!estado || !!tipo || !!uso;
@@ -207,7 +208,7 @@ function celdasRol(role: ApiRecord) {
       <span className="text-sm text-ink-3">{total ? (total === 1 ? "1 persona" : `${fmt(total)} personas`) : "Sin personas"}</span>
     </span>,
     <span key="t" className="flex flex-wrap gap-1.5">
-      {role.es_sistemico ? <Badge tone="neutral">Del sistema</Badge> : <Badge tone="brand">Personalizado</Badge>}
+      {{ sistema: <Badge tone="neutral">Del sistema</Badge>, catalogo: <Badge tone="neutral">Del catálogo</Badge>, personalizados: <Badge tone="brand">Personalizado</Badge> }[tipoDeRol(role)]}
       {!role.activo ? <Badge tone="warning">Inactivo</Badge> : null}
     </span>,
   ];

@@ -20,7 +20,7 @@ import { conDato, MasOpciones, VentanaFormulario } from "./VentanaFormulario";
 
 type Resp = { elaborador_id: string; revisor_id: string; autorizador_id: string };
 const respDe = (r?: Revision | null): Resp => ({ elaborador_id: r?.elaborador_id ? String(r.elaborador_id) : "", revisor_id: r?.revisor_id ? String(r.revisor_id) : "", autorizador_id: r?.autorizador_id ? String(r.autorizador_id) : "" });
-const CAMPOS: Record<string, string> = { motivo_cambio: "rev-motivo", elaborador: "rev-elaborador", revisor: "rev-revisor", autorizador: "rev-autorizador", responsables: "rev-elaborador", fecha_emision: "rev-emision", fecha_vigencia: "rev-vigencia", fecha_proxima_revision: "rev-proxima" };
+const CAMPOS: Record<string, string> = { motivo_cambio: "rev-motivo", elaborador: "rev-elaborador", revisor: "rev-revisor", autorizador: "rev-autorizador", responsables: "rev-elaborador", fecha_emision: "rev-emision", fecha_vigencia: "rev-vigencia", fecha_proxima_revision: "rev-proxima", fecha_limite: "rev-limite" };
 
 /*
  * Nueva revision (documento_crear_ficha): crea una revision de trabajo en

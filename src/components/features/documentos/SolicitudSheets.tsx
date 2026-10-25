@@ -59,7 +59,7 @@ export function SolicitudSheet({ catalogos, documento, onClose }: { catalogos: C
   const [justificacion, setJustificacion] = useState("");
   const [apoyo, setApoyo] = useState<File | null>(null);
   const [guardando, setGuardando] = useState(false);
-  const docs = useResource<Array<{ id: number; clave: string; titulo: string }>>("sgc", async () => ((await getJsonAuth(`${API_BASE_URL}/sgc/documentos`, token)).items || []) as Array<{ id: number; clave: string; titulo: string }>, { enabled: !!token && !documento && tipo === "cambio", deps: [tipo] });
+  const docs = useResource<Array<{ id: number; clave: string; titulo: string }>>("sgc", async () => ((await getJsonAuth(`${API_BASE_URL}/sgc/documentos?origen=interno`, token)).items || []) as Array<{ id: number; clave: string; titulo: string }>, { enabled: !!token && !documento && tipo === "cambio", deps: [tipo] });
   const v = useValidacion({
     titulo: "No se pudo registrar la solicitud",
     reglas: (): Problema[] => {

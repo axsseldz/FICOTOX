@@ -21,7 +21,7 @@ import { formatExtractionFolio, getExtractionRowsFromProcessing, isSampleReadOnl
 import { RecordHistory } from "@/components/features/audit/RecordHistory";
 import { formatActiveUserSignature } from "@/lib/client/session";
 import { invalidate } from "@/lib/client/store";
-import { seOfrece, usePuedeCrear } from "@/lib/client/puede";
+import { estaHabilitada, usePuedeCrear } from "@/lib/client/puede";
 import type { ApiRecord } from "@/lib/client/types";
 import { EXTRACTION_TYPES, type ExtractionType } from "@/lib/shared/extraction";
 import { Callout, ChoiceCard, ChoiceGrid, FieldGroup, FormCard, FormPage, PersonCard, StepRow, personaId, type FormSectionDef } from "./FormLayout";
@@ -35,7 +35,7 @@ import { WeightTable, blancoRow, newWeightRow } from "./extraction/WeightTable";
 import type { ExtractionProtocol, ExtractionState, FixedField, ProtocolContext, WeightColumnPair, WeightRow } from "./extraction/types";
 import { SolicitudCallout, SupervisionCallout } from "./status";
 import { formatearHora } from "@/lib/shared/fechas";
-import { AvisoAutorizacion } from "./AvisoAutorizacion";
+import { AvisoAutorizacion, AvisoEdicionBloqueada } from "./AvisoAutorizacion";
 import { metodoDeExtraccion, requisitoEquipo, requisitosExtraccion } from "@/lib/shared/autorizaciones";
 import { firmanteDe, firmantesPayload, type FirmanteState } from "./FirmanteSelect";
 
@@ -461,7 +461,7 @@ export function ExtractionForm({ item, tipo, prefillProcessingId }: { item: ApiR
   const [submitting, setSubmitting] = useState(false);
   const detailCache = useRef(new Map<number, ApiRecord>());
   const editing = !!item?.id;
-  const canEdit = editing ? seOfrece(item, "editar", can("ensayos", "E", { objeto: "extraccion", borrador: String(item?.estado || "registrada") === "registrada" })) : puedeCrear("extraccion", can("ensayos", "C", { objeto: "extraccion", borrador: true }));
+  const canEdit = editing ? estaHabilitada(item, "editar", can("ensayos", "E", { objeto: "extraccion", borrador: String(item?.estado || "registrada") === "registrada" })) : puedeCrear("extraccion", can("ensayos", "C", { objeto: "extraccion", borrador: true }));
   // Con una solicitud de autorizacion pendiente (Fase 3) el registro no se edita.
   const readOnly = editing && (isSampleReadOnly(item?.estado) || !canEdit || !!item?.solicitud_pendiente);
   const patch = (changes: Partial<ExtractionState>) => setForm((prev) => ({ ...prev, ...changes }));
@@ -782,6 +782,7 @@ export function ExtractionForm({ item, tipo, prefillProcessingId }: { item: ApiR
       <SupervisionCallout item={item} />
       <SolicitudCallout item={item} />
       <AvisoSuspension metodo={metodoDeExtraccion(protocol.tipo)} equipoIds={rows.map((row) => (/^\d+$/.test(row.ref) ? row.ref : null))} />
+      <AvisoEdicionBloqueada item={item} cerrado={!editing || isSampleReadOnly(item?.estado)} />
       {!readOnly ? <AvisoAutorizacion requisitos={[...requisitosExtraccion(protocol.tipo), ...rows.filter((row) => row.enCatalogo && /^\d+$/.test(row.ref)).map((row) => requisitoEquipo(row.ref, row.claveCatalogo || row.nombre))]} /> : null}
       {readOnly && item?.motivo_anulacion ? (
         <Callout tone="danger" title="Registro anulado">

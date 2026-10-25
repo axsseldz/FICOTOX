@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Popover as RadixPopover } from "radix-ui";
 import { Bell, Check, Checks, WarningDiamond } from "@phosphor-icons/react";
 import { IncidenciaVentana, NcVentana } from "@/components/features/calidad/ventanas/CalidadVentanas";
+import { abrirMisAutorizaciones, llevaAMiCuenta } from "@/components/shell/AccountSheet";
 import { CORTO, TONO, ventanaDe } from "@/components/features/inicio/pendientes";
 import { useSession } from "@/components/session/SessionProvider";
 import { Conteo, MarcaDibujada } from "@/components/ui/Conteo";
@@ -108,6 +109,7 @@ export function Campana({ compacta = false }: { compacta?: boolean }) {
     setAbierta(false);
     const v = ventanaDe(n.href);
     if (v) setVentana(v);
+    else if (llevaAMiCuenta(n.href)) abrirMisAutorizaciones();
     else router.push(n.href);
   };
 

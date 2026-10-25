@@ -17,7 +17,7 @@ import { fmtDate, isoDate, parseIntOrNull, todayIso } from "@/lib/client/format"
 import { formatSampleFolio, isSampleReadOnly, sampleStatusLabel } from "@/lib/client/samples";
 import { formatActiveUserSignature } from "@/lib/client/session";
 import { invalidate } from "@/lib/client/store";
-import { seOfrece, usePuedeCrear } from "@/lib/client/puede";
+import { estaHabilitada, usePuedeCrear } from "@/lib/client/puede";
 import type { ApiRecord } from "@/lib/client/types";
 import { ACCEPTANCE_DECISIONS, DISPOSAL_TYPES, LEGACY_INSPECTION_REQUIREMENTS, LEGACY_RECEPTION_METHODS, LEGACY_RECEPTION_SAMPLE_TYPES, RECEPTION_ANALYSIS_TYPES, RECEPTION_INSPECTION_REQUIREMENTS, RECEPTION_METHODS, RECEPTION_SAMPLE_TYPES, CLIENT_CONTACT_MEDIA, RECEPTION_DELIVERY_MEDIA, STORAGE_PLACES } from "@/lib/shared/sgc";
 import { Callout, ChoiceCard, ChoiceGrid, EditableScope, FieldGroup, FormCard, FormPage, Panel, PersonCard, personaId, type FormSectionDef } from "./FormLayout";
@@ -27,7 +27,7 @@ import { PersonSelect } from "./PersonSelect";
 import { SignaturePad } from "./SignaturePad";
 import { FolioChip, SampleStatus, SolicitudCallout, SupervisionCallout } from "./status";
 import { formatearHora } from "@/lib/shared/fechas";
-import { AvisoAutorizacion } from "./AvisoAutorizacion";
+import { AvisoAutorizacion, AvisoEdicionBloqueada } from "./AvisoAutorizacion";
 import { DECISIONES_CON_AUTORIZACION, recepcionAsignable, useAccionesRecepcion } from "./RecepcionAcciones";
 import { useConfirm } from "@/components/ui/Overlay";
 import { requisitosRecepcion } from "@/lib/shared/autorizaciones";
@@ -267,7 +267,7 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
   const disponeSinInforme = String(item?.estado || "") === "rechazada";
   const editing = !!item?.id;
   // Con las banderas del servidor (rol + autorización FX-THF-AP + asignación); sin ellas, solo el rol.
-  const canEdit = editing ? seOfrece(item, "editar", can("muestras", "E", { objeto: "recepcion", borrador: String(item?.estado || "registrada") === "registrada" })) : puedeCrear("recepcion", can("muestras", "C", { objeto: "recepcion", borrador: true }));
+  const canEdit = editing ? estaHabilitada(item, "editar", can("muestras", "E", { objeto: "recepcion", borrador: String(item?.estado || "registrada") === "registrada" })) : puedeCrear("recepcion", can("muestras", "C", { objeto: "recepcion", borrador: true }));
   // Con una solicitud de autorizacion pendiente (Fase 3) el registro no se edita.
   const readOnly = editing && (isSampleReadOnly(item?.estado) || !canEdit || !!item?.solicitud_pendiente);
   // Fase 5: asignar, cambiar folio y reabrir (sin muestras:A quedan como solicitud para la Coord. Tecnica).
@@ -666,6 +666,7 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
       <SupervisionCallout item={item} />
       <SolicitudCallout item={item} />
       {acciones.dialogo}
+      <AvisoEdicionBloqueada item={item} cerrado={!editing || isSampleReadOnly(item?.estado)} />
       {!readOnly ? <AvisoAutorizacion requisitos={requisitosRecepcion()} /> : null}
       {readOnly && item?.motivo_anulacion ? (
         <Callout tone="danger" title="Registro anulado">

@@ -224,12 +224,13 @@ export async function listarSolicitudesSgc({ request, s }: RouteContext): Promis
   const a = await acceso(s, user);
   const atiende = tiene(a, "documento_crear_ficha");
   const estado = new URL(request.url).searchParams.get("estado") || "";
-  // Solicitante y estado se filtran antes del límite: quien solo propone ve siempre las suyas aunque haya más de 500 en total.
+  // Solicitante y estado se filtran antes del límite: quien solo propone ve siempre las suyas aunque haya más de 500 en total;
+  // las pendientes van primero para que la pestaña «Pendientes» (filtra en la pantalla) nunca pierda una.
   const where = [...(atiende ? [] : ["so.solicitante_id = :yo"]), ...(estado ? ["so.estado = :estado"] : [])];
   const filas = await s.query<Row>(
     `SELECT so.*, u.nombre AS solicitante_nombre, r.nombre AS resuelta_por_nombre, d.clave AS documento_clave, d.titulo AS documento_titulo
      FROM sgc_solicitudes so LEFT JOIN usuarios u ON u.id = so.solicitante_id LEFT JOIN usuarios r ON r.id = so.resuelta_por LEFT JOIN sgc_documentos d ON d.id = so.documento_id
-     ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY so.id DESC LIMIT 500`,
+     ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY CASE WHEN so.estado = 'pendiente' THEN 0 ELSE 1 END, so.id DESC LIMIT 500`,
     { yo: a.yo, estado },
   );
   const visibles: Row[] = [];

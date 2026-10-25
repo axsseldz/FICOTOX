@@ -12,7 +12,7 @@ import { hashPassword, validatePasswordStrength } from "../password";
 import { exigirReauth } from "../seguridad";
 import { crearSolicitud, datosDe, detalleSolicitud, pendientesDe, respuestaSolicitud, serializarSolicitud, type ContextoEjecucion, type Solicitud } from "../solicitudes";
 import { ACCIONES_CRITICAS } from "../../shared/acciones-criticas";
-import { sumarDias } from "../../shared/fechas";
+import { fechaValida, sumarDias } from "../../shared/fechas";
 import { randomBytes } from "node:crypto";
 
 /*
@@ -48,11 +48,6 @@ function exigirMotivo(motivo: string, que: string): void {
 /* usuarios:V con alcance "propio" solo ve su propia cuenta (ni otras cuentas ni el catalogo de roles). */
 function soloPropio(permiso: Permiso): boolean {
   return !permiso.total && permiso.alcances.every((a) => a === "propio");
-}
-
-function fechaValida(value: unknown): string | null {
-  const text = String(value || "").trim();
-  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
 }
 
 /* ---------- Catalogo ---------- */
@@ -365,7 +360,8 @@ export async function listUsuarios({ request, s }: RouteContext): Promise<Respon
   const permiso = await requirePermission(s, user, "usuarios", "V");
   const rows = soloPropio(permiso)
     ? await s.query(`${USUARIO_SELECT} WHERE u.id = :id`, { id: permiso.auth.userId })
-    : await s.query(`${USUARIO_SELECT} ORDER BY u.id DESC LIMIT 200`);
+    : // Primero las activas: con el tope, las bajas viejas se quedan fuera antes que las cuentas fundadoras.
+      await s.query(`${USUARIO_SELECT} ORDER BY CASE WHEN COALESCE(u.activo, 1) = 1 THEN 0 ELSE 1 END, u.id DESC LIMIT 1000`);
   const ids = rows.map((r) => Number(r.id));
   const asignaciones = await asignacionesDe(s, ids);
   // Para la lista de Usuarios: solicitud pendiente sobre la cuenta y numero de autorizaciones FX-THF-AP vigentes (solo lectura).
@@ -504,6 +500,7 @@ async function prepararAsignacion(s: Session, usuario: Row, payload: Record<stri
   // Fase 2: la vigencia del rol cabe dentro de la de la cuenta (sin fechas: toma las de la cuenta).
   const cuentaDesde = usuario.vigente_desde ? String(usuario.vigente_desde) : null;
   const cuentaHasta = usuario.vigente_hasta ? String(usuario.vigente_hasta) : null;
+  if (payload.vigente_desde && !fechaValida(payload.vigente_desde)) throw new HttpError(400, { message: "La fecha de inicio de vigencia no es valida" });
   const desde = fechaValida(payload.vigente_desde) || (cuentaDesde && cuentaDesde > hoy() ? cuentaDesde : hoy());
   const hasta = payload.vigente_hasta ? fechaValida(payload.vigente_hasta) : cuentaHasta;
   if (payload.vigente_hasta && !hasta) throw new HttpError(400, { message: "La fecha de fin de vigencia no es valida" });

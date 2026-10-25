@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { abrirMisAutorizaciones, llevaAMiCuenta } from "@/components/shell/AccountSheet";
 import { PageBody } from "@/components/shell/AppShell";
 import { Busqueda } from "@/components/shell/Busqueda";
 import { CORTO, TONO, ordenarPendientes } from "@/components/features/inicio/pendientes";
@@ -76,7 +77,15 @@ export default function InicioPage() {
               const tono = TONO[p.tone];
               return (
                 <li key={p.key}>
-                  <Link href={p.href} title={p.label} className="press inline-flex h-8 items-center gap-2 rounded-full bg-surface pr-3 pl-1.5 text-xs text-ink-2 ring-1 ring-line transition-[box-shadow,color] duration-200 hover:text-ink hover:shadow-card">
+                  <Link
+                    href={p.href}
+                    title={p.label}
+                    onClick={(event) => {
+                      if (!llevaAMiCuenta(p.href)) return;
+                      event.preventDefault();
+                      abrirMisAutorizaciones();
+                    }}
+                    className="press inline-flex h-8 items-center gap-2 rounded-full bg-surface pr-3 pl-1.5 text-xs text-ink-2 ring-1 ring-line transition-[box-shadow,color] duration-200 hover:text-ink hover:shadow-card">
                     <span aria-hidden="true" className={cn("flex h-5 w-5 items-center justify-center rounded-full text-xs [&>svg]:h-[1em] [&>svg]:w-[1em]", tono.circulo)}>
                       {corto.icono}
                     </span>

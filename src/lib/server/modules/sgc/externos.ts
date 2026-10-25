@@ -22,7 +22,7 @@ import { HttpError, intParam, json, readJson, type RouteContext } from "../../ht
 import { hoy } from "../../rbac";
 import { exigirReauth } from "../../seguridad";
 import { documentoVisible, tiene, type AccesoSgc } from "./acceso";
-import { acceso, ahora, datosFicha, documentosVisibles, ENTIDAD, exigir, fechaONull, fichaVisible, idONull, palabrasDe, referenciaDe, sgcDir, texto, textoLargo, validarFicha } from "./documentos";
+import { acceso, ahora, datosFicha, documentosVisibles, ENTIDAD, exigir, fechaONull, fichaVisible, idONull, palabrasDe, personas, referenciaDe, sgcDir, texto, textoLargo, validarFicha } from "./documentos";
 import { registrarFlujo } from "./flujo";
 import { copiarDistribucion } from "./lecturas";
 import { enlaceValido, MIME_SGC, MOTIVO_MIN_SGC, pendienteDeRevision } from "../../../shared/documentos";
@@ -72,9 +72,13 @@ function fechasVigencia(raw: Record<string, unknown>) {
   return { ultima, proxima };
 }
 
-async function validarResponsable(s: Session, id: number | null): Promise<number> {
+/* El responsable da seguimiento (verifica la vigencia): cuenta vigente que pueda consultar documentos vigentes, como ofrece la pantalla. Si no cambia, se conserva. */
+async function validarResponsable(s: Session, id: number | null, actual?: number | null): Promise<number> {
   if (!id) throw new HttpError(400, { message: "Elige al responsable de seguimiento", campo: "responsable" });
-  if (!(await s.queryOne<Row>("SELECT id FROM usuarios WHERE id = :id AND COALESCE(activo, 1) = 1", { id }))) throw new HttpError(400, { message: "El responsable debe ser una cuenta activa", campo: "responsable" });
+  if (actual && id === actual) return id;
+  const p = (await personas(s)).find((x) => x.id === id);
+  if (!p) throw new HttpError(400, { message: "El responsable debe ser una cuenta activa", campo: "responsable" });
+  if (!p.acciones.includes("documento_consultar_vigente")) throw new HttpError(400, { message: `${p.nombre} no puede consultar documentos vigentes; elige a otra persona para el seguimiento`, campo: "responsable" });
   return id;
 }
 
@@ -209,7 +213,7 @@ export async function editarExterno({ request, s, params }: RouteContext): Promi
   const motivo = String(raw.motivo || "").trim();
   if (motivo.length < MOTIVO_MIN_SGC) throw new HttpError(400, { message: `Indica el motivo (al menos ${MOTIVO_MIN_SGC} caracteres)`, campo: "motivo" });
   const seg = datosSeguimiento({ fuente: raw.fuente ?? ext.fuente, version_fecha: ext.version_fecha, enlace: raw.enlace === undefined ? ext.enlace : raw.enlace });
-  const responsable = raw.responsable_id === undefined ? Number(ext.responsable_id) : await validarResponsable(s, idONull(raw.responsable_id));
+  const responsable = raw.responsable_id === undefined ? Number(ext.responsable_id) : await validarResponsable(s, idONull(raw.responsable_id), Number(ext.responsable_id) || null);
   const antes = { fuente: ext.fuente ?? null, enlace: ext.enlace ?? null, responsable_id: ext.responsable_id ?? null };
   const despues = { fuente: seg.fuente, enlace: seg.enlace, responsable_id: responsable };
   await s.execute("UPDATE sgc_externos SET fuente = :f, enlace = :e, responsable_id = :r, actualizado_en = :en WHERE id = :id", { f: seg.fuente, e: seg.enlace, r: responsable, en: ahora(), id: ext.id });

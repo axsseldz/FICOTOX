@@ -21,7 +21,7 @@ import { fmtDate, isoDate, parseFloatOrNull, parseIntOrNull, todayIso } from "@/
 import { findInsumoOption, findUniqueOperativeEquipo, loadInsumoOptions, nextBitacoraFolio } from "@/lib/client/insumos";
 import { formatActiveUserSignature } from "@/lib/client/session";
 import { invalidate } from "@/lib/client/store";
-import { seOfrece, usePuedeCrear } from "@/lib/client/puede";
+import { estaHabilitada, seOfrece, usePuedeCrear } from "@/lib/client/puede";
 import type { ApiRecord } from "@/lib/client/types";
 import { ANALYSIS_METHODS, ANALYSIS_STATES, ANALYSIS_TYPES, CONFORMITY_OPTIONS } from "@/lib/shared/sgc";
 import { Callout, ChoiceCard, ChoiceGrid, FieldGroup, FlowSteps, FormCard, FormPage, Panel, PersonCard, SignoffCard, personaId, type FormSectionDef } from "./FormLayout";
@@ -32,7 +32,7 @@ import { SignDialog } from "./SignDialog";
 import { BotonSegregado, FolioChip, SegregacionCallout, SolicitudCallout, SupervisionCallout } from "./status";
 import { useAnulacion } from "./useAnulacion";
 import { formatearHora } from "@/lib/shared/fechas";
-import { AvisoAutorizacion } from "./AvisoAutorizacion";
+import { AvisoAutorizacion, AvisoEdicionBloqueada } from "./AvisoAutorizacion";
 import { metodoDeTipoAnalisis, requisitosAnalisis, requisitosRevisionResultados } from "@/lib/shared/autorizaciones";
 import { firmanteDe, firmantesPayload, type FirmanteState } from "./FirmanteSelect";
 import { EvidenciaPanel } from "./EvidenciaPanel";
@@ -206,7 +206,7 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
   const editing = !!item?.id;
   const estado = String(item?.estado || "registrado");
   // E solo mientras el análisis está registrado (Fase 1): revisado y aprobado se leen, no se editan.
-  const canEdit = editing ? seOfrece(item, "editar", can("ensayos", "E", { objeto: "analisis", borrador: estado === "registrado" })) && estado === "registrado" : puedeCrear("analisis", can("ensayos", "C", { objeto: "analisis", borrador: true }));
+  const canEdit = editing ? estaHabilitada(item, "editar", can("ensayos", "E", { objeto: "analisis", borrador: estado === "registrado" })) && estado === "registrado" : puedeCrear("analisis", can("ensayos", "C", { objeto: "analisis", borrador: true }));
   // Con una solicitud de autorizacion pendiente (Fase 3) el registro no se edita.
   // Fase 5: enviado a revision ya no se edita; un aprobado se corrige con enmienda.
   const readOnly = editing && (["en_revision", "aprobado", "revisado", "sustituido", "anulado", "anulada"].includes(estado) || !canEdit || !!item?.solicitud_pendiente);
@@ -639,6 +639,7 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
         </Callout>
       ) : null}
       {estado === "en_revision" ? <Callout tone="info">Enviado a revisión: ya no se edita. El revisor lo revisa o lo devuelve con observaciones.</Callout> : null}
+      <AvisoEdicionBloqueada item={item} cerrado={!editing || estado !== "registrado"} />
       {!readOnly ? <AvisoAutorizacion requisitos={requisitosAnalisis(form.tipo)} /> : null}
       {editing && (estado === "registrado" || estado === "en_revision") && canReview ? <AvisoAutorizacion requisitos={requisitosRevisionResultados(form.tipo, "revisar")} accion="revisar este análisis" /> : null}
       {editing && estado === "revisado" && canApprove ? <AvisoAutorizacion requisitos={requisitosRevisionResultados(form.tipo, "aprobar")} accion="aprobar este análisis" /> : null}
