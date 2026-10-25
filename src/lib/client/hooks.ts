@@ -98,11 +98,19 @@ export function useAbrirDesdeUrl<T extends { id?: unknown }>(filas: T[] | null |
   const router = useRouter();
   const valor = params.get(parametro);
   const abrirRef = useRef(abrir);
+  // Valor ya atendido: mientras router.replace no quita el parámetro (lento con el servidor ocupado), una lista
+  // nueva volvía a abrir la ventana, aun después de cerrarla.
+  const atendido = useRef<string | null>(null);
   useEffect(() => {
     abrirRef.current = abrir;
   });
   useEffect(() => {
-    if (!valor || !filas) return;
+    if (!valor) {
+      atendido.current = null;
+      return;
+    }
+    if (!filas || atendido.current === valor) return;
+    atendido.current = valor;
     const indice = filas.findIndex((fila) => String(fila.id) === valor);
     void Promise.resolve().then(() => {
       if (indice >= 0) abrirRef.current(indice);

@@ -5,7 +5,8 @@
  * - la lista de consumibles mostraba una columna «Caducidad» siempre vacía (la tabla no la tiene): ahora «Ingreso»;
  * - un ajuste sin diferencia se pintaba «−0»;
  * - «Stock bajo» en la lista contaba reactivos sin existencia canónica (columnas heredadas) que el Inicio no cuenta;
- * - ?abrir= de un registro que no está en la lista no avisaba nada;
+ * - ?abrir= de un registro que no está en la lista no avisaba nada; y una lista nueva antes de que se quitara de la
+ *   dirección volvía a abrir la ventana ya cerrada;
  * - la pista del stock mínimo de consumibles decía «Opcional. Opcional, …»;
  * - el selector «Responsable» del equipo salía vacío a quien edita equipos sin usuarios:V.
  * Sin errores de consola ni respuestas 5xx.
@@ -149,6 +150,30 @@ await paso("qa", "reactivos: stock bajo como el Inicio y ?abrir= que avisa", asy
     await page.keyboard.press("Escape");
   });
 }
+
+/* ---------- ?abrir= no vuelve a abrir la ventana ya cerrada ---------- */
+// Con el servidor ocupado, router.replace tarda en quitar ?abrir= de la dirección: antes, cualquier lista nueva en ese
+// lapso (aquí, la búsqueda) volvía a abrir la ventana aunque se hubiera cerrado. Se retrasan las peticiones RSC de la
+// navegación para que el parámetro siga ahí mientras se busca.
+await paso("qa", "?abrir= no reabre la ventana cerrada mientras la dirección se actualiza", async (page) => {
+  await page.route("**/*", async (route) => {
+    const req = route.request();
+    if (req.headers()["rsc"] === "1" || new URL(req.url()).searchParams.has("_rsc")) await new Promise((r) => setTimeout(r, 8_000));
+    await route.continue().catch(() => {});
+  });
+  await page.goto(`${BASE_WEB}/inventario/equipos?abrir=${E}`);
+  const ventana = page.locator(`[data-equipo-ventana="${E}"]`);
+  await ventana.waitFor();
+  await page.keyboard.press("Escape");
+  await ventana.waitFor({ state: "detached" });
+  const sigue = new URL(page.url()).searchParams.get("abrir") === String(E);
+  const lista = page.waitForResponse((r) => new URL(r.url()).pathname === "/api/inventory/equipos" && new URL(r.url()).searchParams.get("search") === equipo);
+  await page.getByPlaceholder("Buscar por nombre, marca o modelo").fill(equipo);
+  await lista;
+  const reabierta = await ventana.waitFor({ timeout: 3_000 }).then(() => true).catch(() => false);
+  check("cerrada la ventana de ?abrir=, una lista nueva no la vuelve a abrir (aunque el parámetro siga en la dirección)", !reabierta && sigue, `reabierta=${reabierta} parámetro aún en la dirección=${sigue}`);
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+});
 
 await nav.cerrar();
 terminar();

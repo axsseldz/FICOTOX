@@ -275,6 +275,9 @@ try {
     const { context, page } = await nueva();
     try {
       await entrar(page, revocada.email, PWD);
+      // Que la primera pantalla termine de cargar: si sus peticiones reciben el 401 después del cierre, ya llevan al
+      // acceso con el motivo y la navegación siguiente (sin token) llegaría al acceso sin mensaje.
+      await page.waitForLoadState("networkidle");
       const otro = (await api("POST", "/auth/login", { email: revocada.email, password: PWD })).data?.token;
       await api("POST", "/auth/logout-all", {}, otro);
       await page.goto(`${BASE}/muestras/recepcion`);
