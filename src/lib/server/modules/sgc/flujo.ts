@@ -21,11 +21,11 @@
  * distintas y nadie actua en un papel que no le fue asignado. El administrador
  * tecnico no tiene acciones documentales: no actua en ningun paso.
  */
-import fs from "node:fs";
 import path from "node:path";
 import { requireUser, type CurrentUser } from "../../auth";
 import { registrarAuditoria } from "../../audit";
-import { contentDisposition, descartarArchivo, guardarArchivoEn, rutaEn, validarArchivoSubido, type ArchivoGuardado } from "../../adjuntos";
+import { contentDisposition, descartarArchivo, guardarArchivoEn, integridadArchivo, rutaEn, validarArchivoSubido, type ArchivoGuardado } from "../../adjuntos";
+import { incidenciaPorAlertaIntegridad } from "../calidad/automaticas";
 import { getConfig } from "../../config";
 import { type Row, type Session } from "../../db";
 import { HttpError, intParam, json, readJson, type RouteContext } from "../../http";
@@ -224,15 +224,17 @@ export async function listarSolicitudesSgc({ request, s }: RouteContext): Promis
   const a = await acceso(s, user);
   const atiende = tiene(a, "documento_crear_ficha");
   const estado = new URL(request.url).searchParams.get("estado") || "";
+  // Solicitante y estado se filtran antes del límite: quien solo propone ve siempre las suyas aunque haya más de 500 en total;
+  // las pendientes van primero para que la pestaña «Pendientes» (filtra en la pantalla) nunca pierda una.
+  const where = [...(atiende ? [] : ["so.solicitante_id = :yo"]), ...(estado ? ["so.estado = :estado"] : [])];
   const filas = await s.query<Row>(
     `SELECT so.*, u.nombre AS solicitante_nombre, r.nombre AS resuelta_por_nombre, d.clave AS documento_clave, d.titulo AS documento_titulo
      FROM sgc_solicitudes so LEFT JOIN usuarios u ON u.id = so.solicitante_id LEFT JOIN usuarios r ON r.id = so.resuelta_por LEFT JOIN sgc_documentos d ON d.id = so.documento_id
-     ORDER BY so.id DESC LIMIT 500`,
+     ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY CASE WHEN so.estado = 'pendiente' THEN 0 ELSE 1 END, so.id DESC LIMIT 500`,
+    { yo: a.yo, estado },
   );
   const visibles: Row[] = [];
   for (const f of filas) {
-    if (!atiende && Number(f.solicitante_id) !== a.yo) continue;
-    if (estado && f.estado !== estado) continue;
     // Una solicitud sobre un documento que la persona ya no puede ver no muestra sus datos.
     if (f.documento_id) {
       const ve = await documentoVisible(s, a, Number(f.documento_id)).then(() => true, () => false);
@@ -243,6 +245,7 @@ export async function listarSolicitudesSgc({ request, s }: RouteContext): Promis
         f.justificacion = "(oculta: no tienes acceso al documento)";
         f.necesidad = null;
         f.apoyo_nombre_almacenado = null;
+        f.apoyo_nombre_original = null;
       }
     }
     const { apoyo_nombre_almacenado: _x, ...resto } = f;
@@ -264,12 +267,21 @@ export async function apoyoSolicitud({ request, s, params }: RouteContext): Prom
   const f = await solicitudDe(s, a, intParam(params.sid));
   if (f.documento_id && !(await documentoVisible(s, a, Number(f.documento_id)).then(() => true, () => false))) throw new HttpError(404, { message: "Solicitud no encontrada" });
   if (!f.apoyo_nombre_almacenado) throw new HttpError(404, { message: "La solicitud no tiene archivo de apoyo" });
-  const ruta = rutaEn(sgcDir(), f.apoyo_nombre_almacenado);
-  if (!fs.existsSync(ruta)) throw new HttpError(404, { message: "El archivo no está en el servidor" });
-  const bytes = await fs.promises.readFile(ruta);
-  await registrarAuditoria(s, user, { accion: "descargar", entidad: "sgc_solicitudes", entidadId: Number(f.id), referencia: refSolicitud(Number(f.id)), detalle: { nombre: f.apoyo_nombre_original } });
+  // Como el resto de los archivos SGC: se verifica su SHA-256 (alterado o faltante → alerta e incidencia automática).
+  const integridad = await integridadArchivo(rutaEn(sgcDir(), f.apoyo_nombre_almacenado), f.apoyo_sha256);
+  const referencia = refSolicitud(Number(f.id));
+  if (integridad.estado !== "ok") {
+    await registrarAuditoria(s, user, { accion: "alerta_integridad", entidad: "sgc_solicitudes", entidadId: Number(f.id), referencia, detalle: { nombre: f.apoyo_nombre_original, integridad: integridad.estado, esperado: f.apoyo_sha256, obtenido: integridad.sha256 } });
+    await incidenciaPorAlertaIntegridad(s, { clave: `sgc_apoyo:${f.id}:${integridad.estado}`, descripcion: `El archivo de apoyo "${String(f.apoyo_nombre_original)}" de la ${referencia} ${integridad.estado === "faltante" ? "no está en el servidor" : "no coincide con su huella SHA-256"} (alerta de integridad).`, registros: [] });
+  }
+  if (!integridad.bytes) {
+    await s.commit();
+    return new Response(JSON.stringify({ message: "El archivo no está en el servidor; se registró una alerta de integridad", codigo: "archivo_faltante" }), { status: 404, headers: { "Content-Type": "application/json", "X-Integridad-Archivo": "faltante" } });
+  }
+  const bytes = integridad.bytes;
+  await registrarAuditoria(s, user, { accion: "descargar", entidad: "sgc_solicitudes", entidadId: Number(f.id), referencia, detalle: { nombre: f.apoyo_nombre_original } });
   await s.commit();
-  return new Response(new Uint8Array(bytes), { status: 200, headers: { "Content-Type": String(f.apoyo_mime || "application/octet-stream"), "Content-Disposition": contentDisposition("attachment", String(f.apoyo_nombre_original)), "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store", "Content-Length": String(bytes.length) } });
+  return new Response(new Uint8Array(bytes), { status: 200, headers: { "Content-Type": String(f.apoyo_mime || "application/octet-stream"), "Content-Disposition": contentDisposition("attachment", String(f.apoyo_nombre_original)), "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store", "Content-Length": String(bytes.length), "X-Integridad-Archivo": integridad.estado } });
 }
 
 /*
@@ -306,7 +318,10 @@ async function aceptarInterna(s: Session, user: CurrentUser, a: AccesoSgc, reque
   let numero: number;
   let referencia: string;
   let clave: string | null = null;
+  let hayVigente = false;
   if (f.tipo === "nuevo") {
+    // Como al crear la ficha: un externo se registra en «Documentos externos», no por el flujo interno.
+    if (raw.origen === "externo") throw new HttpError(400, { message: "Los documentos externos se registran en «Documentos externos»", campo: "origen" });
     const d = await validarFicha(s, datosFicha({ ...raw, area_codigo: raw.area_codigo ?? f.area_codigo, tipo_codigo: raw.tipo_codigo ?? f.tipo_codigo, titulo: raw.titulo ?? f.titulo_propuesto }), 0, a);
     numero = raw.numero === undefined || raw.numero === "" ? 1 : Number(raw.numero);
     if (!Number.isInteger(numero) || numero < 0 || numero > 999) throw new HttpError(400, { message: "La revisión inicial debe ser un número entero (0 a 999)", campo: "numero" });
@@ -330,6 +345,7 @@ async function aceptarInterna(s: Session, user: CurrentUser, a: AccesoSgc, reque
     await exigirSinSolicitudPendiente(s, ENTIDAD, docId, referenciaDe(doc), "abrir una revisión");
     numero = Math.max(0, ...revisiones.map((r) => Number(r.numero))) + 1;
     referencia = referenciaDe(doc);
+    hayVigente = revisiones.some((r) => r.estado === "vigente");
   }
   const motivo = textoLargo(raw.motivo_cambio) || (f.tipo === "nuevo" ? "Emisión inicial" : String(f.justificacion));
   const rv = await s.execute(
@@ -345,7 +361,7 @@ async function aceptarInterna(s: Session, user: CurrentUser, a: AccesoSgc, reque
   await registrarFlujo(s, { revision_id: revId, accion: "aceptar_solicitud", comentario: textoLargo(raw.comentario, 2000), usuario_id: a.yo, cargo, papel: "publicador", fecha: en });
   await registrarAuditoria(s, user, { accion: "nueva_revision", entidad: ENTIDAD, entidadId: docId, referencia, motivo, detalle: { solicitud_id: Number(f.id), tipo_solicitud: f.tipo, revision: numero, revision_id: revId, estado: "borrador", ...resp, fecha_limite: fechaLimite, ...(cargo ? { actuo_como: { cargo } } : {}) } });
   await registrarAuditoria(s, user, { accion: "aceptar", entidad: "sgc_solicitudes", entidadId: Number(f.id), referencia: refSolicitud(Number(f.id)), detalle: { documento_id: docId, revision_id: revId, tipo: f.tipo, clave } });
-  return { message: f.tipo === "nuevo" ? `Solicitud aceptada: ficha ${clave} creada con la revisión ${numero} en borrador` : `Solicitud aceptada: revisión ${numero} abierta en borrador; la vigente sigue en uso`, documento_id: docId, revision_id: revId, numero };
+  return { message: f.tipo === "nuevo" ? `Solicitud aceptada: ficha ${clave} creada con la revisión ${numero} en borrador` : `Solicitud aceptada: revisión ${numero} abierta en borrador${hayVigente ? "; la vigente sigue en uso" : ""}`, documento_id: docId, revision_id: revId, numero };
 }
 
 export async function rechazarSolicitudSgc({ request, s, params }: RouteContext): Promise<Response> {
@@ -396,13 +412,15 @@ export async function registrarSolicitudDeFicha(s: Session, a: AccesoSgc, doc: {
 /* ---------- Transiciones de una revision ---------- */
 
 async function cancelarRevision(s: Session, rev: Row, por: number): Promise<void> {
-  await s.execute("UPDATE sgc_revisiones SET estado = 'cancelada', cancelada_en = :en, cancelada_por = :por, actualizado_por = :por, actualizado_en = :en WHERE id = :id", { en: ahora(), por, id: rev.id });
+  // Solo desde el estado en que se leyó: si otra persona la cambió al mismo tiempo, 409 (y nada se registra).
+  const r = await s.execute("UPDATE sgc_revisiones SET estado = 'cancelada', cancelada_en = :en, cancelada_por = :por, actualizado_por = :por, actualizado_en = :en WHERE id = :id AND estado = :actual", { en: ahora(), por, id: rev.id, actual: rev.estado });
+  if (!r.rowcount) throw new HttpError(409, { message: "Otra persona cambió la revisión al mismo tiempo; recarga la página" });
 }
 
 export async function revisarRevision({ request, s, params }: RouteContext): Promise<Response> {
   const user = await requireUser(request);
   const a = await acceso(s, user);
-  const { doc, rev } = await revisionVisible(s, a, intParam(params.rid));
+  const { doc, rev, revisiones } = await revisionVisible(s, a, intParam(params.rid));
   exigirPapel(a, rev, "revisor", "documento_revisar");
   exigirEstado(rev, ["en_revision"], "en revisión");
   await exigirSinOtroPapel(s, Number(rev.id), a.yo, "revisor");
@@ -421,14 +439,14 @@ export async function revisarRevision({ request, s, params }: RouteContext): Pro
   await registrarFlujo(s, { revision_id: Number(rev.id), accion: `revisar_${decision}`, decision, comentario, usuario_id: a.yo, cargo, papel: "revisor", fecha: en });
   await registrarAuditoria(s, user, { accion: decision === "aceptar" ? "revisar" : decision === "devolver" ? "devolver" : "rechazar", entidad: ENTIDAD, entidadId: Number(doc.id), referencia: `${referenciaDe(doc)} rev. ${rev.numero}`, motivo: comentario, antes: { estado: "en_revision" }, despues: { estado: nuevo }, detalle: { revision: Number(rev.numero), revision_id: Number(rev.id), papel: "revisor", decision, ...(cargo ? { actuo_como: { cargo } } : {}) } });
   await s.commit();
-  const msg = { aceptar: "Revisión aceptada: pasa a autorización", devolver: "Devuelta al elaborador con tus comentarios", rechazar: "Revisión rechazada; la vigente sigue en uso" }[decision as "aceptar"];
+  const msg = { aceptar: "Revisión aceptada: pasa a autorización", devolver: "Devuelta al elaborador con tus comentarios", rechazar: revisiones.some((r) => r.estado === "vigente") ? "Revisión rechazada; la vigente sigue en uso" : "Revisión rechazada; el documento sigue sin revisión vigente y Mejora Continua puede abrir otra" }[decision as "aceptar"];
   return json({ message: msg, estado: nuevo });
 }
 
 export async function autorizarRevision({ request, s, params }: RouteContext): Promise<Response> {
   const user = await requireUser(request);
   const a = await acceso(s, user);
-  const { doc, rev } = await revisionVisible(s, a, intParam(params.rid));
+  const { doc, rev, revisiones } = await revisionVisible(s, a, intParam(params.rid));
   exigirPapel(a, rev, "autorizador", "documento_autorizar");
   exigirEstado(rev, ["en_autorizacion"], "en autorización");
   await exigirSinOtroPapel(s, Number(rev.id), a.yo, "autorizador");
@@ -448,7 +466,7 @@ export async function autorizarRevision({ request, s, params }: RouteContext): P
   await registrarFlujo(s, { revision_id: Number(rev.id), accion: decision === "autorizar" ? "autorizar" : `autorizar_${decision}`, decision, comentario, usuario_id: a.yo, cargo, papel: "autorizador", fecha: en });
   await registrarAuditoria(s, user, { accion: decision === "autorizar" ? "autorizar" : decision === "devolver" ? "devolver" : "rechazar", entidad: ENTIDAD, entidadId: Number(doc.id), referencia: `${referenciaDe(doc)} rev. ${rev.numero}`, motivo: comentario, antes: { estado: "en_autorizacion" }, despues: { estado: nuevo }, detalle: { revision: Number(rev.numero), revision_id: Number(rev.id), papel: "autorizador", decision, ...(cargo ? { actuo_como: { cargo } } : {}) } });
   await s.commit();
-  const msg = { autorizar: "Revisión autorizada: Mejora Continua la publicará", devolver: "Devuelta al elaborador con tus comentarios", rechazar: "Revisión rechazada; la vigente sigue en uso" }[decision as "autorizar"];
+  const msg = { autorizar: "Revisión autorizada: Mejora Continua la publicará", devolver: "Devuelta al elaborador con tus comentarios", rechazar: revisiones.some((r) => r.estado === "vigente") ? "Revisión rechazada; la vigente sigue en uso" : "Revisión rechazada; el documento sigue sin revisión vigente y Mejora Continua puede abrir otra" }[decision as "autorizar"];
   return json({ message: msg, estado: nuevo });
 }
 
@@ -475,6 +493,8 @@ export async function publicarRevision({ request, s, params }: RouteContext): Pr
   // Distribucion (Fase 3): la que se indique al publicar; si no se indica, se conserva la de la revision anterior.
   const distribucion = datosDistribucion(raw.distribucion);
   if (distribucion && !tiene(a, "documento_administrar_lecturas")) throw new HttpError(403, { message: "Solo quien administra lecturas define la distribución (documento_administrar_lecturas)", codigo: "sin_permiso" });
+  // Con la obsolescencia pendiente no se publica: al aprobarse dejaría obsoleta la revisión recién publicada.
+  await exigirSinSolicitudPendiente(s, ENTIDAD, Number(doc.id), referenciaDe(doc), "publicar una revisión");
   await exigirReauth(s, request, user, "documentos:publicar");
   const cargo = cargoDe(request, a, "documento_publicar");
   const en = ahora();
@@ -525,11 +545,13 @@ export async function reasignarRevision({ request, s, params }: RouteContext): P
   for (const [campo, papel] of [["elaborador_id", "elaborador"], ["revisor_id", "revisor"], ["autorizador_id", "autorizador"]] as const) if (!nuevo[campo]) throw new HttpError(400, { message: `Asigna al ${papel}`, campo: papel });
   await validarResponsables(s, nuevo);
   for (const papel of ["elaborador", "revisor", "autorizador"] as const) await exigirSinOtroPapel(s, Number(rev.id), Number(nuevo[`${papel}_id`]), papel, 400);
-  const limite = raw.fecha_limite === undefined ? (rev.fecha_limite ?? null) : fechaLimiteDe(raw);
+  // La fecha límite que ya tenía se conserva aunque haya pasado (justo el caso de una revisión atrasada); una nueva, de hoy en adelante.
+  const limite = raw.fecha_limite === undefined || String(raw.fecha_limite ?? "") === String(rev.fecha_limite ?? "") ? (rev.fecha_limite ?? null) : fechaLimiteDe(raw);
   const antes = { elaborador_id: rev.elaborador_id ?? null, revisor_id: rev.revisor_id ?? null, autorizador_id: rev.autorizador_id ?? null, fecha_limite: rev.fecha_limite ?? null };
   const despues = { ...nuevo, fecha_limite: limite };
   if (JSON.stringify(antes) === JSON.stringify(despues)) throw new HttpError(400, { message: "No cambiaste a ningún responsable ni la fecha límite" });
-  await s.execute("UPDATE sgc_revisiones SET elaborador_id = :elaborador_id, revisor_id = :revisor_id, autorizador_id = :autorizador_id, fecha_limite = :limite, actualizado_por = :por, actualizado_en = :en WHERE id = :id", { ...nuevo, limite, por: a.yo, en: ahora(), id: rev.id });
+  const re = await s.execute("UPDATE sgc_revisiones SET elaborador_id = :elaborador_id, revisor_id = :revisor_id, autorizador_id = :autorizador_id, fecha_limite = :limite, actualizado_por = :por, actualizado_en = :en WHERE id = :id AND estado = :actual", { ...nuevo, limite, por: a.yo, en: ahora(), id: rev.id, actual: rev.estado });
+  if (!re.rowcount) throw new HttpError(409, { message: "Otra persona cambió la revisión al mismo tiempo; recarga la página" });
   const cargo = cargoDe(request, a, "documento_crear_ficha");
   await registrarFlujo(s, { revision_id: Number(rev.id), accion: "reasignar", comentario: motivo, usuario_id: a.yo, cargo, papel: "publicador" });
   await registrarAuditoria(s, user, { accion: "reasignar", entidad: ENTIDAD, entidadId: Number(doc.id), referencia: `${referenciaDe(doc)} rev. ${rev.numero}`, motivo, antes, despues, detalle: { revision: Number(rev.numero), revision_id: Number(rev.id) } });
@@ -628,7 +650,8 @@ export async function autorizarRenovacion({ request, s, params }: RouteContext):
     const u = await s.execute("UPDATE sgc_revisiones SET fecha_proxima_revision = :nueva, renovada_en = :en, actualizado_por = :por, actualizado_en = :en WHERE id = :id AND estado = 'vigente'", { nueva: ren.fecha_proxima_nueva, en, por: a.yo, id: vigente.id });
     if (!u.rowcount) throw new HttpError(409, { message: "La revisión ya no está vigente" });
   } else {
-    await s.execute("UPDATE sgc_renovaciones SET estado = 'cancelada', cancelada_en = :en, cancelada_por = :por WHERE id = :id AND estado = 'en_autorizacion'", { en, por: a.yo, id: ren.id });
+    const c = await s.execute("UPDATE sgc_renovaciones SET estado = 'cancelada', cancelada_en = :en, cancelada_por = :por WHERE id = :id AND estado = 'en_autorizacion'", { en, por: a.yo, id: ren.id });
+    if (!c.rowcount) throw new HttpError(409, { message: "Otra persona cambió la renovación al mismo tiempo; recarga la página" });
   }
   await registrarFlujo(s, { revision_id: Number(vigente.id), accion: decision === "autorizar" ? "renovacion_autorizar" : "renovacion_rechazar", decision, comentario, usuario_id: a.yo, cargo, papel: "autorizador", renovacion_id: Number(ren.id), fecha: en });
   await registrarAuditoria(s, user, {

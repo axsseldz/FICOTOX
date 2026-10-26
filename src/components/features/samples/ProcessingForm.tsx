@@ -19,7 +19,7 @@ import { filterManualInventario, findInsumoByAutoQuery, findInsumoOption, findUn
 import { formatProcessingFolio, isSampleReadOnly, sampleStatusLabel } from "@/lib/client/samples";
 import { formatActiveUserSignature } from "@/lib/client/session";
 import { invalidate } from "@/lib/client/store";
-import { seOfrece, usePuedeCrear } from "@/lib/client/puede";
+import { estaHabilitada, usePuedeCrear } from "@/lib/client/puede";
 import type { ApiRecord } from "@/lib/client/types";
 import { Callout, ChoiceCard, ChoiceGrid, FormCard, FormPage, FormTable, PersonCard, StepRow, formTd, formTh, personaId, type FormSectionDef } from "./FormLayout";
 import { CampoValidado, MensajeCampo, useValidacion } from "@/components/ui/Validacion";
@@ -27,7 +27,7 @@ import { msg, type Problema } from "@/lib/client/mensajes";
 import { InsumoSearch, InventarioRows, collectInventarioRows, newInventarioRow } from "./InsumoSearch";
 import { SolicitudCallout, SupervisionCallout } from "./status";
 import { formatearHora } from "@/lib/shared/fechas";
-import { AvisoAutorizacion } from "./AvisoAutorizacion";
+import { AvisoAutorizacion, AvisoEdicionBloqueada } from "./AvisoAutorizacion";
 import { requisitosProcesamiento } from "@/lib/shared/autorizaciones";
 import { firmanteDe, firmantesPayload, type FirmanteState } from "./FirmanteSelect";
 
@@ -276,7 +276,7 @@ export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord |
   const [submitting, setSubmitting] = useState(false);
   const detailCache = useRef(new Map<number, ApiRecord>());
   const editing = !!item?.id;
-  const canEdit = editing ? seOfrece(item, "editar", can("ensayos", "E", { objeto: "procesamiento", borrador: String(item?.estado || "registrada") === "registrada" })) : puedeCrear("procesamiento", can("ensayos", "C", { objeto: "procesamiento", borrador: true }));
+  const canEdit = editing ? estaHabilitada(item, "editar", can("ensayos", "E", { objeto: "procesamiento", borrador: String(item?.estado || "registrada") === "registrada" })) : puedeCrear("procesamiento", can("ensayos", "C", { objeto: "procesamiento", borrador: true }));
   // Con una solicitud de autorizacion pendiente (Fase 3) el registro no se edita.
   const readOnly = editing && (isSampleReadOnly(item?.estado) || !canEdit || !!item?.solicitud_pendiente);
   const patch = (changes: Partial<ProcessingForm>) => setForm((prev) => ({ ...prev, ...changes }));
@@ -290,6 +290,7 @@ export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord |
     const datos = en("sec-datos", "Datos generales");
     if (!form.folio) datos("p-folio", msg.indica("el folio de procesamiento"));
     if (!form.fecha) datos("p-fecha", msg.indica("la fecha de procesamiento"));
+    if (!form.hora) datos("p-hora", msg.indica("la hora de procesamiento"));
     const mu = en("sec-muestra", "Muestra");
     if (!form.receptionId) mu("p-recepcion", msg.elige("la recepción de origen"));
     if (form.muestraTipo === "lote") {
@@ -523,6 +524,7 @@ export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord |
     >
       <SupervisionCallout item={item} />
       <SolicitudCallout item={item} />
+      <AvisoEdicionBloqueada item={item} cerrado={!editing || isSampleReadOnly(item?.estado)} />
       {!readOnly ? <AvisoAutorizacion requisitos={requisitosProcesamiento()} /> : null}
       {readOnly && item?.motivo_anulacion ? (
         <Callout tone="danger" title="Registro anulado">
@@ -551,7 +553,7 @@ export function ProcessingForm({ item, prefillReceptionId }: { item: ApiRecord |
               }}
             >
               <option value="">Sin vincular</option>
-              {receptions.map((option) => (
+              {receptions.filter((option) => String(option.id) === form.receptionId || (["aceptada", "aceptada_con_desviacion"].includes(String(option.decision_aceptacion || "")) && String(option.estado) !== "anulada")).map((option) => (
                 <option key={option.id} value={option.id}>
                   {formatearFolio("R", option.folio_num)} · {option.solicitante || option.id_interno || "Sin solicitante"}
                 </option>

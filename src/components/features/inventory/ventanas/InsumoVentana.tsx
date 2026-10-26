@@ -214,11 +214,10 @@ function FichaConsumible({ item, acciones }: { item: ApiRecord; acciones: Accion
   const inactivo = Number(item.activo ?? 1) === 0;
   const minimo = parseNumberOrNull(item.stock_minimo) || 5;
   const porPieza = parseNumberOrNull(item.cantidad_por_pieza);
-  const cad = caducidadDe(item.caducidad);
   const datos: DatoRapido[] = [
     { icono: <Gauge size={17} weight="duotone" />, etiqueta: "Existencia", valor: `${fmt(unidades)} ${unidades === 1 ? "unidad" : "unidades"}`, tono: unidades <= 0 ? "danger" : unidades <= minimo ? "warning" : "brand" },
     { icono: <WarningCircle size={17} weight="duotone" />, etiqueta: "Mínimo", valor: conUnidad(minimo, "unidades"), titulo: item.stock_minimo ? undefined : "Sin mínimo propio: avisa con 5 unidades o menos" },
-    { icono: <CalendarBlank size={17} weight="duotone" />, etiqueta: "Caducidad", valor: cad ? cad.texto : "Sin fecha", tono: cad?.tono || "brand" },
+    { icono: <CalendarBlank size={17} weight="duotone" />, etiqueta: "Ingreso", valor: item.fecha_ingreso ? formatearFechaCorta(item.fecha_ingreso) : "Sin fecha" },
     { icono: <Tag size={17} weight="duotone" />, etiqueta: "Lote", valor: item.lote ? String(item.lote) : "—" },
   ];
   return (
@@ -265,9 +264,8 @@ function FichaConsumible({ item, acciones }: { item: ApiRecord; acciones: Accion
             <TarjetaLateral icono={<MapPin size={15} weight="duotone" />} titulo="Dónde está" i={1}>
               <DatoLateral etiqueta="Localización">{String(item.localizacion || item.ubicacion || "Sin localización")}</DatoLateral>
             </TarjetaLateral>
-            <TarjetaLateral icono={<CalendarBlank size={15} weight="duotone" />} titulo="Fechas" tono={cad?.tono || "neutral"} i={2}>
-              <DatoLateral etiqueta="Caducidad">{cad ? `${formatearFecha(item.caducidad)}${cad.detalle ? ` · ${cad.detalle}` : ""}` : "Sin fecha de caducidad"}</DatoLateral>
-              {item.fecha_ingreso ? <DatoLateral etiqueta="Ingresó el">{formatearFechaCorta(item.fecha_ingreso)}</DatoLateral> : null}
+            <TarjetaLateral icono={<CalendarBlank size={15} weight="duotone" />} titulo="Fechas" tono="neutral" i={2}>
+              <DatoLateral etiqueta="Ingresó el">{item.fecha_ingreso ? formatearFechaCorta(item.fecha_ingreso) : "Sin fecha de ingreso"}</DatoLateral>
               {inactivo && item.baja_en ? <DatoLateral etiqueta="Baja registrada">{formatearFechaHora(item.baja_en)}</DatoLateral> : null}
             </TarjetaLateral>
           </>

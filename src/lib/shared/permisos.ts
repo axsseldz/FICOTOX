@@ -117,6 +117,17 @@ const MODULOS_DIFERIDO_RESTRINGIDO: Record<string, "sin_acceso" | "propio"> = {
 const LIMITAN_VISTA = new Set<Alcance>(["propio", "estado", "bitacora", "asignado", "autorizados", "incidencias"]);
 
 /*
+ * En ensayos, quien solo opera con "borrador" o "preparacion" (estudiante, tecnico auxiliar) ve lo de las
+ * muestras que tiene asignadas o registro: su V es "asignado", igual que la operacion (que ya exige la asignacion).
+ */
+const VISTA_ASIGNADA: Partial<Record<Modulo, ReadonlySet<Alcance>>> = { ensayos: new Set<Alcance>(["borrador", "preparacion"]) };
+
+function alcanceDeVista(modulo: Modulo, alcance: Alcance): Alcance {
+  if (VISTA_ASIGNADA[modulo]?.has(alcance)) return "asignado";
+  return LIMITAN_VISTA.has(alcance) || ALCANCES_DIFERIDOS.has(alcance) ? alcance : "total";
+}
+
+/*
  * Fase 11: alcances que solo valen con un objeto de su ambito. "incidencias"
  * (en calidad) permite reportar y ver incidencias, NC y acciones propias, pero
  * NUNCA cuenta para una comprobacion sin contexto (bitacora, respaldos, menu de
@@ -195,7 +206,7 @@ export function expandirPermisos(filas: PermisoFila[]): PermisosEfectivos {
     const acciones: Accion[] = fila.accion === "G" ? ACCION_KEYS.filter((a) => !(modulo === "usuarios" && a === "A")) : [fila.accion];
     for (const accion of acciones) {
       add(out, modulo, accion, alcance);
-      if (accion !== "V") add(out, modulo, "V", LIMITAN_VISTA.has(alcance) || ALCANCES_DIFERIDOS.has(alcance) ? alcance : "total");
+      if (accion !== "V") add(out, modulo, "V", alcanceDeVista(modulo, alcance));
     }
   }
   return out;

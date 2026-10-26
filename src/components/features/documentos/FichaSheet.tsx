@@ -213,7 +213,7 @@ export function FichaSheet({ open, onClose, catalogos, editar, areaInicial, tipo
               </Select>
             </Field>
             <Field label={externo ? "Identificador del emisor" : "Clave FX"} htmlFor="ficha-clave" required hint={datos.clave && !clave.problema ? `Se registrará como ${clave.clave}` : externo ? "Por ejemplo NMX-EC-17025-IMNC-2018" : "Formato FX-[Área][Tipo]-[ID], p. ej. FX-TCF-GMR"}>
-              <Input id="ficha-clave" mono maxLength={80} value={datos.clave} onChange={(e) => cambiar({ clave: e.target.value })} onBlur={() => datos.clave && cambiar({ clave: normalizarClave(datos.clave) })} placeholder="FX-GCP-CD" autoComplete="off" />
+              <Input id="ficha-clave" mono maxLength={80} value={datos.clave} onChange={(e) => cambiar({ clave: e.target.value })} onBlur={(e) => e.target.value && cambiar({ clave: normalizarClave(e.target.value) })} placeholder="FX-GCP-CD" autoComplete="off" />
             </Field>
             <Field label="Confidencialidad" htmlFor="ficha-confidencialidad" required hint={CONFIDENCIALIDADES.find((c) => c.value === datos.confidencialidad)?.descripcion}>
               <Select id="ficha-confidencialidad" value={datos.confidencialidad} onChange={(e) => cambiar({ confidencialidad: e.target.value })}>
@@ -251,7 +251,8 @@ export function FichaSheet({ open, onClose, catalogos, editar, areaInicial, tipo
               </Field>
               <Field label="Propietario del documento" htmlFor="ficha-propietario">
                 <Select id="ficha-propietario" value={datos.propietario_id} onChange={(e) => cambiar({ propietario_id: e.target.value })}>
-                  <option value="">Sin asignar</option>
+                  {/* Un externo siempre tiene responsable de seguimiento (su propietario). */}
+                  {datos.origen === "externo" ? null : <option value="">Sin asignar</option>}
                   {personas.map((p) => (
                     <option key={p.id} value={String(p.id)}>
                       {p.nombre}

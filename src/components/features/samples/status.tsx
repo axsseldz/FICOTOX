@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import { Badge, type Tone } from "@/components/ui/Primitives";
 import { Button } from "@/components/ui/Button";
 import { Dialog, Tooltip } from "@/components/ui/Overlay";
-import { SolicitudBanner, SolicitudDetalle, SupervisionBanner } from "@/components/features/solicitudes/Solicitudes";
+import { EnAvisos, SolicitudBanner, SolicitudDetalle, SupervisionBanner } from "@/components/features/solicitudes/Solicitudes";
 import { StatusFlag } from "@/components/ui/StatusFlag";
 import type { ApiRecord } from "@/lib/client/types";
 import { Callout } from "./FormLayout";
@@ -79,24 +79,24 @@ export function SupervisionCallout({ item, tabla, referencia }: { item: ApiRecor
   if (estado === "pendiente") {
     const t = tabla || tablaPorRuta();
     const aviso = (
-      <Callout tone="warning" title="Pendiente del visto bueno del supervisor">
-        Lo capturó una persona bajo supervisión. No avanza (no se cierra, no se revisa ni aprueba y no sirve de origen de la etapa siguiente) hasta que su supervisor dé el visto bueno.
-      </Callout>
+    <Callout tone="warning" title="Pendiente del visto bueno del supervisor">
+      Lo capturó una persona bajo supervisión. No avanza (no se cierra, no se revisa ni aprueba y no sirve de origen de la etapa siguiente) hasta que su supervisor dé el visto bueno.
+    </Callout>
     );
     // El supervisor asignado ve el banner con "Dar visto bueno" y "Regresar"; los demás, el aviso.
     return t ? (
-      <SupervisionBanner item={item} tabla={t} tipo="Registro" referencia={referencia || String(item.folio || item.id || "")}>
-        {aviso}
-      </SupervisionBanner>
+    <SupervisionBanner item={item} tabla={t} tipo="Registro" referencia={referencia || String(item.folio || item.id || "")}>
+      {aviso}
+    </SupervisionBanner>
     ) : (
-      aviso
+    aviso
     );
   }
   if (estado === "regresado") {
     return (
-      <Callout tone="danger" title="Regresado por el supervisor">
-        {item.supervision_observaciones ? `Observaciones: ${String(item.supervision_observaciones)}. ` : ""}Corrige el registro y guárdalo: vuelve a quedar pendiente del visto bueno. Mientras tanto no avanza.
-      </Callout>
+    <Callout tone="danger" title="Regresado por el supervisor">
+      {item.supervision_observaciones ? `Observaciones: ${String(item.supervision_observaciones)}. ` : ""}Corrige el registro y guárdalo: vuelve a quedar pendiente del visto bueno. Mientras tanto no avanza.
+    </Callout>
     );
   }
   return null;
@@ -114,13 +114,13 @@ export function SolicitudBadge({ solicitud, entidad }: { solicitud: ApiRecord | 
   const quien = solicitud.solicitado_nombre ? `Pidió ${String(solicitud.solicitado_nombre)}` : null;
   return (
     <>
-      <StatusFlag kind="pendiente" label={etiqueta} detail={[quien, solicitud.motivo ? `Motivo: ${String(solicitud.motivo)}` : null].filter(Boolean).join(" · ") || undefined} data-solicitud-pendiente={String(solicitud.id || "")} onClick={() => setAbierta(true)} />
-      {/* Panel rápido: la solicitud y sus botones, sin salir de la lista (los clics del portal no llegan a la fila). */}
-      <span className="contents" onClick={(event) => event.stopPropagation()}>
-        <Dialog open={abierta} onOpenChange={setAbierta} title={String(solicitud.pendiente_etiqueta || "Solicitud")} description={String(solicitud.referencia || "")} size="sm">
-          <SolicitudDetalle sol={solicitud} entidad={entidad} onCambio={() => setAbierta(false)} />
-        </Dialog>
-      </span>
+    <StatusFlag kind="pendiente" label={etiqueta} detail={[quien, solicitud.motivo ? `Motivo: ${String(solicitud.motivo)}` : null].filter(Boolean).join(" · ") || undefined} data-solicitud-pendiente={String(solicitud.id || "")} onClick={() => setAbierta(true)} />
+    {/* Panel rápido: la solicitud y sus botones, sin salir de la lista (los clics del portal no llegan a la fila). */}
+    <span className="contents" onClick={(event) => event.stopPropagation()}>
+      <Dialog open={abierta} onOpenChange={setAbierta} title={String(solicitud.pendiente_etiqueta || "Solicitud")} description={String(solicitud.referencia || "")} size="sm">
+        <SolicitudDetalle sol={solicitud} entidad={entidad} onCambio={() => setAbierta(false)} />
+      </Dialog>
+    </span>
     </>
   );
 }
@@ -139,16 +139,16 @@ export function BotonSegregado({ bloqueo, children }: { bloqueo: string | null |
   if (!bloqueo) return <>{children}</>;
   return (
     <Tooltip content={bloqueo}>
-      <span className="inline-flex" aria-label={bloqueo}>
-        {children}
-      </span>
+    <span className="inline-flex" aria-label={bloqueo}>
+      {children}
+    </span>
     </Tooltip>
   );
 }
 
-export function SegregacionCallout({ bloqueo, accion, onSolicitar }: { bloqueo: string | null | undefined; accion: string; onSolicitar: () => void }) {
+export function SegregacionCallout({ bloqueo, accion, onSolicitar, enFormato = false }: { bloqueo: string | null | undefined; accion: string; onSolicitar: () => void; /* Dentro de un FormPage: va a #form-avisos. */ enFormato?: boolean }) {
   if (!bloqueo) return null;
-  return (
+  const aviso = (
     <Callout tone="info" title="Separación de funciones">
       {bloqueo}. Si no hay otra persona disponible, puedes pedir una excepción a quien tiene A en calidad (Responsable General / Mejora Continua); queda registrada en el registro y en la bitácora.
       <div className="mt-2">
@@ -158,4 +158,6 @@ export function SegregacionCallout({ bloqueo, accion, onSolicitar }: { bloqueo: 
       </div>
     </Callout>
   );
+  // En un formato va fuera del fieldset: en revisión está en solo lectura y el botón quedaba deshabilitado.
+  return enFormato ? <EnAvisos>{aviso}</EnAvisos> : aviso;
 }

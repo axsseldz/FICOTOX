@@ -354,7 +354,7 @@ function FichaNc({ id, onCerrar, onLeyendo }: { id: number; onCerrar: () => void
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-ink-3">{item.requiere_accion_correctiva === 0 ? "No requiere acción correctiva." : "Todavía no hay acciones definidas."}</p>
+                <p className="text-sm text-ink-3">{item.requiere_accion_correctiva === "no" ? "No requiere acción correctiva." : "Todavía no hay acciones definidas."}</p>
               )}
             </VentanaSeccion>
 
@@ -407,10 +407,18 @@ function FichaNc({ id, onCerrar, onLeyendo }: { id: number; onCerrar: () => void
                   <ul className="flex flex-wrap gap-1.5">
                     {incidencias.map((inc) => (
                       <li key={String(inc.id)}>
-                        <Link href={`/calidad/incidencias/${inc.id}`} onClick={onCerrar} className="press inline-flex items-center gap-1.5 rounded-full bg-surface px-2.5 py-1 text-sm text-ink shadow-card ring-1 ring-line transition-shadow duration-200 hover:shadow-raised">
-                          {String(inc.folio)}
-                          {inc.estado ? <EstadoIncidencia estado={inc.estado} /> : null}
-                        </Link>
+                        {/* Las ajenas sin calidad:V total llegan restringidas (solo folio y estado): sin enlace, que daría 404. */}
+                        {inc.restringida ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-surface px-2.5 py-1 text-sm text-ink-2 ring-1 ring-line" data-incidencia-restringida title="Incidencia de otra persona: solo ves su folio y estado">
+                            {String(inc.folio)}
+                            {inc.estado ? <EstadoIncidencia estado={inc.estado} /> : null}
+                          </span>
+                        ) : (
+                          <Link href={`/calidad/incidencias/${inc.id}`} onClick={onCerrar} className="press inline-flex items-center gap-1.5 rounded-full bg-surface px-2.5 py-1 text-sm text-ink shadow-card ring-1 ring-line transition-shadow duration-200 hover:shadow-raised">
+                            {String(inc.folio)}
+                            {inc.estado ? <EstadoIncidencia estado={inc.estado} /> : null}
+                          </Link>
+                        )}
                       </li>
                     ))}
                   </ul>

@@ -172,7 +172,8 @@ export async function pendientesDe(s: Session, auth: Autorizacion): Promise<Grup
     const TIPO_MANT: Record<string, string> = { preventivo: "Preventivo", correctivo: "Correctivo", calibracion: "Calibración", verificacion: "Verificación" };
     const mant = await s.query<Row>(
       `SELECT mt.id, mt.tipo, mt.estado, mt.fecha_programada, e.nombre AS equipo FROM mantenimientos mt LEFT JOIN equipos e ON e.id = mt.id_equipo
-       WHERE mt.estado = 'vencido' OR (mt.estado IN ('programado', 'en_proceso') AND mt.fecha_programada <= :en30) ORDER BY mt.fecha_programada LIMIT ${MAX}`,
+       WHERE (mt.estado = 'vencido' OR (mt.estado IN ('programado', 'en_proceso') AND mt.fecha_programada <= :en30))
+         AND COALESCE(e.activo, 1) = 1 ORDER BY mt.fecha_programada LIMIT ${MAX}`,
       { en30 },
     );
     const vencido = (m: Row) => String(m.estado) === "vencido" || String(m.fecha_programada || "") < hoy;
@@ -215,7 +216,9 @@ export async function pendientesDe(s: Session, auth: Autorizacion): Promise<Grup
   // Accesos (cuentas y roles) que vencen en 7 dias: todos para quien administra usuarios; si no, los propios y los de sus supervisados.
   const administra = puede("usuarios", "G");
   const vencen = administra ? await vencimientosProximos(s, 7) : [...(await vencimientosProximos(s, 7)).filter((v) => Number(v.id) === yo), ...(await vencimientosProximos(s, 7, yo))];
-  agregar("accesos_vencen", "Accesos que vencen en 7 días", "warning", administra ? "/administracion/usuarios?vigencia=vence7" : "/supervision", vencen.map((v) => ({ clave: `vence_acceso:${v.id}:${v.rol || "cuenta"}:${v.vigente_hasta}`, frase: v.rol ? "Rol por vencer" : "Cuenta por vencer", registro: Number(v.id) === yo ? (v.rol ? `Tu rol ${v.rol}` : "Tu cuenta") : `${v.nombre || v.email}${v.rol ? ` · ${v.rol}` : ""}`, detalle: `Vence el ${fmt(v.vigente_hasta)}`, href: administra ? `/administracion/usuarios?vigencia=vence7&abrir=${v.id}` : Number(v.id) === yo ? "/#mis-autorizaciones" : "/supervision", tono: "warning", cuando: null, persona_id: Number(v.id) || null, persona: String(v.nombre || v.email || "") })));
+  // Sin administrar usuarios: si solo vence lo propio, el grupo lleva a «Mis autorizaciones» del Inicio, no a Por supervisar.
+  const soloPropios = vencen.every((v) => Number(v.id) === yo);
+  agregar("accesos_vencen", "Accesos que vencen en 7 días", "warning", administra ? "/administracion/usuarios?vigencia=vence7" : soloPropios ? "/#mis-autorizaciones" : "/supervision", vencen.map((v) => ({ clave: `vence_acceso:${v.id}:${v.rol || "cuenta"}:${v.vigente_hasta}`, frase: v.rol ? "Rol por vencer" : "Cuenta por vencer", registro: Number(v.id) === yo ? (v.rol ? `Tu rol ${v.rol}` : "Tu cuenta") : `${v.nombre || v.email}${v.rol ? ` · ${v.rol}` : ""}`, detalle: `Vence el ${fmt(v.vigente_hasta)}`, href: administra ? `/administracion/usuarios?vigencia=vence7&abrir=${v.id}` : Number(v.id) === yo ? "/#mis-autorizaciones" : "/supervision", tono: "warning", cuando: null, persona_id: Number(v.id) || null, persona: String(v.nombre || v.email || "") })));
 
   // Autorizaciones FX-THF-AP por vencer (30 dias; la ultima semana es un aviso nuevo).
   const administraAut = !!permisoAdministrar(auth);

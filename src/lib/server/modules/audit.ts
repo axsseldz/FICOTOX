@@ -112,6 +112,10 @@ export async function listAudit({ request, s }: RouteContext): Promise<Response>
   const search = searchParam(request, "search");
   const desde = searchParam(request, "desde");
   const hasta = searchParam(request, "hasta");
+  // Fechas del filtro: AAAA-MM-DD (antes cualquier texto se comparaba como fecha y devolvía resultados arbitrarios).
+  for (const [campo, valor] of [["desde", desde], ["hasta", hasta]] as const) if (valor && !/^\d{4}-\d{2}-\d{2}$/.test(valor)) return json({ message: `La fecha «${campo}» debe ser AAAA-MM-DD`, campo }, 400);
+  // `%` y `_` del texto buscado son literales.
+  const comoTexto = (valor: string) => `%${valor.replace(/[!%_]/g, (x) => `!${x}`)}%`;
   // Se pide una fila de mas para saber si hay mas resultados.
   const limit = Math.min(Math.max(Number.parseInt(searchParam(request, "limit") || "200", 10) || 200, 1), 1000);
   // Fase 9: filtro por modulo (las entidades cuyo historial pertenece a ese modulo).
@@ -140,8 +144,8 @@ export async function listAudit({ request, s }: RouteContext): Promise<Response>
     WHERE (:entidad = '' OR entidad = :entidad)
       AND (:entidad_id = '' OR entidad_id = :entidad_id)
       AND (:accion = '' OR accion = :accion)
-      AND (:usuario = '' OR usuario_email LIKE :usuario_like OR usuario_nombre LIKE :usuario_like)
-      AND (:search = '' OR referencia LIKE :search_like OR usuario_nombre LIKE :search_like OR (motivo LIKE :search_like${calidadTotal(auth) || historialCalidad ? "" : ` AND NOT ${SQL_SENSIBLE_CALIDAD}`}))
+      AND (:usuario = '' OR usuario_email LIKE :usuario_like ESCAPE '!' OR usuario_nombre LIKE :usuario_like ESCAPE '!')
+      AND (:search = '' OR referencia LIKE :search_like ESCAPE '!' OR usuario_nombre LIKE :search_like ESCAPE '!' OR (motivo LIKE :search_like ESCAPE '!'${calidadTotal(auth) || historialCalidad ? "" : ` AND NOT ${SQL_SENSIBLE_CALIDAD}`}))
       AND (:desde = '' OR fecha_hora >= :desde_ini)
       AND (:hasta = '' OR fecha_hora <= :hasta_fin)
       ${moduloFiltro ? `AND entidad IN (${entidadesModulo.map((e) => `'${e}'`).join(", ") || "''"})` : ""}
@@ -159,13 +163,13 @@ export async function listAudit({ request, s }: RouteContext): Promise<Response>
       entidad_id: entidadId,
       accion,
       usuario,
-      usuario_like: `%${usuario}%`,
+      usuario_like: comoTexto(usuario),
       search,
-      search_like: `%${search}%`,
+      search_like: comoTexto(search),
       desde,
-      desde_ini: /^\d{4}-\d{2}-\d{2}$/.test(desde) ? inicioDiaLocal(desde) : desde,
+      desde_ini: desde ? inicioDiaLocal(desde) : "",
       hasta,
-      hasta_fin: /^\d{4}-\d{2}-\d{2}$/.test(hasta) ? finDiaLocal(hasta) : hasta ? `${hasta}T23:59:59.999Z` : "",
+      hasta_fin: hasta ? finDiaLocal(hasta) : "",
       antes_de: antesDe,
       ...Object.fromEntries(accionesLista.map((a, i) => [`acc${i}`, a])),
       ...Object.fromEntries(usuariosLista.map((u, i) => [`usr${i}`, u])),

@@ -3,14 +3,16 @@ import { HttpError } from "./http";
 import { permisoDe, type Autorizacion } from "./rbac";
 import type { Session } from "./db";
 import { toFloatOrNull, toIntOrNull } from "./modules/helpers";
-import { fechaValida, hoyLocal } from "../shared/fechas";
+import { fechaSola, fechaValida, formatearFecha, hoyLocal } from "../shared/fechas";
 
 /*
  * Movimientos manuales de inventario (reactivos y consumibles): entrada, salida,
  * consumo y ajuste por conteo físico. La existencia solo cambia por movimientos.
  * - entrada: suma `cantidad`.
  * - salida / consumo: resta `cantidad` (no puede dejar la existencia en negativo).
- * - ajuste: `cantidad` es lo contado físicamente; se registra la diferencia con signo.
+ * - ajuste: `cantidad` es lo contado físicamente al cierre del día del conteo; se registra la
+ *   diferencia con signo. Si el conteo es de un día anterior, lo que entró o salió después se
+ *   conserva (existencia de hoy = contado + movimientos con fecha posterior).
  */
 
 export const TIPOS_MOVIMIENTO_MANUAL = ["entrada", "salida", "consumo", "ajuste"] as const;
@@ -79,7 +81,24 @@ async function exigirAccesoAlFolio(s: Session, auth: Autorizacion, tipo: string,
   throw denegado;
 }
 
-export async function interpretarMovimiento(s: Session, auth: Autorizacion, payload: Record<string, unknown>, existencia: number): Promise<MovimientoManual> {
+/* El insumo del movimiento: su tabla, su id y su alta (para el ajuste por conteo con fecha anterior). */
+export interface InsumoMovimiento {
+  tabla: "reactivos" | "consumibles";
+  id: number;
+  creadoEn: unknown;
+}
+
+/* Suma con signo de los movimientos del insumo con fecha posterior a `fecha` (las reversiones son entradas). */
+async function movimientosPosteriores(s: Session, insumo: InsumoMovimiento, fecha: string): Promise<number> {
+  const suma = await s.scalar(
+    `SELECT COALESCE(SUM(CASE WHEN tipo = 'entrada' THEN cantidad WHEN tipo IN ('salida', 'consumo') THEN -cantidad WHEN tipo = 'ajuste' THEN cantidad ELSE 0 END), 0)
+     FROM movimientos WHERE tabla_origen = :tabla AND id_item = :id AND fecha_movimiento > :fecha`,
+    { tabla: insumo.tabla, id: insumo.id, fecha },
+  );
+  return Number(suma) || 0;
+}
+
+export async function interpretarMovimiento(s: Session, auth: Autorizacion, payload: Record<string, unknown>, existencia: number, insumo: InsumoMovimiento): Promise<MovimientoManual> {
   const tipo = tipoDeMovimiento(payload) as TipoMovimientoManual;
   if (!TIPOS_MOVIMIENTO_MANUAL.includes(tipo)) throw new HttpError(400, { message: "El tipo de movimiento debe ser entrada, salida, consumo o ajuste" });
   const cantidad = toFloatOrNull(payload.cantidad);
@@ -90,20 +109,31 @@ export async function interpretarMovimiento(s: Session, auth: Autorizacion, payl
   if (tipo === "ajuste" && !motivoLibre) throw new HttpError(400, { message: "Indica el motivo del ajuste (por ejemplo, «Conteo físico de enero»)" });
   const motivo = motivoLibre || (tipo === "entrada" ? "Relleno manual de stock" : tipo === "consumo" ? "Consumo registrado" : "Salida registrada");
 
-  let delta = cantidad;
-  let registrada = cantidad;
-  if (tipo === "salida" || tipo === "consumo") {
-    if (cantidad > existencia + 1e-9) throw new HttpError(400, { message: "No hay existencia suficiente para esa cantidad" });
-    delta = -cantidad;
-  } else if (tipo === "ajuste") {
-    delta = Math.round((cantidad - existencia) * 1e6) / 1e6;
-    registrada = delta;
-  }
-
   const fechaTexto = String(payload.fecha_movimiento ?? "").trim();
   const fechaMovimiento = fechaTexto ? fechaValida(fechaTexto) : hoyLocal();
   if (!fechaMovimiento) throw new HttpError(400, { message: "La fecha del movimiento no es válida" });
   if (fechaMovimiento > hoyLocal()) throw new HttpError(400, { message: "La fecha del movimiento no puede ser futura" });
+
+  let delta = cantidad;
+  let registrada = cantidad;
+  if (tipo === "salida" || tipo === "consumo") {
+    // Como en los formatos: nunca existencia negativa (409 existencia_insuficiente).
+    if (cantidad > existencia + 1e-9) throw new HttpError(409, { message: `No hay existencia suficiente para esa cantidad (hay ${existencia})`, codigo: "existencia_insuficiente" });
+    delta = -cantidad;
+  } else if (tipo === "ajuste") {
+    // Lo contado es la existencia al cierre del día del conteo: con fecha anterior se suman los movimientos
+    // posteriores (no se borra lo que salió o entró después). Antes del alta del insumo no hay qué contar.
+    let objetivo = cantidad;
+    if (fechaMovimiento < hoyLocal()) {
+      const alta = fechaSola(insumo.creadoEn);
+      if (alta && fechaMovimiento < alta) throw new HttpError(400, { message: `El conteo no puede ser anterior al alta del insumo (${formatearFecha(alta)})`, campo: "fecha_movimiento" });
+      objetivo = Math.round((cantidad + (await movimientosPosteriores(s, insumo, fechaMovimiento))) * 1e6) / 1e6;
+      if (objetivo < 0) throw new HttpError(409, { message: `Lo contado no alcanza para lo que salió después del ${formatearFecha(fechaMovimiento)}; revisa la fecha o la cantidad del conteo`, codigo: "existencia_insuficiente" });
+    }
+    // Sin diferencia se guarda 0, no «−0».
+    delta = Math.round((objetivo - existencia) * 1e6) / 1e6 || 0;
+    registrada = delta;
+  }
 
   const vinculoTipo = String(payload.vinculo_tipo || "").trim().toLowerCase() || null;
   const folio = toIntOrNull(payload.vinculo_folio);

@@ -89,7 +89,7 @@ function exigirOtraPersona(yo: number, usuarioId: number, que: string): void {
 }
 
 async function cuenta(s: Session, usuarioId: number): Promise<Row> {
-  const fila = await s.queryOne<Row>("SELECT id, email, nombre, vigente_hasta FROM usuarios WHERE id = :id", { id: usuarioId });
+  const fila = await s.queryOne<Row>("SELECT id, email, nombre, activo, vigente_hasta FROM usuarios WHERE id = :id", { id: usuarioId });
   if (!fila) throw new HttpError(404, { message: "Usuario no encontrado" });
   return fila;
 }
@@ -100,7 +100,11 @@ export async function listarAutorizacionesUsuario({ request, s, params }: RouteC
   const usuarioId = intParam(params.id);
   const auth = await cargarAutorizacion(s, user);
   const puedeAdministrar = !!permisoAdministrar(auth);
-  if (auth.userId !== usuarioId && !puedeAdministrar) await requirePermission(s, user, "usuarios", "V", undefined, auth);
+  if (auth.userId !== usuarioId && !puedeAdministrar) {
+    const permiso = await requirePermission(s, user, "usuarios", "V", undefined, auth);
+    // Con alcance «propio» en usuarios solo se ve la cuenta propia (como en la ficha de usuario).
+    if (!permiso.total && permiso.alcances.every((a) => a === "propio")) throw new HttpError(403, { message: "Tu alcance en usuarios es solo tu propia cuenta" });
+  }
   await cuenta(s, usuarioId);
   return json({ items: await autorizacionesDe(s, usuarioId), puede_administrar: puedeAdministrar && auth.userId !== usuarioId });
 }
@@ -130,6 +134,9 @@ export async function otorgarAutorizacion({ request, s, params }: RouteContext):
   const yo = userIdFromClaims(user) as number;
   exigirOtraPersona(yo, usuarioId, "otorgarte");
   const persona = await cuenta(s, usuarioId);
+  // Solo a cuentas activas y vigentes: una cuenta dada de baja o vencida no ejerce actividades técnicas.
+  if (Number(persona.activo ?? 1) === 0) throw new HttpError(409, { message: "La cuenta está dada de baja; reactívala antes de otorgarle autorizaciones", codigo: "cuenta_inactiva" });
+  if (persona.vigente_hasta && String(persona.vigente_hasta).slice(0, 10) < hoyLocal()) throw new HttpError(409, { message: "La vigencia de la cuenta ya terminó; amplíala antes de otorgarle autorizaciones", codigo: "cuenta_vencida" });
   const payload = await readJson(request);
   const tipo = String(payload.tipo || "") as TipoAutorizacion;
   const clave = String(payload.clave || "").trim();
@@ -236,7 +243,8 @@ export async function revocarAutorizacion({ request, s, params }: RouteContext):
   if (motivo.length < 5) throw new HttpError(400, { message: "Indica el motivo de la revocación (al menos 5 caracteres)" });
   await exigirReauth(s, request, user, "autorizaciones:revocar");
   const actuo = cargoActuante(request, permiso);
-  await s.execute(`UPDATE ${TABLE} SET revocada_en = :en, revocada_por = :por, motivo_revocacion = :motivo WHERE id = :id AND revocada_en IS NULL`, { en: new Date().toISOString(), por: yo, motivo, id: autorizacionId });
+  const r = await s.execute(`UPDATE ${TABLE} SET revocada_en = :en, revocada_por = :por, motivo_revocacion = :motivo WHERE id = :id AND revocada_en IS NULL`, { en: new Date().toISOString(), por: yo, motivo, id: autorizacionId });
+  if (!r.rowcount) throw new HttpError(409, { message: "La autorización ya estaba revocada" });
   const [item] = await serializar(s, [(await s.queryOne<Row>(`SELECT * FROM ${TABLE} WHERE id = :id`, { id: autorizacionId }))!]);
   await registrarAuditoria(s, user, {
     accion: "revocar_autorizacion",

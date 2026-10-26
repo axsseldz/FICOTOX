@@ -113,7 +113,7 @@ export async function solicitarExcepcion({ request, s }: RouteContext): Promise<
   if (excepcionPara(excepcionesDe(row), userIdFromClaims(user) as number, accion)) throw new HttpError(409, { message: `Ya tienes una excepción aprobada para ${accion} este registro`, codigo: "excepcion_innecesaria" });
   const referencia = referenciaCalidad || (entidad === "informes" ? informeFolio(row) : folioLabel(entidad as SampleTable, row));
   await exigirReauth(s, request, user, "solicitudes:excepcion");
-  const solicitud = await crearSolicitud(s, user, { tipo: "excepcion_segregacion", entidad, entidadId: id, referencia, accion: "excepcion", datos: { accion }, motivo: String(payload.motivo || "") });
+  const solicitud = await crearSolicitud(s, user, { tipo: "excepcion_segregacion", entidad, entidadId: id, referencia, accion: "excepcion", datos: { accion, ...(entidad === "suspensiones" && row?.nc_id ? { nc_id: Number(row.nc_id) } : {}) }, motivo: String(payload.motivo || "") });
   await s.commit();
   return respuestaSolicitud(solicitud, `la excepción para ${accion} ${referencia}`);
 }

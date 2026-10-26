@@ -162,7 +162,7 @@ function RecepcionList() {
     if (seOfrece(item, "editar", canEdit(item)) && !anulada && !terminada) list.push({ label: "Editar", description: motivoDe(item, "editar") || "Cambiar datos o decidir la aceptación", disabled: !estaHabilitada(item, "editar", canEdit(item)), icon: <PencilSimple size={16} weight="duotone" />, onSelect: () => router.push(`/muestras/recepcion/${item.id}`) });
     // Con alcance "estado" no se ve la muestra completa: tampoco su etiqueta (el servidor responde 403).
     if (!anulada && !item.solo_estado) list.push({ label: "Imprimir etiqueta", description: "Una etiqueta por muestra del lote", icon: <Printer size={16} weight="duotone" />, onSelect: () => router.push(`/muestras/recepcion/${item.id}/etiquetas`) });
-    if (!anulada && !terminada && can("muestras", "E", { objeto: "recepcion" })) list.push({ label: "Cambiar folio…", description: "Con motivo; lo autoriza la Coord. Técnica", icon: <Hash size={16} weight="duotone" />, onSelect: () => acciones.cambiarFolio(item) });
+    if (!anulada && !terminada && !item.solicitud_pendiente && can("muestras", "E", { objeto: "recepcion" })) list.push({ label: "Cambiar folio…", description: "Con motivo; lo autoriza la Coord. Técnica", icon: <Hash size={16} weight="duotone" />, onSelect: () => acciones.cambiarFolio(item) });
     if (["cerrada", "rechazada"].includes(estado) && can("muestras", "E", { objeto: "recepcion" })) list.push({ label: "Reabrir…", description: "Vuelve al estado previo, con motivo", icon: <ArrowCounterClockwise size={16} weight="duotone" />, tone: "warning", onSelect: () => acciones.reabrir(item) });
     if (puedeProcesar) list.push({ label: "Procesar", description: "Crear el procesamiento de esta muestra", icon: <Flask size={16} weight="duotone" />, tone: "success", onSelect: () => router.push(`/muestras/procesamiento/nuevo?recepcion=${item.id}`) });
     list.push(...reportar("muestras_recepcion", item.id, formatSampleFolio(item)));
@@ -192,7 +192,7 @@ function RecepcionList() {
 
       <TableShell footer={items ? contar(visible.length, "recepción", "recepciones") : undefined}>
         {resource.error ? (
-          <ErrorState message={resource.error} onRetry={resource.reload} />
+          <ErrorState message={resource.error} status={resource.errorStatus} onRetry={resource.reload} />
         ) : !items ? (
           <TableSkeleton cols={6} />
         ) : !visible.length ? (

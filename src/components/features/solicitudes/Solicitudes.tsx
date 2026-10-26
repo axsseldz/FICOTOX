@@ -67,6 +67,9 @@ export function hrefDeSolicitud(item: ApiRecord): string | null {
       return `/calidad/incidencias/${id}`;
     case "no_conformidades":
       return `/calidad/nc/${id}`;
+    // La excepción para reanudar una suspensión lleva a su NC (la suspensión no tiene ficha propia).
+    case "suspensiones":
+      return (item.datos as ApiRecord | undefined)?.nc_id ? `/calidad/nc/${(item.datos as ApiRecord).nc_id}` : null;
     case "usuarios":
       return "/administracion/usuarios";
     case "roles":
@@ -319,7 +322,7 @@ export function SolicitudDetalle({ sol, entidad, onCambio, compacto = false }: {
  * Dentro de un formato en solo lectura todo queda en un <fieldset disabled>:
  * los avisos con botones se montan en #form-avisos (fuera del fieldset), si existe.
  */
-function EnAvisos({ children }: { children: ReactNode }) {
+export function EnAvisos({ children }: { children: ReactNode }) {
   const [destino, setDestino] = useState<HTMLElement | null>(null);
   useEffect(() => {
     // El lugar se monta en el mismo commit que el aviso: se busca justo después.

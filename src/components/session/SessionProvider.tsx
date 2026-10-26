@@ -65,6 +65,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const started = useRef(false);
   const [locked, setLocked] = useState(false);
   const lockedRef = useRef(false);
+  // Hay una sesion confirmada por el servidor: una falla pasajera al refrescarla no la cierra.
+  const autenticadaRef = useRef(false);
+  const reintentoRef = useRef<() => void>(() => {});
   // La plataforma se esta restaurando desde un respaldo: pantalla de espera hasta que vuelva a atender.
   const [restaurando, setRestaurando] = useState(false);
 
@@ -75,10 +78,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     adoptarTemaDeCuenta(nextUser.tema);
     setPermissions(nextPermissions);
     setRoles(nextRoles);
+    autenticadaRef.current = true;
     setStatus("authenticated");
   }, []);
 
   const leave = useCallback(() => {
+    autenticadaRef.current = false;
     clearSession();
     setToken("");
     setUser(null);
@@ -104,6 +109,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setRestaurando(true);
         return;
       }
+      /*
+       * Falla pasajera (sin red, 500, 429…): no se cierra la sesion ni se pierde lo capturado; el
+       * refresco de cada minuto lo vuelve a intentar. Al abrir la plataforma se reintenta en 5 s.
+       * Solo el servidor diciendo que la sesion no vale (401/403) lleva al acceso.
+       */
+      if (!(err instanceof ApiError) || (err.status !== 401 && err.status !== 403)) {
+        if (!autenticadaRef.current) window.setTimeout(() => reintentoRef.current(), 5_000);
+        return;
+      }
       // Sesion revocada o cuenta no vigente: el acceso muestra el motivo.
       const mensaje = err instanceof Error ? err.message : "";
       if (mensaje && !/token/i.test(mensaje)) {
@@ -116,6 +130,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       leave();
     }
   }, [enter, leave]);
+
+  useEffect(() => {
+    reintentoRef.current = () => void refreshMe();
+  }, [refreshMe]);
 
   useEffect(() => {
     if (started.current) return;

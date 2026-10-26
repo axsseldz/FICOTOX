@@ -32,6 +32,17 @@ import { ListaAutorizaciones } from "@/components/features/admin/AutorizacionesP
 export const ABRIR_MIS_AUTORIZACIONES = "#mis-autorizaciones";
 export const EVENTO_ABRIR_CUENTA = "ficotox:abrir-cuenta";
 
+/*
+ * Avisos de la campana y del Inicio que llevan a la propia cuenta (/#mis-autorizaciones):
+ * el shell ya está montado y una navegación del cliente no vuelve a revisar el hash, así
+ * que se abre «Mi cuenta» directamente (con el hash para llevar la vista a la sección).
+ */
+export const llevaAMiCuenta = (href: string): boolean => href.endsWith(ABRIR_MIS_AUTORIZACIONES);
+export function abrirMisAutorizaciones(): void {
+  window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search + ABRIR_MIS_AUTORIZACIONES);
+  window.dispatchEvent(new Event(EVENTO_ABRIR_CUENTA));
+}
+
 export function AccountSheet({ open, onClose, abrirClave = false }: { open: boolean; onClose: () => void; /* Abre ya el formulario de cambio de contraseña (desde la búsqueda). */ abrirClave?: boolean }) {
   const { user, token, refreshMe, roles, logoutAll, authConfig } = useSession();
   const confirm = useConfirm();
@@ -162,7 +173,8 @@ export function AccountSheet({ open, onClose, abrirClave = false }: { open: bool
         </div>
         {user?.tipo_cuenta === "temporal" ? (
           <p className="rounded-field bg-surface-2 px-3 py-2 text-xs text-ink-2 ring-1 ring-line">
-            Cuenta temporal{user.vigente_hasta ? ` vigente hasta el ${fmtDate(user.vigente_hasta)}` : ""}. Lo que capturas queda pendiente del visto bueno de tu supervisor.
+            Cuenta temporal{user.vigente_hasta ? ` vigente hasta el ${fmtDate(user.vigente_hasta)}` : ""}.
+            {roles.some((rol) => Object.values(rol.permisos || {}).some((acciones) => Object.values(acciones || {}).includes("supervisado"))) ? " Lo que capturas en equipos e inventario queda pendiente del visto bueno de tu supervisor." : ""}
           </p>
         ) : null}
         {roles.length > 1 ? (

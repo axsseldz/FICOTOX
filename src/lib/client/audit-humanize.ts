@@ -669,6 +669,7 @@ const SOLICITUD_QUE: Record<string, string> = {
   cambiar_folio: "cambiar el folio de",
   reabrir_recepcion: "reabrir",
   obsoletar_documento: "declarar obsoleto",
+  obsoletar_documento_sgc: "declarar obsoleto",
 };
 function queSeSolicito(detalle: ApiRecord): string {
   const tipo = String(detalle.tipo || "");
@@ -683,6 +684,19 @@ const ACTUALIZACIONES: Record<number, string> = {
   11: "registrar incidencias, no conformidades y acciones correctivas",
   12: "mejorar el manejo interno de las firmas",
   13: "agregar la Biblioteca de documentos",
+  14: "guardar el tema de cada cuenta",
+  15: "recordar qué avisos de la campana ya se leyeron",
+  16: "agregar la foto de perfil",
+  17: "recordar las búsquedas recientes",
+  18: "agregar los permisos de respaldos",
+  19: "agregar campos al inventario",
+  20: "llevar los consumibles por unidades",
+  21: "ajustar los permisos de acceso y de la Biblioteca",
+  22: "agregar el control de Documentos SGC",
+  23: "agregar el flujo de revisión y autorización de Documentos SGC",
+  24: "agregar documentos externos y acuses de lectura",
+  25: "guardar los reportes PDF de mantenimiento",
+  26: "aplicar las correcciones de la primera versión",
 };
 
 const DELIVERY: Record<string, string> = { correo: "por correo electrónico", impreso: "en mano (impreso)", portal: "por el portal o una carpeta compartida", otro: "por otro medio" };
@@ -725,6 +739,16 @@ function redactarSgc(accion: string, d: ApiRecord, O: string, quien: string, ref
     case "publicar":
       if (d.sustituye) return { accion: `publicó ${O}`, quePaso: `${quien} publicó ${O}: queda vigente y la revisión ${texto((d.sustituye as ApiRecord).revision)} queda obsoleta.` };
       return null;
+    case "distribuir": {
+      const n = Number(d.agregados || 0);
+      return { accion: `distribuyó ${O}`, quePaso: `${quien} distribuyó ${O}${n ? ` a ${n} destinatario${n === 1 ? "" : "s"}` : ""}${d.requiere_lectura ? ", con acuse de lectura" : ""}.` };
+    }
+    case "retirar_distribucion":
+      return { accion: `retiró a un destinatario ${de(O)}`, quePaso: `${quien} retiró ${d.usuario_id ? "a una persona" : "a un rol"} de la distribución ${de(O)}.` };
+    case "recordar": {
+      const n = Array.isArray(d.destinatarios) ? d.destinatarios.length : 0;
+      return { accion: `recordó la lectura ${de(O)}`, quePaso: `${quien} envió un recordatorio de lectura ${de(O)}${n ? ` a ${n} persona${n === 1 ? "" : "s"} con el acuse pendiente` : ""}.` };
+    }
     default:
       return null;
   }

@@ -62,7 +62,7 @@ const destino = (t: TareaSgc, tipo: string) => {
 
 export default function BandejaPage() {
   return (
-    <RequireDocumentos>
+    <RequireDocumentos diagnostico={false}>
       <Bandeja />
     </RequireDocumentos>
   );
@@ -89,7 +89,7 @@ function Bandeja() {
         <PageHeader title="Bandeja" description="Lo que te toca en Documentos SGC." />
       </div>
       {recurso.error ? (
-        <ErrorState message={recurso.error} onRetry={recurso.reload} />
+        <ErrorState message={recurso.error} status={recurso.errorStatus} onRetry={recurso.reload} />
       ) : !recurso.data ? (
         <div className="flex flex-col gap-3">
           <Skeleton className="h-5 w-40" />

@@ -17,7 +17,7 @@ import { fmtDate, isoDate, parseIntOrNull, todayIso } from "@/lib/client/format"
 import { formatSampleFolio, isSampleReadOnly, sampleStatusLabel } from "@/lib/client/samples";
 import { formatActiveUserSignature } from "@/lib/client/session";
 import { invalidate } from "@/lib/client/store";
-import { seOfrece, usePuedeCrear } from "@/lib/client/puede";
+import { estaHabilitada, usePuedeCrear } from "@/lib/client/puede";
 import type { ApiRecord } from "@/lib/client/types";
 import { ACCEPTANCE_DECISIONS, DISPOSAL_TYPES, LEGACY_INSPECTION_REQUIREMENTS, LEGACY_RECEPTION_METHODS, LEGACY_RECEPTION_SAMPLE_TYPES, RECEPTION_ANALYSIS_TYPES, RECEPTION_INSPECTION_REQUIREMENTS, RECEPTION_METHODS, RECEPTION_SAMPLE_TYPES, CLIENT_CONTACT_MEDIA, RECEPTION_DELIVERY_MEDIA, STORAGE_PLACES } from "@/lib/shared/sgc";
 import { Callout, ChoiceCard, ChoiceGrid, EditableScope, FieldGroup, FormCard, FormPage, Panel, PersonCard, personaId, type FormSectionDef } from "./FormLayout";
@@ -27,7 +27,7 @@ import { PersonSelect } from "./PersonSelect";
 import { SignaturePad } from "./SignaturePad";
 import { FolioChip, SampleStatus, SolicitudCallout, SupervisionCallout } from "./status";
 import { formatearHora } from "@/lib/shared/fechas";
-import { AvisoAutorizacion } from "./AvisoAutorizacion";
+import { AvisoAutorizacion, AvisoEdicionBloqueada } from "./AvisoAutorizacion";
 import { DECISIONES_CON_AUTORIZACION, recepcionAsignable, useAccionesRecepcion } from "./RecepcionAcciones";
 import { useConfirm } from "@/components/ui/Overlay";
 import { requisitosRecepcion } from "@/lib/shared/autorizaciones";
@@ -267,7 +267,7 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
   const disponeSinInforme = String(item?.estado || "") === "rechazada";
   const editing = !!item?.id;
   // Con las banderas del servidor (rol + autorización FX-THF-AP + asignación); sin ellas, solo el rol.
-  const canEdit = editing ? seOfrece(item, "editar", can("muestras", "E", { objeto: "recepcion", borrador: String(item?.estado || "registrada") === "registrada" })) : puedeCrear("recepcion", can("muestras", "C", { objeto: "recepcion", borrador: true }));
+  const canEdit = editing ? estaHabilitada(item, "editar", can("muestras", "E", { objeto: "recepcion", borrador: String(item?.estado || "registrada") === "registrada" })) : puedeCrear("recepcion", can("muestras", "C", { objeto: "recepcion", borrador: true }));
   // Con una solicitud de autorizacion pendiente (Fase 3) el registro no se edita.
   const readOnly = editing && (isSampleReadOnly(item?.estado) || !canEdit || !!item?.solicitud_pendiente);
   // Fase 5: asignar, cambiar folio y reabrir (sin muestras:A quedan como solicitud para la Coord. Tecnica).
@@ -497,7 +497,9 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
   const procesamientos = (item?.procesamientos || []) as ApiRecord[];
   // Una muestra rechazada tambien se dispone (se devuelve o se desecha); solo las
   // cerradas y las anuladas ya no admiten disposicion.
-  const puedeDisponer = editing && !["cerrada", "anulada"].includes(String(form.estado)) && can("muestras", "A") && !savedDisposicion;
+  // Una muestra reabierta tras cerrarse conserva su disposición anterior (queda en el historial) y admite otra.
+  const reabiertaConDisposicion = !!savedDisposicion && !["cerrada", "anulada"].includes(String(form.estado));
+  const puedeDisponer = editing && !["cerrada", "anulada"].includes(String(form.estado)) && can("muestras", "A");
   // Exige el informe liberado (o enviado); la muestra rechazada en la recepcion se dispone sin el, con motivo.
   const bloqueoDisposicion = item?.disposicion_bloqueo ? String(item.disposicion_bloqueo) : null;
 
@@ -546,7 +548,7 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
 
           <ValidacionAmbito v={vDisp}>
           <FormCard id="sec-disposicion" title="Disposición final de remanentes" description="Cierra la muestra: qué se hizo con lo que sobró, cuándo y quién (FX-MC 7.4.4).">
-            {savedDisposicion ? (
+            {savedDisposicion && !(reabiertaConDisposicion && puedeDisponer) ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 <p className="text-sm">
                   <span className="text-ink-3">Disposición: </span>
@@ -568,6 +570,11 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
               </div>
             ) : puedeDisponer ? (
               <div className="flex flex-col gap-4">
+                {reabiertaConDisposicion ? (
+                  <Callout tone="info" data-testid="disposicion-anterior">
+                    La muestra se reabrió después de cerrarse. La disposición anterior ({DISPOSAL_TYPES.find((d) => d.value === savedDisposicion!.tipo)?.label || String(savedDisposicion!.tipo_otro || savedDisposicion!.tipo)}, {fmtDate(savedDisposicion!.fecha)}) queda en el historial; registra la nueva para volver a cerrarla.
+                  </Callout>
+                ) : null}
                 <CampoValidado id="r-disp-tipo">
                   <ChoiceGrid>
                     {DISPOSAL_TYPES.map((d) => (
@@ -600,9 +607,7 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
                 {disponeSinInforme ? (
                   <FormGrid>
                     <Field label="Motivo de la disposición" htmlFor="r-disp-motivo" required hint="La muestra se rechazó en la recepción y no tendrá informe.">
-                      <CampoValidado id="r-disp-motivo">
-                        <Textarea id="r-disp-motivo" rows={2} maxLength={500} value={disposicion.motivo} onChange={(event) => setDisposicion({ ...disposicion, motivo: event.target.value })} />
-                      </CampoValidado>
+                      <Textarea id="r-disp-motivo" rows={2} maxLength={500} value={disposicion.motivo} onChange={(event) => setDisposicion({ ...disposicion, motivo: event.target.value })} />
                     </Field>
                   </FormGrid>
                 ) : null}
@@ -661,6 +666,7 @@ export function ReceptionForm({ item }: { item: ApiRecord | null }) {
       <SupervisionCallout item={item} />
       <SolicitudCallout item={item} />
       {acciones.dialogo}
+      <AvisoEdicionBloqueada item={item} cerrado={!editing || isSampleReadOnly(item?.estado)} />
       {!readOnly ? <AvisoAutorizacion requisitos={requisitosRecepcion()} /> : null}
       {readOnly && item?.motivo_anulacion ? (
         <Callout tone="danger" title="Registro anulado">

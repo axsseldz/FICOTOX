@@ -35,7 +35,11 @@ const { check, terminar } = crearCheck();
 const stamp = Date.now().toString(36).slice(-4).toUpperCase();
 const { t, id } = await sesiones();
 const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Tijuana" }).format(new Date());
-const enDias = (n) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Tijuana" }).format(new Date(Date.now() + n * 86_400_000));
+// Hoy (en Tijuana) más n días de calendario (sumar n × 24 h fallaba el día del cambio de horario).
+const enDias = (n) => {
+  const [anio, mes, dia] = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Tijuana" }).format(new Date()).split("-").map(Number);
+  return new Date(Date.UTC(anio, mes - 1, dia + n)).toISOString().slice(0, 10);
+};
 
 /* ---------- Datos de apoyo ---------- */
 const responsables = { elaborador_id: id.luis, revisor_id: id.ricardo, autorizador_id: id.patricia };

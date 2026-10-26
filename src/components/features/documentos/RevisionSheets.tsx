@@ -12,7 +12,7 @@ import { API_BASE_URL, sendFormAuthProgress, sendJsonAuth } from "@/lib/client/a
 import { type Problema } from "@/lib/client/mensajes";
 import { invalidate } from "@/lib/client/store";
 import { extensionDe, fmtBytes } from "@/lib/shared/adjuntos";
-import { MOTIVO_MIN_SGC, TIPOS_ARCHIVO_SGC, type TipoArchivoSgc } from "@/lib/shared/documentos";
+import { ANIOS_PROXIMA_REVISION, MOTIVO_MIN_SGC, TIPOS_ARCHIVO_SGC, type TipoArchivoSgc } from "@/lib/shared/documentos";
 import type { AccionDocumental } from "@/lib/shared/permisos";
 import type { Catalogos, FichaDocumento, Revision } from "./comun";
 import { opcionesPersonas } from "./FichaSheet";
@@ -20,7 +20,7 @@ import { conDato, MasOpciones, VentanaFormulario } from "./VentanaFormulario";
 
 type Resp = { elaborador_id: string; revisor_id: string; autorizador_id: string };
 const respDe = (r?: Revision | null): Resp => ({ elaborador_id: r?.elaborador_id ? String(r.elaborador_id) : "", revisor_id: r?.revisor_id ? String(r.revisor_id) : "", autorizador_id: r?.autorizador_id ? String(r.autorizador_id) : "" });
-const CAMPOS: Record<string, string> = { motivo_cambio: "rev-motivo", elaborador: "rev-elaborador", revisor: "rev-revisor", autorizador: "rev-autorizador", responsables: "rev-elaborador", fecha_emision: "rev-emision", fecha_vigencia: "rev-vigencia", fecha_proxima_revision: "rev-proxima" };
+const CAMPOS: Record<string, string> = { motivo_cambio: "rev-motivo", elaborador: "rev-elaborador", revisor: "rev-revisor", autorizador: "rev-autorizador", responsables: "rev-elaborador", fecha_emision: "rev-emision", fecha_vigencia: "rev-vigencia", fecha_proxima_revision: "rev-proxima", fecha_limite: "rev-limite" };
 
 /*
  * Nueva revision (documento_crear_ficha): crea una revision de trabajo en
@@ -293,7 +293,7 @@ export function RegistrarVigenteDialog({ doc, revision, onClose }: { doc: FichaD
               <Field label="Fecha de vigencia" htmlFor="rev-vigencia" hint="Si la dejas vacía, la de emisión">
                 <DateInput id="rev-vigencia" value={fechas.fecha_vigencia} onChange={(x) => setFechas((f) => ({ ...f, fecha_vigencia: x }))} />
               </Field>
-              <Field label="Próxima revisión" htmlFor="rev-proxima">
+              <Field label="Próxima revisión" htmlFor="rev-proxima" hint={`Si la dejas vacía, emisión + ${ANIOS_PROXIMA_REVISION} años`}>
                 <DateInput id="rev-proxima" value={fechas.fecha_proxima_revision} onChange={(x) => setFechas((f) => ({ ...f, fecha_proxima_revision: x }))} />
               </Field>
             </FormGrid>

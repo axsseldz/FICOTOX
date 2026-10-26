@@ -112,7 +112,7 @@ function Ficha({ id }: { id: string }) {
       <PageBody>
         <RutaDocumentos />
         <div className="rounded-card bg-surface shadow-card" data-testid="sgc-no-encontrado">
-          <ErrorState message={e.que} onRetry={recurso.reload} />
+          <ErrorState message={e.que} status={recurso.errorStatus} onRetry={recurso.reload} />
         </div>
       </PageBody>
     );

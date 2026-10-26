@@ -133,7 +133,7 @@ function ProcesamientoList() {
 
       <TableShell footer={items ? contar(visible.length, "procesamiento", "procesamientos") : undefined}>
         {resource.error ? (
-          <ErrorState message={resource.error} onRetry={resource.reload} />
+          <ErrorState message={resource.error} status={resource.errorStatus} onRetry={resource.reload} />
         ) : !items ? (
           <TableSkeleton cols={6} />
         ) : !visible.length ? (

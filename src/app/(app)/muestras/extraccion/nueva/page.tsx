@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { ExtractionForm } from "@/components/features/samples/ExtractionForm";
 import { ExtractionTypeChooser } from "@/components/features/samples/extraction/TypeChooser";
+import { RequiereCrear } from "@/components/session/RequiereCrear";
 import { RequireModule } from "@/components/session/RequireModule";
 import { Skeleton } from "@/components/ui/Primitives";
 import { normalizeExtractionType } from "@/lib/shared/extraction";
@@ -20,7 +21,9 @@ export default function NuevaExtraccionPage() {
   return (
     <RequireModule modules="ensayos">
       <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-        <NuevaExtraccion />
+        <RequiereCrear tipo="extraccion">
+          <NuevaExtraccion />
+        </RequiereCrear>
       </Suspense>
     </RequireModule>
   );

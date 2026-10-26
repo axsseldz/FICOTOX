@@ -63,7 +63,15 @@ function useActiveSection(): string {
       { rootMargin: "-20% 0px -65% 0px", threshold: 0 },
     );
     targets.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
+    // Las últimas secciones son cortas y al final de la página nunca llegan a la franja del observador: al tocar fondo se marca la última.
+    const alFondo = () => {
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) setActive(SECTIONS[SECTIONS.length - 1].anchor);
+    };
+    window.addEventListener("scroll", alFondo, { passive: true });
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", alFondo);
+    };
   }, []);
   return active;
 }
@@ -154,19 +162,19 @@ export default function AyudaPage() {
             </p>
           </Section>
 
-          <Section anchor="cuenta" title="Tu cuenta y la sesión" lead="Entras con tu correo y tu contraseña. Tu cuenta, tu foto y la apariencia se cambian en Mi cuenta (tu nombre, abajo en la barra lateral).">
+          <Section anchor="cuenta" title="Tu cuenta y la sesión" lead="Entras con tu correo y tu contraseña. Tu cuenta, tu foto y la apariencia se cambian en Mi cuenta (toca tu nombre, abajo en la barra lateral, y elige «Mi cuenta»).">
             <ul className="flex flex-col gap-2">
               <li>
-                <b>Primer ingreso:</b> una cuenta nueva, o una contraseña que restableció quien administra los usuarios, llega con una contraseña temporal. Al entrar, el sistema te pide cambiarla antes de seguir (mínimo 10 caracteres). Después la cambias cuando quieras en <b>Mi cuenta › Cambiar contraseña</b>.
+                <b>Primer ingreso:</b> una cuenta nueva, o una contraseña que restableció quien administra los usuarios, llega con una contraseña temporal. Al entrar, el sistema te pide cambiarla antes de seguir: mínimo 10 caracteres, distinta de la actual y sin tu correo ni tu nombre. Después la cambias cuando quieras en <b>Mi cuenta › Cambiar contraseña</b>.
               </li>
               <li>
                 <b>Cerrar sesión:</b> abre el menú de tu nombre en la barra lateral y elige <b>Cerrar sesión</b>, o escribe «cerrar sesión» en el buscador. En Mi cuenta, <b>Cerrar sesión en todos los dispositivos</b> cierra también las que dejaste abiertas en otras computadoras.
               </li>
               <li>
-                <b>Inactividad:</b> tras un rato sin usar la plataforma (30 minutos por omisión) la sesión se cierra sola; un minuto antes aparece un aviso para continuar. Lo que estabas capturando se conserva debajo: vuelve a escribir tu contraseña y sigues donde ibas.
+                <b>Inactividad:</b> tras un rato sin usar la plataforma (30 minutos por omisión) la sesión se cierra sola; un minuto antes aparece un aviso para continuar. Lo que estabas capturando se conserva debajo: vuelve a escribir tu contraseña y sigues donde ibas. Si se cae la red un momento, la sesión sigue abierta y se reintenta sola.
               </li>
               <li>
-                <b>Varios roles:</b> si tienes más de un cargo, al firmar o aprobar el sistema te pregunta con cuál actúas y lo deja registrado.
+                <b>Varios roles:</b> si tienes más de un cargo, al firmar o aprobar se usa tu <b>cargo predeterminado</b> (Mi cuenta) si permite la acción; si no, el sistema te pregunta con cuál actúas. Queda registrado.
               </li>
             </ul>
           </Section>
@@ -250,7 +258,7 @@ export default function AyudaPage() {
                   Registra los controles de calidad (blanco, material de referencia, duplicado) y presiona <b>Registrar análisis</b>.
                 </>,
                 <>
-                  <b>Marcar revisado</b> y luego <b>Aprobar</b> (permisos de revisar y aprobar ensayos). Quien elaboró o editó el análisis no puede revisarlo ni aprobarlo; revisor y aprobador sí pueden ser la misma persona. Si tienes varios roles que lo permiten, el sistema te pregunta con qué cargo actúas. Un análisis aprobado ya no se edita: si está mal, se corrige con una <b>enmienda</b> (nueva versión con el mismo folio).
+                  <b>Marcar revisado</b> y luego <b>Aprobar</b> (permisos de revisar y aprobar ensayos). Quien elaboró o editó el análisis no puede revisarlo ni aprobarlo; revisor y aprobador sí pueden ser la misma persona. Si tienes varios roles que lo permiten, se usa tu cargo predeterminado o el sistema te pregunta con cuál actúas. Un análisis aprobado ya no se edita: si está mal, se corrige con una <b>enmienda</b> (nueva versión con el mismo folio).
                 </>,
               ]}
             />
@@ -293,7 +301,7 @@ export default function AyudaPage() {
                 <b>Movimientos.</b> Cada entrada y salida queda con motivo y referencia («Extracción E-A folio 1»). Los movimientos no se borran: al anular un registro, lo que descontó se repone con un movimiento de reversión y ambos quedan en la lista.
               </li>
               <li>
-                <b>Avisos del Inicio.</b> Mantenimientos vencidos, equipos con alerta de calibración, stock bajo, análisis e informes esperando firma. Al abrirlos, la lista llega ya filtrada con la misma cuenta.
+                <b>Avisos del Inicio.</b> Mantenimientos vencidos, equipos con alerta de calibración, stock bajo (a quien gestiona equipos o inventario), análisis e informes esperando firma. El Inicio muestra los cuatro más urgentes; la campana los tiene todos. Al abrirlos, la lista llega ya filtrada con la misma cuenta.
               </li>
             </ul>
           </Section>
@@ -307,7 +315,7 @@ export default function AyudaPage() {
                 <b>No conformidades:</b> análisis de causa, acciones correctivas con responsable y fecha, y verificación de eficacia; si no fue eficaz, se reabre. Al cerrarla se genera su PDF. Las tuyas aparecen en «Mis acciones correctivas».
               </li>
               <li>
-                <b>Por autorizar:</b> las acciones delicadas (anular algo avanzado, asignar un rol, ampliar permisos, obsoletar un documento, restaurar un respaldo…) no se hacen solas: quedan como solicitud hasta que otra persona con permiso la aprueba en <b>Por autorizar</b>. Nadie aprueba lo suyo.
+                <b>Por autorizar:</b> las acciones delicadas (anular algo avanzado, asignar un rol, ampliar permisos, obsoletar un documento, restaurar un respaldo…) no se hacen solas: quedan como solicitud hasta que otra persona con permiso la aprueba en <b>Por autorizar</b>. Nadie resuelve lo suyo: ni quien la pidió ni la persona a quien afecta un cambio de acceso.
               </li>
             </ul>
             <p>
@@ -321,7 +329,7 @@ export default function AyudaPage() {
                 <b>Crear y probar:</b> quien administra el sistema crea un respaldo con <b>Crear respaldo</b> y comprueba que se puede recuperar con <b>Probar restauración</b>: se restaura en una copia aparte, corre 8 verificaciones y deja un acta, sin tocar los datos en uso.
               </li>
               <li>
-                <b>Restaurar un respaldo:</b> en el respaldo elegido, <b>Restaurar este respaldo</b> con el motivo. Queda en <b>Por autorizar</b> hasta que otra persona con autoridad (Responsable General) lo apruebe. Al aprobarse, la plataforma muestra «Restaurando» unos momentos, guarda antes un respaldo del estado actual, reemplaza los datos y cierra todas las sesiones: hay que volver a entrar.
+                <b>Restaurar un respaldo:</b> en el respaldo elegido, <b>Restaurar este respaldo</b> con el motivo. Queda en <b>Por autorizar</b> hasta que otra persona con autorización de calidad (Responsable General o Mejora Continua) lo apruebe. Al aprobarse, la plataforma muestra «Restaurando» unos momentos, guarda antes un respaldo del estado actual, reemplaza los datos y cierra todas las sesiones: hay que volver a entrar.
               </li>
               <li>
                 <b>Descargar (copia fuera de la computadora):</b> en el menú ⋯ o en la ficha del respaldo, <b>Descargar</b>. Pide una contraseña de cifrado (12 caracteres o más, escrita dos veces) y la tuya. Se descarga un archivo <b>.ficotox</b> cifrado con la base, los PDF, las evidencias y la llave del registro de actividad. Guárdalo en una memoria USB o en la nube del laboratorio.
@@ -333,7 +341,7 @@ export default function AyudaPage() {
                 <b>Si la computadora se descompone:</b> instala FICOTOX en otra, ejecuta <code>npm run configurar</code> (anota el <b>código de instalación</b> que muestra) y ábrelo. Como no hay cuentas, aparece la <b>Configuración inicial</b>: escribe el código, elige «Restaurar desde respaldo» y sube el .ficotox con su contraseña. Todo vuelve como estaba, con las mismas cuentas y contraseñas. La guía paso a paso para Mac y Windows está en el README.
               </li>
               <li>
-                <b>Avisos:</b> si pasa más de un día sin respaldo o mucho tiempo sin una prueba de restauración, el Inicio lo avisa.
+                <b>Avisos:</b> si pasa más de un día sin respaldo o más de 90 días sin una prueba de restauración, el Inicio se lo avisa a quien puede ver los respaldos.
               </li>
             </ul>
             <Tip tone="warn">Restaurar regresa la plataforma al momento del respaldo: lo capturado después se pierde (queda en el respaldo previo que se guarda antes).</Tip>

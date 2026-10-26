@@ -93,12 +93,14 @@ export function EmptyState({ icon, title, description, action, compact, classNam
   );
 }
 
-export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+/* `status` 403: la persona no tiene acceso (no se ofrece «Reintentar», que no lo cambiaria). */
+export function ErrorState({ message, onRetry, status }: { message: string; onRetry?: () => void; status?: number | null }) {
+  const sinAcceso = status === 403;
   return (
-    <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
-      <p className="text-md font-semibold text-ink">No se pudo cargar</p>
+    <div className="flex flex-col items-center gap-3 px-6 py-12 text-center" data-error-estado={status ?? undefined}>
+      <p className="text-md font-semibold text-ink">{sinAcceso ? "Sin acceso" : "No se pudo cargar"}</p>
       <p className="max-w-md text-sm text-ink-3">{message}</p>
-      {onRetry ? (
+      {onRetry && !sinAcceso ? (
         <button type="button" onClick={onRetry} className="press h-8 rounded-control bg-surface px-3 text-sm font-medium text-ink shadow-card hover:bg-surface-2">
           Reintentar
         </button>

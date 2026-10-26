@@ -42,10 +42,15 @@ export const motivoDe = (item: ApiRecord | null | undefined, accion: string): st
 
 export type TipoRegistro = "recepcion" | "procesamiento" | "extraccion" | "analisis" | "informe";
 
+/* Banderas de alta por tipo de registro, segun el servidor (las comparten las listas y las pantallas de alta). */
+export function usePuedeCrearRecurso() {
+  const { token } = useSession();
+  return useResource<Record<string, PuedeFlag>>("puede-crear", async () => ((await getJsonAuth(`${API_BASE_URL}/samples/puede-crear`, token)).puede || {}) as Record<string, PuedeFlag>, { enabled: !!token });
+}
+
 /* Si la persona puede crear cada tipo de registro (rol + autorizacion de la actividad), segun el servidor. */
 export function usePuedeCrear(): (tipo: TipoRegistro, porRol: boolean) => boolean {
-  const { token } = useSession();
-  const recurso = useResource<Record<string, PuedeFlag>>("puede-crear", async () => ((await getJsonAuth(`${API_BASE_URL}/samples/puede-crear`, token)).puede || {}) as Record<string, PuedeFlag>, { enabled: !!token });
+  const recurso = usePuedeCrearRecurso();
   return (tipo, porRol) => {
     const flag = recurso.data?.[tipo];
     return flag ? flag.ok : porRol;

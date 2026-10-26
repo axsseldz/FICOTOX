@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CalendarBlank, Certificate, ChartLine, ClockCounterClockwise, Database, Eye, FileText, Flask, HandPalm, HourglassLow, ListChecks, Package, Pause, PaperPlaneTilt, PencilLine, Ruler, SealCheck, ShieldWarning, Stamp, TestTube, UserMinus, UserSwitch, WarningDiamond, Wrench } from "@phosphor-icons/react";
+import { BookOpenText, CalendarBlank, Certificate, ChartLine, ClockCounterClockwise, Database, Eye, FileText, Flask, HandPalm, HourglassLow, ListChecks, Package, Pause, PaperPlaneTilt, PencilLine, Ruler, SealCheck, ShieldWarning, Stamp, TestTube, UserMinus, UserSwitch, WarningDiamond, Wrench } from "@phosphor-icons/react";
 import type { Pendiente } from "./tipos";
 
 /* Pendientes de la persona (de /inicio/avisos): etiquetas, iconos y tonos que comparten las píldoras del Inicio y la campana. */
@@ -24,6 +24,7 @@ export const CORTO: Record<string, { label: string; icono: ReactNode }> = {
   calidad_reasignar: { label: "Por reasignar", icono: <UserSwitch weight="duotone" /> },
   documentos_sgc: { label: "Documentos por atender", icono: <FileText weight="duotone" /> },
   documentos_solicitudes: { label: "Tus solicitudes", icono: <Stamp weight="duotone" /> },
+  documentos_lecturas: { label: "Lecturas pendientes", icono: <BookOpenText weight="duotone" /> },
   reactivos_bajos: { label: "Stock bajo", icono: <Flask weight="duotone" /> },
   reactivos_caducan: { label: "Por caducar", icono: <HourglassLow weight="duotone" /> },
   consumibles_bajos: { label: "Consumibles bajos", icono: <Package weight="duotone" /> },

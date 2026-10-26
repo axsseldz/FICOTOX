@@ -222,7 +222,7 @@ async function fuenteInventario(request: Request, s: Session): Promise<Hit[]> {
     const equipo = String(m.equipo || "Equipo");
     const tipo = MANT_TIPO[String(m.tipo)] || String(m.tipo || "Mantenimiento");
     const estado = String(m.estado || "");
-    out.push(hit({ clave: `m-${m.id}`, tipo: "mantenimiento", grupo: "inventario", titulo: `${tipo} · ${equipo}`, sub: join(MANT_ESTADO[estado] || estado, m.fecha_programada ? `programado ${fmtDate(m.fecha_programada)}` : null, m.tecnico_proveedor), href: `/inventario/mantenimiento?abrir=${m.id}&filtro=${estado === "completado" ? "completado" : estado === "vencido" ? "vencido" : "pendiente"}`, etiqueta: "Mantenimiento", lista: "/inventario/mantenimiento", palabras: [tipo, equipo, m.equipo_marca, m.equipo_modelo, estado, MANT_ESTADO[estado], m.tecnico_proveedor, "mantenimiento"] }));
+    out.push(hit({ clave: `m-${m.id}`, tipo: "mantenimiento", grupo: "inventario", titulo: `${tipo} · ${equipo}`, sub: join(MANT_ESTADO[estado] || estado, m.fecha_programada ? `programado ${fmtDate(m.fecha_programada)}` : null, m.tecnico_proveedor), href: `/inventario/mantenimiento?abrir=${m.id}&filtro=${estado === "completado" ? "completado" : estado === "vencido" ? "vencido" : estado === "cancelado" ? "" : "pendiente"}`, etiqueta: "Mantenimiento", lista: "/inventario/mantenimiento", palabras: [tipo, equipo, m.equipo_marca, m.equipo_modelo, estado, MANT_ESTADO[estado], m.tecnico_proveedor, "mantenimiento"] }));
   }
   for (const m of movimientos) {
     const producto = String(m.item_nombre || m.item_codigo || "Movimiento");

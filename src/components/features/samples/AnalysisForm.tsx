@@ -21,7 +21,7 @@ import { fmtDate, isoDate, parseFloatOrNull, parseIntOrNull, todayIso } from "@/
 import { findInsumoOption, findUniqueOperativeEquipo, loadInsumoOptions, nextBitacoraFolio } from "@/lib/client/insumos";
 import { formatActiveUserSignature } from "@/lib/client/session";
 import { invalidate } from "@/lib/client/store";
-import { seOfrece, usePuedeCrear } from "@/lib/client/puede";
+import { estaHabilitada, seOfrece, usePuedeCrear } from "@/lib/client/puede";
 import type { ApiRecord } from "@/lib/client/types";
 import { ANALYSIS_METHODS, ANALYSIS_STATES, ANALYSIS_TYPES, CONFORMITY_OPTIONS } from "@/lib/shared/sgc";
 import { Callout, ChoiceCard, ChoiceGrid, FieldGroup, FlowSteps, FormCard, FormPage, Panel, PersonCard, SignoffCard, personaId, type FormSectionDef } from "./FormLayout";
@@ -32,7 +32,7 @@ import { SignDialog } from "./SignDialog";
 import { BotonSegregado, FolioChip, SegregacionCallout, SolicitudCallout, SupervisionCallout } from "./status";
 import { useAnulacion } from "./useAnulacion";
 import { formatearHora } from "@/lib/shared/fechas";
-import { AvisoAutorizacion } from "./AvisoAutorizacion";
+import { AvisoAutorizacion, AvisoEdicionBloqueada } from "./AvisoAutorizacion";
 import { metodoDeTipoAnalisis, requisitosAnalisis, requisitosRevisionResultados } from "@/lib/shared/autorizaciones";
 import { firmanteDe, firmantesPayload, type FirmanteState } from "./FirmanteSelect";
 import { EvidenciaPanel } from "./EvidenciaPanel";
@@ -67,7 +67,7 @@ interface AnalysisFormState {
   metodoOtro: string;
   metodoReferencia: string;
   extraccionId: string;
-  recepcionId: string;
+  procesamientoId: string;
   fecha: string;
   horaInicio: string;
   horaFin: string;
@@ -102,7 +102,7 @@ const defaultForm = (): AnalysisFormState => ({
   metodoOtro: "",
   metodoReferencia: "",
   extraccionId: "",
-  recepcionId: "",
+  procesamientoId: "",
   fecha: todayIso(),
   horaInicio: formatearHora(new Date()),
   horaFin: "",
@@ -146,7 +146,7 @@ const formFromItem = (item: ApiRecord): AnalysisFormState => {
     metodoOtro: str(item.metodo_otro),
     metodoReferencia: str(item.metodo_referencia),
     extraccionId: item.extraccion_id ? String(item.extraccion_id) : "",
-    recepcionId: item.recepcion_id ? String(item.recepcion_id) : "",
+    procesamientoId: item.procesamiento_id ? String(item.procesamiento_id) : "",
     fecha: isoDate(item.fecha_analisis),
     horaInicio: str(item.hora_inicio),
     horaFin: str(item.hora_fin),
@@ -198,7 +198,7 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
   // Fase 5: el analista se liga a una cuenta (con su contraseña si no es la sesión).
   const [analistaCuenta, setAnalistaCuenta] = useState<FirmanteState>(() => firmanteDe(item, "analista"));
   const [extracciones, setExtracciones] = useState<ApiRecord[]>([]);
-  const [recepciones, setRecepciones] = useState<ApiRecord[]>([]);
+  const [procesamientos, setProcesamientos] = useState<ApiRecord[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [sign, setSign] = useState<"revisar" | "aprobar" | null>(null);
   const [signing, setSigning] = useState(false);
@@ -206,7 +206,7 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
   const editing = !!item?.id;
   const estado = String(item?.estado || "registrado");
   // E solo mientras el análisis está registrado (Fase 1): revisado y aprobado se leen, no se editan.
-  const canEdit = editing ? seOfrece(item, "editar", can("ensayos", "E", { objeto: "analisis", borrador: estado === "registrado" })) && estado === "registrado" : puedeCrear("analisis", can("ensayos", "C", { objeto: "analisis", borrador: true }));
+  const canEdit = editing ? estaHabilitada(item, "editar", can("ensayos", "E", { objeto: "analisis", borrador: estado === "registrado" })) && estado === "registrado" : puedeCrear("analisis", can("ensayos", "C", { objeto: "analisis", borrador: true }));
   // Con una solicitud de autorizacion pendiente (Fase 3) el registro no se edita.
   // Fase 5: enviado a revision ya no se edita; un aprobado se corrige con enmienda.
   const readOnly = editing && (["en_revision", "aprobado", "revisado", "sustituido", "anulado", "anulada"].includes(estado) || !canEdit || !!item?.solicitud_pendiente);
@@ -270,10 +270,10 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
     let cancelled = false;
     (async () => {
       const empty: ApiRecord = {};
-      const [ext, rec] = await Promise.all([getJsonAuth(`${API_BASE_URL}/samples/extraction?search=`, token).catch(() => empty), getJsonAuth(`${API_BASE_URL}/samples/reception?search=`, token).catch(() => empty)]);
+      const [ext, proc] = await Promise.all([getJsonAuth(`${API_BASE_URL}/samples/extraction?search=`, token).catch(() => empty), getJsonAuth(`${API_BASE_URL}/samples/processing?search=`, token).catch(() => empty)]);
       if (cancelled) return;
       setExtracciones(((ext.items || []) as ApiRecord[]).filter((e) => e.estado !== "anulada"));
-      setRecepciones(((rec.items || []) as ApiRecord[]).filter((r) => ["aceptada", "aceptada_con_desviacion"].includes(String(r.decision_aceptacion || ""))));
+      setProcesamientos(((proc.items || []) as ApiRecord[]).filter((p) => p.estado !== "anulada"));
       await loadInsumoOptions();
       if (item) return;
       if (prefillExtraccionId) {
@@ -319,7 +319,8 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
     metodo_otro: form.metodo === "otro" ? form.metodoOtro.trim() || null : null,
     metodo_referencia: form.metodoReferencia.trim() || null,
     extraccion_id: parseIntOrNull(form.extraccionId),
-    recepcion_id: parseIntOrNull(form.recepcionId),
+    // Sin extracción (plancton u otro), el análisis parte de un procesamiento; la recepción la deriva el servidor.
+    procesamiento_id: form.extraccionId ? null : parseIntOrNull(form.procesamientoId),
     fecha_analisis: form.fecha || null,
     hora_inicio: form.horaInicio || null,
     hora_fin: form.horaFin || null,
@@ -365,7 +366,7 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
     else if (form.metodo === "otro" && !form.metodoOtro.trim()) datos("a-metodo-otro", msg.indica("el método"));
     const origen = en("sec-origen", "Muestra y origen");
     if (requiereExtraccion && !form.extraccionId) origen("a-ext", msg.elige("la extracción de origen (este análisis la requiere)"));
-    else if (!requiereExtraccion && !form.recepcionId && !form.extraccionId) origen("a-rec", msg.elige("la recepción de la muestra"));
+    else if (!requiereExtraccion && !form.procesamientoId && !form.extraccionId) origen("a-proc", msg.elige("el procesamiento de la muestra (o la extracción)"));
     if (!form.equipo) en("sec-equipo", "Equipo y condiciones")("a-equipo", msg.elige("el equipo empleado"));
     const res = en("sec-resultados", "Resultados");
     if (!form.resultados.length) res("a-resultados", "Agrega al menos una muestra con su resultado");
@@ -592,7 +593,7 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
               Enmendar…
             </Button>
           ) : null}
-          {editing && (estado === "registrado" || estado === "en_revision") && canReview ? (
+          {editing && estado === "en_revision" && canReview ? (
             <BotonSegregado bloqueo={segregacion.revisar} onSolicitar={() => solicitarExcepcion("revisar")}>
               <Button variant="soft" icon={<CheckCircle size={16} />} onClick={() => setSign("revisar")} disabled={!!segregacion.revisar}>
                 Marcar revisado
@@ -639,10 +640,11 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
         </Callout>
       ) : null}
       {estado === "en_revision" ? <Callout tone="info">Enviado a revisión: ya no se edita. El revisor lo revisa o lo devuelve con observaciones.</Callout> : null}
+      <AvisoEdicionBloqueada item={item} cerrado={!editing || estado !== "registrado"} />
       {!readOnly ? <AvisoAutorizacion requisitos={requisitosAnalisis(form.tipo)} /> : null}
       {editing && (estado === "registrado" || estado === "en_revision") && canReview ? <AvisoAutorizacion requisitos={requisitosRevisionResultados(form.tipo, "revisar")} accion="revisar este análisis" /> : null}
       {editing && estado === "revisado" && canApprove ? <AvisoAutorizacion requisitos={requisitosRevisionResultados(form.tipo, "aprobar")} accion="aprobar este análisis" /> : null}
-      <SegregacionCallout bloqueo={editing && (estado === "registrado" || estado === "en_revision") && canReview ? segregacion.revisar : editing && estado === "revisado" && canApprove ? segregacion.aprobar : null} accion={estado === "revisado" ? "aprobar" : "revisar"} onSolicitar={() => solicitarExcepcion(estado === "revisado" ? "aprobar" : "revisar")} />
+      <SegregacionCallout enFormato bloqueo={editing && (estado === "registrado" || estado === "en_revision") && canReview ? segregacion.revisar : editing && estado === "revisado" && canApprove ? segregacion.aprobar : null} accion={estado === "revisado" ? "aprobar" : "revisar"} onSolicitar={() => solicitarExcepcion(estado === "revisado" ? "aprobar" : "revisar")} />
       {item?.motivo_anulacion ? (
         <Callout tone="danger" title="Registro anulado">
           Motivo: {String(item.motivo_anulacion)}
@@ -697,7 +699,7 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
         </FormGrid>
       </FormCard>
 
-      <FormCard id="sec-origen" title="Muestra y origen" description={requiereExtraccion ? "El análisis parte de un extracto; la cadena recepción → procesamiento se deriva de él." : "Si el análisis no requiere extracción (plancton), vincula directamente la recepción."}>
+      <FormCard id="sec-origen" title="Muestra y origen" description={requiereExtraccion ? "El análisis parte de un extracto; la cadena recepción → procesamiento se deriva de él." : "Si el análisis no requiere extracción (plancton u otro), vincula el procesamiento de la muestra; la recepción se deriva de él."}>
         <FormGrid>
           <Field label="Extracción" htmlFor="a-ext" required={requiereExtraccion} hint={ext ? [formatearFolio(ext.tipo_registro, ext.folio_num), ext.id_interno || "sin ID", ext.folio_procesamiento_num ? formatearFolio("P", ext.folio_procesamiento_num) : null].filter(Boolean).join(" · ") : "Al vincular se cargan las muestras del extracto."}>
             <Select
@@ -719,12 +721,12 @@ export function AnalysisForm({ item, prefillExtraccionId }: { item: ApiRecord | 
             </Select>
           </Field>
           {!requiereExtraccion ? (
-            <Field label="Recepción" htmlFor="a-rec" hint="Solo recepciones aceptadas.">
-              <Select id="a-rec" value={form.recepcionId} disabled={readOnly} onChange={(event) => patch({ recepcionId: event.target.value })}>
+            <Field label="Procesamiento" htmlFor="a-proc" hint="Sin extracción, el análisis parte del procesamiento de la muestra.">
+              <Select id="a-proc" value={form.procesamientoId} disabled={readOnly || !!form.extraccionId} onChange={(event) => patch({ procesamientoId: event.target.value })}>
                 <option value="">Sin vincular</option>
-                {recepciones.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {formatearFolio("R", r.folio_num)} · {r.solicitante || r.id_interno || ""}
+                {procesamientos.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {formatearFolio("P", p.folio_num)} · {p.folio_recepcion_num ? formatearFolio("R", p.folio_recepcion_num) : "sin recepción"} · {p.id_interno || "sin ID"}
                   </option>
                 ))}
               </Select>

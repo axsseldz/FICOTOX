@@ -170,8 +170,9 @@ function MantenimientoContent() {
 
   const menuFor = (item: ApiRecord): MenuItem[] => {
     const list: MenuItem[] = [];
-    if (canUpdate) list.push({ label: "Editar", description: "Cambiar fecha, técnico, estado u observaciones", icon: <PencilSimple size={16} weight="duotone" />, tone: "brand", onSelect: () => editItem(Number(item.id)) });
-    if (canDelete) list.push({ label: "Cancelar mantenimiento…", description: "Queda cancelado con motivo en el historial", icon: <Prohibit size={16} weight="duotone" />, tone: "danger", disabled: item.estado === "cancelado", separatorBefore: list.length > 0, onSelect: () => deleteItem(item) });
+    // Lo cancelado ya no se edita y lo completado no se cancela (el servidor responde 409).
+    if (canUpdate && item.estado !== "cancelado") list.push({ label: "Editar", description: "Cambiar fecha, técnico, estado u observaciones", icon: <PencilSimple size={16} weight="duotone" />, tone: "brand", onSelect: () => editItem(Number(item.id)) });
+    if (canDelete && !["cancelado", "completado"].includes(String(item.estado))) list.push({ label: "Cancelar mantenimiento…", description: "Queda cancelado con motivo en el historial", icon: <Prohibit size={16} weight="duotone" />, tone: "danger", separatorBefore: list.length > 0, onSelect: () => deleteItem(item) });
     return list;
   };
 

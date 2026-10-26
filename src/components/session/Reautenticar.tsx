@@ -34,11 +34,27 @@ const ETIQUETA_ACCION: Record<string, string> = {
   publicar: "registrar o publicar una revisión vigente de un documento",
   autorizar: "autorizar la emisión o la renovación de un documento",
   obsoletar: "solicitar que un documento quede obsoleto",
+  aprobar: "aprobar una solicitud",
+  rechazar: "rechazar una solicitud",
+  excepcion: "solicitar una excepción de segregación",
+  otorgar: "otorgar una autorización de personal",
+  revocar: "revocar una autorización de personal",
+  distribucion: "cambiar la distribución de un documento",
+  externo: "registrar o actualizar un documento externo",
+  reporte: "registrar o quitar un reporte de mantenimiento",
+  restaurar: "restaurar un respaldo",
+  descargar: "descargar un respaldo",
+  importar: "importar un respaldo",
+};
+// Claves completas cuando la parte final se repite entre modulos.
+const ETIQUETA_COMPLETA: Record<string, string> = {
+  "adjuntos:anular": "quitar un archivo adjunto",
+  "documentos:autorizar": "autorizar la emisión o la renovación de un documento",
 };
 
 function describirAccion(accion: string): string {
   const [, clave] = accion.split(":");
-  return ETIQUETA_ACCION[clave] || "realizar esta acción";
+  return ETIQUETA_COMPLETA[accion] || ETIQUETA_ACCION[clave] || "realizar esta acción";
 }
 
 /*

@@ -7,7 +7,7 @@ import { cargarAutorizacion, permisoDe, type Autorizacion } from "./rbac";
 import { conSolicitudes, type SampleTable } from "./samples-flow";
 import { elaboradoresDe, excepcionesDe } from "./segregacion";
 import { safeJsonLoad } from "./modules/helpers";
-import { faltantes, requisitosAnalisis, requisitosExtraccion, requisitosInforme, requisitosProcesamiento, requisitosRecepcion, requisitosRevisionResultados, type Requisito } from "../shared/autorizaciones";
+import { faltantes, mensajeFaltante, requisitosAnalisis, requisitosExtraccion, requisitosInforme, requisitosProcesamiento, requisitosRecepcion, requisitosRevisionResultados, type Requisito } from "../shared/autorizaciones";
 import { formatearFolio } from "../shared/folios";
 import { evaluarAnalisis, evaluarInforme, excepcionPara } from "../shared/segregacion";
 
@@ -55,9 +55,14 @@ class Persona {
 
   /* Autorizaciones FX-THF-AP vigentes; sin ellas obligatorias (AUTORIZACIONES_OBLIGATORIAS=false) todo se cumple. */
   async cumple(requisitos: Requisito[]): Promise<boolean> {
-    if (!getConfig().AUTORIZACIONES_OBLIGATORIAS || !requisitos.length) return true;
+    return (await this.faltan(requisitos)).length === 0;
+  }
+
+  /* Los requisitos que no cubre ninguna autorizacion vigente (vacio si no son obligatorias). */
+  async faltan(requisitos: Requisito[]): Promise<Requisito[]> {
+    if (!getConfig().AUTORIZACIONES_OBLIGATORIAS || !requisitos.length) return [];
     if (!this.vigentes) this.vigentes = (await vigentesDe(this.s, this.yo)).map((a) => ({ tipo: a.tipo, clave: a.clave }));
-    return faltantes(requisitos, this.vigentes as never).length === 0;
+    return faltantes(requisitos, this.vigentes as never);
   }
 
   async asignada(recepcionId: number | null): Promise<boolean> {
@@ -87,14 +92,21 @@ async function vistaPermitida(p: Persona, permiso: ReturnType<typeof permisoDe>,
   return Number(row.creado_por) === p.yo || (await p.asignada(num(row.id)));
 }
 
+/* Editar un formato: con el rol (y la asignacion) pero sin la autorizacion FX-THF-AP, el motivo dice cual falta; con solicitud pendiente, ese motivo. */
+async function editarCon(p: Persona, rolOk: boolean, requisitos: () => Promise<Requisito[]> | Requisito[], pendiente: unknown): Promise<PuedeFlag> {
+  if (!rolOk) return NO;
+  const falta = await p.faltan(await requisitos());
+  if (falta.length) return bloqueado(mensajeFaltante(falta));
+  return pendiente ? bloqueado(MOTIVO_SOLICITUD) : SI;
+}
+
 /* ---------- Por tabla ---------- */
 
 async function puedeRecepcion(p: Persona, row: Row): Promise<Puede> {
   const registrada = String(row.estado || "registrada") === "registrada";
   const permisoE = permisoDe(p.auth, "muestras", "E", { objeto: "recepcion", borrador: registrada });
-  const editar = !!permisoE && (await vistaPermitida(p, permisoE, row)) && (await p.cumple(requisitosRecepcion()));
   const out: Puede = {};
-  out.editar = editar && row.__pendiente ? bloqueado(MOTIVO_SOLICITUD) : flag(editar);
+  out.editar = await editarCon(p, !!permisoE && (await vistaPermitida(p, permisoE, row)), requisitosRecepcion, row.__pendiente);
   out.anular = flag(!!permisoDe(p.auth, "muestras", "AN"));
   return out;
 }
@@ -102,9 +114,8 @@ async function puedeRecepcion(p: Persona, row: Row): Promise<Puede> {
 async function puedeProcesamiento(p: Persona, row: Row): Promise<Puede> {
   const registrada = String(row.estado || "registrada") === "registrada";
   const rol = !!permisoDe(p.auth, "ensayos", "E", { objeto: "procesamiento", borrador: registrada });
-  const ok = rol && (await p.cumple(requisitosProcesamiento())) && (await p.asignada(num(row.recepcion_id)));
   const out: Puede = {};
-  out.editar = ok && row.__pendiente ? bloqueado(MOTIVO_SOLICITUD) : flag(ok);
+  out.editar = await editarCon(p, rol && (await p.asignada(num(row.recepcion_id))), requisitosProcesamiento, row.__pendiente);
   out.anular = flag(!!permisoDe(p.auth, "ensayos", "AN"));
   return out;
 }
@@ -112,13 +123,9 @@ async function puedeProcesamiento(p: Persona, row: Row): Promise<Puede> {
 async function puedeExtraccion(s: Session, p: Persona, row: Row): Promise<Puede> {
   const registrada = String(row.estado || "registrada") === "registrada";
   const rol = !!permisoDe(p.auth, "ensayos", "E", { objeto: "extraccion", borrador: registrada });
-  let ok = false;
-  if (rol) {
-    const equipos = safeJsonLoad<Array<{ equipo_id?: unknown }>>(row.equipos_json, []).map((e) => e.equipo_id);
-    ok = (await p.cumple([...requisitosExtraccion(row.tipo_registro), ...(await requisitosEquipos(s, equipos))])) && (await p.asignada(await recepcionDeProcesamiento(s, row.procesamiento_id)));
-  }
+  const equipos = safeJsonLoad<Array<{ equipo_id?: unknown }>>(row.equipos_json, []).map((e) => e.equipo_id);
   const out: Puede = {};
-  out.editar = ok && row.__pendiente ? bloqueado(MOTIVO_SOLICITUD) : flag(ok);
+  out.editar = await editarCon(p, rol && (await p.asignada(await recepcionDeProcesamiento(s, row.procesamiento_id))), async () => [...requisitosExtraccion(row.tipo_registro), ...(await requisitosEquipos(s, equipos))], row.__pendiente);
   out.anular = flag(!!permisoDe(p.auth, "ensayos", "AN"));
   return out;
 }
@@ -130,8 +137,7 @@ async function puedeAnalisis(s: Session, p: Persona, row: Row, detalle: boolean)
   const asignada = await p.asignada(num(row.recepcion_id));
   const equipoReq = await requisitosEquipos(s, [row.equipo_id]);
 
-  out.editar = flag(!!permisoDe(p.auth, "ensayos", "E", { objeto: "analisis", borrador: true }) && asignada && (await p.cumple([...requisitosAnalisis(row.tipo_analisis), ...equipoReq])));
-  if (row.__pendiente && out.editar.ok) out.editar = bloqueado(MOTIVO_SOLICITUD);
+  out.editar = await editarCon(p, !!permisoDe(p.auth, "ensayos", "E", { objeto: "analisis", borrador: true }) && asignada, () => [...requisitosAnalisis(row.tipo_analisis), ...equipoReq], row.__pendiente);
   out.enviar_revision = flag(!!permisoDe(p.auth, "ensayos", "C", { objeto: "analisis", borrador: true }) && asignada);
   if (supervision && out.enviar_revision.ok) out.enviar_revision = bloqueado(MOTIVO_SUPERVISION);
   out.anular = flag(!!permisoDe(p.auth, "ensayos", "AN"));
@@ -230,11 +236,17 @@ export async function conPuede<T extends Row>(s: Session, auth: Autorizacion, ta
 /* ¿Puede crear cada tipo de registro? (rol + autorizacion de la actividad). Para los botones "Nueva ...". */
 export async function puedeCrearRegistros(s: Session, auth: Autorizacion): Promise<Record<string, PuedeFlag>> {
   const p = new Persona(s, auth);
+  // Con el rol pero sin la autorizacion FX-THF-AP de la actividad: el motivo dice cual falta.
+  const crear = async (rol: boolean, requisitos: Requisito[]): Promise<PuedeFlag> => {
+    if (!rol) return NO;
+    const falta = await p.faltan(requisitos);
+    return falta.length ? bloqueado(mensajeFaltante(falta)) : SI;
+  };
   return {
-    recepcion: flag(!!permisoDe(auth, "muestras", "C", { objeto: "recepcion", borrador: true }) && (await p.cumple(requisitosRecepcion()))),
-    procesamiento: flag(!!permisoDe(auth, "ensayos", "C", { objeto: "procesamiento", borrador: true }) && (await p.cumple(requisitosProcesamiento()))),
-    extraccion: flag(!!permisoDe(auth, "ensayos", "C", { objeto: "extraccion", borrador: true }) && (await p.cumple([{ tipo: "actividad", clave: "extraccion", texto: "extracción" }]))),
-    analisis: flag(!!permisoDe(auth, "ensayos", "C", { objeto: "analisis", borrador: true }) && (await p.cumple([{ tipo: "actividad", clave: "analisis", texto: "análisis" }]))),
+    recepcion: await crear(!!permisoDe(auth, "muestras", "C", { objeto: "recepcion", borrador: true }), requisitosRecepcion()),
+    procesamiento: await crear(!!permisoDe(auth, "ensayos", "C", { objeto: "procesamiento", borrador: true }), requisitosProcesamiento()),
+    extraccion: await crear(!!permisoDe(auth, "ensayos", "C", { objeto: "extraccion", borrador: true }), [{ tipo: "actividad", clave: "extraccion", texto: "extracción" }]),
+    analisis: await crear(!!permisoDe(auth, "ensayos", "C", { objeto: "analisis", borrador: true }), [{ tipo: "actividad", clave: "analisis", texto: "análisis" }]),
     informe: flag(!!permisoDe(auth, "informes", "C", { objeto: "informe", borrador: true })),
   };
 }

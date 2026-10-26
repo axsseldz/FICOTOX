@@ -43,7 +43,7 @@ import { crearSolicitud, pendientesDe, respuestaSolicitud, serializarSolicitud }
 import { detalleExcepcion, excepcionesDe, exigirSegregacion } from "../../segregacion";
 import { evaluarCierreNc, evaluarReanudacion, evaluarVerificacion, excepcionPara } from "../../../shared/segregacion";
 import { CLASIFICACION_NC_LABEL, ESTADOS_ACCION, ESTADOS_NC, METODOS_CAUSA, METODOS_SUSPENDIBLES, MEDIOS_COMUNICACION, ORIGEN_NC_LABEL, ORIGENES_NC, accionVencida, folioIncidencia, folioNc, RANGO_NC } from "../../../shared/calidad";
-import { finDiaLocal, formatearFecha, formatearFechaHora, hoyLocal, inicioDiaLocal } from "../../../shared/fechas";
+import { fechaValida, finDiaLocal, formatearFecha, formatearFechaHora, hoyLocal, inicioDiaLocal } from "../../../shared/fechas";
 import { accesoCalidad, ahora, conPrevio, exigirTexto, filaBloqueada, ncVisible, personaVigente, previosDe, respuestaCsv, siguienteFolio, T, type AccesoCalidad } from "./comun";
 import { accionVisible } from "./adjuntos";
 import { retencionesActivas, suspensionesActivas } from "./bloqueos";
@@ -64,7 +64,6 @@ const MEDIOS = new Set(MEDIOS_COMUNICACION.map((m) => m.value));
 const SI_NO = new Set(["si", "no"]);
 const param = (request: Request, nombre: string) => (new URL(request.url).searchParams.get(nombre) || "").trim();
 const cerradaOAnulada = (nc: Row) => ["cerrada", "anulada"].includes(String(nc.estado));
-const fechaValida = (v: unknown) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
 
 /* ---------- Permisos de la NC ---------- */
 
@@ -273,7 +272,8 @@ async function detalleNc(s: Session, acc: AccesoCalidad, nc: Row): Promise<Row> 
     acciones: acciones.map((a) => ({ ...a, vencida: accionVencida(a, hoy), responsable_vigente: Number(a.responsable_activo) === 1 && (!a.responsable_vigente_hasta || String(a.responsable_vigente_hasta) >= hoy) })),
     verificaciones,
     comunicaciones: comunicaciones.map((c) => ({ ...c, informe_ids: JSON.parse(String(c.informe_ids_json || "[]")) })),
-    suspensiones,
+    // Con la excepción de la regla 10 ya aprobada, quien suspendió puede reanudar (la pantalla le ofrece «Reanudar…»).
+    suspensiones: suspensiones.map((su) => ({ ...su, excepcion_reanudar: !!excepcionPara(excepcionesDe(su), acc.yo, "reanudar") })),
     retenciones: retenciones.map((r) => ({ ...r, informe: `${formatearFolio("IR", r.informe_folio)}${Number(r.informe_version || 1) > 1 ? ` v${r.informe_version}` : ""}` })),
     propuesta,
     solicitud_pendiente: pendiente ? serializarSolicitud(pendiente) : null,
@@ -281,7 +281,7 @@ async function detalleNc(s: Session, acc: AccesoCalidad, nc: Row): Promise<Row> 
     puede: {
       editar: editor,
       administrar: !!permisoDe(acc.auth, "calidad", "G", { objeto: "nc" }),
-      verificar: acc.puede("R") && String(nc.estado) === "en_verificacion",
+      verificar: acc.puede("R") && String(nc.estado) === "en_verificacion" && verificaciones.at(-1)?.resultado !== "eficaz",
       suspender: acc.puede("R") && !cerradaOAnulada(nc),
       retener: acc.puede("R") && !cerradaOAnulada(nc),
       reanudar: acc.puede("A"),
@@ -350,6 +350,8 @@ export async function editarNc({ request, s, params }: RouteContext): Promise<Re
   if ("requiere_cambio_documental" in p) cambios.requiere_cambio_documental = p.requiere_cambio_documental ? 1 : 0;
   if ("verificacion_programada" in p) {
     if (p.verificacion_programada && !fechaValida(p.verificacion_programada)) throw new HttpError(400, { message: "Fecha de verificación no válida" });
+    // Como en el formulario: se programa de hoy en adelante (una fecha ya guardada se conserva aunque haya pasado).
+    if (p.verificacion_programada && String(p.verificacion_programada) !== String(antes.verificacion_programada || "") && String(fechaValida(p.verificacion_programada)) < hoyLocal()) throw new HttpError(400, { message: "La verificación se programa de hoy en adelante", campo: "verificacion_programada" });
     cambios.verificacion_programada = p.verificacion_programada || null;
   }
   let reasignacion: { motivo: string } | null = null;
@@ -512,7 +514,8 @@ export async function cancelarAccion({ request, s, params }: RouteContext): Prom
   exigirEditable(acc, nc);
   if (["implementada", "cancelada"].includes(String(accion.estado))) throw new HttpError(409, { message: `La acción ya está ${accion.estado}` });
   const motivo = exigirTexto((await readJson(request)).motivo, 5, "Indica el motivo de la cancelación");
-  await s.execute(`UPDATE ${T.acciones} SET estado = 'cancelada', cancelada_por = :por, cancelada_en = :en, motivo_cancelacion = :m WHERE id = :id`, { por: acc.yo, en: ahora(), m: motivo, id: accion.id });
+  const r = await s.execute(`UPDATE ${T.acciones} SET estado = 'cancelada', cancelada_por = :por, cancelada_en = :en, motivo_cancelacion = :m WHERE id = :id AND estado = :actual`, { por: acc.yo, en: ahora(), m: motivo, id: accion.id, actual: accion.estado });
+  if (!r.rowcount) throw new HttpError(409, { message: "La acción ya cambió de estado" });
   await auditar(s, user, nc, "cancelar", { motivo, detalle: { accion_correctiva: Number(accion.id), descripcion: accion.descripcion } });
   await s.commit();
   return json({ message: "Acción cancelada" });
@@ -529,6 +532,9 @@ export async function verificarNc({ request, s, params }: RouteContext): Promise
   const nc = await ncVisible(s, acc, intParam(params.id), true);
   await sinSolicitudPendiente(s, nc);
   if (String(nc.estado) !== "en_verificacion") throw new HttpError(409, { message: "Solo se verifica una NC en verificación (todas sus acciones implementadas)" });
+  // Una verificación eficaz es definitiva: la NC queda lista para cerrarse (no se verifica dos veces ni se reabre después).
+  const ultima = await s.scalar(`SELECT resultado FROM ${T.verificaciones} WHERE nc_id = :id ORDER BY id DESC LIMIT 1`, { id: nc.id });
+  if (String(ultima || "") === "eficaz") throw new HttpError(409, { message: "La eficacia ya se verificó (eficaz): la NC está lista para cerrarse", codigo: "ya_verificada" });
   const excepcion = exigirSegregacion(evaluarVerificacion(acc.yo, await participantesDe(s, nc.id)), nc, acc.yo, "verificar");
   const p = await readJson(request);
   const resultado = String(p.resultado || "");
@@ -580,6 +586,7 @@ export async function registrarComunicacion({ request, s, params }: RouteContext
   exigirEditable(acc, nc);
   const p = await readJson(request);
   if (!fechaValida(p.fecha)) throw new HttpError(400, { message: "Indica la fecha de la comunicación" });
+  if (String(fechaValida(p.fecha)) > hoyLocal()) throw new HttpError(400, { message: "La fecha de la comunicación no puede ser futura", campo: "fecha" });
   const medio = String(p.medio || "");
   if (!MEDIOS.has(medio)) throw new HttpError(400, { message: "Elige el medio" });
   const contacto = exigirTexto(p.contacto, 3, "Indica con quién se comunicó");
@@ -768,7 +775,15 @@ export async function cerrarNc({ request, s, params }: RouteContext): Promise<Re
   const nombre = `${folioNc(cerrada.folio_num).replace(" ", "-")}-${Date.now()}.pdf`;
   fs.mkdirSync(carpetaPdf(), { recursive: true });
   const ruta = path.join(/*turbopackIgnore: true*/ carpetaPdf(), nombre);
-  fs.writeFileSync(ruta, pdf);
+  // Escritura atómica (temporal + rename): nunca queda un PDF a medias con el nombre final.
+  const temporal = path.join(/*turbopackIgnore: true*/ carpetaPdf(), `.${nombre}.${process.pid}.tmp`);
+  try {
+    fs.writeFileSync(temporal, pdf, { flag: "wx" });
+    fs.renameSync(temporal, ruta);
+  } catch (error) {
+    fs.rmSync(temporal, { force: true });
+    throw error;
+  }
   try {
     await s.execute(`UPDATE ${T.nc} SET archivo_pdf = :a, pdf_sha256 = :sha WHERE id = :id`, { a: nombre, sha, id: nc.id });
     await auditar(s, user, nc, "cerrar", { antes: nc, despues: await snapshotRow(s, T.nc, Number(nc.id)), motivo: conclusion, detalle: { pdf_sha256: sha, actuo_como: actuo, ...detalleExcepcion(excepcion) } });

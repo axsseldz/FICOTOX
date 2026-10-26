@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { requireUser, userIdFromClaims, type CurrentUser } from "../auth";
-import { descartarArchivo, guardarArchivoEn, validarArchivoSubido, type ArchivoGuardado } from "../adjuntos";
+import { descartarArchivo, guardarArchivoEn, integridadArchivo, validarArchivoSubido, type ArchivoGuardado } from "../adjuntos";
+import { incidenciaPorAlertaIntegridad } from "./calidad/automaticas";
 import { registrarAuditoria } from "../audit";
 import { getConfig } from "../config";
 import { isSqlite, type Row, type Session } from "../db";
@@ -102,6 +103,7 @@ export async function createMaintenanceReport({ request, s }: RouteContext): Pro
   if (!mantenimientoId) throw new HttpError(400, { message: "Falta el mantenimiento vinculado" });
   const mantenimiento = await s.queryOne<Row>("SELECT id, estado FROM mantenimientos WHERE id = :id LIMIT 1", { id: mantenimientoId });
   if (!mantenimiento) throw new HttpError(404, { message: "Mantenimiento no encontrado" });
+  if (String(mantenimiento.estado) === "cancelado") throw new HttpError(409, { message: "El mantenimiento está cancelado; no se le adjuntan reportes", codigo: "cancelado" });
 
   const fechaReporte = String(form.get("fecha_reporte") || "").trim() || hoyLocal();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaReporte)) throw new HttpError(400, { message: "La fecha del reporte no es válida" });
@@ -191,18 +193,36 @@ export async function getDocumentFile({ request, s, params }: RouteContext): Pro
   const relative = parts.map((part) => decodeURIComponent(part)).join("/");
   const baseDir = reportsUploadDir();
   const target = path.resolve(baseDir, relative);
-  if (!target.startsWith(baseDir + path.sep) || !fs.existsSync(target) || !fs.statSync(target).isFile()) {
-    return json({ message: "Ruta no encontrada" }, 404);
-  }
+  if (!target.startsWith(baseDir + path.sep)) return json({ message: "Ruta no encontrada" }, 404);
 
-  const contentType = MIME_TYPES[path.extname(target).toLowerCase()] || "application/octet-stream";
-  const data = await fs.promises.readFile(target);
-  return new Response(new Uint8Array(data), {
+  // Como todo archivo con huella: se verifica el SHA-256 al abrirlo (ok/alterado/faltante con alerta) y queda en la bitácora.
+  const reporte = await s.queryOne<Row>("SELECT * FROM reportes_mantenimiento WHERE nombre_almacenado = :n ORDER BY id DESC LIMIT 1", { n: relative });
+  if (!reporte) {
+    if (!fs.existsSync(target) || !fs.statSync(target).isFile()) return json({ message: "Ruta no encontrada" }, 404);
+    // Archivo heredado sin registro (antes de la migración 25): se sirve tal cual.
+    const data = await fs.promises.readFile(target);
+    return new Response(new Uint8Array(data), { status: 200, headers: { "Content-Type": MIME_TYPES[path.extname(target).toLowerCase()] || "application/octet-stream", "Content-Length": String(data.length), "Content-Disposition": `inline; filename="${path.basename(target)}"` } });
+  }
+  const referencia = String(reporte.codigo || `reporte ${reporte.id}`);
+  const integridad = await integridadArchivo(target, reporte.sha256);
+  if (integridad.estado !== "ok") {
+    await registrarAuditoria(s, user, { accion: "alerta_integridad", entidad: "reportes_mantenimiento", entidadId: Number(reporte.id), referencia, motivo: integridad.estado === "faltante" ? "El reporte de mantenimiento no está en el servidor" : "El SHA-256 del reporte de mantenimiento no coincide con el registrado", detalle: { archivo: relative, esperado: reporte.sha256, obtenido: integridad.sha256 } });
+    await incidenciaPorAlertaIntegridad(s, { clave: `reporte_mantenimiento:${reporte.id}:${integridad.estado}`, descripcion: `El reporte de mantenimiento ${referencia} ${integridad.estado === "faltante" ? "no está en el servidor" : "no coincide con su huella SHA-256"} (alerta de integridad).`, registros: [{ entidad: "reportes_mantenimiento", entidad_id: Number(reporte.id), referencia }] });
+  }
+  if (!integridad.bytes) {
+    await s.commit();
+    return json({ message: "El archivo del reporte no está en el servidor; se registró una alerta de integridad", codigo: "archivo_faltante" }, 404);
+  }
+  await registrarAuditoria(s, user, { accion: "descargar", entidad: "reportes_mantenimiento", entidadId: Number(reporte.id), referencia, detalle: { archivo: relative, integridad: integridad.estado, ...(reporte.anulado_en ? { quitado_o_reemplazado: true } : {}) } });
+  await s.commit();
+  const nombre = String(reporte.nombre_original || path.basename(target)).replace(/["\\\r\n]/g, "_");
+  return new Response(new Uint8Array(integridad.bytes), {
     status: 200,
     headers: {
-      "Content-Type": contentType,
-      "Content-Length": String(data.length),
-      "Content-Disposition": `inline; filename="${path.basename(target)}"`,
+      "Content-Type": "application/pdf",
+      "Content-Length": String(integridad.bytes.length),
+      "Content-Disposition": `inline; filename="reporte.pdf"; filename*=UTF-8''${encodeURIComponent(nombre)}`,
+      "X-Integridad-Archivo": integridad.estado,
     },
   });
 }

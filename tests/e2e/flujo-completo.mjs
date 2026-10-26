@@ -42,7 +42,7 @@ const require = createRequire(import.meta.url);
 const { chromium } = require("playwright-core");
 const BASE = process.env.BASE || "http://localhost:3100";
 process.env.BASE = `${BASE}/api`;
-const { api, cadena, credenciales, crearCheck, EMAIL, fila, filas, hoy, enDias, informeLiberado, sesiones } = await import("../lib/calidad.mjs");
+const { api, cadena, credenciales, crearCheck, Database, EMAIL, fila, filas, hoy, enDias, informeLiberado, sesiones } = await import("../lib/calidad.mjs");
 const { pdfConTexto } = await import("../lib/archivos.mjs");
 const { adjuntarEvidencia, pdfDePrueba } = await import("../lib/evidencia.mjs");
 const { registrarEnvio } = await import("../lib/envio.mjs");
@@ -312,13 +312,19 @@ async function inventario() {
     check("a) ajuste sin motivo y con fecha futura: no se registra (pop-up con ambos)", /motivo del ajuste/i.test(texto) && /futura/i.test(texto), texto.replace(/\s+/g, " ").slice(0, 160));
     await entendido(page);
     const anterior = enDias(-5);
+    // El conteo de hace 5 días necesita un alta anterior: se fecha el alta (y su existencia inicial) hace 10 días.
+    const db = new Database(process.env.TEST_DB_PATH);
+    db.prepare("UPDATE reactivos SET creado_en = datetime('now', '-10 days') WHERE id = ?").run(E.reactivoId);
+    db.prepare("UPDATE movimientos SET fecha_movimiento = ? WHERE tabla_origen = 'reactivos' AND id_item = ? AND motivo = 'Existencia inicial'").run(enDias(-10), E.reactivoId);
+    db.close();
     await page.locator("#refill-fecha").fill(fechaEs(anterior));
     await page.locator("#refill-fecha").blur();
     await page.locator("#refill-reason").fill("Conteo físico mensual: el frasco abierto tenía 2.5 L");
     await page.locator('button[form="stock-refill-form"]').click();
     await toast(page, /Existencia ajustada/);
     const mov = fila("SELECT tipo, fecha_movimiento, motivo FROM movimientos WHERE tabla_origen = 'reactivos' AND id_item = ? ORDER BY id DESC LIMIT 1", E.reactivoId);
-    check("a) ajuste por conteo: existencia 2.5 L y movimiento con la fecha anterior", (await existenciaReactivo(E.reactivoId)) === 2.5 && mov?.tipo === "ajuste" && mov?.fecha_movimiento === anterior, `${await existenciaReactivo(E.reactivoId)} ${JSON.stringify(mov)}`);
+    // Lo contado es la existencia de ese día; la entrada de 1 L de hoy se conserva: 2.5 + 1 = 3.5 L.
+    check("a) ajuste por conteo con fecha anterior: existencia 2.5 L contados + 1 L que entró después = 3.5 L, movimiento con la fecha del conteo", (await existenciaReactivo(E.reactivoId)) === 3.5 && mov?.tipo === "ajuste" && mov?.fecha_movimiento === anterior, `${await existenciaReactivo(E.reactivoId)} ${JSON.stringify(mov)}`);
     await page.goto(`${BASE}/movimientos`);
     await page.getByPlaceholder("Buscar por insumo, referencia o motivo").fill(R_NOMBRE);
     const filaM = page.locator("[data-movimiento]").filter({ hasText: "Ajuste por conteo" }).first();

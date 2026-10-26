@@ -59,7 +59,7 @@ const COLUMNAS: ColumnaLista[] = [
 
 export default function ExternosPage() {
   return (
-    <RequireDocumentos>
+    <RequireDocumentos diagnostico={false}>
       <Suspense fallback={<Skeleton className="h-[420px]" />}>
         <Externos />
       </Suspense>

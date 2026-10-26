@@ -410,7 +410,9 @@ try {
       // Se espera a que el perdedor termine (su servidor sale con 78 al no poder crear servidor.lock).
       const perdedor = await Promise.race([l1.fin.then((c) => ({ n: 1, c })), l2.fin.then((c) => ({ n: 2, c })), new Promise((r) => setTimeout(() => r(null), 60000))]);
       await new Promise((r) => setTimeout(r, 1000));
-      const vivos = [(await esperarSalud({ PORT: String(p1), TLS_CERT: envHttps.TLS_CERT }, 2)).ok, (await esperarSalud({ PORT: String(p2), TLS_CERT: envHttps.TLS_CERT }, 2)).ok];
+      // El ganador puede tardar en escuchar (servidor ocupado al final de la corrida completa): se le da hasta 60 s.
+      const segundos = (n) => (perdedor && perdedor.n !== n ? 60 : 2);
+      const vivos = [(await esperarSalud({ PORT: String(p1), TLS_CERT: envHttps.TLS_CERT }, segundos(1))).ok, (await esperarSalud({ PORT: String(p2), TLS_CERT: envHttps.TLS_CERT }, segundos(2))).ok];
       const salidas = [l1.salida(), l2.salida()].join("\n");
       check("dos servidores arrancados a la vez sobre la misma instancia: solo uno queda escuchando; el otro sale con «ya hay un servidor»", vivos.filter(Boolean).length === 1 && perdedor?.c === 78 && /ya hay un (servidor|lanzador)/.test(salidas), `escuchando: ${vivos.join(",")} perdedor ${JSON.stringify(perdedor)} ${perdedor ? [l1, l2][perdedor.n - 1].salida().trim().split("\n").slice(-3).join(" | ") : ""}`);
       await nodoAsync("scripts/detener-ficotox.mjs", [], { FICOTOX_ENV_FILE: nuevaInst.env });

@@ -17,6 +17,8 @@
  *   el correo aparece parcialmente oculto.
  */
 import { exigirSinRetencion } from "./modules/calidad/bloqueos";
+import { incidenciaPorAlertaIntegridad } from "./modules/calidad/automaticas";
+import { integridadArchivo } from "./adjuntos";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -32,7 +34,8 @@ import { exigirSinRequiereEnmienda, informeFolio } from "./modules/informes";
 
 const TABLE = "envios_informe";
 const EXTENSIONES = new Set([".pdf", ".png", ".jpg", ".jpeg", ".webp", ".eml", ".msg"]);
-const MAX_BYTES = 15 * 1024 * 1024;
+/* La evidencia del envío pesa lo mismo que cualquier evidencia (EVIDENCIA_MAX_MB). */
+const maxBytes = () => getConfig().EVIDENCIA_MAX_MB * 1024 * 1024;
 
 /* ---------- Utilidades ---------- */
 
@@ -119,7 +122,8 @@ async function registrar(s: Session, user: CurrentUser, cargo: string, informe: 
 export async function listarEnvios({ request, s, params }: RouteContext): Promise<Response> {
   const user = await requireUser(request);
   await requirePermission(s, user, "informes", "V");
-  return json({ items: await listar(s, intParam(params.id)), smtp_disponible: !!smtpConfig() });
+  if (!(await s.scalar("SELECT id FROM informes WHERE id = :id", { id: intParam(params.id) }))) throw new HttpError(404, { message: "Informe no encontrado" });
+  return json({ items: await listar(s, intParam(params.id)), smtp_disponible: !!smtpConfig(), max_mb: getConfig().EVIDENCIA_MAX_MB });
 }
 
 /* POST /api/informes/:id/envios (multipart): envio manual con evidencia. */
@@ -141,7 +145,7 @@ export async function registrarEnvioManual({ request, s, params }: RouteContext)
   const ext = path.extname(archivo.name).toLowerCase();
   if (!EXTENSIONES.has(ext)) throw new HttpError(400, { message: "La evidencia debe ser PDF, imagen (PNG/JPG/WebP) o correo (.eml/.msg)" });
   const bytes = Buffer.from(await archivo.arrayBuffer());
-  if (!bytes.length || bytes.length > MAX_BYTES) throw new HttpError(400, { message: "La evidencia está vacía o pesa más de 15 MB" });
+  if (!bytes.length || bytes.length > maxBytes()) throw new HttpError(400, { message: `La evidencia está vacía o pesa más de ${getConfig().EVIDENCIA_MAX_MB} MB` });
   const sha = createHash("sha256").update(bytes).digest("hex");
   const nombreArchivo = `${informeFolio(informe).replace(/\s+/g, "-")}-v${informe.version}-envio-${Date.now()}${ext}`;
   await fs.promises.writeFile(path.join(enviosDir(), nombreArchivo), bytes);
@@ -194,6 +198,9 @@ export async function confirmarEnvio({ request, s, params }: RouteContext): Prom
   const envio = await s.queryOne<Row>(`SELECT * FROM ${TABLE} WHERE id = :id AND informe_id = :informe`, { id: intParam(params.envio), informe: informeId });
   if (!envio) throw new HttpError(404, { message: "Envío no encontrado" });
   if (envio.confirmacion_en) throw new HttpError(409, { message: "La confirmación de recepción ya está registrada" });
+  // Un informe anulado ya no cambia (tampoco su historial de envíos).
+  const anulado = await s.queryOne<Row>("SELECT estado, folio_num, version FROM informes WHERE id = :id", { id: informeId });
+  if (String(anulado?.estado) === "anulado") throw new HttpError(409, { message: `El informe ${informeFolio(anulado!)} está anulado: no se registran confirmaciones`, codigo: "anulado" });
   const payload = await readJson(request);
   const en = String(payload.confirmacion_en || "").trim();
   const nota = String(payload.confirmacion_nota || "").trim() || null;
@@ -212,9 +219,22 @@ export async function descargarEvidencia({ request, s, params }: RouteContext): 
   const envio = await s.queryOne<Row>(`SELECT * FROM ${TABLE} WHERE id = :id AND informe_id = :informe`, { id: intParam(params.envio), informe: intParam(params.id) });
   if (!envio?.evidencia_archivo) throw new HttpError(404, { message: "Evidencia no encontrada" });
   const ruta = path.join(enviosDir(), String(envio.evidencia_archivo));
-  if (!fs.existsSync(ruta)) throw new HttpError(404, { message: "El archivo de evidencia no está en el servidor" });
-  const bytes = await fs.promises.readFile(ruta);
+  // Como los adjuntos: se verifica el SHA-256 guardado al registrar el envío; si falta o no coincide, alerta e incidencia automática.
+  const informe = await snapshotRow(s, "informes", Number(envio.informe_id));
+  const referencia = `${informeFolio(informe)} v${envio.version}`;
+  const integridad = await integridadArchivo(ruta, envio.evidencia_sha256);
+  if (integridad.estado !== "ok") {
+    await registrarAuditoria(s, user, { accion: "alerta_integridad", entidad: "informes", entidadId: Number(envio.informe_id), referencia, motivo: integridad.estado === "faltante" ? "La evidencia del envío no está en el servidor" : "El SHA-256 de la evidencia del envío no coincide con el registrado", detalle: { envio_id: envio.id, archivo: envio.evidencia_archivo, esperado: envio.evidencia_sha256, obtenido: integridad.sha256 } });
+    await incidenciaPorAlertaIntegridad(s, { clave: `envio:${envio.id}:${integridad.estado}`, descripcion: `La evidencia del envío del informe ${referencia} ${integridad.estado === "faltante" ? "no está en el servidor" : "no coincide con su huella SHA-256"} (alerta de integridad).`, registros: [{ entidad: "informes", entidad_id: Number(envio.informe_id), referencia }] });
+  }
+  if (!integridad.bytes) {
+    await s.commit();
+    return json({ message: "El archivo de evidencia no está en el servidor; se registró una alerta de integridad", codigo: "archivo_faltante" }, 404);
+  }
+  const bytes = integridad.bytes;
+  await registrarAuditoria(s, user, { accion: "descargar", entidad: "informes", entidadId: Number(envio.informe_id), referencia, detalle: { envio_id: envio.id, evidencia: true } });
+  await s.commit();
   const ext = path.extname(ruta).toLowerCase();
   const tipo = ext === ".pdf" ? "application/pdf" : ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : [".jpg", ".jpeg"].includes(ext) ? "image/jpeg" : ext === ".json" ? "application/json" : "message/rfc822";
-  return new Response(new Uint8Array(bytes), { status: 200, headers: { "Content-Type": tipo, "Content-Disposition": `attachment; filename="${envio.evidencia_archivo}"`, "X-Evidencia-Sha256": String(envio.evidencia_sha256 || "") } });
+  return new Response(new Uint8Array(bytes), { status: 200, headers: { "Content-Type": tipo, "Content-Disposition": `attachment; filename="${envio.evidencia_archivo}"`, "X-Evidencia-Sha256": String(envio.evidencia_sha256 || ""), "X-Integridad-Evidencia": integridad.estado } });
 }

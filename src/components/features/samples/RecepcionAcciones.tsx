@@ -145,6 +145,8 @@ function AsignarDialog({ recepcion, onClose, onChange }: { recepcion: ApiRecord;
       setAsignados((data.items || []) as ApiRecord[]);
       setUsuario("");
       setMotivo("");
+      // El selector vacío tras asignar no es un error: se quitan las marcas del intento.
+      v.reiniciar();
       onChange();
     } catch (err) {
       v.errorServidor(err, { motivo: "asignar-motivo" });

@@ -40,7 +40,7 @@ const COLUMNAS: ColumnaLista[] = [
 
 export default function SolicitudesPage() {
   return (
-    <RequireDocumentos>
+    <RequireDocumentos diagnostico={false}>
       <Suspense fallback={<Skeleton className="h-[320px]" />}>
         <Solicitudes />
       </Suspense>
@@ -77,7 +77,7 @@ function Solicitudes() {
 
   const apoyo = async (x: SolicitudSgc) => {
     try {
-      await descargarUrl(`${API_BASE_URL}/sgc/solicitudes/${x.id}/apoyo`, token, `apoyo-solicitud-${x.id}`);
+      await descargarUrl(`${API_BASE_URL}/sgc/solicitudes/${x.id}/apoyo`, token, String(x.apoyo_nombre_original || `apoyo-solicitud-${x.id}`));
     } catch (err) {
       toast.error(explicarError(err, "No se pudo descargar").que);
     }

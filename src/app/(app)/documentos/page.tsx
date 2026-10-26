@@ -127,7 +127,7 @@ function Inicio() {
       </div>
 
       {recurso.error ? (
-        <ErrorState message={recurso.error} onRetry={recurso.reload} />
+        <ErrorState message={recurso.error} status={recurso.errorStatus} onRetry={recurso.reload} />
       ) : !data ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <Skeleton className="h-[64px] rounded-card sm:col-span-2 xl:col-span-3" />

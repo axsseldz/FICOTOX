@@ -59,10 +59,10 @@ const vistaAuditor = await reportesDe(M, t.hector);
 const vistaCarmen = await reportesDe(M, t.carmen);
 check("quien solo consulta (Auditor Interno) ve el reporte, sin poder gestionarlo; quien lo adjuntó sí", vistaAuditor?.items?.some((x) => Number(x.id) === R1) && vistaAuditor?.puede_gestionar === false && vistaCarmen?.puede_gestionar === true, `${vistaAuditor?.items?.length} ${vistaAuditor?.puede_gestionar}/${vistaCarmen?.puede_gestionar}`);
 const archivo = await api("GET", String(subida.data?.archivo_url || "").replace(/^\/api/, ""), undefined, t.hector);
-check("el PDF se sirve en línea (sin descarga forzada) a quien solo consulta", archivo.status === 200 && /application\/pdf/.test(archivo.headers.get("content-type") || "") && /^inline/.test(archivo.headers.get("content-disposition") || "") && Buffer.isBuffer(archivo.data) && sha(archivo.data) === sha(pdf), `${archivo.status} ${archivo.headers.get("content-disposition")}`);
+check("el PDF se sirve en línea (sin descarga forzada) a quien solo consulta, con su huella verificada", archivo.headers.get("x-integridad-archivo") === "ok" && archivo.status === 200 && /application\/pdf/.test(archivo.headers.get("content-type") || "") && /^inline/.test(archivo.headers.get("content-disposition") || "") && Buffer.isBuffer(archivo.data) && sha(archivo.data) === sha(pdf), `${archivo.status} ${archivo.headers.get("content-disposition")}`);
 const mantLista = ((await api("GET", "/inventory/mantenimientos", undefined, t.carmen)).data?.items || []).find((x) => Number(x.id) === M);
 check("la lista de mantenimientos muestra su reporte vigente", mantLista?.reporte_codigo === r1?.codigo, `${mantLista?.reporte_codigo}`);
-const evCrear = fila("SELECT accion, referencia, coalesce(datos_nuevos_json, '') || coalesce(cambios_json, '') AS detalle FROM auditoria WHERE entidad = 'reportes_mantenimiento' AND entidad_id = ? ORDER BY id DESC LIMIT 1", String(R1));
+const evCrear = fila("SELECT accion, referencia, coalesce(datos_nuevos_json, '') || coalesce(cambios_json, '') AS detalle FROM auditoria WHERE entidad = 'reportes_mantenimiento' AND entidad_id = ? AND accion = 'crear' ORDER BY id DESC LIMIT 1", String(R1));
 check("bitácora: «crear» del reporte con su huella SHA-256", evCrear?.accion === "crear" && evCrear?.referencia === r1?.codigo && String(evCrear?.detalle || "").includes(sha(pdf)), JSON.stringify(evCrear)?.slice(0, 160));
 
 /* ---------- Rechazos ---------- */

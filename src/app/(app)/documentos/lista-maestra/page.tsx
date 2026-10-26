@@ -58,7 +58,7 @@ interface Respuesta {
 
 export default function ListaMaestraPage() {
   return (
-    <RequireDocumentos>
+    <RequireDocumentos diagnostico={false}>
       <Suspense fallback={<Skeleton className="h-[420px]" />}>
         <ListaMaestra />
       </Suspense>
@@ -138,7 +138,7 @@ function ListaMaestra() {
         </p>
       ) : null}
       {recurso.error ? (
-        <ErrorState message={recurso.error} onRetry={recurso.reload} />
+        <ErrorState message={recurso.error} status={recurso.errorStatus} onRetry={recurso.reload} />
       ) : !data ? (
         <Skeleton className="h-[360px] rounded-card" />
       ) : !data.items.length ? (

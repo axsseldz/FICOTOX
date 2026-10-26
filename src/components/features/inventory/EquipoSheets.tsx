@@ -15,15 +15,16 @@ import { EQUIPO_ESTADOS, MANTENIMIENTO_ESTADOS, MANTENIMIENTO_TIPOS } from "./me
 import { useValidacion, ValidacionAmbito } from "@/components/ui/Validacion";
 import { msg, type Problema } from "@/lib/client/mensajes";
 
+/* Cuentas activas para elegir responsable: cualquiera que edite equipos, tenga o no usuarios:V. */
 function useActiveUsers(enabled: boolean) {
-  const { token, can } = useSession();
+  const { token } = useSession();
   const [users, setUsers] = useState<ApiRecord[]>([]);
   useEffect(() => {
-    if (!enabled || !token || !can("usuarios")) return;
-    getJsonAuth(`${API_BASE_URL}/admin/usuarios`, token)
-      .then((data) => setUsers(((data.items || []) as ApiRecord[]).filter((user) => !!user.activo)))
+    if (!enabled || !token) return;
+    getJsonAuth(`${API_BASE_URL}/cuentas/activas`, token)
+      .then((data) => setUsers((data.items || []) as ApiRecord[]))
       .catch(() => setUsers([]));
-  }, [enabled, token, can]);
+  }, [enabled, token]);
   return users;
 }
 
@@ -313,7 +314,8 @@ export function MantenimientoSheet({ open, item, onClose }: { open: boolean; ite
           </Field>
           <Field label="Estado" htmlFor="m-estado" required>
             <Select id="m-estado" value={form.estado} onChange={set("estado")}>
-              {MANTENIMIENTO_ESTADOS.map((estado) => (
+              {/* «Vencido» lo marca el sistema y «Cancelado» tiene su acción (motivo y contraseña); lo completado no se reabre. */}
+              {MANTENIMIENTO_ESTADOS.filter((estado) => (item?.estado === "completado" ? estado.value === "completado" : ["programado", "en_proceso", "completado"].includes(estado.value) || estado.value === item?.estado)).map((estado) => (
                 <option key={estado.value} value={estado.value}>
                   {estado.label}
                 </option>

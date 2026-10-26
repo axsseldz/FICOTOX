@@ -33,6 +33,7 @@ const horaActual = () => {
 export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { item: ApiRecord; token: string; puedeEnviar: boolean; bloqueo?: string | null; onCambio?: () => void }) {
   const [envios, setEnvios] = useState<ApiRecord[]>([]);
   const [smtp, setSmtp] = useState(false);
+  const [maxMb, setMaxMb] = useState(25);
   const [cargando, setCargando] = useState(true);
   const cliente = (item.cliente || {}) as ApiRecord;
   const [form, setForm] = useState({ nombre: String(cliente.contacto || cliente.nombre || ""), correo: String(cliente.correo || ""), fecha: hoyLocal(), hora: horaActual(), observaciones: "" });
@@ -52,6 +53,7 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
       if (cancelled) return;
       setEnvios((data.items || []) as ApiRecord[]);
       setSmtp(!!data.smtp_disponible);
+      setMaxMb(Number(data.max_mb || 25));
       setCargando(false);
     })();
     return () => {
@@ -223,7 +225,7 @@ export function EnviosPanel({ item, token, puedeEnviar, bloqueo, onCambio }: { i
                 <Input id="envio-hora" type="time" value={form.hora} onChange={(event) => setForm({ ...form, hora: event.target.value })} />
               </Field>
             </FormGrid>
-            <Field label="Evidencia del correo enviado" htmlFor="envio-evidencia" required hint="PDF, PNG, JPG, WebP o .eml (máx. 15 MB). Se guarda con su huella SHA-256.">
+            <Field label="Evidencia del correo enviado" htmlFor="envio-evidencia" required hint={`PDF, PNG, JPG, WebP o .eml (máx. ${maxMb} MB). Se guarda con su huella SHA-256.`}>
               <input id="envio-evidencia" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.eml,.msg" onChange={(event) => setArchivo(event.target.files?.[0] || null)} className="max-w-full text-sm text-ink-2 file:mr-3 file:rounded-control file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink file:shadow-card" />
             </Field>
             <Field label="Observaciones" htmlFor="envio-obs">

@@ -28,7 +28,11 @@ const { check, terminar } = crearCheck();
 const stamp = Date.now().toString(36).slice(-4).toUpperCase();
 const { t, id } = await sesiones();
 const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Tijuana" }).format(new Date());
-const enDias = (n) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Tijuana" }).format(new Date(Date.now() + n * 86_400_000));
+// Hoy (en Tijuana) más n días de calendario (sumar n × 24 h fallaba el día del cambio de horario).
+const enDias = (n) => {
+  const [anio, mes, dia] = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Tijuana" }).format(new Date()).split("-").map(Number);
+  return new Date(Date.UTC(anio, mes - 1, dia + n)).toISOString().slice(0, 10);
+};
 
 /* ---------- Datos de apoyo ---------- */
 const responsables = { elaborador_id: id.luis, revisor_id: id.ricardo, autorizador_id: id.patricia };
@@ -148,10 +152,11 @@ try {
     check("bandeja: «Revisar» abre la ficha con la ventana de revisión", (await ventanaCentrada(page)) && !new URL(page.url()).searchParams.has("accion"));
   });
 
-  await paso("jorge", "Bandeja vacía", async (page) => {
+  // La administración técnica solo diagnostica metadatos en carpetas y fichas: la Bandeja no es para ese papel.
+  await paso("jorge", "Bandeja sin acciones documentales", async (page) => {
     await page.goto(`${BASE}/documentos/bandeja`);
-    await page.getByTestId("bandeja-vacia").waitFor();
-    check("bandeja: estado vacío «No tienes pendientes»", /No tienes pendientes/.test(await page.getByTestId("bandeja-vacia").innerText()));
+    await page.getByText("Sin acceso a Documentos SGC").waitFor();
+    check("bandeja: el administrador técnico ve «Sin acceso» (no tiene tareas documentales)", (await page.getByTestId("bandeja-vacia").count()) === 0);
   });
 
   /* ---------- Solicitudes ---------- */

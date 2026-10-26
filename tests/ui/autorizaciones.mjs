@@ -1,7 +1,7 @@
 /*
  * Autorizaciones FX-THF-AP en el navegador (Fase 4):
  * - al abrir un formato sin la autorizacion necesaria aparece el aviso (no espera al guardar);
- *   con la autorizacion no aparece;
+ *   con la autorizacion no aparece; un formato ya registrado se abre en solo lectura y dice cual falta;
  * - el Coord. del Area Tecnica ve la pestaña "Autorizaciones (FX-THF-AP)" en la ficha de
  *   una persona, con las autorizaciones del seed y el boton "Agregar".
  */
@@ -34,6 +34,11 @@ const TR = await tokenDe(RICARDO, credenciales[RICARDO]);
 const luisId = ((await api("GET", "/admin/usuarios", undefined, QA)).data?.items || []).find((u) => u.email === LUIS)?.id;
 const vigentes = async () => ((await api("GET", `/admin/usuarios/${luisId}/autorizaciones`, undefined, QA)).data?.items || []).filter((a) => a.tipo === "actividad" && a.clave === "procesamiento" && a.estado === "vigente");
 
+// Procesamiento propio asignado a Luis (lib/calidad.mjs habla con la API).
+process.env.BASE = API;
+const { cadena } = await import("../lib/calidad.mjs");
+const propio = await cadena({ qa: QA, ricardo: TR }, "AUT", { asignar: [luisId] });
+
 // Luis se queda sin la actividad procesamiento mientras dura la prueba.
 for (const a of await vigentes()) await api("POST", `/admin/usuarios/${luisId}/autorizaciones/${a.id}/revocar`, { motivo: "Prueba del aviso en el formato" }, TR);
 check("datos: Luis sin autorizacion de procesamiento", (await vigentes()).length === 0);
@@ -57,9 +62,17 @@ try {
     const { context, page } = await entrar(LUIS, credenciales[LUIS]);
     try {
       await page.goto(`${BASE}/muestras/procesamiento/nuevo`);
-      const aviso = page.locator("[data-aviso-autorizacion]").first();
+      // Desde la prueba integral (T-01) el formato no se abre sin la autorizacion: se dice cual falta en lugar del formulario.
+      const aviso = page.locator("[data-sin-permiso-registrar]").first();
       await aviso.waitFor();
-      check("al abrir el formato sin la autorizacion aparece el aviso", /procesamiento/i.test((await aviso.textContent()) || ""), (await aviso.textContent())?.slice(0, 160));
+      await page.goto(`${BASE}/muestras/procesamiento/${propio.P}`);
+      const avisoFicha = page.locator("[data-aviso-autorizacion]").first();
+      await avisoFicha.waitFor();
+      const textoFicha = (await avisoFicha.textContent()) || "";
+      check("un procesamiento ya registrado se abre en solo lectura y dice que falta la autorizacion de procesamiento", /procesamiento/i.test(textoFicha) && /solo lectura/.test(textoFicha) && (await page.locator("fieldset[disabled].form-readonly").count()) > 0, textoFicha.slice(0, 160));
+      await page.goto(`${BASE}/muestras/procesamiento/nuevo`);
+      await aviso.waitFor();
+      check("al abrir el formato sin la autorizacion se dice cual falta (sin formulario)", /procesamiento/i.test((await aviso.textContent()) || "") && /FX-THF-AP/.test((await aviso.textContent()) || "") && (await page.getByText("FX-TCF-GMP").count()) === 0, (await aviso.textContent())?.slice(0, 160));
     } catch (error) {
       check("aviso al abrir el formato", false, error.message);
       await captura(page);
@@ -73,7 +86,11 @@ try {
       await page.goto(`${BASE}/muestras/procesamiento/nuevo`);
       await page.getByRole("heading").first().waitFor();
       await page.waitForTimeout(1500);
-      check("con la autorizacion vigente no aparece el aviso", (await page.locator("[data-aviso-autorizacion]").count()) === 0);
+      check("con la autorizacion vigente se abre el formato, sin aviso", (await page.locator("[data-aviso-autorizacion], [data-sin-permiso-registrar]").count()) === 0 && (await page.getByText("FX-TCF-GMP").count()) > 0);
+      await page.goto(`${BASE}/muestras/procesamiento/${propio.P}`);
+      await page.getByText("FX-TCF-GMP").first().waitFor();
+      await page.waitForTimeout(1500);
+      check("…y su procesamiento registrado se puede editar (sin aviso ni solo lectura)", (await page.locator("[data-aviso-autorizacion]").count()) === 0 && (await page.locator("fieldset[disabled].form-readonly").count()) === 0);
     } catch (error) {
       check("sin aviso con autorizacion", false, error.message);
       await captura(page);

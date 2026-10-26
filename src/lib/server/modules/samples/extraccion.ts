@@ -20,7 +20,7 @@ import { exigirAutorizaciones, requisitosEquipos } from "../../autorizaciones";
 import { metodoDeExtraccion, requisitosExtraccion } from "../../../shared/autorizaciones";
 import { exigirSinSuspension, idsDeEquipos } from "../calidad/bloqueos";
 import { incidenciasPorEquiposNoAptos } from "../calidad/automaticas";
-import { exigirAsignacion, filtroAsignadas } from "../../asignaciones";
+import { exigirAsignacion, exigirEnsayoVisible, filtroAsignadas, soloAsignado } from "../../asignaciones";
 import { guardarFirmantes, resolverFirmantes, verificarFirmasConPassword, type RolFirma } from "../../firmas";
 
 /* Fase 11: equipos de la extraccion para suspensiones e incidencias (con id, o solo por nombre si no se eligio del catalogo). */
@@ -186,8 +186,9 @@ export async function listExtractionSamples({ request, s }: RouteContext): Promi
   const user = await requireUser(request);
   const permiso = await requirePermission(s, user, "ensayos", "V");
   const supFiltro = filtroSupervision(request, "e", permiso.auth.userId);
-  // Fase 5: filtro "Mis muestras".
-  const asignadas = await filtroAsignadas(s, permiso.auth.userId, "(SELECT p2.recepcion_id FROM muestras_procesamiento p2 WHERE p2.id = e.procesamiento_id)", searchParam(request, "mias") === "1");
+  // Fase 5: filtro "Mis muestras"; con alcance "asignado", solo lo asignado o registrado por la persona.
+  const restringida = soloAsignado(permiso);
+  const asignadas = await filtroAsignadas(s, permiso.auth.userId, "(SELECT p2.recepcion_id FROM muestras_procesamiento p2 WHERE p2.id = e.procesamiento_id)", restringida || searchParam(request, "mias") === "1", "e.creado_por");
 
   const search = searchParam(request, "search");
   const tipoParam = searchParam(request, "tipo");
@@ -230,7 +231,7 @@ export async function listExtractionSamples({ request, s }: RouteContext): Promi
       exact_tipo: exactFolio !== null ? folioSearch.tipo : "",
       exact_folio: exactFolio ?? 0,
       incluir_anuladas: searchParam(request, "anuladas") === "1" ? 1 : 0,
-      ...supFiltro.params,
+      ...supFiltro.params, ...asignadas.params,
     },
   );
   return json({ items: await conSolicitudesYPuede(s, user, TABLE, rows), total: rows.length });
@@ -239,7 +240,7 @@ export async function listExtractionSamples({ request, s }: RouteContext): Promi
 export async function getExtractionSample({ request, s, params }: RouteContext): Promise<Response> {
   const extractionId = intParam(params.id);
   const user = await requireUser(request);
-  await requirePermission(s, user, "ensayos", "V");
+  const permiso = await requirePermission(s, user, "ensayos", "V");
 
   const row = await s.queryOne(
     `
@@ -252,7 +253,7 @@ export async function getExtractionSample({ request, s, params }: RouteContext):
            firma_quien_extrajo, firma_quien_limpieza,
            firma_quien_superviso, uso_inventario_json,
            extrajo_usuario_id, extrajo_cargo, limpio_usuario_id, limpio_cargo, superviso_usuario_id, superviso_cargo,
-           estado, creado_en, actualizado_en,
+           estado, creado_por, creado_en, actualizado_en,
            requiere_supervision, supervision_estado, supervisor_id, supervision_observaciones
     FROM ${TABLE}
     WHERE id = :id
@@ -262,6 +263,7 @@ export async function getExtractionSample({ request, s, params }: RouteContext):
   if (!row) {
     return json({ message: "Registro no encontrado" }, 404);
   }
+  await exigirEnsayoVisible(s, permiso, TABLE, row);
   return json({ item: (await conSolicitudesYPuede(s, user, TABLE, [serializeRow(row)]))[0] });
 }
 
@@ -364,6 +366,8 @@ export async function updateExtractionSample({ request, s, params }: RouteContex
   if (!tipo) {
     return json({ message: "Tipo de extraccion no valido" }, 400);
   }
+  // El formato (E-A ASP o E-D DSP) y su serie de folios se fijan al registrar: cambiarlo dejaría el folio en la serie equivocada.
+  if (antes && normalizeExtractionType(antes.tipo_registro) && tipo !== normalizeExtractionType(antes.tipo_registro)) return json({ message: `La extracción es ${normalizeExtractionType(antes.tipo_registro)}; el formato no cambia (anúlala y registra otra)`, campo: "tipo_registro" }, 400);
   const data = normalizePayload(payload, tipo);
   // Fase 4: autorizacion FX-THF-AP: extraccion, metodo del tipo (E-A ASP, E-D DSP) y cada equipo del inventario usado.
   await exigirAutorizaciones(s, user, [...requisitosExtraccion(tipo), ...(await requisitosEquipos(s, (safeJsonLoad(data.equipos_json, []) as Array<{ equipo_id?: unknown }>).map((e) => e.equipo_id)))]);

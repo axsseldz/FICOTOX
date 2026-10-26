@@ -162,7 +162,7 @@ function ExtraccionList() {
 
       <TableShell footer={items ? `${contar(visible.length, "extracción", "extracciones")}${tipo ? ` ${extractionTypeMeta(tipo).short}` : ""}` : undefined}>
         {resource.error ? (
-          <ErrorState message={resource.error} onRetry={resource.reload} />
+          <ErrorState message={resource.error} status={resource.errorStatus} onRetry={resource.reload} />
         ) : !items ? (
           <TableSkeleton cols={6} />
         ) : !visible.length ? (

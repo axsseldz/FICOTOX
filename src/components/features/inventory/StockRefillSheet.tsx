@@ -25,7 +25,7 @@ const TIPOS = [
   { value: "entrada", label: "Entrada", hint: "Suma a la existencia (compra, reposición)." },
   { value: "salida", label: "Salida", hint: "Resta de la existencia (traslado, merma)." },
   { value: "consumo", label: "Consumo", hint: "Resta lo usado en el trabajo del laboratorio." },
-  { value: "ajuste", label: "Ajuste por conteo físico", hint: "Captura lo que contaste; se registra la diferencia." },
+  { value: "ajuste", label: "Ajuste por conteo físico", hint: "Captura lo que contaste ese día; se registra la diferencia y se conserva lo que entró o salió después." },
 ];
 const VINCULOS = [
   { value: "", label: "Sin vínculo" },
