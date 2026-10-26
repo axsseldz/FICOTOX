@@ -197,4 +197,5 @@ Cuentas de la base de prueba: `jorge.ramirez` (Administrador técnico), `patrici
 - No está claro si una NC aún puede generar `propuesta_documento_id`; el PDF de un informe podría quedar huérfano si la liberación falla tras escribirlo.
 - Documentos SGC: CA-17 (validación escrita de Mejora Continua), colores HEX por validar, correo/escalamiento, suplentes, copias controladas y firma avanzada para V2.
 - «A confirmar» de la auditoría V1 §9.
+- Prueba integral (revisor, ronda 2, severidad baja): la ficha de un procesamiento muestra «Recepción: Sin vincular» a quien ve ensayos en total pero recepciones solo asignadas (técnico analista), porque el selector sale de su lista de recepciones (`ProcessingForm.tsx`); el filtro `desde`/`hasta` de la bitácora (`modules/audit.ts`) solo revisa el patrón y acepta fechas que no existen (solo filtra, no guarda). Reporte completo en `~/Downloads/PRUEBA_INTEGRAL.md`.
 - Respaldos portables: sin probar en Windows real; descarga e importación solo con SQLite; el bloqueo de la configuración inicial vive en memoria (se reinicia con el servidor).
